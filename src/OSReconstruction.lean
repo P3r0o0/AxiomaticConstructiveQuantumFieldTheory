@@ -1,0 +1,21119 @@
+import VectorBHW
+import Mathlib.Analysis.InnerProductSpace.Completion
+import Mathlib.Analysis.InnerProductSpace.Positive
+import Mathlib.Analysis.InnerProductSpace.StarOrder
+import Mathlib.Analysis.SpecialFunctions.ContinuousFunctionalCalculus.Rpow.Basic
+import Mathlib.Analysis.CStarAlgebra.ContinuousFunctionalCalculus.Commute
+import Mathlib.Data.Fin.Tuple.Sort
+import Mathlib.Topology.Algebra.LinearMapCompletion
+
+namespace QFT
+
+open Geometry Geometry.PolarDecomposition MeasureTheory Filter Topology Matrix
+open scoped ComplexOrder FourierTransform RealInnerProductSpace Interval ContDiff InnerProductSpace
+
+noncomputable section OperatorHolomorphicSemigroup
+
+open scoped NNReal
+
+lemma mul_exp_neg_le_inv_of_pos {u δ : ℝ} (hδ : 0 < δ) :
+    u * Real.exp (-(u * δ)) ≤ δ⁻¹ := by
+  have h1 : u * δ ≤ Real.exp (u * δ) :=
+    (le_add_of_nonneg_right zero_le_one).trans (Real.add_one_le_exp (u * δ))
+  have h2 : (u * δ) * Real.exp (-(u * δ)) ≤ 1 := by
+    calc (u * δ) * Real.exp (-(u * δ))
+        ≤ Real.exp (u * δ) * Real.exp (-(u * δ)) :=
+          mul_le_mul_of_nonneg_right h1 (Real.exp_pos _).le
+      _ = 1 := by rw [← Real.exp_add, add_neg_cancel, Real.exp_zero]
+  calc u * Real.exp (-(u * δ))
+      = ((u * δ) * Real.exp (-(u * δ))) / δ := by
+        field_simp [hδ.ne']
+    _ ≤ 1 / δ := div_le_div_of_nonneg_right h2 hδ.le
+    _ = δ⁻¹ := one_div δ
+
+lemma sq_mul_exp_neg_le_four_div_sq {u δ : ℝ} (hu : 0 ≤ u) (hδ : 0 < δ) :
+    u ^ 2 * Real.exp (-(u * δ)) ≤ 4 / δ ^ 2 := by
+  have hhalf : 0 < δ / 2 := half_pos hδ
+  have h1 := mul_exp_neg_le_inv_of_pos (u := u) hhalf
+  have hexp : Real.exp (-(u * δ)) = Real.exp (-(u * (δ / 2))) * Real.exp (-(u * (δ / 2))) := by
+    rw [← Real.exp_add]
+    congr 1
+    ring
+  have hprod : (u * Real.exp (-(u * (δ / 2)))) * (u * Real.exp (-(u * (δ / 2)))) ≤
+      (δ / 2)⁻¹ * (δ / 2)⁻¹ :=
+    mul_le_mul h1 h1 (mul_nonneg hu (Real.exp_pos _).le) (inv_nonneg.mpr hhalf.le)
+  calc u ^ 2 * Real.exp (-(u * δ))
+      = (u * Real.exp (-(u * (δ / 2)))) * (u * Real.exp (-(u * (δ / 2)))) := by
+        rw [hexp]
+        ring
+    _ ≤ (δ / 2)⁻¹ * (δ / 2)⁻¹ := hprod
+    _ = 4 / δ ^ 2 := by
+        field_simp [hδ.ne']
+        ring
+
+def cpowOnReal (w z : ℂ) : ℂ :=
+  if z.re ≤ 0 then 0 else Complex.exp (w * (Real.log z.re : ℂ))
+
+def dcpowOnReal (w z : ℂ) : ℂ :=
+  if z.re ≤ 0 then 0 else (Real.log z.re : ℂ) * Complex.exp (w * (Real.log z.re : ℂ))
+
+lemma norm_cpowOnReal_eq {w z : ℂ} (hz : 0 < z.re) :
+    ‖cpowOnReal w z‖ = z.re ^ w.re := by
+  dsimp [cpowOnReal]
+  rw [if_neg (not_le.mpr hz), Complex.norm_exp]
+  have hre : (w * (Real.log z.re : ℂ)).re = Real.log z.re * w.re := by
+    simp [Complex.mul_re, mul_comm]
+  rw [hre, Real.rpow_def_of_pos hz]
+
+lemma norm_cpowOnReal_le_one {w z : ℂ} (hw : 0 ≤ w.re) (hz1 : z.re ≤ 1) :
+    ‖cpowOnReal w z‖ ≤ 1 := by
+  by_cases hz : z.re ≤ 0
+  · simp [cpowOnReal, hz]
+  · push Not at hz
+    rw [norm_cpowOnReal_eq hz]
+    exact Real.rpow_le_one hz.le hz1 hw
+
+lemma cpowOnReal_add (w₁ w₂ z : ℂ) :
+    cpowOnReal (w₁ + w₂) z = cpowOnReal w₁ z * cpowOnReal w₂ z := by
+  by_cases hz : z.re ≤ 0
+  · simp [cpowOnReal, hz]
+  · simp [cpowOnReal, hz, add_mul, Complex.exp_add]
+
+lemma cpowOnReal_star (w z : ℂ) :
+    cpowOnReal (star w) z = star (cpowOnReal w z) := by
+  by_cases hz : z.re ≤ 0
+  · simp [cpowOnReal, hz]
+  · dsimp [cpowOnReal]
+    rw [if_neg hz, if_neg hz, ← Complex.exp_conj]
+    congr 1
+    simp
+
+lemma continuous_cpowOnReal {w : ℂ} (hw : 0 < w.re) : Continuous (cpowOnReal w) := by
+  rw [continuous_iff_continuousAt]
+  intro z₀
+  by_cases hz₀ : z₀.re < 0
+  · have h_ev : cpowOnReal w =ᶠ[𝓝 z₀] fun _ => (0 : ℂ) := by
+      filter_upwards [(isOpen_lt Complex.continuous_re continuous_const).mem_nhds hz₀] with z hz
+      exact if_pos (le_of_lt hz)
+    exact continuousAt_const.congr h_ev.symm
+  · by_cases hz_pos : 0 < z₀.re
+    · have h_ev : cpowOnReal w =ᶠ[𝓝 z₀]
+          fun z => Complex.exp (w * (Real.log z.re : ℂ)) := by
+        filter_upwards [(isOpen_lt continuous_const Complex.continuous_re).mem_nhds hz_pos]
+          with z hz
+        exact if_neg (not_le.mpr hz)
+      have h_cont : ContinuousAt (fun z : ℂ => Complex.exp (w * (Real.log z.re : ℂ))) z₀ := by
+        refine Complex.continuous_exp.continuousAt.comp ?_
+        refine ContinuousAt.mul continuousAt_const ?_
+        exact Complex.continuous_ofReal.continuousAt.comp
+          ((Real.continuousAt_log hz_pos.ne').comp Complex.continuous_re.continuousAt)
+      exact h_cont.congr h_ev.symm
+    · have hz_zero : z₀.re = 0 := le_antisymm (not_lt.mp hz_pos) (not_lt.mp hz₀)
+      rw [Metric.continuousAt_iff]
+      intro ε hε
+      have h_rpow : ContinuousAt (fun x : ℝ => x ^ w.re) 0 :=
+        Real.continuousAt_rpow_const 0 w.re (Or.inr hw.le)
+      rw [Metric.continuousAt_iff] at h_rpow
+      have h0_rpow : (0 : ℝ) ^ w.re = 0 := Real.zero_rpow hw.ne'
+      rcases h_rpow ε hε with ⟨δ, hδ_pos, hδ⟩
+      refine ⟨δ, hδ_pos, fun z hz => ?_⟩
+      have hz0_val : cpowOnReal w z₀ = 0 := if_pos (le_of_eq hz_zero)
+      rw [dist_eq_norm, hz0_val, sub_zero]
+      by_cases hle : z.re ≤ 0
+      · simp [cpowOnReal, hle, hε]
+      · push Not at hle
+        rw [norm_cpowOnReal_eq hle]
+        have hre_dist : dist z.re 0 < δ := by
+          rw [Real.dist_eq, sub_zero]
+          have hsub : z.re = (z - z₀).re := by simp [hz_zero]
+          rw [hsub]
+          exact (Complex.abs_re_le_norm (z - z₀)).trans_lt (by rwa [dist_eq_norm] at hz)
+        have h1 := hδ hre_dist
+        rwa [h0_rpow, Real.dist_eq, sub_zero, abs_of_nonneg (Real.rpow_nonneg hle.le _)] at h1
+
+lemma continuous_dcpowOnReal {w : ℂ} (hw : 0 < w.re) : Continuous (dcpowOnReal w) := by
+  rw [continuous_iff_continuousAt]
+  intro z₀
+  by_cases hz₀ : z₀.re < 0
+  · have h_ev : dcpowOnReal w =ᶠ[𝓝 z₀] fun _ => (0 : ℂ) := by
+      filter_upwards [(isOpen_lt Complex.continuous_re continuous_const).mem_nhds hz₀] with z hz
+      exact if_pos (le_of_lt hz)
+    exact continuousAt_const.congr h_ev.symm
+  · by_cases hz_pos : 0 < z₀.re
+    · have h_ev : dcpowOnReal w =ᶠ[𝓝 z₀]
+          fun z => (Real.log z.re : ℂ) * Complex.exp (w * (Real.log z.re : ℂ)) := by
+        filter_upwards [(isOpen_lt continuous_const Complex.continuous_re).mem_nhds hz_pos]
+          with z hz
+        exact if_neg (not_le.mpr hz)
+      have h_log : ContinuousAt (fun z : ℂ => (Real.log z.re : ℂ)) z₀ :=
+        Complex.continuous_ofReal.continuousAt.comp
+          ((Real.continuousAt_log hz_pos.ne').comp Complex.continuous_re.continuousAt)
+      have h_cont : ContinuousAt
+          (fun z : ℂ => (Real.log z.re : ℂ) * Complex.exp (w * (Real.log z.re : ℂ))) z₀ :=
+        h_log.mul (Complex.continuous_exp.continuousAt.comp (continuousAt_const.mul h_log))
+      exact h_cont.congr h_ev.symm
+    · have hz_zero : z₀.re = 0 := le_antisymm (not_lt.mp hz_pos) (not_lt.mp hz₀)
+      rw [Metric.continuousAt_iff]
+      intro ε hε
+      let c : ℝ := 2 / w.re
+      have hc_pos : 0 < c := div_pos zero_lt_two hw
+      have h_rpow : ContinuousAt (fun x : ℝ => c * x ^ (w.re / 2)) 0 :=
+        continuousAt_const.mul (Real.continuousAt_rpow_const 0 (w.re / 2) (Or.inr (half_pos hw).le))
+      rw [Metric.continuousAt_iff] at h_rpow
+      have h0_val : c * (0 : ℝ) ^ (w.re / 2) = 0 := by
+        rw [Real.zero_rpow (half_pos hw).ne', mul_zero]
+      rcases h_rpow ε hε with ⟨δ₁, hδ₁_pos, hδ₁⟩
+      let δ := min δ₁ 1
+      have hδ_pos : 0 < δ := lt_min hδ₁_pos zero_lt_one
+      refine ⟨δ, hδ_pos, fun z hz => ?_⟩
+      have hz0_val : dcpowOnReal w z₀ = 0 := if_pos (le_of_eq hz_zero)
+      rw [dist_eq_norm, hz0_val, sub_zero]
+      by_cases hle : z.re ≤ 0
+      · simp [dcpowOnReal, hle, hε]
+      · push Not at hle
+        have hre_lt_δ : z.re < δ := by
+          have h1 : |z.re - z₀.re| < δ :=
+            (Complex.abs_re_le_norm (z - z₀)).trans_lt (by rwa [dist_eq_norm] at hz)
+          rw [hz_zero, sub_zero, abs_of_pos hle] at h1
+          exact h1
+        have hre_le_one : z.re ≤ 1 := hre_lt_δ.le.trans (min_le_right _ _)
+        dsimp [dcpowOnReal]
+        rw [if_neg (not_le.mpr hle), norm_mul, Complex.norm_real, Complex.norm_exp]
+        have h_abs_log : ‖Real.log z.re‖ = -Real.log z.re := by
+          rw [Real.norm_eq_abs, abs_of_nonpos (Real.log_nonpos hle.le hre_le_one)]
+        have h_re_mul : (w * (Real.log z.re : ℂ)).re =
+            -((-Real.log z.re) * (w.re / 2)) + Real.log z.re * (w.re / 2) := by
+          simp [Complex.mul_re]
+          ring
+        rw [h_abs_log, h_re_mul, Real.exp_add, ← mul_assoc]
+        have h_u_bd := mul_exp_neg_le_inv_of_pos (u := -Real.log z.re) (half_pos hw)
+        have h_inv_eq : (w.re / 2)⁻¹ = c := by
+          dsimp [c]
+          field_simp [hw.ne']
+        rw [h_inv_eq] at h_u_bd
+        have h_rpow_eq : Real.exp (Real.log z.re * (w.re / 2)) = z.re ^ (w.re / 2) :=
+          (Real.rpow_def_of_pos hle (w.re / 2)).symm
+        rw [h_rpow_eq]
+        have h_le : (-Real.log z.re * Real.exp (-(-Real.log z.re * (w.re / 2)))) *
+            z.re ^ (w.re / 2) ≤ c * z.re ^ (w.re / 2) :=
+          mul_le_mul_of_nonneg_right h_u_bd (Real.rpow_nonneg hle.le _)
+        have hre_dist : dist z.re 0 < δ₁ := by
+          rw [Real.dist_eq, sub_zero, abs_of_pos hle]
+          exact hre_lt_δ.trans_le (min_le_left _ _)
+        have h_lt := hδ₁ hre_dist
+        rw [h0_val, Real.dist_eq, sub_zero,
+            abs_of_nonneg (mul_nonneg hc_pos.le (Real.rpow_nonneg hle.le _))] at h_lt
+        exact h_le.trans_lt h_lt
+
+lemma norm_cpowOnReal_taylor_le {w₀ h z : ℂ} {δ : ℝ}
+    (hδ : 0 < δ) (hw_re : ∀ t : ℂ, ‖t‖ ≤ ‖h‖ → δ ≤ (w₀ + t).re)
+    (hz_le_one : z.re ≤ 1) :
+    ‖cpowOnReal (w₀ + h) z - cpowOnReal w₀ z - h * dcpowOnReal w₀ z‖ ≤
+      (4 / δ ^ 2) * ‖h‖ ^ 2 := by
+  by_cases hz : z.re ≤ 0
+  · simp only [cpowOnReal, dcpowOnReal, if_pos hz, mul_zero, sub_zero, norm_zero]
+    positivity
+  · push Not at hz
+    let L : ℝ := Real.log z.re
+    have hL_nonpos : L ≤ 0 := Real.log_nonpos hz.le hz_le_one
+    have hu_nn : 0 ≤ -L := neg_nonneg.mpr hL_nonpos
+    let φ : ℂ → ℂ := fun t =>
+      Complex.exp ((w₀ + t) * (L : ℂ)) - Complex.exp (w₀ * (L : ℂ)) -
+        t * ((L : ℂ) * Complex.exp (w₀ * (L : ℂ)))
+    let φ' : ℂ → ℂ := fun t =>
+      (L : ℂ) * (Complex.exp ((w₀ + t) * (L : ℂ)) - Complex.exp (w₀ * (L : ℂ)))
+    let φ'' : ℂ → ℂ := fun t =>
+      (L : ℂ) ^ 2 * Complex.exp ((w₀ + t) * (L : ℂ))
+    have h_deriv1 : ∀ t : ℂ, HasDerivAt φ (φ' t) t := by
+      intro t
+      have h1 : HasDerivAt (fun s : ℂ => (w₀ + s) * (L : ℂ)) (1 * (L : ℂ)) t :=
+        ((hasDerivAt_id t).const_add w₀).mul_const (L : ℂ)
+      have h2 : HasDerivAt (fun s : ℂ => Complex.exp ((w₀ + s) * (L : ℂ)))
+          (Complex.exp ((w₀ + t) * (L : ℂ)) * (1 * (L : ℂ))) t := h1.cexp
+      have h3 : HasDerivAt (fun s : ℂ => s * ((L : ℂ) * Complex.exp (w₀ * (L : ℂ))))
+          (1 * ((L : ℂ) * Complex.exp (w₀ * (L : ℂ)))) t :=
+        (hasDerivAt_id t).mul_const _
+      exact ((h2.sub_const (Complex.exp (w₀ * (L : ℂ)))).sub h3).congr_deriv (by dsimp [φ']; ring)
+    have h_deriv2 : ∀ t : ℂ, HasDerivAt φ' (φ'' t) t := by
+      intro t
+      have h1 : HasDerivAt (fun s : ℂ => (w₀ + s) * (L : ℂ)) (1 * (L : ℂ)) t :=
+        ((hasDerivAt_id t).const_add w₀).mul_const (L : ℂ)
+      exact ((h1.cexp.sub_const (Complex.exp (w₀ * (L : ℂ)))).const_mul (L : ℂ)).congr_deriv
+        (by dsimp [φ'']; ring)
+    have h_bd2 : ∀ t ∈ Metric.closedBall (0 : ℂ) ‖h‖, ‖φ'' t‖ ≤ 4 / δ ^ 2 := by
+      intro t ht
+      rw [Metric.mem_closedBall, dist_zero_right] at ht
+      dsimp [φ'']
+      rw [norm_mul, norm_pow, Complex.norm_real, Real.norm_eq_abs,
+          abs_of_nonpos hL_nonpos, Complex.norm_exp]
+      have hre : ((w₀ + t) * (L : ℂ)).re = -((-L) * (w₀ + t).re) := by
+        simp [Complex.mul_re]
+        ring
+      rw [hre]
+      have hexp_le : Real.exp (-((-L) * (w₀ + t).re)) ≤ Real.exp (-((-L) * δ)) :=
+        Real.exp_le_exp.mpr (neg_le_neg (mul_le_mul_of_nonneg_left (hw_re t ht) hu_nn))
+      exact (mul_le_mul_of_nonneg_left hexp_le (sq_nonneg (-L))).trans
+        (sq_mul_exp_neg_le_four_div_sq hu_nn hδ)
+    have h_conv : Convex ℝ (Metric.closedBall (0 : ℂ) ‖h‖) := convex_closedBall 0 ‖h‖
+    have h0_mem : (0 : ℂ) ∈ Metric.closedBall (0 : ℂ) ‖h‖ := by simp
+    have hh_mem : h ∈ Metric.closedBall (0 : ℂ) ‖h‖ := by simp
+    have h_bd1 : ∀ t ∈ Metric.closedBall (0 : ℂ) ‖h‖, ‖φ' t‖ ≤ (4 / δ ^ 2) * ‖h‖ := by
+      intro t ht
+      have h_mvt := h_conv.norm_image_sub_le_of_norm_hasDerivWithin_le
+        (fun s _ => (h_deriv2 s).hasDerivWithinAt) h_bd2 h0_mem ht
+      have hφ'0 : φ' 0 = 0 := by simp [φ']
+      rw [hφ'0, sub_zero, sub_zero] at h_mvt
+      rw [Metric.mem_closedBall, dist_zero_right] at ht
+      exact h_mvt.trans (mul_le_mul_of_nonneg_left ht (by positivity))
+    have h_mvt0 := h_conv.norm_image_sub_le_of_norm_hasDerivWithin_le
+      (fun s _ => (h_deriv1 s).hasDerivWithinAt) h_bd1 h0_mem hh_mem
+    have hφ0 : φ 0 = 0 := by simp [φ]
+    rw [hφ0, sub_zero, sub_zero] at h_mvt0
+    have h_eq : cpowOnReal (w₀ + h) z - cpowOnReal w₀ z - h * dcpowOnReal w₀ z = φ h := by
+      dsimp [cpowOnReal, dcpowOnReal, φ, L]
+      rw [if_neg (not_le.mpr hz), if_neg (not_le.mpr hz), if_neg (not_le.mpr hz)]
+    rw [h_eq]
+    calc ‖φ h‖ ≤ (4 / δ ^ 2 * ‖h‖) * ‖h‖ := h_mvt0
+      _ = (4 / δ ^ 2) * ‖h‖ ^ 2 := by ring
+
+section OperatorCFC
+
+variable {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H] [CompleteSpace H]
+
+def cfcCpow (A : H →L[ℂ] H) (w : ℂ) : H →L[ℂ] H :=
+  cfc (cpowOnReal w) A
+
+lemma spectrum_complex_mem_Icc_of_nonneg_contraction {A : H →L[ℂ] H}
+    (hA_pos : 0 ≤ A) (hA_norm : ‖A‖ ≤ 1) {z : ℂ} (hz : z ∈ spectrum ℂ A) :
+    (z.re : ℂ) = z ∧ 0 ≤ z.re ∧ z.re ≤ 1 := by
+  have h_sa : IsSelfAdjoint A := IsSelfAdjoint.of_nonneg hA_pos
+  haveI : IsStarNormal A := h_sa.isStarNormal
+  have h_real : (z.re : ℂ) = z :=
+    (SpectrumRestricts.real_iff.mp h_sa.spectrumRestricts z hz).symm
+  have hz_norm : ‖z‖ ≤ 1 :=
+    (IsometricContinuousFunctionalCalculus.norm_spectrum_le A hz).trans hA_norm
+  have hz_le_one : z.re ≤ 1 := (Complex.re_le_norm z).trans hz_norm
+  have hz_mem_real : z.re ∈ spectrum ℝ A := by
+    rw [← spectrum.algebraMap_mem_iff ℂ]
+    change (z.re : ℂ) ∈ spectrum ℂ A
+    rwa [h_real]
+  exact ⟨h_real, spectrum_nonneg_of_nonneg hA_pos hz_mem_real, hz_le_one⟩
+
+lemma norm_cfcCpow_le_one {A : H →L[ℂ] H} (hA_pos : 0 ≤ A) (hA_norm : ‖A‖ ≤ 1)
+    {w : ℂ} (hw : 0 ≤ w.re) :
+    ‖cfcCpow A w‖ ≤ 1 := by
+  unfold cfcCpow
+  refine norm_cfc_le zero_le_one (fun z hz => ?_)
+  exact norm_cpowOnReal_le_one hw
+    (spectrum_complex_mem_Icc_of_nonneg_contraction hA_pos hA_norm hz).2.2
+
+lemma cfcCpow_add {A : H →L[ℂ] H} (hA_pos : 0 ≤ A) {w₁ w₂ : ℂ}
+    (hw₁ : 0 < w₁.re) (hw₂ : 0 < w₂.re) :
+    cfcCpow A (w₁ + w₂) = (cfcCpow A w₁).comp (cfcCpow A w₂) := by
+  have h_sa : IsSelfAdjoint A := IsSelfAdjoint.of_nonneg hA_pos
+  haveI : IsStarNormal A := h_sa.isStarNormal
+  unfold cfcCpow
+  change cfc (cpowOnReal (w₁ + w₂)) A = cfc (cpowOnReal w₁) A * cfc (cpowOnReal w₂) A
+  rw [← cfc_mul (cpowOnReal w₁) (cpowOnReal w₂) A
+    (continuous_cpowOnReal hw₁).continuousOn (continuous_cpowOnReal hw₂).continuousOn]
+  exact cfc_congr (fun z _ => cpowOnReal_add w₁ w₂ z)
+
+lemma star_cfcCpow (A : H →L[ℂ] H) (w : ℂ) :
+    star (cfcCpow A w) = cfcCpow A (star w) := by
+  unfold cfcCpow
+  rw [← cfc_star]
+  exact cfc_congr (fun z _ => (cpowOnReal_star w z).symm)
+
+lemma inner_cfcCpow_adjoint (A : H →L[ℂ] H) (w : ℂ) (x y : H) :
+    ⟪cfcCpow A w x, y⟫_ℂ = ⟪x, cfcCpow A (star w) y⟫_ℂ := by
+  rw [← star_cfcCpow A w, ContinuousLinearMap.star_eq_adjoint,
+      ContinuousLinearMap.adjoint_inner_right]
+
+lemma commute_cfcCpow {A B : H →L[ℂ] H} (hA_pos : 0 ≤ A)
+    (hcomm : B.comp A = A.comp B) (w : ℂ) :
+    B.comp (cfcCpow A w) = (cfcCpow A w).comp B := by
+  have h_sa : IsSelfAdjoint A := IsSelfAdjoint.of_nonneg hA_pos
+  have h_comm_ab : Commute A B := hcomm.symm
+  exact (h_sa.commute_cfc h_comm_ab (cpowOnReal w)).eq.symm
+
+lemma nnrpow_eq_cfcCpow {A : H →L[ℂ] H} (hA_pos : 0 ≤ A) (hA_norm : ‖A‖ ≤ 1)
+    {y : ℝ≥0} (hy : 0 < y) :
+    A ^ y = cfcCpow A ((y : ℝ) : ℂ) := by
+  have hy_real : (0 : ℝ) < (y : ℝ) := hy
+  have h_sa : IsSelfAdjoint A := IsSelfAdjoint.of_nonneg hA_pos
+  rw [CFC.nnrpow_eq_rpow hy, CFC.rpow_eq_cfc_real hA_pos, cfc_real_eq_complex _ h_sa]
+  unfold cfcCpow
+  refine cfc_congr (fun z hz => ?_)
+  have hz_spec := spectrum_complex_mem_Icc_of_nonneg_contraction hA_pos hA_norm hz
+  by_cases hz0 : z.re ≤ 0
+  · have hz_eq0 : z.re = 0 := le_antisymm hz0 hz_spec.2.1
+    simp [cpowOnReal, hz_eq0, Real.zero_rpow hy_real.ne']
+  · push Not at hz0
+    dsimp [cpowOnReal]
+    rw [if_neg (not_le.mpr hz0), Real.rpow_def_of_pos hz0, Complex.ofReal_exp]
+    congr 1
+    push_cast
+    ring
+
+lemma hasDerivAt_cfcCpow {A : H →L[ℂ] H} (hA_pos : 0 ≤ A) (hA_norm : ‖A‖ ≤ 1)
+    {w₀ : ℂ} (hw₀ : 0 < w₀.re) :
+    HasDerivAt (cfcCpow A) (cfc (dcpowOnReal w₀) A) w₀ := by
+  have h_sa : IsSelfAdjoint A := IsSelfAdjoint.of_nonneg hA_pos
+  haveI : IsStarNormal A := h_sa.isStarNormal
+  rw [hasDerivAt_iff_isLittleO_nhds_zero, Asymptotics.isLittleO_iff]
+  intro c hc
+  let δ : ℝ := w₀.re / 2
+  have hδ : 0 < δ := half_pos hw₀
+  let K : ℝ := 4 / δ ^ 2 + 1
+  have hK : 0 < K := by positivity
+  let r : ℝ := min δ (c / K)
+  have hr : 0 < r := lt_min hδ (div_pos hc hK)
+  filter_upwards [Metric.ball_mem_nhds (0 : ℂ) hr] with h hh
+  rw [Metric.mem_ball, dist_zero_right] at hh
+  have hh_lt_δ : ‖h‖ < δ := hh.trans_le (min_le_left _ _)
+  have hh_lt_cK : ‖h‖ ≤ c / K := hh.le.trans (min_le_right _ _)
+  have hw_re : ∀ t : ℂ, ‖t‖ ≤ ‖h‖ → δ ≤ (w₀ + t).re := by
+    intro t ht
+    have ht_re : -δ < t.re := by
+      have habs : |t.re| < δ := (Complex.abs_re_le_norm t).trans_lt (ht.trans_lt hh_lt_δ)
+      exact (abs_lt.mp habs).1
+    dsimp [δ] at ht_re ⊢
+    linarith
+  have hw_pos : 0 < (w₀ + h).re := hδ.trans_le (hw_re h le_rfl)
+  have h_cfc_lin : cfcCpow A (w₀ + h) - cfcCpow A w₀ - h • cfc (dcpowOnReal w₀) A =
+      cfc (fun z => cpowOnReal (w₀ + h) z - cpowOnReal w₀ z - h * dcpowOnReal w₀ z) A := by
+    unfold cfcCpow
+    have hc1 := (continuous_cpowOnReal hw_pos).continuousOn (s := spectrum ℂ A)
+    have hc0 := (continuous_cpowOnReal hw₀).continuousOn (s := spectrum ℂ A)
+    have hcd := (continuous_dcpowOnReal hw₀).continuousOn (s := spectrum ℂ A)
+    have h1 := cfc_smul (-1 : ℂ) (cpowOnReal w₀) A hc0
+    have h2 := cfc_smul (-h) (dcpowOnReal w₀) A hcd
+    have h3 := cfc_add (a := A) (cpowOnReal (w₀ + h)) (fun z => (-1 : ℂ) • cpowOnReal w₀ z)
+      hc1 ((continuousOn_const (c := (-1 : ℂ))).smul hc0)
+    have h4 := cfc_add (a := A)
+      (fun z => cpowOnReal (w₀ + h) z + (-1 : ℂ) • cpowOnReal w₀ z)
+      (fun z => (-h) • dcpowOnReal w₀ z)
+      (hc1.add ((continuousOn_const (c := (-1 : ℂ))).smul hc0))
+      ((continuousOn_const (c := -h)).smul hcd)
+    have h_eq_fn : (fun z => cpowOnReal (w₀ + h) z - cpowOnReal w₀ z - h * dcpowOnReal w₀ z) =
+        fun z => (cpowOnReal (w₀ + h) z + (-1 : ℂ) • cpowOnReal w₀ z) +
+          (-h) • dcpowOnReal w₀ z := by
+      ext z
+      simp [sub_eq_add_neg]
+    rw [h_eq_fn, h4, h3, h1, h2]
+    simp [sub_eq_add_neg]
+  rw [h_cfc_lin]
+  have h_bd : ‖cfc (fun z => cpowOnReal (w₀ + h) z - cpowOnReal w₀ z -
+      h * dcpowOnReal w₀ z) A‖ ≤ (4 / δ ^ 2) * ‖h‖ ^ 2 := by
+    refine norm_cfc_le (by positivity) (fun z hz => ?_)
+    exact norm_cpowOnReal_taylor_le hδ hw_re
+      (spectrum_complex_mem_Icc_of_nonneg_contraction hA_pos hA_norm hz).2.2
+  calc ‖cfc (fun z => cpowOnReal (w₀ + h) z - cpowOnReal w₀ z - h * dcpowOnReal w₀ z) A‖
+      ≤ (4 / δ ^ 2) * ‖h‖ ^ 2 := h_bd
+    _ ≤ K * ‖h‖ ^ 2 := by
+        refine mul_le_mul_of_nonneg_right ?_ (sq_nonneg ‖h‖)
+        dsimp [K]
+        linarith
+    _ = (K * ‖h‖) * ‖h‖ := by ring
+    _ ≤ c * ‖h‖ := by
+        refine mul_le_mul_of_nonneg_right ?_ (norm_nonneg h)
+        exact (le_div_iff₀' hK).mp hh_lt_cK
+
+lemma continuousAt_cfcCpow {A : H →L[ℂ] H} (hA_pos : 0 ≤ A) (hA_norm : ‖A‖ ≤ 1)
+    {w₀ : ℂ} (hw₀ : 0 < w₀.re) :
+    ContinuousAt (cfcCpow A) w₀ :=
+  (hasDerivAt_cfcCpow hA_pos hA_norm hw₀).continuousAt
+
+lemma semigroup_dyadic_unit_eq_nnrpow {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t) (m : ℕ) :
+    T ((1 / 2 ^ m : ℝ≥0)) = (T 1) ^ ((1 / 2 ^ m : ℝ≥0)) := by
+  induction m with
+  | zero =>
+    have h1 : ((1 / 2 ^ 0 : ℝ≥0)) = 1 := by norm_num
+    rw [h1, CFC.nnrpow_one (T 1) (hpos 1)]
+  | succ m ih =>
+    let d : ℝ≥0 := 1 / 2 ^ (m + 1)
+    have hd_add : d + d = 1 / 2 ^ m := by
+      ext
+      dsimp [d]
+      ring
+    have h_sq : T d * T d = (T 1) ^ ((1 / 2 ^ m : ℝ≥0)) := by
+      change (T d).comp (T d) = _
+      rw [← hadd d d, hd_add, ih]
+    have h_sqrt : CFC.sqrt ((T 1) ^ ((1 / 2 ^ m : ℝ≥0))) = T d :=
+      (CFC.sqrt_eq_iff _ _ CFC.nnrpow_nonneg (hpos d)).mpr h_sq
+    have h_half : ((1 / 2 ^ m : ℝ≥0)) / 2 = d := by
+      ext
+      dsimp [d]
+      ring
+    rw [CFC.sqrt_nnrpow, h_half] at h_sqrt
+    exact h_sqrt.symm
+
+lemma semigroup_dyadic_eq_nnrpow {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t) (m k : ℕ) :
+    T (((k + 1 : ℕ) : ℝ≥0) * (1 / 2 ^ m : ℝ≥0)) =
+      (T 1) ^ (((k + 1 : ℕ) : ℝ≥0) * (1 / 2 ^ m : ℝ≥0)) := by
+  induction k with
+  | zero =>
+    simpa [one_div] using semigroup_dyadic_unit_eq_nnrpow hadd hpos m
+  | succ k ih =>
+    let d : ℝ≥0 := 1 / 2 ^ m
+    have hd_pos : 0 < d := by
+      dsimp [d]
+      positivity
+    have hk_pos : 0 < ((k + 1 : ℕ) : ℝ≥0) * d := mul_pos (by positivity) hd_pos
+    have h_split : (((k + 1 + 1 : ℕ) : ℝ≥0) * d) = ((k + 1 : ℕ) : ℝ≥0) * d + d := by
+      push_cast
+      ring
+    change T (((k + 1 + 1 : ℕ) : ℝ≥0) * d) = (T 1) ^ (((k + 1 + 1 : ℕ) : ℝ≥0) * d)
+    rw [h_split, hadd, CFC.nnrpow_add hk_pos hd_pos, ih,
+        semigroup_dyadic_unit_eq_nnrpow hadd hpos m]
+    rfl
+
+theorem semigroup_eq_cfcCpow_of_pos {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {t : ℝ≥0} (ht : 0 < t) :
+    T t = cfcCpow (T 1) ((t : ℝ) : ℂ) := by
+  let d : ℕ → ℝ≥0 := fun m =>
+    ((Nat.floor ((t : ℝ) * 2 ^ m) + 1 : ℕ) : ℝ≥0) * (1 / 2 ^ m : ℝ≥0)
+  have hd_tendsto_real : Tendsto (fun m : ℕ => (d m : ℝ)) Filter.atTop (𝓝 (t : ℝ)) := by
+    rw [Metric.tendsto_atTop]
+    intro ε hε
+    obtain ⟨N, hN⟩ := exists_pow_lt_of_lt_one hε (by norm_num : (1 / 2 : ℝ) < 1)
+    refine ⟨N, fun m hm => ?_⟩
+    have h2m_pos : (0 : ℝ) < 2 ^ m := by positivity
+    have h_le1 : (t : ℝ) * 2 ^ m ≤ (Nat.floor ((t : ℝ) * 2 ^ m) + 1 : ℝ) :=
+      (Nat.lt_floor_add_one _).le
+    have h_fl : (Nat.floor ((t : ℝ) * 2 ^ m) : ℝ) ≤ (t : ℝ) * 2 ^ m :=
+      Nat.floor_le (mul_nonneg t.2 h2m_pos.le)
+    have h_le2 : (Nat.floor ((t : ℝ) * 2 ^ m) + 1 : ℝ) ≤ (t : ℝ) * 2 ^ m + 1 := by
+      linarith
+    have hd_val : (d m : ℝ) = (Nat.floor ((t : ℝ) * 2 ^ m) + 1 : ℝ) / 2 ^ m := by
+      dsimp [d]
+      push_cast
+      ring
+    have h_low : (t : ℝ) ≤ (d m : ℝ) := by
+      rw [hd_val, le_div_iff₀ h2m_pos]
+      exact h_le1
+    have h_high : (d m : ℝ) - (t : ℝ) ≤ (1 / 2 : ℝ) ^ m := by
+      rw [hd_val, div_sub' h2m_pos.ne', div_le_iff₀ h2m_pos]
+      have h_cancel : (1 / 2 : ℝ) ^ m * 2 ^ m = 1 := by
+        rw [← mul_pow]
+        norm_num
+      linarith
+    rw [Real.dist_eq, abs_of_nonneg (sub_nonneg.mpr h_low)]
+    have h_mono : (1 / 2 : ℝ) ^ m ≤ (1 / 2 : ℝ) ^ N :=
+      pow_le_pow_of_le_one (by norm_num) (by norm_num) hm
+    exact (h_high.trans h_mono).trans_lt hN
+  have hd_tendsto : Tendsto d Filter.atTop (𝓝 t) :=
+    NNReal.tendsto_coe.mp hd_tendsto_real
+  have hd_eq : ∀ m : ℕ, T (d m) = cfcCpow (T 1) ((d m : ℝ) : ℂ) := by
+    intro m
+    have hd_pos : 0 < d m := by
+      dsimp [d]
+      positivity
+    rw [semigroup_dyadic_eq_nnrpow hadd hpos m (Nat.floor ((t : ℝ) * 2 ^ m)),
+        nnrpow_eq_cfcCpow (hpos 1) hnorm1 hd_pos]
+  ext x
+  have hL : Tendsto (fun m : ℕ => T (d m) x) Filter.atTop (𝓝 (T t x)) :=
+    ((hcont x).tendsto t).comp hd_tendsto
+  have hR_op : Tendsto (fun m : ℕ => cfcCpow (T 1) ((d m : ℝ) : ℂ)) Filter.atTop
+      (𝓝 (cfcCpow (T 1) ((t : ℝ) : ℂ))) := by
+    have ht_re : 0 < (((t : ℝ) : ℂ)).re := by simpa using ht
+    exact (continuousAt_cfcCpow (hpos 1) hnorm1 ht_re).tendsto.comp
+      (Complex.continuous_ofReal.continuousAt.tendsto.comp hd_tendsto_real)
+  have hR : Tendsto (fun m : ℕ => cfcCpow (T 1) ((d m : ℝ) : ℂ) x) Filter.atTop
+      (𝓝 (cfcCpow (T 1) ((t : ℝ) : ℂ) x)) :=
+    (ContinuousLinearMap.apply ℂ H x).continuous.tendsto _ |>.comp hR_op
+  have h_congr : (fun m : ℕ => T (d m) x) = fun m : ℕ => cfcCpow (T 1) ((d m : ℝ) : ℂ) x := by
+    ext m
+    rw [hd_eq m]
+  rw [h_congr] at hL
+  exact tendsto_nhds_unique hL hR
+
+lemma inner_cfcCpow_shift_eq_semigroup {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z : ℂ} (hz : 0 ≤ z.re) {δ₁ δ₂ : ℝ} (hδ₁ : 0 < δ₁) (hδ₂ : 0 < δ₂) (x : H) :
+    ⟪cfcCpow (T 1) (z + (δ₁ : ℂ)) x, cfcCpow (T 1) (z + (δ₂ : ℂ)) x⟫_ℂ =
+      ⟪x, T ⟨2 * z.re + δ₁ + δ₂, by positivity⟩ x⟫_ℂ := by
+  have hw₁ : 0 < (z + (δ₁ : ℂ)).re := by
+    simp [Complex.add_re]
+    linarith
+  have hw₂ : 0 < (z + (δ₂ : ℂ)).re := by
+    simp [Complex.add_re]
+    linarith
+  have hw₁_star : 0 < (star (z + (δ₁ : ℂ))).re := by
+    simpa using hw₁
+  have h_sum : star (z + (δ₁ : ℂ)) + (z + (δ₂ : ℂ)) = ((2 * z.re + δ₁ + δ₂ : ℝ) : ℂ) := by
+    apply Complex.ext
+    · simp; ring
+    · simp
+  let t₁₂ : ℝ≥0 := ⟨2 * z.re + δ₁ + δ₂, by positivity⟩
+  have ht₁₂_pos : 0 < t₁₂ := Subtype.mk_lt_mk.mpr (by positivity)
+  rw [inner_cfcCpow_adjoint (T 1) (z + (δ₁ : ℂ))]
+  change ⟪x, ((cfcCpow (T 1) (star (z + (δ₁ : ℂ)))).comp (cfcCpow (T 1) (z + (δ₂ : ℂ)))) x⟫_ℂ = _
+  rw [← cfcCpow_add (hpos 1) hw₁_star hw₂, h_sum]
+  have hT_eq := semigroup_eq_cfcCpow_of_pos hadd hpos hnorm1 hcont ht₁₂_pos
+  change _ = ⟪x, T t₁₂ x⟫_ℂ
+  rw [hT_eq]
+  rfl
+
+lemma exists_delta_cfcCpow_shift_sub_lt {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z : ℂ} (hz : 0 ≤ z.re) (x : H) {ε : ℝ} (hε : 0 < ε) :
+    ∃ η : ℝ, 0 < η ∧ ∀ δ₁ δ₂ : ℝ, 0 < δ₁ → δ₁ < η → 0 < δ₂ → δ₂ < η →
+      ‖cfcCpow (T 1) (z + (δ₁ : ℂ)) x - cfcCpow (T 1) (z + (δ₂ : ℂ)) x‖ < ε := by
+  let t₀ : ℝ≥0 := ⟨2 * z.re, mul_nonneg zero_le_two hz⟩
+  let g : ℝ≥0 → ℝ := fun t => RCLike.re ⟪x, T t x⟫_ℂ
+  have hg_cont : Continuous g := by
+    change Continuous (RCLike.reCLM ∘ fun t : ℝ≥0 => ⟪x, T t x⟫_ℂ)
+    exact RCLike.reCLM.continuous.comp ((continuous_const (y := x)).inner (hcont x))
+  have hε_sq : 0 < ε ^ 2 / 4 := by positivity
+  rcases Metric.continuousAt_iff.mp (hg_cont.continuousAt (x := t₀)) (ε ^ 2 / 4) hε_sq with
+    ⟨η₀, hη₀_pos, hη₀⟩
+  refine ⟨η₀ / 2, half_pos hη₀_pos, fun δ₁ δ₂ hδ₁_pos hδ₁_lt hδ₂_pos hδ₂_lt => ?_⟩
+  let u := cfcCpow (T 1) (z + (δ₁ : ℂ)) x
+  let v := cfcCpow (T 1) (z + (δ₂ : ℂ)) x
+  let t₁₁ : ℝ≥0 := ⟨2 * z.re + δ₁ + δ₁, by positivity⟩
+  let t₁₂ : ℝ≥0 := ⟨2 * z.re + δ₁ + δ₂, by positivity⟩
+  let t₂₂ : ℝ≥0 := ⟨2 * z.re + δ₂ + δ₂, by positivity⟩
+  have hu_sq : ‖u‖ ^ 2 = g t₁₁ := by
+    rw [@norm_sq_eq_re_inner ℂ H _ _ _ u]
+    dsimp [u, g, t₁₁]
+    rw [inner_cfcCpow_shift_eq_semigroup hadd hpos hnorm1 hcont hz hδ₁_pos hδ₁_pos x]
+  have hv_sq : ‖v‖ ^ 2 = g t₂₂ := by
+    rw [@norm_sq_eq_re_inner ℂ H _ _ _ v]
+    dsimp [v, g, t₂₂]
+    rw [inner_cfcCpow_shift_eq_semigroup hadd hpos hnorm1 hcont hz hδ₂_pos hδ₂_pos x]
+  have huv : RCLike.re ⟪u, v⟫_ℂ = g t₁₂ := by
+    dsimp [u, v, g, t₁₂]
+    rw [inner_cfcCpow_shift_eq_semigroup hadd hpos hnorm1 hcont hz hδ₁_pos hδ₂_pos x]
+  have h_dist₁₁ : dist t₁₁ t₀ < η₀ := by
+    change |(2 * z.re + δ₁ + δ₁) - 2 * z.re| < η₀
+    have h_eq : (2 * z.re + δ₁ + δ₁) - 2 * z.re = δ₁ + δ₁ := by ring
+    rw [h_eq, abs_of_pos (by positivity)]
+    linarith
+  have h_dist₁₂ : dist t₁₂ t₀ < η₀ := by
+    change |(2 * z.re + δ₁ + δ₂) - 2 * z.re| < η₀
+    have h_eq : (2 * z.re + δ₁ + δ₂) - 2 * z.re = δ₁ + δ₂ := by ring
+    rw [h_eq, abs_of_pos (by positivity)]
+    linarith
+  have h_dist₂₂ : dist t₂₂ t₀ < η₀ := by
+    change |(2 * z.re + δ₂ + δ₂) - 2 * z.re| < η₀
+    have h_eq : (2 * z.re + δ₂ + δ₂) - 2 * z.re = δ₂ + δ₂ := by ring
+    rw [h_eq, abs_of_pos (by positivity)]
+    linarith
+  have hb₁₁ : |g t₁₁ - g t₀| < ε ^ 2 / 4 := by
+    simpa [Real.dist_eq] using hη₀ h_dist₁₁
+  have hb₁₂ : |g t₁₂ - g t₀| < ε ^ 2 / 4 := by
+    simpa [Real.dist_eq] using hη₀ h_dist₁₂
+  have hb₂₂ : |g t₂₂ - g t₀| < ε ^ 2 / 4 := by
+    simpa [Real.dist_eq] using hη₀ h_dist₂₂
+  have h_norm_sq : ‖u - v‖ ^ 2 < ε ^ 2 := by
+    rw [norm_sub_sq (𝕜 := ℂ) u v, hu_sq, hv_sq, huv]
+    have h_split : g t₁₁ - 2 * g t₁₂ + g t₂₂ =
+        (g t₁₁ - g t₀) - 2 * (g t₁₂ - g t₀) + (g t₂₂ - g t₀) := by ring
+    rw [h_split]
+    linarith [le_abs_self (g t₁₁ - g t₀), neg_abs_le (g t₁₂ - g t₀), le_abs_self (g t₂₂ - g t₀)]
+  exact lt_of_pow_lt_pow_left₀ 2 hε.le h_norm_sq
+
+lemma exists_tendsto_cfcCpow_nhdsGT_zero {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z : ℂ} (hz : 0 ≤ z.re) (x : H) :
+    ∃ y : H, Tendsto (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) x) (𝓝[>] 0) (𝓝 y) := by
+  let F : ℝ → H := fun δ => cfcCpow (T 1) (z + (δ : ℂ)) x
+  let s : ℕ → ℝ := fun n => 1 / ((n : ℝ) + 1)
+  have hs_pos : ∀ n : ℕ, 0 < s n := fun n => by
+    dsimp [s]
+    positivity
+  have hs_tendsto : Tendsto s atTop (𝓝 0) :=
+    tendsto_one_div_add_atTop_nhds_zero_nat
+  have h_cauchy : CauchySeq (fun n : ℕ => F (s n)) := by
+    rw [Metric.cauchySeq_iff]
+    intro ε hε
+    rcases exists_delta_cfcCpow_shift_sub_lt hadd hpos hnorm1 hcont hz x hε with ⟨η, hη, h_sub⟩
+    rcases Metric.tendsto_atTop.mp hs_tendsto η hη with ⟨N, hN⟩
+    refine ⟨N, fun m hm n hn => ?_⟩
+    have hm_lt : s m < η := by
+      have hm_d := hN m hm
+      rwa [Real.dist_eq, sub_zero, abs_of_pos (hs_pos m)] at hm_d
+    have hn_lt : s n < η := by
+      have hn_d := hN n hn
+      rwa [Real.dist_eq, sub_zero, abs_of_pos (hs_pos n)] at hn_d
+    rw [dist_eq_norm]
+    exact h_sub (s m) (s n) (hs_pos m) hm_lt (hs_pos n) hn_lt
+  rcases cauchySeq_tendsto_of_complete h_cauchy with ⟨y, hy⟩
+  refine ⟨y, Metric.tendsto_nhdsWithin_nhds.mpr (fun ε hε => ?_)⟩
+  rcases exists_delta_cfcCpow_shift_sub_lt hadd hpos hnorm1 hcont hz x (half_pos hε) with
+    ⟨η, hη, h_sub⟩
+  rcases Metric.tendsto_atTop.mp hs_tendsto η hη with ⟨N₁, hN₁⟩
+  rcases Metric.tendsto_atTop.mp hy (ε / 2) (half_pos hε) with ⟨N₂, hN₂⟩
+  let N := max N₁ N₂
+  have hsN_lt : s N < η := by
+    have h_d := hN₁ N (le_max_left _ _)
+    rwa [Real.dist_eq, sub_zero, abs_of_pos (hs_pos N)] at h_d
+  have hFN_lt : ‖F (s N) - y‖ < ε / 2 := by
+    simpa [dist_eq_norm] using hN₂ N (le_max_right _ _)
+  refine ⟨η, hη, fun δ hδ_pos hδ_dist => ?_⟩
+  have hδ_lt : δ < η := by
+    have hδ_pos' : 0 < δ := hδ_pos
+    rwa [Real.dist_eq, sub_zero, abs_of_pos hδ_pos'] at hδ_dist
+  rw [dist_eq_norm]
+  calc ‖F δ - y‖
+      ≤ ‖F δ - F (s N)‖ + ‖F (s N) - y‖ := norm_sub_le_norm_sub_add_norm_sub (F δ) (F (s N)) y
+    _ < ε / 2 + ε / 2 := add_lt_add (h_sub δ (s N) hδ_pos hδ_lt (hs_pos N) hsN_lt) hFN_lt
+    _ = ε := add_halves ε
+
+def semigroupRightHalfPlaneVec {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    (z : ℂ) (hz : 0 ≤ z.re) (x : H) : H :=
+  Classical.choose (exists_tendsto_cfcCpow_nhdsGT_zero hadd hpos hnorm1 hcont hz x)
+
+lemma tendsto_cfcCpow_semigroupRightHalfPlaneVec {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z : ℂ} (hz : 0 ≤ z.re) (x : H) :
+    Tendsto (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) x) (𝓝[>] 0)
+      (𝓝 (semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont z hz x)) :=
+  Classical.choose_spec (exists_tendsto_cfcCpow_nhdsGT_zero hadd hpos hnorm1 hcont hz x)
+
+def semigroupRightHalfPlane {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    (z : ℂ) (hz : 0 ≤ z.re) : H →L[ℂ] H :=
+  LinearMap.mkContinuous
+    { toFun := semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont z hz
+      map_add' := fun x y => by
+        have hx := tendsto_cfcCpow_semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont hz x
+        have hy := tendsto_cfcCpow_semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont hz y
+        have hxy := tendsto_cfcCpow_semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont hz (x + y)
+        have hsum := hx.add hy
+        have h_eq : (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) (x + y)) =
+            fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) x + cfcCpow (T 1) (z + (δ : ℂ)) y := by
+          ext δ
+          exact map_add _ x y
+        rw [h_eq] at hxy
+        exact tendsto_nhds_unique hxy hsum
+      map_smul' := fun c x => by
+        have hx := tendsto_cfcCpow_semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont hz x
+        have hcx := tendsto_cfcCpow_semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont hz (c • x)
+        have hsmul := hx.const_smul c
+        have h_eq : (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) (c • x)) =
+            fun δ : ℝ => c • cfcCpow (T 1) (z + (δ : ℂ)) x := by
+          ext δ
+          exact map_smul _ c x
+        rw [h_eq] at hcx
+        exact tendsto_nhds_unique hcx hsmul }
+    1
+    (fun x => by
+      rw [one_mul]
+      have hx := tendsto_cfcCpow_semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont hz x
+      have h_norm : Tendsto (fun δ : ℝ => ‖cfcCpow (T 1) (z + (δ : ℂ)) x‖) (𝓝[>] 0)
+          (𝓝 ‖semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont z hz x‖) := hx.norm
+      have h_le : ∀ᶠ δ : ℝ in 𝓝[>] 0, ‖cfcCpow (T 1) (z + (δ : ℂ)) x‖ ≤ ‖x‖ := by
+        filter_upwards [self_mem_nhdsWithin] with δ (hδ : 0 < δ)
+        have hw : 0 ≤ (z + (δ : ℂ)).re := by
+          simp [Complex.add_re]
+          linarith
+        calc ‖cfcCpow (T 1) (z + (δ : ℂ)) x‖
+            ≤ ‖cfcCpow (T 1) (z + (δ : ℂ))‖ * ‖x‖ := ContinuousLinearMap.le_opNorm _ x
+          _ ≤ 1 * ‖x‖ := mul_le_mul_of_nonneg_right
+              (norm_cfcCpow_le_one (hpos 1) hnorm1 hw) (norm_nonneg x)
+          _ = ‖x‖ := one_mul ‖x‖
+      haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+      exact le_of_tendsto h_norm h_le)
+
+lemma tendsto_cfcCpow_semigroupRightHalfPlane {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z : ℂ} (hz : 0 ≤ z.re) (x : H) :
+    Tendsto (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) x) (𝓝[>] 0)
+      (𝓝 (semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz x)) :=
+  tendsto_cfcCpow_semigroupRightHalfPlaneVec hadd hpos hnorm1 hcont hz x
+
+theorem semigroupRightHalfPlane_eq_cfcCpow_of_re_pos {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z : ℂ} (hz : 0 < z.re) :
+    semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz.le = cfcCpow (T 1) z := by
+  ext x
+  have h1 := tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont hz.le x
+  have h_add_cont : ContinuousAt (fun δ : ℝ => z + (δ : ℂ)) 0 :=
+    continuousAt_const.add Complex.continuous_ofReal.continuousAt
+  have h_op : ContinuousAt (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ))) 0 :=
+    (continuousAt_cfcCpow (hpos 1) hnorm1 (by simpa using hz)).comp h_add_cont
+  have h2 : Tendsto (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) x) (𝓝[>] 0)
+      (𝓝 (cfcCpow (T 1) z x)) := by
+    have h_at : ContinuousAt (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) x) 0 :=
+      (ContinuousLinearMap.apply ℂ H x).continuous.continuousAt.comp h_op
+    simpa using h_at.tendsto.mono_left nhdsWithin_le_nhds
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique h1 h2
+
+theorem semigroupRightHalfPlane_real_eq {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    (t : ℝ≥0) :
+    semigroupRightHalfPlane hadd hpos hnorm1 hcont ((t : ℝ) : ℂ) (by simp) = T t := by
+  by_cases ht : 0 < t
+  · rw [semigroupRightHalfPlane_eq_cfcCpow_of_re_pos hadd hpos hnorm1 hcont (by simpa using ht),
+        semigroup_eq_cfcCpow_of_pos hadd hpos hnorm1 hcont ht]
+  · have ht0 : t = 0 := le_antisymm (not_lt.mp ht) zero_le
+    subst ht0
+    ext x
+    have h1 := tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont
+      (z := (((0 : ℝ≥0) : ℝ) : ℂ)) (by simp) x
+    have h2 : Tendsto (fun δ : ℝ => T (Real.toNNReal δ) x) (𝓝[>] 0) (𝓝 (T 0 x)) := by
+      have h_nn : Continuous Real.toNNReal := continuous_real_toNNReal
+      have h_at : ContinuousAt (fun δ : ℝ => T (Real.toNNReal δ) x) 0 :=
+        ContinuousAt.comp (g := fun s : ℝ≥0 => T s x) (f := Real.toNNReal)
+          ((hcont x).continuousAt) h_nn.continuousAt
+      simpa [Real.toNNReal_zero] using h_at.tendsto.mono_left nhdsWithin_le_nhds
+    have h_ev : (fun δ : ℝ => cfcCpow (T 1) ((((0 : ℝ≥0) : ℝ) : ℂ) + (δ : ℂ)) x) =ᶠ[𝓝[>] 0]
+        fun δ : ℝ => T (Real.toNNReal δ) x := by
+      filter_upwards [self_mem_nhdsWithin] with δ (hδ : 0 < δ)
+      have hδ_nn : 0 < Real.toNNReal δ := Real.toNNReal_pos.mpr hδ
+      have h_coe : ((Real.toNNReal δ : ℝ) : ℂ) = (((0 : ℝ≥0) : ℝ) : ℂ) + (δ : ℂ) := by
+        simp [Real.coe_toNNReal δ hδ.le]
+      rw [semigroup_eq_cfcCpow_of_pos hadd hpos hnorm1 hcont hδ_nn, h_coe]
+    haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+    exact tendsto_nhds_unique h1 (h2.congr' h_ev.symm)
+
+theorem semigroupRightHalfPlane_add {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z₁ z₂ : ℂ} (hz₁ : 0 ≤ z₁.re) (hz₂ : 0 ≤ z₂.re) :
+    semigroupRightHalfPlane hadd hpos hnorm1 hcont (z₁ + z₂)
+      (by simp [Complex.add_re]; linarith) =
+      (semigroupRightHalfPlane hadd hpos hnorm1 hcont z₁ hz₁).comp
+        (semigroupRightHalfPlane hadd hpos hnorm1 hcont z₂ hz₂) := by
+  let Z := semigroupRightHalfPlane hadd hpos hnorm1 hcont
+  have h_step1 : ∀ (w₁ : ℂ) (hw₁ : 0 < w₁.re) (x : H),
+      Z (w₁ + z₂) (by simp [Complex.add_re]; linarith) x =
+        cfcCpow (T 1) w₁ (Z z₂ hz₂ x) := by
+    intro w₁ hw₁ x
+    have hL : Tendsto (fun δ : ℝ => cfcCpow (T 1) ((w₁ + z₂) + (δ : ℂ)) x) (𝓝[>] 0)
+        (𝓝 (Z (w₁ + z₂) (by simp [Complex.add_re]; linarith) x)) :=
+      tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont _ x
+    have hR : Tendsto (fun δ : ℝ => cfcCpow (T 1) w₁ (cfcCpow (T 1) (z₂ + (δ : ℂ)) x)) (𝓝[>] 0)
+        (𝓝 (cfcCpow (T 1) w₁ (Z z₂ hz₂ x))) :=
+      (cfcCpow (T 1) w₁).continuous.tendsto _ |>.comp
+        (tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont hz₂ x)
+    have h_ev : (fun δ : ℝ => cfcCpow (T 1) ((w₁ + z₂) + (δ : ℂ)) x) =ᶠ[𝓝[>] 0]
+        fun δ : ℝ => cfcCpow (T 1) w₁ (cfcCpow (T 1) (z₂ + (δ : ℂ)) x) := by
+      filter_upwards [self_mem_nhdsWithin] with δ (hδ : 0 < δ)
+      have hw₂_pos : 0 < (z₂ + (δ : ℂ)).re := by
+        simp [Complex.add_re]
+        linarith
+      rw [add_assoc, cfcCpow_add (hpos 1) hw₁ hw₂_pos]
+      rfl
+    haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+    exact tendsto_nhds_unique (hL.congr' h_ev) hR
+  ext x
+  change Z (z₁ + z₂) _ x = Z z₁ hz₁ (Z z₂ hz₂ x)
+  have hR : Tendsto (fun δ : ℝ => cfcCpow (T 1) (z₁ + (δ : ℂ)) (Z z₂ hz₂ x)) (𝓝[>] 0)
+      (𝓝 (Z z₁ hz₁ (Z z₂ hz₂ x))) :=
+    tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont hz₁ (Z z₂ hz₂ x)
+  have hL : Tendsto (fun δ : ℝ => cfcCpow (T 1) ((z₁ + z₂) + (δ : ℂ)) x) (𝓝[>] 0)
+      (𝓝 (Z (z₁ + z₂) (by simp [Complex.add_re]; linarith) x)) :=
+    tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont _ x
+  have h_ev : (fun δ : ℝ => cfcCpow (T 1) ((z₁ + z₂) + (δ : ℂ)) x) =ᶠ[𝓝[>] 0]
+      fun δ : ℝ => cfcCpow (T 1) (z₁ + (δ : ℂ)) (Z z₂ hz₂ x) := by
+    filter_upwards [self_mem_nhdsWithin] with δ (hδ : 0 < δ)
+    have hw₁_pos : 0 < (z₁ + (δ : ℂ)).re := by
+      simp [Complex.add_re]
+      linarith
+    have hw_sum_pos : 0 < ((z₁ + z₂) + (δ : ℂ)).re := by
+      simp [Complex.add_re]
+      linarith
+    have h_reassoc : (z₁ + z₂) + (δ : ℂ) = (z₁ + (δ : ℂ)) + z₂ := by ring
+    rw [← semigroupRightHalfPlane_eq_cfcCpow_of_re_pos hadd hpos hnorm1 hcont hw_sum_pos]
+    change Z ((z₁ + z₂) + (δ : ℂ)) _ x = _
+    have h_congr : Z ((z₁ + z₂) + (δ : ℂ)) hw_sum_pos.le x =
+        Z ((z₁ + (δ : ℂ)) + z₂) (by simp [Complex.add_re] at hw₁_pos ⊢; linarith) x := by
+      congr 2
+    rw [h_congr, h_step1 (z₁ + (δ : ℂ)) hw₁_pos x]
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique (hL.congr' h_ev) hR
+
+theorem norm_semigroupRightHalfPlane_apply_le {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z : ℂ} (hz : 0 ≤ z.re) (x : H) :
+    ‖semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz x‖ ≤ ‖x‖ := by
+  have hop : ‖semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz‖ ≤ 1 :=
+    LinearMap.mkContinuous_norm_le _ zero_le_one _
+  calc ‖semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz x‖
+      ≤ ‖semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz‖ * ‖x‖ :=
+        ContinuousLinearMap.le_opNorm _ x
+    _ ≤ 1 * ‖x‖ := mul_le_mul_of_nonneg_right hop (norm_nonneg x)
+    _ = ‖x‖ := one_mul ‖x‖
+
+theorem semigroupRightHalfPlane_fix {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {Ω : H} (hfix : ∀ t : ℝ≥0, T t Ω = Ω) {z : ℂ} (hz : 0 ≤ z.re) :
+    semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz Ω = Ω := by
+  have h_cfc_fix : ∀ (w : ℂ), 0 < w.re → cfcCpow (T 1) w Ω = Ω := by
+    intro w hw
+    have h_ww : ⟪cfcCpow (T 1) w Ω, cfcCpow (T 1) w Ω⟫_ℂ = ⟪Ω, Ω⟫_ℂ := by
+      rw [inner_cfcCpow_adjoint (T 1) w]
+      change ⟪Ω, ((cfcCpow (T 1) (star w)).comp (cfcCpow (T 1) w)) Ω⟫_ℂ = _
+      have hw_star : 0 < (star w).re := by simpa using hw
+      rw [← cfcCpow_add (hpos 1) hw_star hw]
+      have h_sum : star w + w = ((2 * w.re : ℝ) : ℂ) := by
+        apply Complex.ext
+        · simp; ring
+        · simp
+      rw [h_sum]
+      let t₂ : ℝ≥0 := ⟨2 * w.re, by positivity⟩
+      have ht₂ : 0 < t₂ := Subtype.mk_lt_mk.mpr (by positivity)
+      have h_eq := semigroup_eq_cfcCpow_of_pos hadd hpos hnorm1 hcont ht₂
+      change ⟪Ω, cfcCpow (T 1) ((t₂ : ℝ) : ℂ) Ω⟫_ℂ = ⟪Ω, Ω⟫_ℂ
+      rw [← h_eq, hfix t₂]
+    have h_wΩ : ⟪cfcCpow (T 1) w Ω, Ω⟫_ℂ = ⟪Ω, Ω⟫_ℂ := by
+      have h_an : DifferentiableOn ℂ (fun u : ℂ => ⟪Ω, cfcCpow (T 1) u Ω⟫_ℂ)
+          {u : ℂ | 0 < u.re} := by
+        intro u hu
+        have hd : HasDerivAt (fun ζ : ℂ => ⟪Ω, cfcCpow (T 1) ζ Ω⟫_ℂ)
+            ⟪Ω, cfc (dcpowOnReal u) (T 1) Ω⟫_ℂ u := by
+          have h1 := ((ContinuousLinearMap.apply ℂ H Ω).hasFDerivAt.comp_hasDerivAt u
+            (hasDerivAt_cfcCpow (hpos 1) hnorm1 hu))
+          exact (innerSL ℂ Ω).hasFDerivAt.comp_hasDerivAt u h1
+        exact hd.differentiableAt.differentiableWithinAt
+      have h_open : IsOpen {u : ℂ | 0 < u.re} := isOpen_lt continuous_const Complex.continuous_re
+      have h_preconn : IsPreconnected {u : ℂ | 0 < u.re} :=
+        (convex_halfSpace_gt Complex.reLm.isLinear 0).isPreconnected
+      have h_diff_sub : AnalyticOnNhd ℂ (fun u : ℂ => ⟪Ω, cfcCpow (T 1) u Ω⟫_ℂ - ⟪Ω, Ω⟫_ℂ)
+          {u : ℂ | 0 < u.re} :=
+        h_open.analyticOn_iff_analyticOnNhd.mp
+          ((h_an.sub (differentiableOn_const _)).analyticOn h_open)
+      have h_real_zero : ∀ s : ℝ, 0 < s →
+          ⟪Ω, cfcCpow (T 1) (s : ℂ) Ω⟫_ℂ - ⟪Ω, Ω⟫_ℂ = 0 := by
+        intro s hs
+        let ts : ℝ≥0 := ⟨s, hs.le⟩
+        have hts : 0 < ts := Subtype.mk_lt_mk.mpr hs
+        change ⟪Ω, cfcCpow (T 1) ((ts : ℝ) : ℂ) Ω⟫_ℂ - ⟪Ω, Ω⟫_ℂ = 0
+        rw [← semigroup_eq_cfcCpow_of_pos hadd hpos hnorm1 hcont hts, hfix ts, sub_self]
+      have h_freq : ∃ᶠ u in 𝓝[≠] (1 : ℂ),
+          ⟪Ω, cfcCpow (T 1) u Ω⟫_ℂ - ⟪Ω, Ω⟫_ℂ = 0 := by
+        rw [Filter.frequently_iff]
+        intro U hU
+        rw [mem_nhdsWithin] at hU
+        rcases hU with ⟨V, hV_open, h1V, hVU⟩
+        rcases Metric.isOpen_iff.mp hV_open 1 h1V with ⟨r, hr_pos, hrV⟩
+        let s : ℝ := 1 + r / 2
+        have hs_pos : 0 < s := by dsimp [s]; linarith
+        have hs_mem_V : (s : ℂ) ∈ V := by
+          apply hrV
+          rw [Metric.mem_ball, Complex.dist_eq]
+          have h_sub : (s : ℂ) - 1 = ((r / 2 : ℝ) : ℂ) := by dsimp [s]; push_cast; ring
+          rw [h_sub, Complex.norm_real, Real.norm_eq_abs, abs_of_pos (half_pos hr_pos)]
+          linarith
+        have hs_ne : (s : ℂ) ≠ 1 := by
+          intro h_eq
+          have : s = 1 := by exact_mod_cast h_eq
+          dsimp [s] at this
+          linarith
+        exact ⟨(s : ℂ), hVU ⟨hs_mem_V, hs_ne⟩, h_real_zero s hs_pos⟩
+      have h_zero_all := h_diff_sub.eqOn_zero_of_preconnected_of_frequently_eq_zero
+        h_preconn (by simp : (1 : ℂ) ∈ {u : ℂ | 0 < u.re}) h_freq
+      have hw_star : (star w) ∈ {u : ℂ | 0 < u.re} := by simpa using hw
+      have h_eval := sub_eq_zero.mp (h_zero_all hw_star)
+      rw [inner_cfcCpow_adjoint (T 1) w, h_eval]
+    have h_norm_sq : ‖cfcCpow (T 1) w Ω - Ω‖ ^ 2 ≤ 0 := by
+      rw [norm_sub_sq (𝕜 := ℂ), @norm_sq_eq_re_inner ℂ H _ _ _ (cfcCpow (T 1) w Ω),
+          @norm_sq_eq_re_inner ℂ H _ _ _ Ω, h_ww, h_wΩ]
+      linarith
+    have h_sq0 : ‖cfcCpow (T 1) w Ω - Ω‖ ^ 2 = 0 :=
+      le_antisymm h_norm_sq (sq_nonneg _)
+    exact sub_eq_zero.mp (norm_eq_zero.mp (sq_eq_zero_iff.mp h_sq0))
+  have h1 := tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont hz Ω
+  have h_ev : (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) Ω) =ᶠ[𝓝[>] 0] fun _ : ℝ => Ω := by
+    filter_upwards [self_mem_nhdsWithin] with δ (hδ : 0 < δ)
+    exact h_cfc_fix (z + (δ : ℂ)) (by simp [Complex.add_re]; linarith)
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique (h1.congr' h_ev) tendsto_const_nhds
+
+theorem inner_semigroupRightHalfPlane_adjoint {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {z : ℂ} (hz : 0 ≤ z.re) (x y : H) :
+    ⟪semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz x, y⟫_ℂ =
+      ⟪x, semigroupRightHalfPlane hadd hpos hnorm1 hcont (star z) (by simpa using hz) y⟫_ℂ := by
+  have hx := tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont hz x
+  have hy := tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont
+    (z := star z) (by simpa using hz) y
+  have hL : Tendsto (fun δ : ℝ => ⟪cfcCpow (T 1) (z + (δ : ℂ)) x, y⟫_ℂ) (𝓝[>] 0)
+      (𝓝 ⟪semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz x, y⟫_ℂ) :=
+    hx.inner tendsto_const_nhds
+  have hR : Tendsto (fun δ : ℝ => ⟪x, cfcCpow (T 1) (star z + (δ : ℂ)) y⟫_ℂ) (𝓝[>] 0)
+      (𝓝 ⟪x, semigroupRightHalfPlane hadd hpos hnorm1 hcont (star z) (by simpa using hz) y⟫_ℂ) :=
+    tendsto_const_nhds.inner hy
+  have h_ev : (fun δ : ℝ => ⟪cfcCpow (T 1) (z + (δ : ℂ)) x, y⟫_ℂ) =ᶠ[𝓝[>] 0]
+      fun δ : ℝ => ⟪x, cfcCpow (T 1) (star z + (δ : ℂ)) y⟫_ℂ := by
+    filter_upwards [self_mem_nhdsWithin] with δ _
+    have h_star : star (z + (δ : ℂ)) = star z + (δ : ℂ) := by simp
+    rw [inner_cfcCpow_adjoint (T 1) (z + (δ : ℂ)), h_star]
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique (hL.congr' h_ev) hR
+
+theorem commute_semigroupRightHalfPlane {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    {B : H →L[ℂ] H} (hB : B.comp (T 1) = (T 1).comp B) {z : ℂ} (hz : 0 ≤ z.re) :
+    B.comp (semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz) =
+      (semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz).comp B := by
+  ext x
+  have hL : Tendsto (fun δ : ℝ => B (cfcCpow (T 1) (z + (δ : ℂ)) x)) (𝓝[>] 0)
+      (𝓝 (B (semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz x))) :=
+    B.continuous.tendsto _ |>.comp
+      (tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont hz x)
+  have hR : Tendsto (fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) (B x)) (𝓝[>] 0)
+      (𝓝 (semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz (B x))) :=
+    tendsto_cfcCpow_semigroupRightHalfPlane hadd hpos hnorm1 hcont hz (B x)
+  have h_ev : (fun δ : ℝ => B (cfcCpow (T 1) (z + (δ : ℂ)) x)) =ᶠ[𝓝[>] 0]
+      fun δ : ℝ => cfcCpow (T 1) (z + (δ : ℂ)) (B x) := by
+    filter_upwards [self_mem_nhdsWithin] with δ _
+    exact congrArg (fun L : H →L[ℂ] H => L x) (commute_cfcCpow (hpos 1) hB (z + (δ : ℂ)))
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique (hL.congr' h_ev) hR
+
+def semigroupRightHalfPlaneTotal {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    (z : ℂ) : H →L[ℂ] H :=
+  if hz : 0 ≤ z.re then semigroupRightHalfPlane hadd hpos hnorm1 hcont z hz else 0
+
+theorem differentiableOn_semigroupRightHalfPlaneTotal {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x)) :
+    DifferentiableOn ℂ (semigroupRightHalfPlaneTotal hadd hpos hnorm1 hcont)
+      {z : ℂ | 0 < z.re} := by
+  have h_diff : DifferentiableOn ℂ (cfcCpow (T 1)) {z : ℂ | 0 < z.re} := fun z hz =>
+    (hasDerivAt_cfcCpow (hpos 1) hnorm1 hz).differentiableAt.differentiableWithinAt
+  refine h_diff.congr (fun z hz => ?_)
+  have hz' : 0 < z.re := hz
+  dsimp [semigroupRightHalfPlaneTotal]
+  rw [dif_pos hz'.le, semigroupRightHalfPlane_eq_cfcCpow_of_re_pos hadd hpos hnorm1 hcont hz']
+
+theorem continuousOn_semigroupRightHalfPlaneTotal_apply {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hzero : T 0 = ContinuousLinearMap.id ℂ H)
+    (hpos : ∀ t : ℝ≥0, 0 ≤ T t)
+    (hnorm1 : ‖T 1‖ ≤ 1)
+    (hcont : ∀ x : H, Continuous (fun t : ℝ≥0 => T t x))
+    (x : H) :
+    ContinuousOn (fun z : ℂ => semigroupRightHalfPlaneTotal hadd hpos hnorm1 hcont z x)
+      {z : ℂ | 0 ≤ z.re} := by
+  intro z₀ hz₀
+  rw [Metric.continuousWithinAt_iff]
+  intro ε hε
+  have hT0 : T 0 x = x := by rw [hzero]; rfl
+  have h_lim_δ : Tendsto (fun t : ℝ≥0 => ‖T t x - x‖) (𝓝 0) (𝓝 0) := by
+    have h_fn_cont : Continuous (fun t : ℝ≥0 => ‖T t x - x‖) :=
+      ((hcont x).sub (continuous_const (y := x))).norm
+    simpa [hT0] using (h_fn_cont.continuousAt (x := (0 : ℝ≥0))).tendsto
+  rcases Metric.tendsto_nhds_nhds.mp h_lim_δ (ε / 4) (by positivity) with ⟨η₁, hη₁, h_η₁⟩
+  let δ : ℝ≥0 := ⟨η₁ / 2, (half_pos hη₁).le⟩
+  have hδ_pos : (0 : ℝ) < (δ : ℝ) := half_pos hη₁
+  have hTδ_lt : ‖T δ x - x‖ < ε / 4 := by
+    have hd : dist δ 0 < η₁ := by
+      change |(η₁ / 2 : ℝ) - 0| < η₁
+      rw [sub_zero, abs_of_pos (half_pos hη₁)]
+      linarith
+    simpa [Real.dist_eq] using h_η₁ hd
+  have hz₀_δ_pos : 0 < (z₀ + ((δ : ℝ) : ℂ)).re := by
+    have hz₀' : 0 ≤ z₀.re := hz₀
+    simp [Complex.add_re]
+    linarith
+  have h_cfc_cont : ContinuousAt (fun z : ℂ => cfcCpow (T 1) (z + ((δ : ℝ) : ℂ)) x) z₀ := by
+    have h1 : ContinuousAt (fun z : ℂ => z + ((δ : ℝ) : ℂ)) z₀ :=
+      continuousAt_id.add continuousAt_const
+    have h2 : ContinuousAt (fun z : ℂ => cfcCpow (T 1) (z + ((δ : ℝ) : ℂ))) z₀ :=
+      ContinuousAt.comp (g := cfcCpow (T 1)) (f := fun z : ℂ => z + ((δ : ℝ) : ℂ))
+        (continuousAt_cfcCpow (hpos 1) hnorm1 hz₀_δ_pos) h1
+    exact ContinuousAt.comp (g := fun L : H →L[ℂ] H => L x)
+      (f := fun z : ℂ => cfcCpow (T 1) (z + ((δ : ℝ) : ℂ)))
+      ((ContinuousLinearMap.apply ℂ H x).continuous.continuousAt) h2
+  rcases Metric.continuousAt_iff.mp h_cfc_cont (ε / 2) (by positivity) with ⟨η₂, hη₂, h_η₂⟩
+  refine ⟨η₂, hη₂, fun z hz h_dist => ?_⟩
+  have hz' : 0 ≤ z.re := hz
+  have hz₀' : 0 ≤ z₀.re := hz₀
+  let Z := semigroupRightHalfPlane hadd hpos hnorm1 hcont
+  have h_id_z : ∀ (w : ℂ) (hw : 0 ≤ w.re),
+      Z w hw (T δ x) = cfcCpow (T 1) (w + ((δ : ℝ) : ℂ)) x := by
+    intro w hw
+    have hwδ_pos : 0 < (w + ((δ : ℝ) : ℂ)).re := by
+      simp [Complex.add_re]
+      linarith
+    rw [← semigroupRightHalfPlane_real_eq hadd hpos hnorm1 hcont δ]
+    change (Z w hw).comp (Z ((δ : ℝ) : ℂ) (by simp)) x = _
+    rw [← semigroupRightHalfPlane_add hadd hpos hnorm1 hcont hw (by simp),
+        semigroupRightHalfPlane_eq_cfcCpow_of_re_pos hadd hpos hnorm1 hcont hwδ_pos]
+  dsimp [semigroupRightHalfPlaneTotal]
+  rw [dif_pos hz', dif_pos hz₀', dist_eq_norm]
+  have h_split : Z z hz' x - Z z₀ hz₀' x =
+      Z z hz' (x - T δ x) +
+        (cfcCpow (T 1) (z + ((δ : ℝ) : ℂ)) x - cfcCpow (T 1) (z₀ + ((δ : ℝ) : ℂ)) x) +
+        Z z₀ hz₀' (T δ x - x) := by
+    rw [← h_id_z z hz', ← h_id_z z₀ hz₀', map_sub, map_sub]
+    abel
+  rw [h_split]
+  have h1_le : ‖Z z hz' (x - T δ x)‖ ≤ ‖T δ x - x‖ := by
+    rw [norm_sub_rev (T δ x) x]
+    exact norm_semigroupRightHalfPlane_apply_le hadd hpos hnorm1 hcont hz' (x - T δ x)
+  have h3_le : ‖Z z₀ hz₀' (T δ x - x)‖ ≤ ‖T δ x - x‖ :=
+    norm_semigroupRightHalfPlane_apply_le hadd hpos hnorm1 hcont hz₀' (T δ x - x)
+  have h2_lt : ‖cfcCpow (T 1) (z + ((δ : ℝ) : ℂ)) x -
+      cfcCpow (T 1) (z₀ + ((δ : ℝ) : ℂ)) x‖ < ε / 2 := by
+    simpa [dist_eq_norm] using h_η₂ h_dist
+  calc ‖Z z hz' (x - T δ x) +
+        (cfcCpow (T 1) (z + ((δ : ℝ) : ℂ)) x - cfcCpow (T 1) (z₀ + ((δ : ℝ) : ℂ)) x) +
+        Z z₀ hz₀' (T δ x - x)‖
+      ≤ ‖Z z hz' (x - T δ x)‖ +
+          ‖cfcCpow (T 1) (z + ((δ : ℝ) : ℂ)) x - cfcCpow (T 1) (z₀ + ((δ : ℝ) : ℂ)) x‖ +
+          ‖Z z₀ hz₀' (T δ x - x)‖ :=
+        (norm_add_le _ _).trans (add_le_add (norm_add_le _ _) le_rfl)
+    _ < ε / 4 + ε / 2 + ε / 4 := by linarith
+    _ = ε := by ring
+
+omit [CompleteSpace H] in
+lemma continuous_semigroup_of_tendsto_zero {T : ℝ≥0 → (H →L[ℂ] H)}
+    (hadd : ∀ s t : ℝ≥0, T (s + t) = (T s).comp (T t))
+    (hnorm : ∀ t : ℝ≥0, ∀ x : H, ‖T t x‖ ≤ ‖x‖)
+    (hzero_lim : ∀ x : H, Tendsto (fun t : ℝ≥0 => T t x) (𝓝 0) (𝓝 x)) (x : H) :
+    Continuous (fun t : ℝ≥0 => T t x) := by
+  rw [continuous_iff_continuousAt]
+  intro t₀
+  rw [Metric.continuousAt_iff]
+  intro ε hε
+  rcases Metric.tendsto_nhds_nhds.mp (hzero_lim x) ε hε with ⟨δ, hδ, h_δ⟩
+  refine ⟨δ, hδ, fun t ht => ?_⟩
+  rw [dist_eq_norm]
+  by_cases hle : t₀ ≤ t
+  · let d : ℝ≥0 := t - t₀
+    have h_sum : t₀ + d = t := add_tsub_cancel_of_le hle
+    have hd_dist : dist d 0 < δ := by
+      have h_sub_coe : (d : ℝ) = (t : ℝ) - (t₀ : ℝ) := NNReal.coe_sub hle
+      have h_nn : 0 ≤ (t : ℝ) - (t₀ : ℝ) := sub_nonneg.mpr hle
+      change |(d : ℝ) - 0| < δ
+      rw [sub_zero, h_sub_coe, ← abs_of_nonneg h_nn]
+      simpa [NNReal.dist_eq, Real.dist_eq] using ht
+    have h_step : T t x - T t₀ x = T t₀ (T d x - x) := by
+      rw [← h_sum, hadd, ContinuousLinearMap.comp_apply, map_sub]
+    rw [h_step]
+    exact (hnorm t₀ (T d x - x)).trans_lt (by simpa [dist_eq_norm] using h_δ hd_dist)
+  · have hle' : t ≤ t₀ := le_of_not_ge hle
+    let d : ℝ≥0 := t₀ - t
+    have h_sum : t + d = t₀ := add_tsub_cancel_of_le hle'
+    have hd_dist : dist d 0 < δ := by
+      have h_sub_coe : (d : ℝ) = (t₀ : ℝ) - (t : ℝ) := NNReal.coe_sub hle'
+      have h_nn : 0 ≤ (t₀ : ℝ) - (t : ℝ) := sub_nonneg.mpr hle'
+      change |(d : ℝ) - 0| < δ
+      rw [sub_zero, h_sub_coe, ← abs_of_nonneg h_nn, abs_sub_comm]
+      simpa [NNReal.dist_eq, Real.dist_eq] using ht
+    have h_step : T t x - T t₀ x = -(T t (T d x - x)) := by
+      rw [← h_sum, hadd, ContinuousLinearMap.comp_apply, map_sub, neg_sub]
+    rw [h_step, norm_neg]
+    exact (hnorm t (T d x - x)).trans_lt (by simpa [dist_eq_norm] using h_δ hd_dist)
+
+end OperatorCFC
+
+end OperatorHolomorphicSemigroup
+
+def euclidInner (x y : Fin 4 → ℝ) : ℝ :=
+  ∑ μ : Fin 4, x μ * y μ
+
+lemma euclidInner_explicit (x y : Fin 4 → ℝ) :
+    euclidInner x y = x 0 * y 0 + x 1 * y 1 + x 2 * y 2 + x 3 * y 3 := by
+  simp [euclidInner, Fin.sum_univ_four]
+
+lemma euclidInner_comm (x y : Fin 4 → ℝ) :
+    euclidInner x y = euclidInner y x := by
+  rw [euclidInner_explicit, euclidInner_explicit]
+  ring
+
+lemma euclidInner_add_left (x y z : Fin 4 → ℝ) :
+    euclidInner (x + y) z = euclidInner x z + euclidInner y z := by
+  simp only [euclidInner_explicit, Pi.add_apply]
+  ring
+
+lemma euclidInner_add_right (x y z : Fin 4 → ℝ) :
+    euclidInner x (y + z) = euclidInner x y + euclidInner x z := by
+  simp only [euclidInner_explicit, Pi.add_apply]
+  ring
+
+lemma euclidInner_smul_left (c : ℝ) (x y : Fin 4 → ℝ) :
+    euclidInner (c • x) y = c * euclidInner x y := by
+  simp only [euclidInner_explicit, Pi.smul_apply, smul_eq_mul]
+  ring
+
+lemma euclidInner_smul_right (c : ℝ) (x y : Fin 4 → ℝ) :
+    euclidInner x (c • y) = c * euclidInner x y := by
+  simp only [euclidInner_explicit, Pi.smul_apply, smul_eq_mul]
+  ring
+
+@[simp]
+lemma euclidInner_neg_left (x y : Fin 4 → ℝ) :
+    euclidInner (-x) y = -euclidInner x y := by
+  simp only [euclidInner_explicit, Pi.neg_apply]
+  ring
+
+@[simp]
+lemma euclidInner_neg_right (x y : Fin 4 → ℝ) :
+    euclidInner x (-y) = -euclidInner x y := by
+  simp only [euclidInner_explicit, Pi.neg_apply]
+  ring
+
+@[simp]
+lemma euclidInner_zero_left (y : Fin 4 → ℝ) :
+    euclidInner 0 y = 0 := by
+  simp [euclidInner_explicit]
+
+@[simp]
+lemma euclidInner_zero_right (x : Fin 4 → ℝ) :
+    euclidInner x 0 = 0 := by
+  simp [euclidInner_explicit]
+
+lemma euclidInner_self_nonneg (x : Fin 4 → ℝ) :
+    0 ≤ euclidInner x x := by
+  rw [euclidInner_explicit]
+  nlinarith [mul_self_nonneg (x 0), mul_self_nonneg (x 1),
+    mul_self_nonneg (x 2), mul_self_nonneg (x 3)]
+
+lemma euclidInner_self_eq_zero_iff (x : Fin 4 → ℝ) :
+    euclidInner x x = 0 ↔ x = 0 := by
+  constructor
+  · intro h
+    rw [euclidInner_explicit] at h
+    have s0 := mul_self_nonneg (x 0)
+    have s1 := mul_self_nonneg (x 1)
+    have s2 := mul_self_nonneg (x 2)
+    have s3 := mul_self_nonneg (x 3)
+    have h0 : x 0 = 0 := mul_self_eq_zero.mp (by linarith)
+    have h1 : x 1 = 0 := mul_self_eq_zero.mp (by linarith)
+    have h2 : x 2 = 0 := mul_self_eq_zero.mp (by linarith)
+    have h3 : x 3 = 0 := mul_self_eq_zero.mp (by linarith)
+    ext μ
+    fin_cases μ
+    · exact h0
+    · exact h1
+    · exact h2
+    · exact h3
+  · rintro rfl
+    exact euclidInner_zero_left 0
+
+def euclidTimeReflect (x : Fin 4 → ℝ) : Fin 4 → ℝ :=
+  fun μ => if μ = 0 then -x 0 else x μ
+
+@[simp]
+lemma euclidTimeReflect_zero_coord (x : Fin 4 → ℝ) :
+    euclidTimeReflect x 0 = -x 0 := rfl
+
+lemma euclidTimeReflect_of_ne_zero (x : Fin 4 → ℝ) {μ : Fin 4} (hμ : μ ≠ 0) :
+    euclidTimeReflect x μ = x μ := by
+  dsimp [euclidTimeReflect]
+  rw [if_neg hμ]
+
+@[simp]
+lemma euclidTimeReflect_involutive (x : Fin 4 → ℝ) :
+    euclidTimeReflect (euclidTimeReflect x) = x := by
+  ext μ
+  fin_cases μ <;> simp [euclidTimeReflect]
+
+@[simp]
+lemma euclidTimeReflect_zero :
+    euclidTimeReflect 0 = 0 := by
+  ext μ
+  fin_cases μ <;> simp [euclidTimeReflect]
+
+lemma euclidTimeReflect_add (x y : Fin 4 → ℝ) :
+    euclidTimeReflect (x + y) = euclidTimeReflect x + euclidTimeReflect y := by
+  ext μ
+  fin_cases μ <;> simp [euclidTimeReflect, add_comm]
+
+lemma euclidTimeReflect_sub (x y : Fin 4 → ℝ) :
+    euclidTimeReflect (x - y) = euclidTimeReflect x - euclidTimeReflect y := by
+  ext μ
+  fin_cases μ <;> simp [euclidTimeReflect, sub_eq_add_neg, add_comm]
+
+lemma euclidTimeReflect_neg (x : Fin 4 → ℝ) :
+    euclidTimeReflect (-x) = -euclidTimeReflect x := by
+  ext μ
+  fin_cases μ <;> simp [euclidTimeReflect]
+
+lemma euclidTimeReflect_smul (c : ℝ) (x : Fin 4 → ℝ) :
+    euclidTimeReflect (c • x) = c • euclidTimeReflect x := by
+  ext μ
+  fin_cases μ <;> simp [euclidTimeReflect]
+
+lemma euclidInner_euclidTimeReflect (x y : Fin 4 → ℝ) :
+    euclidInner (euclidTimeReflect x) (euclidTimeReflect y) = euclidInner x y := by
+  simp only [euclidInner_explicit, euclidTimeReflect, ↓reduceIte, Fin.isValue, Fin.reduceEq]
+  ring
+
+def euclidTimeReflectN (n : ℕ) (x : Fin n → Fin 4 → ℝ) : Fin n → Fin 4 → ℝ :=
+  fun i => euclidTimeReflect (x i)
+
+def euclidTimeReflectRev (n : ℕ) (x : Fin n → Fin 4 → ℝ) : Fin n → Fin 4 → ℝ :=
+  fun i => euclidTimeReflect (x (Fin.rev i))
+
+@[simp]
+lemma euclidTimeReflectN_involutive (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    euclidTimeReflectN n (euclidTimeReflectN n x) = x := by
+  ext i μ
+  exact congrFun (euclidTimeReflect_involutive (x i)) μ
+
+@[simp]
+lemma euclidTimeReflectRev_involutive (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    euclidTimeReflectRev n (euclidTimeReflectRev n x) = x := by
+  ext i μ
+  dsimp [euclidTimeReflectRev]
+  rw [Fin.rev_rev]
+  exact congrFun (euclidTimeReflect_involutive (x i)) μ
+
+def wickEmbed (x : Fin 4 → ℝ) : Fin 4 → ℂ :=
+  fun μ => if μ = 0 then (x 0 : ℂ) * Complex.I else (x μ : ℂ)
+
+@[simp]
+lemma wickEmbed_zero_coord (x : Fin 4 → ℝ) :
+    wickEmbed x 0 = (x 0 : ℂ) * Complex.I := rfl
+
+lemma wickEmbed_of_ne_zero (x : Fin 4 → ℝ) {μ : Fin 4} (hμ : μ ≠ 0) :
+    wickEmbed x μ = (x μ : ℂ) := by
+  dsimp [wickEmbed]
+  rw [if_neg hμ]
+
+@[simp]
+lemma wickEmbed_re (x : Fin 4 → ℝ) (μ : Fin 4) :
+    (wickEmbed x μ).re = if μ = 0 then 0 else x μ := by
+  fin_cases μ <;> simp [wickEmbed]
+
+@[simp]
+lemma wickEmbed_im (x : Fin 4 → ℝ) (μ : Fin 4) :
+    (wickEmbed x μ).im = if μ = 0 then x 0 else 0 := by
+  fin_cases μ <;> simp [wickEmbed]
+
+@[simp]
+lemma wickEmbed_zero :
+    wickEmbed 0 = 0 := by
+  ext μ
+  fin_cases μ <;> simp [wickEmbed]
+
+lemma wickEmbed_add (x y : Fin 4 → ℝ) :
+    wickEmbed (x + y) = wickEmbed x + wickEmbed y := by
+  ext μ
+  fin_cases μ <;> simp [wickEmbed, add_mul]
+
+lemma wickEmbed_sub (x y : Fin 4 → ℝ) :
+    wickEmbed (x - y) = wickEmbed x - wickEmbed y := by
+  ext μ
+  fin_cases μ <;> simp [wickEmbed, sub_mul]
+
+lemma wickEmbed_neg (x : Fin 4 → ℝ) :
+    wickEmbed (-x) = -wickEmbed x := by
+  ext μ
+  fin_cases μ <;> simp [wickEmbed]
+
+lemma wickEmbed_smul (c : ℝ) (x : Fin 4 → ℝ) :
+    wickEmbed (c • x) = c • wickEmbed x := by
+  ext μ
+  fin_cases μ <;> simp [wickEmbed, Complex.real_smul, mul_assoc]
+
+lemma wickEmbed_injective : Function.Injective wickEmbed := by
+  intro x y h
+  ext μ
+  fin_cases μ
+  · have h0 := congrArg Complex.im (congrFun h 0)
+    simpa [wickEmbed] using h0
+  · have h1 := congrArg Complex.re (congrFun h 1)
+    simpa [wickEmbed] using h1
+  · have h2 := congrArg Complex.re (congrFun h 2)
+    simpa [wickEmbed] using h2
+  · have h3 := congrArg Complex.re (congrFun h 3)
+    simpa [wickEmbed] using h3
+
+noncomputable def wickEmbedCLM : (Fin 4 → ℝ) →L[ℝ] (Fin 4 → ℂ) :=
+  LinearMap.toContinuousLinearMap
+    { toFun := wickEmbed
+      map_add' := wickEmbed_add
+      map_smul' := fun c x => by
+        simp only [RingHom.id_apply]
+        exact wickEmbed_smul c x }
+
+lemma continuous_wickEmbed : Continuous wickEmbed :=
+  wickEmbedCLM.continuous
+
+lemma minkowskiInnerC_wickEmbed (x y : Fin 4 → ℝ) :
+    minkowskiInnerC (wickEmbed x) (wickEmbed y) = -(euclidInner x y : ℂ) := by
+  dsimp [minkowskiInnerC, wickEmbed]
+  rw [euclidInner_explicit]
+  push_cast
+  have hI2 : Complex.I * Complex.I = -1 := Complex.I_mul_I
+  calc
+    (x 0 : ℂ) * Complex.I * ((y 0 : ℂ) * Complex.I) -
+        (x 1 : ℂ) * (y 1 : ℂ) - (x 2 : ℂ) * (y 2 : ℂ) - (x 3 : ℂ) * (y 3 : ℂ)
+      = (x 0 : ℂ) * (y 0 : ℂ) * (Complex.I * Complex.I) -
+        (x 1 : ℂ) * (y 1 : ℂ) - (x 2 : ℂ) * (y 2 : ℂ) - (x 3 : ℂ) * (y 3 : ℂ) := by ring
+    _ = -((x 0 : ℂ) * (y 0 : ℂ) + (x 1 : ℂ) * (y 1 : ℂ) +
+        (x 2 : ℂ) * (y 2 : ℂ) + (x 3 : ℂ) * (y 3 : ℂ)) := by rw [hI2]; ring
+
+lemma star_wickEmbed (x : Fin 4 → ℝ) :
+    (fun μ => star (wickEmbed x μ)) = wickEmbed (euclidTimeReflect x) := by
+  ext μ
+  fin_cases μ <;> simp [wickEmbed, euclidTimeReflect]
+
+lemma conjTranspose_vec_to_spinor_wickEmbed (x : Fin 4 → ℝ) :
+    (vec_to_spinor (wickEmbed x))ᴴ = vec_to_spinor (wickEmbed (euclidTimeReflect x)) := by
+  ext i j
+  fin_cases i <;> fin_cases j <;>
+    simp [vec_to_spinor, wickEmbed, euclidTimeReflect, sigma_0, sigma_1, sigma_2, sigma_3,
+      Matrix.conjTranspose_apply]
+
+lemma det_vec_to_spinor_wickEmbed (x : Fin 4 → ℝ) :
+    (vec_to_spinor (wickEmbed x)).det = -(euclidInner x x : ℂ) := by
+  rw [vec_to_spinor_det]
+  have h : (wickEmbed x 0) ^ 2 - (wickEmbed x 1) ^ 2 -
+      (wickEmbed x 2) ^ 2 - (wickEmbed x 3) ^ 2 =
+      minkowskiInnerC (wickEmbed x) (wickEmbed x) := by
+    dsimp [minkowskiInnerC]
+    ring
+  rw [h, minkowskiInnerC_wickEmbed]
+
+def wickEmbedN (n : ℕ) (x : Fin n → Fin 4 → ℝ) : Fin n → Fin 4 → ℂ :=
+  fun i => wickEmbed (x i)
+
+@[simp]
+lemma wickEmbedN_apply (n : ℕ) (x : Fin n → Fin 4 → ℝ) (i : Fin n) :
+    wickEmbedN n x i = wickEmbed (x i) := rfl
+
+@[simp]
+lemma wickEmbedN_zero (n : ℕ) :
+    wickEmbedN n 0 = 0 := by
+  ext i μ
+  exact congrFun wickEmbed_zero μ
+
+lemma wickEmbedN_add (n : ℕ) (x y : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n (x + y) = wickEmbedN n x + wickEmbedN n y := by
+  ext i μ
+  exact congrFun (wickEmbed_add (x i) (y i)) μ
+
+lemma wickEmbedN_sub (n : ℕ) (x y : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n (x - y) = wickEmbedN n x - wickEmbedN n y := by
+  ext i μ
+  exact congrFun (wickEmbed_sub (x i) (y i)) μ
+
+lemma wickEmbedN_neg (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n (-x) = -wickEmbedN n x := by
+  ext i μ
+  exact congrFun (wickEmbed_neg (x i)) μ
+
+lemma wickEmbedN_smul (n : ℕ) (c : ℝ) (x : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n (c • x) = c • wickEmbedN n x := by
+  ext i μ
+  exact congrFun (wickEmbed_smul c (x i)) μ
+
+lemma wickEmbedN_injective (n : ℕ) : Function.Injective (wickEmbedN n) := by
+  intro x y h
+  ext i μ
+  have hi := congrFun h i
+  exact congrFun (wickEmbed_injective hi) μ
+
+noncomputable def wickEmbedNCLM (n : ℕ) :
+    (Fin n → Fin 4 → ℝ) →L[ℝ] (Fin n → Fin 4 → ℂ) :=
+  LinearMap.toContinuousLinearMap
+    { toFun := wickEmbedN n
+      map_add' := wickEmbedN_add n
+      map_smul' := fun c x => by
+        simp only [RingHom.id_apply]
+        exact wickEmbedN_smul n c x }
+
+lemma continuous_wickEmbedN (n : ℕ) : Continuous (wickEmbedN n) :=
+  (wickEmbedNCLM n).continuous
+
+lemma wickEmbedN_comp_rev (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n (x ∘ Fin.rev) = (wickEmbedN n x) ∘ Fin.rev := rfl
+
+lemma star_wickEmbedN (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    (fun i μ => star (wickEmbedN n x i μ)) = wickEmbedN n (euclidTimeReflectN n x) := by
+  ext i μ
+  exact congrFun (star_wickEmbed (x i)) μ
+
+lemma wickEmbedN_euclidTimeReflectRev (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n (euclidTimeReflectRev n x) =
+      fun i μ => star (wickEmbedN n x (Fin.rev i) μ) := by
+  ext i μ
+  exact (congrFun (star_wickEmbed (x (Fin.rev i))) μ).symm
+
+def euclidPosTime : Set (Fin 4 → ℝ) :=
+  { x | 0 < x 0 }
+
+def orderedEuclidN (n : ℕ) : Set (Fin n → Fin 4 → ℝ) :=
+  { x | ∀ (i : Fin n) (hi : i.val + 1 < n), x i 0 < x ⟨i.val + 1, hi⟩ 0 }
+
+def posOrderedEuclidN (n : ℕ) : Set (Fin n → Fin 4 → ℝ) :=
+  { x | (∀ i : Fin n, 0 < x i 0) ∧ x ∈ orderedEuclidN n }
+
+lemma posOrderedEuclidN_subset_orderedEuclidN (n : ℕ) :
+    posOrderedEuclidN n ⊆ orderedEuclidN n :=
+  fun _ hx => hx.2
+
+lemma isOpen_euclidPosTime : IsOpen euclidPosTime :=
+  isOpen_lt continuous_const (continuous_apply 0)
+
+lemma convex_euclidPosTime : Convex ℝ euclidPosTime := by
+  intro x hx y hy a b ha hb hab
+  change 0 < a * x 0 + b * y 0
+  have hx0 : 0 < x 0 := hx
+  have hy0 : 0 < y 0 := hy
+  by_cases ha0 : a = 0
+  · subst ha0
+    have hb1 : b = 1 := by linarith
+    subst hb1
+    linarith
+  · have ha_pos : 0 < a := lt_of_le_of_ne ha (Ne.symm ha0)
+    have h1 : 0 < a * x 0 := mul_pos ha_pos hx0
+    have h2 : 0 ≤ b * y 0 := mul_nonneg hb (le_of_lt hy0)
+    linarith
+
+lemma wickEmbed_sub_neg_im (x y : Fin 4 → ℝ) :
+    (fun μ : Fin 4 => -((wickEmbed x - wickEmbed y) μ).im) =
+      fun μ : Fin 4 => if μ = 0 then y 0 - x 0 else 0 := by
+  ext μ
+  fin_cases μ <;> simp [wickEmbed]
+
+lemma wickEmbed_sub_neg_im_mem_forward_light_cone_iff (x y : Fin 4 → ℝ) :
+    (fun μ : Fin 4 => -((wickEmbed x - wickEmbed y) μ).im) ∈ forward_light_cone ↔
+      x 0 < y 0 := by
+  rw [wickEmbed_sub_neg_im]
+  dsimp [forward_light_cone]
+  rw [minkowskiInner_explicit]
+  simp only [ ↓reduceIte, Fin.isValue, Fin.reduceEq, mul_zero, sub_zero]
+  constructor
+  · rintro ⟨h1, _⟩
+    linarith
+  · intro h
+    have hpos : 0 < y 0 - x 0 := sub_pos.mpr h
+    exact ⟨hpos, mul_pos hpos hpos⟩
+
+theorem wickEmbedN_mem_forward_tube_n_iff (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n x ∈ forward_tube_n n ↔ x ∈ orderedEuclidN n := by
+  dsimp [forward_tube_n, orderedEuclidN, wickEmbedN]
+  constructor
+  · intro hx i hi
+    exact (wickEmbed_sub_neg_im_mem_forward_light_cone_iff (x i) (x ⟨i.val + 1, hi⟩)).mp (hx i hi)
+  · intro hx i hi
+    exact (wickEmbed_sub_neg_im_mem_forward_light_cone_iff (x i) (x ⟨i.val + 1, hi⟩)).mpr (hx i hi)
+
+lemma wickEmbedN_mem_forward_tube_n (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    wickEmbedN n x ∈ forward_tube_n n :=
+  (wickEmbedN_mem_forward_tube_n_iff n x).mpr hx
+
+lemma wickEmbedN_mem_extended_tube_n (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    wickEmbedN n x ∈ extended_tube_n n := by
+  dsimp [extended_tube_n]
+  rw [Set.mem_iUnion]
+  refine ⟨1, wickEmbedN n x, wickEmbedN_mem_forward_tube_n n hx, ?_⟩
+  exact one_smul _ _
+
+lemma isOpen_orderedEuclidN (n : ℕ) : IsOpen (orderedEuclidN n) := by
+  have h_eq : orderedEuclidN n = (wickEmbedN n) ⁻¹' (forward_tube_n n) := by
+    ext x
+    exact (wickEmbedN_mem_forward_tube_n_iff n x).symm
+  rw [h_eq]
+  exact (forward_tube_n_isOpen n).preimage (continuous_wickEmbedN n)
+
+lemma convex_orderedEuclidN (n : ℕ) : Convex ℝ (orderedEuclidN n) := by
+  intro x hx y hy a b ha hb hab i hi
+  change a * x i 0 + b * y i 0 < a * x ⟨i.val + 1, hi⟩ 0 + b * y ⟨i.val + 1, hi⟩ 0
+  have hxi : x i 0 < x ⟨i.val + 1, hi⟩ 0 := hx i hi
+  have hyi : y i 0 < y ⟨i.val + 1, hi⟩ 0 := hy i hi
+  by_cases ha0 : a = 0
+  · subst ha0
+    have hb1 : b = 1 := by linarith
+    subst hb1
+    linarith
+  · have ha_pos : 0 < a := lt_of_le_of_ne ha (Ne.symm ha0)
+    have h1 : a * x i 0 < a * x ⟨i.val + 1, hi⟩ 0 := mul_lt_mul_of_pos_left hxi ha_pos
+    have h2 : b * y i 0 ≤ b * y ⟨i.val + 1, hi⟩ 0 := mul_le_mul_of_nonneg_left (le_of_lt hyi) hb
+    linarith
+
+lemma isOpen_posOrderedEuclidN (n : ℕ) : IsOpen (posOrderedEuclidN n) := by
+  have h_pos : IsOpen {x : Fin n → Fin 4 → ℝ | ∀ i : Fin n, 0 < x i 0} := by
+    rw [Set.setOf_forall]
+    exact isOpen_iInter_of_finite (fun i =>
+      isOpen_lt continuous_const ((continuous_apply 0).comp (continuous_apply i)))
+  exact h_pos.inter (isOpen_orderedEuclidN n)
+
+lemma convex_posOrderedEuclidN (n : ℕ) : Convex ℝ (posOrderedEuclidN n) := by
+  intro x hx y hy a b ha hb hab
+  refine ⟨fun i => ?_, convex_orderedEuclidN n hx.2 hy.2 ha hb hab⟩
+  exact convex_euclidPosTime (hx.1 i) (hy.1 i) ha hb hab
+
+def euclidOrderedBasePoint (n : ℕ) : Fin n → Fin 4 → ℝ :=
+  fun i μ => if μ = 0 then (i.val : ℝ) + 1 else 0
+
+lemma euclidOrderedBasePoint_mem_posOrderedEuclidN (n : ℕ) :
+    euclidOrderedBasePoint n ∈ posOrderedEuclidN n := by
+  refine ⟨fun i => ?_, fun i hi => ?_⟩
+  · dsimp [euclidOrderedBasePoint]
+    positivity
+  · dsimp [euclidOrderedBasePoint]
+    have hlt : (i.val : ℝ) < ((i.val + 1 : ℕ) : ℝ) := by exact_mod_cast Nat.lt_succ_self i.val
+    linarith
+
+lemma euclidOrderedBasePoint_mem_orderedEuclidN (n : ℕ) :
+    euclidOrderedBasePoint n ∈ orderedEuclidN n :=
+  (euclidOrderedBasePoint_mem_posOrderedEuclidN n).2
+
+lemma orderedEuclidN_nonempty (n : ℕ) : (orderedEuclidN n).Nonempty :=
+  ⟨euclidOrderedBasePoint n, euclidOrderedBasePoint_mem_orderedEuclidN n⟩
+
+lemma posOrderedEuclidN_nonempty (n : ℕ) : (posOrderedEuclidN n).Nonempty :=
+  ⟨euclidOrderedBasePoint n, euclidOrderedBasePoint_mem_posOrderedEuclidN n⟩
+
+lemma shift_mem_orderedEuclidN (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) (a : Fin 4 → ℝ) :
+    (fun i => x i + a) ∈ orderedEuclidN n := by
+  intro i hi
+  simp only [Pi.add_apply]
+  linarith [hx i hi]
+
+lemma neg_rev_mem_orderedEuclidN (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    (-(x ∘ Fin.rev)) ∈ orderedEuclidN n := by
+  rw [← wickEmbedN_mem_forward_tube_n_iff]
+  rw [wickEmbedN_neg, wickEmbedN_comp_rev]
+  exact neg_rev_mem_forward_tube_n n (wickEmbedN n x) (wickEmbedN_mem_forward_tube_n n hx)
+
+lemma neg_rev_mem_orderedEuclidN_iff (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    (-(x ∘ Fin.rev)) ∈ orderedEuclidN n ↔ x ∈ orderedEuclidN n := by
+  constructor
+  · intro h
+    have h' := neg_rev_mem_orderedEuclidN n h
+    have h_inv : -((-(x ∘ Fin.rev)) ∘ Fin.rev) = x := by
+      ext i μ
+      simp [Fin.rev_rev]
+    rwa [h_inv] at h'
+  · exact neg_rev_mem_orderedEuclidN n
+
+lemma euclidTimeReflectRev_mem_orderedEuclidN (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    euclidTimeReflectRev n x ∈ orderedEuclidN n := by
+  intro i hi
+  dsimp [euclidTimeReflectRev, euclidTimeReflect]
+  have h_neg : (-(x ∘ Fin.rev)) i 0 < (-(x ∘ Fin.rev)) ⟨i.val + 1, hi⟩ 0 :=
+    neg_rev_mem_orderedEuclidN n hx i hi
+  simpa using h_neg
+
+lemma euclidTimeReflectRev_mem_orderedEuclidN_iff (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    euclidTimeReflectRev n x ∈ orderedEuclidN n ↔ x ∈ orderedEuclidN n := by
+  constructor
+  · intro h
+    have h' := euclidTimeReflectRev_mem_orderedEuclidN n h
+    rwa [euclidTimeReflectRev_involutive] at h'
+  · exact euclidTimeReflectRev_mem_orderedEuclidN n
+
+lemma wickEmbedN_euclidTimeReflectN_mem_backward_tube_n (n : ℕ)
+    {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    wickEmbedN n (euclidTimeReflectN n x) ∈ backward_tube_n n := by
+  have h_rev : euclidTimeReflectRev n x ∈ orderedEuclidN n :=
+    euclidTimeReflectRev_mem_orderedEuclidN n hx
+  have h_fwd : wickEmbedN n (euclidTimeReflectRev n x) ∈ forward_tube_n n :=
+    wickEmbedN_mem_forward_tube_n n h_rev
+  have h_bwd := rev_mem_backward_tube_n n (wickEmbedN n (euclidTimeReflectRev n x)) h_fwd
+  have h_eq : (wickEmbedN n (euclidTimeReflectRev n x)) ∘ Fin.rev =
+      wickEmbedN n (euclidTimeReflectN n x) := by
+    ext i μ
+    dsimp [wickEmbedN, euclidTimeReflectRev, euclidTimeReflectN]
+    rw [Fin.rev_rev]
+  rwa [h_eq] at h_bwd
+
+lemma wickEmbedN_euclidTimeReflectN_mem_extended_tube_n (n : ℕ)
+    {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    wickEmbedN n (euclidTimeReflectN n x) ∈ extended_tube_n n :=
+  backward_tube_subset_extended_tube_n n
+    (wickEmbedN_euclidTimeReflectN_mem_backward_tube_n n hx)
+
+lemma wickEmbed_eq_coeReal_of_time_zero {x : Fin 4 → ℝ} (hx : x 0 = 0) :
+    wickEmbed x = fun μ => (x μ : ℂ) := by
+  ext μ
+  fin_cases μ
+  · simp [wickEmbed, hx]
+  · simp [wickEmbed]
+  · simp [wickEmbed]
+  · simp [wickEmbed]
+
+lemma wickEmbedN_eq_coeReal_of_time_zero (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : ∀ i, x i 0 = 0) :
+    wickEmbedN n x = coeReal n x := by
+  ext i μ
+  exact congrFun (wickEmbed_eq_coeReal_of_time_zero (hx i)) μ
+
+lemma is_spacelike_of_time_zero_ne_zero {v : Fin 4 → ℝ}
+    (hv0 : v 0 = 0) (hv : v ≠ 0) :
+    is_spacelike v := by
+  dsimp [is_spacelike]
+  rw [minkowskiInner_explicit, hv0]
+  have h_sum_pos : 0 < v 1 ^ 2 + v 2 ^ 2 + v 3 ^ 2 := by
+    by_contra h_le
+    push Not at h_le
+    have h1 : v 1 = 0 := by nlinarith [sq_nonneg (v 1), sq_nonneg (v 2), sq_nonneg (v 3)]
+    have h2 : v 2 = 0 := by nlinarith [sq_nonneg (v 1), sq_nonneg (v 2), sq_nonneg (v 3)]
+    have h3 : v 3 = 0 := by nlinarith [sq_nonneg (v 1), sq_nonneg (v 2), sq_nonneg (v 3)]
+    apply hv
+    ext μ
+    fin_cases μ
+    · exact hv0
+    · exact h1
+    · exact h2
+    · exact h3
+  linarith
+
+lemma equal_time_mem_jost_points_n (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx0 : ∀ i : Fin n, x i 0 = 0)
+    (h_hull : (0 : Fin 4 → ℝ) ∉ jost_convex_hull n x) :
+    x ∈ jost_points_n n := by
+  intro v hv
+  have hv0 : v 0 = 0 := by
+    have h_diff_zero : ∀ w ∈ jost_differences_n n x, w 0 = 0 := by
+      rintro w ⟨i, hi, rfl⟩
+      simp [hx0]
+    have h_sub : jost_differences_n n x ⊆ {w : Fin 4 → ℝ | w 0 = 0} := h_diff_zero
+    have h_conv : Convex ℝ {w : Fin 4 → ℝ | w 0 = 0} := by
+      intro a ha b hb c d _ _ _
+      change c * a 0 + d * b 0 = 0
+      rw [ha, hb]
+      ring
+    exact convexHull_min h_sub h_conv hv
+  have hv_ne : v ≠ 0 := fun h_eq => h_hull (h_eq ▸ hv)
+  exact is_spacelike_of_time_zero_ne_zero hv0 hv_ne
+
+lemma wickEmbedN_equal_time_mem_extended_tube_n {n : ℕ} (hn : 1 < n)
+    {x : Fin n → Fin 4 → ℝ} (hx0 : ∀ i : Fin n, x i 0 = 0)
+    (h_hull : (0 : Fin 4 → ℝ) ∉ jost_convex_hull n x) :
+    wickEmbedN n x ∈ extended_tube_n n := by
+  rw [wickEmbedN_eq_coeReal_of_time_zero n hx0]
+  exact (jost_theorem n x hn).mp (equal_time_mem_jost_points_n n hx0 h_hull)
+
+noncomputable def su2ToSL2CHom : SU2 →* SL2C where
+  toFun := su2ToSL2C
+  map_one' := by
+    apply Subtype.ext
+    rfl
+  map_mul' U V := by
+    apply Subtype.ext
+    rfl
+
+@[simp]
+lemma su2ToSL2CHom_apply (U : SU2) : su2ToSL2CHom U = su2ToSL2C U := rfl
+
+@[simp]
+lemma su2ToSL2C_one : su2ToSL2C 1 = 1 := su2ToSL2CHom.map_one
+
+@[simp]
+lemma su2ToSL2C_mul (U V : SU2) :
+    su2ToSL2C (U * V) = su2ToSL2C U * su2ToSL2C V :=
+  su2ToSL2CHom.map_mul U V
+
+@[simp]
+lemma su2ToSL2C_inv (U : SU2) :
+    su2ToSL2C U⁻¹ = (su2ToSL2C U)⁻¹ :=
+  su2ToSL2CHom.map_inv U
+
+lemma su2_conjTranspose_eq_adjugate (U : SU2) :
+    U.valᴴ = U.val.adjugate := by
+  have h_unit : star U.val * U.val = 1 :=
+    Matrix.mem_unitaryGroup_iff'.mp (Matrix.mem_specialUnitaryGroup_iff.mp U.property).1
+  have h_det : U.val.det = 1 :=
+    (Matrix.mem_specialUnitaryGroup_iff.mp U.property).2
+  calc
+    U.valᴴ = star U.val * 1 := (Matrix.mul_one _).symm
+    _ = star U.val * (U.val * U.val.adjugate) := by
+      rw [Matrix.mul_adjugate, h_det, one_smul]
+    _ = (star U.val * U.val) * U.val.adjugate := (Matrix.mul_assoc _ _ _).symm
+    _ = U.val.adjugate := by rw [h_unit, Matrix.one_mul]
+
+lemma su2_transpose_conjTranspose_eq_adjugate_transpose (V : SU2) :
+    (V.valᵀ)ᴴ = (V.valᵀ).adjugate := by
+  have h1 : (V.valᵀ)ᴴ = (V.valᴴ)ᵀ := by
+    ext i j
+    simp [Matrix.conjTranspose_apply, Matrix.transpose_apply]
+  rw [h1, su2_conjTranspose_eq_adjugate V, Matrix.adjugate_transpose]
+
+def wickUnembed (z : Fin 4 → ℂ) : Fin 4 → ℝ :=
+  fun μ => if μ = 0 then (z 0).im else (z μ).re
+
+@[simp]
+lemma wickUnembed_wickEmbed (x : Fin 4 → ℝ) :
+    wickUnembed (wickEmbed x) = x := by
+  ext μ
+  fin_cases μ <;> simp [wickUnembed, wickEmbed]
+
+lemma vec_to_spinor_wick_condition_iff (z : Fin 4 → ℂ) :
+    (vec_to_spinor z)ᴴ = -(vec_to_spinor z).adjugate ↔
+      wickEmbed (wickUnembed z) = z := by
+  constructor
+  · intro h
+    have h00 := congrFun (congrFun h 0) 0
+    have h01 := congrFun (congrFun h 0) 1
+    have h10 := congrFun (congrFun h 1) 0
+    have h11 := congrFun (congrFun h 1) 1
+    simp only [Matrix.conjTranspose_apply, Matrix.neg_apply, adjugate_fin_two,
+      of_apply, cons_val', cons_val_zero, cons_val_fin_one, cons_val_one,
+      vec_to_spinor_apply_00, vec_to_spinor_apply_01,
+      vec_to_spinor_apply_10, vec_to_spinor_apply_11,
+      star_add, star_sub, star_mul, Complex.star_def, Complex.conj_I] at h00 h01 h10 h11
+    have hz0 : (starRingEnd ℂ) (z 0) = -z 0 := by linear_combination (h00 + h11) / 2
+    have hz3 : (starRingEnd ℂ) (z 3) = z 3 := by linear_combination (h00 - h11) / 2
+    have hz1 : (starRingEnd ℂ) (z 1) = z 1 := by linear_combination (h01 + h10) / 2
+    have hz2 : (starRingEnd ℂ) (z 2) = z 2 := by
+      have hI : (starRingEnd ℂ) (z 2) * Complex.I = z 2 * Complex.I := by
+        linear_combination (h10 - h01) / 2
+      have hI' := congrArg (· * Complex.I) hI
+      simpa [mul_assoc, Complex.I_mul_I] using hI'
+    ext μ
+    fin_cases μ
+    · dsimp [wickEmbed, wickUnembed]
+      apply Complex.ext
+      · have hre := congrArg Complex.re hz0
+        simp at hre ⊢
+        linarith
+      · simp
+    · dsimp [wickEmbed, wickUnembed]
+      apply Complex.ext
+      · simp
+      · have him := congrArg Complex.im hz1
+        simp at him ⊢
+        linarith
+    · dsimp [wickEmbed, wickUnembed]
+      apply Complex.ext
+      · simp
+      · have him := congrArg Complex.im hz2
+        simp at him ⊢
+        linarith
+    · dsimp [wickEmbed, wickUnembed]
+      apply Complex.ext
+      · simp
+      · have him := congrArg Complex.im hz3
+        simp at him ⊢
+        linarith
+  · intro hz
+    rw [← hz]
+    ext i j
+    fin_cases i <;> fin_cases j <;>
+      simp [vec_to_spinor, wickEmbed, adjugate_fin_two, sigma_0, sigma_1, sigma_2, sigma_3,
+        Matrix.conjTranspose_apply] <;> ring
+
+lemma vec_to_spinor_wickEmbed_conjTranspose (x : Fin 4 → ℝ) :
+    (vec_to_spinor (wickEmbed x))ᴴ = -(vec_to_spinor (wickEmbed x)).adjugate := by
+  rw [vec_to_spinor_wick_condition_iff, wickUnembed_wickEmbed]
+
+lemma spinorPhi_su2_preserves_wick (U V : SU2) (x : Fin 4 → ℝ) :
+    wickEmbed (wickUnembed (spinorPhi (su2ToSL2C U, su2ToSL2C V) • wickEmbed x)) =
+      spinorPhi (su2ToSL2C U, su2ToSL2C V) • wickEmbed x := by
+  rw [← vec_to_spinor_wick_condition_iff]
+  have h_act : vec_to_spinor (spinorPhi (su2ToSL2C U, su2ToSL2C V) • wickEmbed x) =
+      U.val * vec_to_spinor (wickEmbed x) * V.valᵀ := by
+    change vec_to_spinor (spinorPhi_matrix (su2ToSL2C U) (su2ToSL2C V) *ᵥ wickEmbed x) = _
+    rw [spinorPhi_matrix_mulVec]
+    simp [spinor_action, vec_to_spinor_right_inv, su2ToSL2C]
+  rw [h_act]
+  have hX := vec_to_spinor_wickEmbed_conjTranspose x
+  have h_adj : (U.val * vec_to_spinor (wickEmbed x) * V.valᵀ).adjugate =
+      (V.valᵀ).adjugate * ((vec_to_spinor (wickEmbed x)).adjugate * U.val.adjugate) := by
+    rw [Matrix.adjugate_mul_distrib, Matrix.adjugate_mul_distrib]
+  calc
+    (U.val * vec_to_spinor (wickEmbed x) * V.valᵀ)ᴴ
+      = (V.valᵀ)ᴴ * (vec_to_spinor (wickEmbed x))ᴴ * U.valᴴ := by
+        simp [Matrix.conjTranspose_mul, Matrix.mul_assoc]
+    _ = (V.valᵀ).adjugate * (-(vec_to_spinor (wickEmbed x)).adjugate) * U.val.adjugate := by
+        rw [su2_transpose_conjTranspose_eq_adjugate_transpose V, hX,
+          su2_conjTranspose_eq_adjugate U]
+    _ = -((V.valᵀ).adjugate * ((vec_to_spinor (wickEmbed x)).adjugate * U.val.adjugate)) := by
+        simp [Matrix.mul_assoc]
+    _ = -(U.val * vec_to_spinor (wickEmbed x) * V.valᵀ).adjugate := by
+        rw [h_adj]
+
+noncomputable def euclidRotApply (U V : SU2) (x : Fin 4 → ℝ) : Fin 4 → ℝ :=
+  wickUnembed (spinorPhi (su2ToSL2C U, su2ToSL2C V) • wickEmbed x)
+
+@[simp]
+theorem wickEmbed_euclidRotApply (U V : SU2) (x : Fin 4 → ℝ) :
+    wickEmbed (euclidRotApply U V x) =
+      spinorPhi (su2ToSL2C U, su2ToSL2C V) • wickEmbed x :=
+  spinorPhi_su2_preserves_wick U V x
+
+@[simp]
+lemma euclidRotApply_one (x : Fin 4 → ℝ) :
+    euclidRotApply 1 1 x = x := by
+  apply wickEmbed_injective
+  rw [wickEmbed_euclidRotApply]
+  have h1 : (su2ToSL2C 1, su2ToSL2C 1) = (1 : SL2C × SL2C) := by
+    ext <;> rfl
+  rw [h1, map_one]
+  exact Matrix.one_mulVec (wickEmbed x)
+
+lemma euclidRotApply_mul (U₁ U₂ V₁ V₂ : SU2) (x : Fin 4 → ℝ) :
+    euclidRotApply (U₁ * U₂) (V₁ * V₂) x =
+      euclidRotApply U₁ V₁ (euclidRotApply U₂ V₂ x) := by
+  apply wickEmbed_injective
+  rw [wickEmbed_euclidRotApply, wickEmbed_euclidRotApply, wickEmbed_euclidRotApply]
+  have h_mul : (su2ToSL2C (U₁ * U₂), su2ToSL2C (V₁ * V₂)) =
+      (su2ToSL2C U₁, su2ToSL2C V₁) * (su2ToSL2C U₂, su2ToSL2C V₂) := by
+    ext <;> rfl
+  rw [h_mul, map_mul]
+  exact (Matrix.mulVec_mulVec (wickEmbed x) _ _).symm
+
+@[simp]
+lemma euclidRotApply_inv_self (U V : SU2) (x : Fin 4 → ℝ) :
+    euclidRotApply U⁻¹ V⁻¹ (euclidRotApply U V x) = x := by
+  rw [← euclidRotApply_mul, inv_mul_cancel, inv_mul_cancel, euclidRotApply_one]
+
+@[simp]
+lemma euclidRotApply_self_inv (U V : SU2) (x : Fin 4 → ℝ) :
+    euclidRotApply U V (euclidRotApply U⁻¹ V⁻¹ x) = x := by
+  rw [← euclidRotApply_mul, mul_inv_cancel, mul_inv_cancel, euclidRotApply_one]
+
+lemma euclidRotApply_add (U V : SU2) (x y : Fin 4 → ℝ) :
+    euclidRotApply U V (x + y) = euclidRotApply U V x + euclidRotApply U V y := by
+  apply wickEmbed_injective
+  rw [wickEmbed_euclidRotApply, wickEmbed_add, wickEmbed_add,
+    wickEmbed_euclidRotApply, wickEmbed_euclidRotApply]
+  exact Matrix.mulVec_add _ _ _
+
+lemma euclidRotApply_smul (U V : SU2) (c : ℝ) (x : Fin 4 → ℝ) :
+    euclidRotApply U V (c • x) = c • euclidRotApply U V x := by
+  apply wickEmbed_injective
+  rw [wickEmbed_euclidRotApply, wickEmbed_smul, wickEmbed_smul, wickEmbed_euclidRotApply]
+  change (spinorPhi (su2ToSL2C U, su2ToSL2C V)).val.val *ᵥ ((c : ℂ) • wickEmbed x) =
+    (c : ℂ) • ((spinorPhi (su2ToSL2C U, su2ToSL2C V)).val.val *ᵥ wickEmbed x)
+  exact Matrix.mulVec_smul _ _ _
+
+noncomputable def euclidRotLM (U V : SU2) : (Fin 4 → ℝ) →ₗ[ℝ] (Fin 4 → ℝ) where
+  toFun := euclidRotApply U V
+  map_add' := euclidRotApply_add U V
+  map_smul' c v := by
+    simp only [RingHom.id_apply]
+    exact euclidRotApply_smul U V c v
+
+theorem euclidInner_euclidRotApply (U V : SU2) (x y : Fin 4 → ℝ) :
+    euclidInner (euclidRotApply U V x) (euclidRotApply U V y) = euclidInner x y := by
+  apply Complex.ofReal_injective
+  rw [← neg_inj]
+  rw [← minkowskiInnerC_wickEmbed, ← minkowskiInnerC_wickEmbed]
+  rw [wickEmbed_euclidRotApply, wickEmbed_euclidRotApply]
+  exact complex_lorentz_preserves_inner_pair
+    (spinorPhi (su2ToSL2C U, su2ToSL2C V)) (wickEmbed x) (wickEmbed y)
+
+noncomputable def euclidRotOfSU2 (U V : SU2) : Matrix (Fin 4) (Fin 4) ℝ :=
+  fun μ ν => euclidRotLM U V (Pi.single ν 1) μ
+
+lemma euclidRotOfSU2_mulVec (U V : SU2) (x : Fin 4 → ℝ) :
+    (euclidRotOfSU2 U V).mulVec x = euclidRotApply U V x := by
+  have hx : x = ∑ ν : Fin 4, x ν • Pi.single ν (1 : ℝ) := by
+    ext μ
+    simp [Finset.sum_apply, Pi.single_apply]
+  change (euclidRotOfSU2 U V).mulVec x = euclidRotLM U V x
+  conv_rhs => rw [hx]
+  rw [map_sum]
+  ext μ
+  rw [Finset.sum_apply]
+  dsimp [Matrix.mulVec, dotProduct, euclidRotOfSU2]
+  refine Finset.sum_congr rfl (fun ν _ => ?_)
+  rw [map_smul, Pi.smul_apply, smul_eq_mul, mul_comm]
+
+@[simp]
+theorem wickEmbed_euclidRotOfSU2_mulVec (U V : SU2) (x : Fin 4 → ℝ) :
+    wickEmbed ((euclidRotOfSU2 U V).mulVec x) =
+      spinorPhi (su2ToSL2C U, su2ToSL2C V) • wickEmbed x := by
+  rw [euclidRotOfSU2_mulVec, wickEmbed_euclidRotApply]
+
+@[simp]
+lemma euclidRotOfSU2_one :
+    euclidRotOfSU2 1 1 = 1 := by
+  ext μ ν
+  have h := congrFun (euclidRotOfSU2_mulVec 1 1 (Pi.single ν 1)) μ
+  rw [euclidRotApply_one] at h
+  have h1 : (euclidRotOfSU2 1 1).mulVec (Pi.single ν 1) μ = euclidRotOfSU2 1 1 μ ν := by
+    simp [Matrix.mulVec, dotProduct, Pi.single_apply]
+  rw [h1] at h
+  rw [h, Matrix.one_apply]
+  simp [Pi.single_apply]
+
+lemma euclidRotOfSU2_mul (U₁ U₂ V₁ V₂ : SU2) :
+    euclidRotOfSU2 (U₁ * U₂) (V₁ * V₂) =
+      euclidRotOfSU2 U₁ V₁ * euclidRotOfSU2 U₂ V₂ := by
+  apply Matrix.ext_of_mulVec_single
+  intro ν
+  rw [← Matrix.mulVec_mulVec, euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec,
+    euclidRotOfSU2_mulVec, euclidRotApply_mul]
+
+lemma euclidRotOfSU2_transpose_mul_self (U V : SU2) :
+    (euclidRotOfSU2 U V)ᵀ * euclidRotOfSU2 U V = 1 := by
+  ext μ ν
+  rw [Matrix.mul_apply]
+  have h_inner := euclidInner_euclidRotApply U V (Pi.single μ 1) (Pi.single ν 1)
+  dsimp [euclidInner, euclidRotOfSU2, euclidRotLM] at h_inner ⊢
+  rw [h_inner]
+  simp [Pi.single_apply, Matrix.one_apply, eq_comm]
+
+lemma euclidRotOfSU2_mul_transpose_self (U V : SU2) :
+    euclidRotOfSU2 U V * (euclidRotOfSU2 U V)ᵀ = 1 :=
+  mul_eq_one_comm.mpr (euclidRotOfSU2_transpose_mul_self U V)
+
+noncomputable def euclidAct (a : Fin 4 → ℝ) (U V : SU2) (x : Fin 4 → ℝ) : Fin 4 → ℝ :=
+  (euclidRotOfSU2 U V).mulVec x + a
+
+noncomputable def euclidRotN (n : ℕ) (U V : SU2) (x : Fin n → Fin 4 → ℝ) :
+    Fin n → Fin 4 → ℝ :=
+  fun i => (euclidRotOfSU2 U V).mulVec (x i)
+
+@[simp]
+lemma wickEmbedN_euclidRotN (n : ℕ) (U V : SU2) (x : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n (euclidRotN n U V x) =
+      spinorPhi (su2ToSL2C U, su2ToSL2C V) • wickEmbedN n x := by
+  ext i μ
+  exact congrFun (wickEmbed_euclidRotOfSU2_mulVec U V (x i)) μ
+
+def negOneSU2 : SU2 :=
+  ⟨-1, Matrix.mem_specialUnitaryGroup_iff.mpr
+    ⟨by rw [Matrix.mem_unitaryGroup_iff]; simp,
+     by rw [Matrix.det_fin_two]; simp⟩⟩
+
+@[simp]
+lemma su2ToSL2C_negOneSU2 :
+    su2ToSL2C negOneSU2 = (-1 : SL2C) := by
+  apply Subtype.ext
+  rfl
+
+@[simp]
+lemma euclidRotApply_negOne_one (x : Fin 4 → ℝ) :
+    euclidRotApply negOneSU2 1 x = -x := by
+  apply wickEmbed_injective
+  rw [wickEmbed_euclidRotApply, wickEmbed_neg, su2ToSL2C_negOneSU2, su2ToSL2C_one]
+  exact spinorPT_smul_vec (wickEmbed x)
+
+@[simp]
+lemma euclidRotApply_one_negOne (x : Fin 4 → ℝ) :
+    euclidRotApply 1 negOneSU2 x = -x := by
+  apply wickEmbed_injective
+  rw [wickEmbed_euclidRotApply, wickEmbed_neg, su2ToSL2C_one, su2ToSL2C_negOneSU2,
+    spinorPhi_one_neg_one]
+  exact spinorPT_smul_vec (wickEmbed x)
+
+@[simp]
+lemma euclidRotApply_negOne_negOne (x : Fin 4 → ℝ) :
+    euclidRotApply negOneSU2 negOneSU2 x = x := by
+  have h1 : negOneSU2 * 1 = negOneSU2 := mul_one _
+  have h2 : (1 : SU2) * negOneSU2 = negOneSU2 := one_mul _
+  have h' := euclidRotApply_mul negOneSU2 1 1 negOneSU2 x
+  rw [h1, h2] at h'
+  rw [h', euclidRotApply_one_negOne, euclidRotApply_negOne_one, neg_neg]
+
+lemma boostHalfSL2C_unitary (θ : ℝ) :
+    (boostHalfSL2C θ).val * star (boostHalfSL2C θ).val = 1 := by
+  rw [boostHalfSL2C_val θ, Matrix.star_eq_conjTranspose]
+  have h1 : (starRingEnd ℂ) (Complex.exp (-(Complex.I * (θ : ℂ) / 2))) =
+      Complex.exp (Complex.I * (θ : ℂ) / 2) := by
+    rw [← Complex.exp_conj]
+    congr 1
+    simp only [map_neg, map_div₀, map_mul, Complex.conj_I, Complex.conj_ofReal, map_ofNat]
+    ring
+  have h2 : (starRingEnd ℂ) (Complex.exp (Complex.I * (θ : ℂ) / 2)) =
+      Complex.exp (-(Complex.I * (θ : ℂ) / 2)) := by
+    rw [← Complex.exp_conj]
+    congr 1
+    simp only [map_div₀, map_mul, Complex.conj_I, Complex.conj_ofReal, map_ofNat]
+    ring
+  ext i j
+  fin_cases i <;> fin_cases j <;>
+    simp [Matrix.mul_apply, Fin.sum_univ_two, Matrix.conjTranspose_apply,
+      h1, h2, complex_exp_identity_3, complex_exp_identity_4]
+
+noncomputable def boostHalfSU2 (θ : ℝ) : SU2 :=
+  ⟨(boostHalfSL2C θ).val,
+   Matrix.mem_specialUnitaryGroup_iff.mpr
+     ⟨Matrix.mem_unitaryGroup_iff.mpr (boostHalfSL2C_unitary θ),
+      (boostHalfSL2C θ).property⟩⟩
+
+@[simp]
+lemma su2ToSL2C_boostHalfSU2 (θ : ℝ) :
+    su2ToSL2C (boostHalfSU2 θ) = boostHalfSL2C θ := by
+  apply Subtype.ext
+  rfl
+
+theorem euclidRotApply_boostHalfSU2 (θ : ℝ) (x : Fin 4 → ℝ) :
+    euclidRotApply (boostHalfSU2 θ) (boostHalfSU2 θ) x =
+      ![Real.cos θ * x 0 - Real.sin θ * x 3,
+        x 1,
+        x 2,
+        Real.sin θ * x 0 + Real.cos θ * x 3] := by
+  apply wickEmbed_injective
+  rw [wickEmbed_euclidRotApply, su2ToSL2C_boostHalfSU2]
+  change (spinorPhi (boostHalfSL2C θ, boostHalfSL2C θ)).val.val *ᵥ wickEmbed x = _
+  rw [spinorPhi_boost_val, ← spinorPhi_boost_matrix, spinorPhi_boost_mulVec]
+  ext μ
+  fin_cases μ
+  · dsimp [wickEmbed]
+    push_cast
+    ring_nf
+  · dsimp [wickEmbed]
+  · dsimp [wickEmbed]
+  · dsimp [wickEmbed]
+    push_cast
+    ring_nf
+    rw [Complex.I_sq]
+    ring
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+def TubeWickHermiticity {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    {W : WightmanFamily ι} (E : TubeExtension W) : Prop :=
+  ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+    z ∈ forward_tube_n n →
+    (fun i μ => star (z (Fin.rev i) μ)) ∈ forward_tube_n n →
+    star (E.H n α z) =
+      ∑ β : Fin n → ι,
+        (∏ i, S.C (α i) (β i)) * E.H n (β ∘ Fin.rev) (fun i μ => star (z (Fin.rev i) μ))
+
+noncomputable def schwingerFromTube {W : WightmanFamily ι} (E : TubeExtension W)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) : ℂ :=
+  E.H n α (wickEmbedN n x)
+
+noncomputable def vladimirovSchwinger (W : WightmanFamily ι)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) : ℂ :=
+  vladimirov_H W n α (wickEmbedN n x)
+
+@[simp]
+lemma schwingerFromTube_vladimirov (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι)
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) :
+    schwingerFromTube (vladimirovTubeExtension R W hspec hP) n α x =
+      vladimirovSchwinger W n α x := rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma vladimirovSchwinger_eq_zero_eval {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) :
+    vladimirovSchwinger W n α x = vladimirov_H W n α 0 :=
+  vladimirov_H_eq_zero_eval hspec n α (wickEmbedN n x)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem schwingerFromTube_contDiffOn {W : WightmanFamily ι} (E : TubeExtension W)
+    (n : ℕ) (α : Fin n → ι) :
+    ContDiffOn ℝ (⊤ : ℕ∞) (schwingerFromTube E n α) (orderedEuclidN n) := by
+  have h_holo : ContDiffOn ℂ (⊤ : ℕ∞) (E.H n α) (forward_tube_n n) :=
+    (E.analytic n α).contDiffOn (forward_tube_n_isOpen n).uniqueDiffOn
+  have h_real : ContDiffOn ℝ (⊤ : ℕ∞) (E.H n α) (forward_tube_n n) :=
+    h_holo.restrict_scalars ℝ
+  have h_wick : ContDiffOn ℝ (⊤ : ℕ∞) (wickEmbedN n) (orderedEuclidN n) :=
+    (wickEmbedNCLM n).contDiff.contDiffOn
+  exact h_real.comp h_wick (fun x hx => wickEmbedN_mem_forward_tube_n n hx)
+
+theorem vladimirovSchwinger_contDiffOn (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι)
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (n : ℕ) (α : Fin n → ι) :
+    ContDiffOn ℝ (⊤ : ℕ∞) (vladimirovSchwinger W n α) (orderedEuclidN n) :=
+  schwingerFromTube_contDiffOn (vladimirovTubeExtension R W hspec hP) n α
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem schwingerFromTube_translation_invariant {W : WightmanFamily ι} (E : TubeExtension W)
+    (htrans : TubeTranslationInvariant E) (n : ℕ) (α : Fin n → ι)
+    (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n) (a : Fin 4 → ℝ) :
+    schwingerFromTube E n α (fun i => x i + a) = schwingerFromTube E n α x := by
+  dsimp [schwingerFromTube]
+  have h_add : wickEmbedN n (fun i => x i + a) =
+      fun i => wickEmbedN n x i + wickEmbed a := by
+    ext i μ
+    exact congrFun (wickEmbed_add (x i) a) μ
+  rw [h_add]
+  exact htrans n α (wickEmbedN n x) (wickEmbed a) (wickEmbedN_mem_forward_tube_n n hx)
+
+lemma vladimirov_tubeTranslationInvariant (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι)
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W) :
+    TubeTranslationInvariant (vladimirovTubeExtension R W hspec hP) := by
+  intro n α z a _hz
+  change vladimirov_H W n α (fun i => z i + a) = vladimirov_H W n α z
+  rw [vladimirov_H_eq_zero_eval hspec n α (fun i => z i + a),
+      vladimirov_H_eq_zero_eval hspec n α z]
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirovSchwinger_translation_invariant {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W) (n : ℕ) (α : Fin n → ι)
+    (x : Fin n → Fin 4 → ℝ) (a : Fin 4 → ℝ) :
+    vladimirovSchwinger W n α (fun i => x i + a) = vladimirovSchwinger W n α x := by
+  rw [vladimirovSchwinger_eq_zero_eval hspec, vladimirovSchwinger_eq_zero_eval hspec]
+
+theorem schwingerFromTube_euclidCovariant (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (n : ℕ) (U V : SU2) (x : Fin n → Fin 4 → ℝ)
+    (hx : x ∈ orderedEuclidN n) (hRx : euclidRotN n U V x ∈ orderedEuclidN n)
+    (α : Fin n → ι) :
+    schwingerFromTube E n α (euclidRotN n U V x) =
+      ∑ β : Fin n → ι,
+        (∏ i, R.σ (su2ToSL2C U, su2ToSL2C V) (α i) (β i)) *
+          schwingerFromTube E n β x := by
+  have h_ccov : ComplexCovariant R E := complex_covariance_of_real R W E h_cov
+  dsimp [schwingerFromTube]
+  rw [wickEmbedN_euclidRotN]
+  have hz : wickEmbedN n x ∈ forward_tube_n n := wickEmbedN_mem_forward_tube_n n hx
+  have hRz : spinorPhi (su2ToSL2C U, su2ToSL2C V) • wickEmbedN n x ∈ forward_tube_n n := by
+    rw [← wickEmbedN_euclidRotN]
+    exact wickEmbedN_mem_forward_tube_n n hRx
+  exact h_ccov n (su2ToSL2C U) (su2ToSL2C V) (wickEmbedN n x) hz hRz α
+
+theorem vladimirovSchwinger_euclidCovariant (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι)
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (n : ℕ) (U V : SU2) (x : Fin n → Fin 4 → ℝ) (α : Fin n → ι) :
+    vladimirovSchwinger W n α (euclidRotN n U V x) =
+      ∑ β : Fin n → ι,
+        (∏ i, R.σ (su2ToSL2C U, su2ToSL2C V) (α i) (β i)) *
+          vladimirovSchwinger W n β x := by
+  dsimp [vladimirovSchwinger]
+  exact vladimirov_H_complexCovariant_all R W hspec hP n
+    (su2ToSL2C U) (su2ToSL2C V)
+    (wickEmbedN n (euclidRotN n U V x)) (wickEmbedN n x) α
+
+theorem schwingerFromTube_os_hermiticity {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    {W : WightmanFamily ι} (E : TubeExtension W) (hherm : TubeWickHermiticity S E)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n) :
+    star (schwingerFromTube E n α x) =
+      ∑ β : Fin n → ι,
+        (∏ i, S.C (α i) (β i)) *
+          schwingerFromTube E n (β ∘ Fin.rev) (euclidTimeReflectRev n x) := by
+  dsimp [schwingerFromTube]
+  rw [wickEmbedN_euclidTimeReflectRev]
+  have hz : wickEmbedN n x ∈ forward_tube_n n := wickEmbedN_mem_forward_tube_n n hx
+  have h_star_z : (fun i μ => star (wickEmbedN n x (Fin.rev i) μ)) ∈ forward_tube_n n := by
+    rw [← wickEmbedN_euclidTimeReflectRev]
+    exact wickEmbedN_mem_forward_tube_n n (euclidTimeReflectRev_mem_orderedEuclidN n hx)
+  exact hherm n α (wickEmbedN n x) hz h_star_z
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem schwingerFromTube_weakLocality {W : WightmanFamily ι} {η : ℂ}
+    (E : TubeExtension W) (hloc : TubeWeakLocality η E)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n) :
+    schwingerFromTube E n α (-(x ∘ Fin.rev)) =
+      η ^ (n * (n - 1) / 2) * schwingerFromTube E n (α ∘ Fin.rev) x := by
+  dsimp [schwingerFromTube]
+  rw [wickEmbedN_neg, wickEmbedN_comp_rev]
+  exact hloc n α (wickEmbedN n x) (wickEmbedN_mem_forward_tube_n n hx)
+
+theorem schwingerFromTube_pct {W : WightmanFamily ι} {η : ℂ}
+    (R : HolomorphicLorentzRep ι) (E : TubeExtension W) (hpct : TubePCT η R E)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n) :
+    schwingerFromTube E n α (-(x ∘ Fin.rev)) =
+      η ^ (n * (n - 1) / 2) *
+        ∑ β : Fin n → ι,
+          (∏ i, R.σ (-1, 1) (α i) (β i)) * schwingerFromTube E n (β ∘ Fin.rev) x := by
+  dsimp [schwingerFromTube]
+  rw [wickEmbedN_neg, wickEmbedN_comp_rev]
+  exact hpct n α (wickEmbedN n x) (wickEmbedN_mem_forward_tube_n n hx)
+
+theorem vladimirovSchwinger_weakLocality_iff (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι)
+    {η : ℂ} (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W) :
+    WeakLocality η W ↔
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n →
+        vladimirovSchwinger W n α (-(x ∘ Fin.rev)) =
+          η ^ (n * (n - 1) / 2) * vladimirovSchwinger W n (α ∘ Fin.rev) x := by
+  refine (jost_theorem_vladimirov R W hspec hP).trans ?_
+  constructor
+  · intro h_tloc n α x hx
+    exact schwingerFromTube_weakLocality (vladimirovTubeExtension R W hspec hP) h_tloc n α x hx
+  · intro h_euclid n α z _hz
+    have hx := euclidOrderedBasePoint_mem_orderedEuclidN n
+    have h_base := h_euclid n α (euclidOrderedBasePoint n) hx
+    dsimp [vladimirovSchwinger] at h_base
+    change vladimirov_H W n α (-(z ∘ Fin.rev)) =
+      η ^ (n * (n - 1) / 2) * vladimirov_H W n (α ∘ Fin.rev) z
+    rw [vladimirov_H_eq_zero_eval hspec n α (-(z ∘ Fin.rev)),
+        vladimirov_H_eq_zero_eval hspec n (α ∘ Fin.rev) z]
+    rw [vladimirov_H_eq_zero_eval hspec n α
+          (wickEmbedN n (-(euclidOrderedBasePoint n ∘ Fin.rev))),
+        vladimirov_H_eq_zero_eval hspec n (α ∘ Fin.rev)
+          (wickEmbedN n (euclidOrderedBasePoint n))] at h_base
+    exact h_base
+
+theorem vladimirovSchwinger_pct_theorem (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι)
+    {η : ℂ} (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (hloc : WeakLocality η W)
+    (n : ℕ) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n) (α : Fin n → ι) :
+    vladimirovSchwinger W n α (-(x ∘ Fin.rev)) =
+      η ^ (n * (n - 1) / 2) *
+        ∑ β : Fin n → ι,
+          (∏ i, R.σ (-1, 1) (α i) (β i)) *
+            vladimirovSchwinger W n (β ∘ Fin.rev) x := by
+  dsimp [vladimirovSchwinger]
+  rw [wickEmbedN_neg, wickEmbedN_comp_rev]
+  exact vladimirov_tube_pct_theorem R W hspec hP hloc n
+    (wickEmbedN n x) (wickEmbedN_mem_forward_tube_n n hx) α
+
+theorem schwingerFromTube_spin_parity_selection (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (n : ℕ) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n) (α : Fin n → ι) :
+    schwingerFromTube E n α x = ε ^ n * schwingerFromTube E n α x :=
+  tube_spin_parity_selection R W E h_cov ε hε n
+    (wickEmbedN n x) (wickEmbedN_mem_forward_tube_n n hx) α
+
+theorem schwingerFromTube_eq_zero_of_odd_fermion (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (hε : R.HasSpinParity (-1))
+    (n : ℕ) (hn : Odd n) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n)
+    (α : Fin n → ι) :
+    schwingerFromTube E n α x = 0 :=
+  tube_eq_zero_of_odd_fermion R W E h_cov hε n hn
+    (wickEmbedN n x) (wickEmbedN_mem_forward_tube_n n hx) α
+
+noncomputable section
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+abbrev SchwingerFamily (ι : Type*) : Type _ :=
+  ∀ n : ℕ, (Fin n → ι) → (Fin n → Fin 4 → ℝ) → ℂ
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma schwinger_congr_n (𝒮 : SchwingerFamily ι) {n m : ℕ} (h : n = m)
+    (α : Fin m → ι) (x : Fin m → Fin 4 → ℝ) :
+    𝒮 n (α ∘ finCongr h) (x ∘ finCongr h) = 𝒮 m α x := by
+  subst h
+  rfl
+
+def osConcatPoint (j k : ℕ) (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ) :
+    Fin (j + k) → Fin 4 → ℝ :=
+  Fin.append (euclidTimeReflectRev j x) y
+
+def osConcatIdx (j k : ℕ) (β : Fin j → ι) (α' : Fin k → ι) : Fin (j + k) → ι :=
+  Fin.append (β ∘ Fin.rev) α'
+
+@[simp]
+lemma osConcatPoint_castAdd (j k : ℕ) (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ)
+    (i : Fin j) :
+    osConcatPoint j k x y (Fin.castAdd k i) = euclidTimeReflect (x (Fin.rev i)) := by
+  simp [osConcatPoint, euclidTimeReflectRev]
+
+@[simp]
+lemma osConcatPoint_natAdd (j k : ℕ) (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ)
+    (i : Fin k) :
+    osConcatPoint j k x y (Fin.natAdd j i) = y i := by
+  simp [osConcatPoint]
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConcatIdx_castAdd (j k : ℕ) (β : Fin j → ι) (α' : Fin k → ι) (i : Fin j) :
+    osConcatIdx j k β α' (Fin.castAdd k i) = β (Fin.rev i) := by
+  simp [osConcatIdx]
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConcatIdx_natAdd (j k : ℕ) (β : Fin j → ι) (α' : Fin k → ι) (i : Fin k) :
+    osConcatIdx j k β α' (Fin.natAdd j i) = α' i := by
+  simp [osConcatIdx]
+
+lemma fin_append_apply_lt {α : Type*} {j k : ℕ} (u : Fin j → α) (v : Fin k → α)
+    (i : Fin (j + k)) (hi : i.val < j) :
+    Fin.append u v i = u ⟨i.val, hi⟩ := by
+  have h_eq : i = Fin.castAdd k ⟨i.val, hi⟩ := by
+    ext
+    rfl
+  conv_lhs => rw [h_eq]
+  exact Fin.append_left u v ⟨i.val, hi⟩
+
+lemma fin_append_apply_ge {α : Type*} {j k : ℕ} (u : Fin j → α) (v : Fin k → α)
+    (i : Fin (j + k)) (hi : j ≤ i.val) :
+    Fin.append u v i = v ⟨i.val - j, Nat.sub_lt_left_of_lt_add hi i.isLt⟩ := by
+  have h_eq : i = Fin.natAdd j ⟨i.val - j, Nat.sub_lt_left_of_lt_add hi i.isLt⟩ := by
+    ext
+    dsimp
+    omega
+  conv_lhs => rw [h_eq]
+  exact Fin.append_right u v ⟨i.val - j, Nat.sub_lt_left_of_lt_add hi i.isLt⟩
+
+theorem osConcatPoint_mem_orderedEuclidN (j k : ℕ)
+    {x : Fin j → Fin 4 → ℝ} (hx : x ∈ posOrderedEuclidN j)
+    {y : Fin k → Fin 4 → ℝ} (hy : y ∈ posOrderedEuclidN k) :
+    osConcatPoint j k x y ∈ orderedEuclidN (j + k) := by
+  intro i hi
+  dsimp [osConcatPoint]
+  have h_left_ord : euclidTimeReflectRev j x ∈ orderedEuclidN j :=
+    euclidTimeReflectRev_mem_orderedEuclidN j hx.2
+  by_cases h1 : i.val + 1 < j
+  · have h0 : i.val < j := by omega
+    rw [fin_append_apply_lt _ _ i h0, fin_append_apply_lt _ _ ⟨i.val + 1, hi⟩ h1]
+    exact h_left_ord ⟨i.val, h0⟩ h1
+  · by_cases h0 : i.val < j
+    · have h_ge : j ≤ (⟨i.val + 1, hi⟩ : Fin (j + k)).val := by
+        dsimp
+        omega
+      rw [fin_append_apply_lt _ _ i h0, fin_append_apply_ge _ _ ⟨i.val + 1, hi⟩ h_ge]
+      have h_neg : euclidTimeReflectRev j x ⟨i.val, h0⟩ 0 < 0 := by
+        dsimp [euclidTimeReflectRev, euclidTimeReflect]
+        linarith [hx.1 (Fin.rev ⟨i.val, h0⟩)]
+      have h_pos : 0 < y ⟨i.val + 1 - j, Nat.sub_lt_left_of_lt_add h_ge hi⟩ 0 :=
+        hy.1 _
+      linarith
+    · have h_ge0 : j ≤ i.val := by omega
+      have h_ge1 : j ≤ (⟨i.val + 1, hi⟩ : Fin (j + k)).val := by
+        dsimp
+        omega
+      rw [fin_append_apply_ge _ _ i h_ge0, fin_append_apply_ge _ _ ⟨i.val + 1, hi⟩ h_ge1]
+      have h_sub_lt : i.val - j + 1 < k := by omega
+      have h_idx_eq : (⟨i.val + 1 - j, Nat.sub_lt_left_of_lt_add h_ge1 hi⟩ : Fin k) =
+          ⟨i.val - j + 1, h_sub_lt⟩ := by
+        ext
+        dsimp
+        omega
+      rw [h_idx_eq]
+      exact hy.2 ⟨i.val - j, Nat.sub_lt_left_of_lt_add h_ge0 i.isLt⟩ h_sub_lt
+
+lemma fin_append_rev_finCongr {α : Type*} (j k : ℕ) (u : Fin k → α) (v : Fin j → α) :
+    (Fin.append u v ∘ Fin.rev) ∘ finCongr (Nat.add_comm j k) =
+      Fin.append (v ∘ Fin.rev) (u ∘ Fin.rev) := by
+  ext i
+  simp only [Function.comp_apply]
+  by_cases hi : i.val < j
+  · rw [fin_append_apply_lt _ _ i hi]
+    have h_rev_ge : k ≤ (Fin.rev (finCongr (Nat.add_comm j k) i)).val := by
+      dsimp [Fin.rev, finCongr]
+      omega
+    rw [fin_append_apply_ge _ _ (Fin.rev (finCongr (Nat.add_comm j k) i)) h_rev_ge]
+    have h_idx : (⟨(Fin.rev (finCongr (Nat.add_comm j k) i)).val - k,
+        Nat.sub_lt_left_of_lt_add h_rev_ge
+          (Fin.rev (finCongr (Nat.add_comm j k) i)).isLt⟩ : Fin j) =
+        Fin.rev ⟨i.val, hi⟩ := by
+      ext
+      dsimp [Fin.rev, finCongr]
+      omega
+    rw [h_idx]
+    rfl
+  · have h_ge : j ≤ i.val := by omega
+    rw [fin_append_apply_ge _ _ i h_ge]
+    have h_rev_lt : (Fin.rev (finCongr (Nat.add_comm j k) i)).val < k := by
+      dsimp [Fin.rev, finCongr]
+      omega
+    rw [fin_append_apply_lt _ _ (Fin.rev (finCongr (Nat.add_comm j k) i)) h_rev_lt]
+    have h_idx : (⟨(Fin.rev (finCongr (Nat.add_comm j k) i)).val, h_rev_lt⟩ : Fin k) =
+        Fin.rev ⟨i.val - j, Nat.sub_lt_left_of_lt_add h_ge i.isLt⟩ := by
+      ext
+      dsimp [Fin.rev, finCongr]
+      omega
+    rw [h_idx]
+    rfl
+
+lemma euclidTimeReflectRev_osConcatPoint (j k : ℕ)
+    (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ) :
+    euclidTimeReflectRev (k + j) (osConcatPoint k j y x) ∘ finCongr (Nat.add_comm j k) =
+      osConcatPoint j k x y := by
+  have h1 : euclidTimeReflectRev (k + j) (osConcatPoint k j y x) =
+      Fin.append (euclidTimeReflect ∘ euclidTimeReflectRev k y)
+        (euclidTimeReflect ∘ x) ∘ Fin.rev := by
+    ext m μ
+    dsimp [euclidTimeReflectRev, osConcatPoint]
+    by_cases hm : (Fin.rev m).val < k
+    · rw [fin_append_apply_lt _ _ (Fin.rev m) hm, fin_append_apply_lt _ _ (Fin.rev m) hm]
+      rfl
+    · have h_ge : k ≤ (Fin.rev m).val := by omega
+      rw [fin_append_apply_ge _ _ (Fin.rev m) h_ge, fin_append_apply_ge _ _ (Fin.rev m) h_ge]
+      rfl
+  rw [h1, fin_append_rev_finCongr]
+  dsimp [osConcatPoint]
+  congr 1
+  ext i μ
+  simp [euclidTimeReflectRev, Fin.rev_rev]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConcatIdx_rev_finCongr (j k : ℕ) (α : Fin j → ι) (β' : Fin k → ι) :
+    (osConcatIdx k j β' α ∘ Fin.rev) ∘ finCongr (Nat.add_comm j k) =
+      osConcatIdx j k α β' := by
+  dsimp [osConcatIdx]
+  rw [fin_append_rev_finCongr]
+  congr 1
+  ext i
+  simp [Fin.rev_rev]
+
+def osConcatIdxEquiv (k j : ℕ) : ((Fin k → ι) × (Fin j → ι)) ≃ (Fin (k + j) → ι) where
+  toFun p := osConcatIdx k j p.1 p.2
+  invFun δ := (fun i => δ (Fin.castAdd j (Fin.rev i)), fun i => δ (Fin.natAdd k i))
+  left_inv p := by
+    ext i
+    · simp [Fin.rev_rev]
+    · simp
+  right_inv δ := by
+    ext m
+    dsimp
+    by_cases hm : m.val < k
+    · have h_eq : m = Fin.castAdd j ⟨m.val, hm⟩ := by ext; rfl
+      rw [h_eq, osConcatIdx_castAdd, Fin.rev_rev]
+    · have h_ge : k ≤ m.val := by omega
+      have h_eq : m = Fin.natAdd k ⟨m.val - k, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+        ext; dsimp; omega
+      rw [h_eq, osConcatIdx_natAdd]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma prod_osConcatIdx (k j : ℕ) (F : ι → ι → ℂ)
+    (γ δL : Fin k → ι) (α β : Fin j → ι) :
+    (∏ m : Fin (k + j), F (osConcatIdx k j γ α m) (osConcatIdx k j δL β m)) =
+      (∏ i : Fin k, F (γ i) (δL i)) * (∏ r : Fin j, F (α r) (β r)) := by
+  rw [Fin.prod_univ_add]
+  congr 1
+  · simp only [osConcatIdx_castAdd]
+    exact Equiv.prod_comp Fin.revPerm (fun i => F (γ i) (δL i))
+  · simp only [osConcatIdx_natAdd]
+
+lemma starStructure_map_star_mul_self {R : HolomorphicLorentzRep ι} (S : StarStructure R) :
+    S.C.map star * S.C = 1 :=
+  mul_eq_one_comm.mp S.involutive
+
+lemma sum_prod_star_C_mul_C {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (k : ℕ) (α' δL : Fin k → ι) :
+    (∑ γ : Fin k → ι, ∏ i : Fin k, star (S.C (α' i) (γ i)) * S.C (γ i) (δL i)) =
+      if α' = δL then 1 else 0 := by
+  have h_ps := (Fintype.prod_sum
+    (fun (i : Fin k) (c : ι) => star (S.C (α' i) c) * S.C c (δL i))).symm
+  rw [h_ps]
+  have h_mat : ∀ i : Fin k,
+      (∑ c : ι, star (S.C (α' i) c) * S.C c (δL i)) =
+        (S.C.map star * S.C) (α' i) (δL i) := by
+    intro i
+    simp [Matrix.mul_apply]
+  simp_rw [h_mat, starStructure_map_star_mul_self S]
+  by_cases h : α' = δL
+  · subst h
+    simp
+  · rw [if_neg h]
+    obtain ⟨i, hi⟩ : ∃ i, α' i ≠ δL i := by
+      by_contra hc
+      push Not at hc
+      exact h (funext hc)
+    apply Finset.prod_eq_zero (Finset.mem_univ i)
+    exact Matrix.one_apply_ne hi
+
+def OSConfig (ι : Type*) : Type _ :=
+  Σ n : ℕ, (Fin n → ι) × posOrderedEuclidN n
+
+def osVacuumConfig (ι : Type*) : OSConfig ι :=
+  ⟨0, (Fin.elim0, ⟨euclidOrderedBasePoint 0, euclidOrderedBasePoint_mem_posOrderedEuclidN 0⟩)⟩
+
+def osKernel {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) (A B : OSConfig ι) : ℂ :=
+  ∑ β : Fin A.1 → ι,
+    (∏ i : Fin A.1, S.C (A.2.1 i) (β i)) *
+      𝒮 (A.1 + B.1) (osConcatIdx A.1 B.1 β B.2.1)
+        (osConcatPoint A.1 B.1 A.2.2.val B.2.2.val)
+
+def OSHermiticity {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n →
+    star (𝒮 n α x) =
+      ∑ β : Fin n → ι,
+        (∏ i : Fin n, S.C (α i) (β i)) *
+          𝒮 n (β ∘ Fin.rev) (euclidTimeReflectRev n x)
+
+theorem osKernel_conj_symm {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) (hherm : OSHermiticity S 𝒮)
+    (A B : OSConfig ι) :
+    star (osKernel S 𝒮 B A) = osKernel S 𝒮 A B := by
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  unfold osKernel
+  dsimp only
+  rw [star_sum]
+  have h_ord : osConcatPoint k j y x ∈ orderedEuclidN (k + j) :=
+    osConcatPoint_mem_orderedEuclidN k j hy hx
+  have h_term : ∀ γ : Fin k → ι,
+      star ((∏ i : Fin k, S.C (α' i) (γ i)) *
+        𝒮 (k + j) (osConcatIdx k j γ α) (osConcatPoint k j y x)) =
+      ∑ δL : Fin k → ι, ∑ β : Fin j → ι,
+        (∏ i : Fin k, star (S.C (α' i) (γ i)) * S.C (γ i) (δL i)) *
+          ((∏ r : Fin j, S.C (α r) (β r)) *
+            𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y)) := by
+    intro γ
+    rw [star_mul', star_prod, hherm (k + j) (osConcatIdx k j γ α) (osConcatPoint k j y x) h_ord]
+    rw [← (osConcatIdxEquiv k j).sum_comp]
+    rw [Fintype.sum_prod_type]
+    rw [Finset.mul_sum]
+    refine Finset.sum_congr rfl (fun δL _ => ?_)
+    rw [Finset.mul_sum]
+    refine Finset.sum_congr rfl (fun β _ => ?_)
+    dsimp [osConcatIdxEquiv]
+    rw [prod_osConcatIdx k j (fun a b => S.C a b) γ δL α β]
+    have h_schw :
+        𝒮 (k + j) (osConcatIdx k j δL β ∘ Fin.rev)
+          (euclidTimeReflectRev (k + j) (osConcatPoint k j y x)) =
+        𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y) := by
+      rw [← schwinger_congr_n 𝒮 (Nat.add_comm j k)]
+      rw [osConcatIdx_rev_finCongr, euclidTimeReflectRev_osConcatPoint]
+    rw [h_schw]
+    have h_prod_mul :
+        (∏ x : Fin k, star (S.C (α' x) (γ x))) * (∏ i : Fin k, S.C (γ i) (δL i)) =
+          ∏ i : Fin k, star (S.C (α' i) (γ i)) * S.C (γ i) (δL i) :=
+      (Finset.prod_mul_distrib (s := Finset.univ)
+        (f := fun i : Fin k => star (S.C (α' i) (γ i)))
+        (g := fun i : Fin k => S.C (γ i) (δL i))).symm
+    calc (∏ x : Fin k, star (S.C (α' x) (γ x))) *
+          (((∏ i : Fin k, S.C (γ i) (δL i)) * ∏ r : Fin j, S.C (α r) (β r)) *
+            𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y))
+      _ = ((∏ x : Fin k, star (S.C (α' x) (γ x))) * (∏ i : Fin k, S.C (γ i) (δL i))) *
+            ((∏ r : Fin j, S.C (α r) (β r)) *
+              𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y)) := by ring
+      _ = (∏ i : Fin k, star (S.C (α' i) (γ i)) * S.C (γ i) (δL i)) *
+            ((∏ r : Fin j, S.C (α r) (β r)) *
+              𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y)) := by rw [h_prod_mul]
+  simp_rw [h_term]
+  rw [Finset.sum_comm]
+  have h_collapse : ∀ δL : Fin k → ι,
+      (∑ γ : Fin k → ι, ∑ β : Fin j → ι,
+        (∏ i : Fin k, star (S.C (α' i) (γ i)) * S.C (γ i) (δL i)) *
+          ((∏ r : Fin j, S.C (α r) (β r)) *
+            𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y))) =
+      (if α' = δL then 1 else 0) *
+        ∑ β : Fin j → ι,
+          (∏ r : Fin j, S.C (α r) (β r)) *
+            𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y) := by
+    intro δL
+    rw [Finset.sum_comm]
+    have h_inner : ∀ β : Fin j → ι,
+        (∑ γ : Fin k → ι,
+          (∏ i : Fin k, star (S.C (α' i) (γ i)) * S.C (γ i) (δL i)) *
+            ((∏ r : Fin j, S.C (α r) (β r)) *
+              𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y))) =
+        (if α' = δL then 1 else 0) *
+          ((∏ r : Fin j, S.C (α r) (β r)) *
+            𝒮 (j + k) (osConcatIdx j k β δL) (osConcatPoint j k x y)) := by
+      intro β
+      rw [← Finset.sum_mul, sum_prod_star_C_mul_C S k α' δL]
+    simp_rw [h_inner, ← Finset.mul_sum]
+  simp_rw [h_collapse]
+  simp
+
+def osPreInner {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) (Ψ Φ : OSConfig ι →₀ ℂ) : ℂ :=
+  Ψ.sum fun A cA => Φ.sum fun B cB => star cA * cB * osKernel S 𝒮 A B
+
+def OSReflectionPositive {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ Ψ : OSConfig ι →₀ ℂ, 0 ≤ (osPreInner S 𝒮 Ψ Ψ).re
+
+def OSTranslationInvariant (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → ∀ a : Fin 4 → ℝ,
+    𝒮 n α (fun i => x i + a) = 𝒮 n α x
+
+def EuclidRotCovariant (R : HolomorphicLorentzRep ι) (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ (n : ℕ) (U V : SU2) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → euclidRotN n U V x ∈ orderedEuclidN n →
+    ∀ α : Fin n → ι,
+    𝒮 n α (euclidRotN n U V x) =
+      ∑ β : Fin n → ι,
+        (∏ i : Fin n, R.σ (su2ToSL2C U, su2ToSL2C V) (α i) (β i)) * 𝒮 n β x
+
+structure OSAxioms (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (η : ℂ) (𝒮 : SchwingerFamily ι) : Prop where
+  os0_smooth : ∀ (n : ℕ) (α : Fin n → ι),
+    ContDiffOn ℝ (⊤ : ℕ∞) (𝒮 n α) (orderedEuclidN n)
+  os1_translation : OSTranslationInvariant 𝒮
+  os1_rotation : EuclidRotCovariant R 𝒮
+  os2_hermiticity : OSHermiticity S 𝒮
+  os2_positivity : OSReflectionPositive S 𝒮
+  os3_symmetry : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n →
+    𝒮 n α (-(x ∘ Fin.rev)) =
+      η ^ (n * (n - 1) / 2) *
+        ∑ β : Fin n → ι,
+          (∏ i : Fin n, R.σ (-1, 1) (α i) (β i)) * 𝒮 n (β ∘ Fin.rev) x
+
+theorem OSAxioms.of_scalar_symmetry {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hPT : R.HasPTScalar 1)
+    (os0 : ∀ (n : ℕ) (α : Fin n → ι),
+      ContDiffOn ℝ (⊤ : ℕ∞) (𝒮 n α) (orderedEuclidN n))
+    (os1_t : OSTranslationInvariant 𝒮)
+    (os1_r : EuclidRotCovariant R 𝒮)
+    (os2_h : OSHermiticity S 𝒮)
+    (os2_p : OSReflectionPositive S 𝒮)
+    (os3_s : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n →
+      𝒮 n α (-(x ∘ Fin.rev)) = η ^ (n * (n - 1) / 2) * 𝒮 n (α ∘ Fin.rev) x) :
+    OSAxioms R S η 𝒮 where
+  os0_smooth := os0
+  os1_translation := os1_t
+  os1_rotation := os1_r
+  os2_hermiticity := os2_h
+  os2_positivity := os2_p
+  os3_symmetry n α x hx := by
+    rw [os3_s n α x hx]
+    congr 1
+    have h_prod : ∀ β : Fin n → ι,
+        (∏ i : Fin n, R.σ (-1, 1) (α i) (β i)) = if α = β then 1 else 0 := by
+      intro β
+      rw [hPT]
+      by_cases hab : α = β
+      · subst hab
+        simp only [↓reduceIte, one_smul, Matrix.one_apply_eq, Finset.prod_const_one]
+      · rw [if_neg hab]
+        obtain ⟨i, hi⟩ : ∃ i, α i ≠ β i := by
+          by_contra hc
+          push Not at hc
+          exact hab (funext hc)
+        refine Finset.prod_eq_zero (Finset.mem_univ i) ?_
+        simp only [one_smul, Matrix.one_apply_ne hi]
+    simp_rw [h_prod]
+    simp
+
+theorem schwingerFromTube_osAxioms (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (W : WightmanFamily ι) {η : ℂ} (E : TubeExtension W)
+    (htrans : TubeTranslationInvariant E) (hcov : TubeCovariant R E)
+    (hherm : TubeWickHermiticity S E) (hpct : TubePCT η R E)
+    (hpos : OSReflectionPositive S (schwingerFromTube E)) :
+    OSAxioms R S η (schwingerFromTube E) where
+  os0_smooth := schwingerFromTube_contDiffOn E
+  os1_translation := schwingerFromTube_translation_invariant E htrans
+  os1_rotation := schwingerFromTube_euclidCovariant R W E hcov
+  os2_hermiticity := schwingerFromTube_os_hermiticity S E hherm
+  os2_positivity := hpos
+  os3_symmetry := schwingerFromTube_pct R E hpct
+
+structure OSReflectionPositiveData (R : HolomorphicLorentzRep ι) (S : StarStructure R) where
+  𝒮 : SchwingerFamily ι
+  hermiticity : OSHermiticity S 𝒮
+  positivity : OSReflectionPositive S 𝒮
+
+def OSAxioms.toReflectionPositiveData {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι} (hOS : OSAxioms R S η 𝒮) :
+    OSReflectionPositiveData R S where
+  𝒮 := 𝒮
+  hermiticity := hOS.os2_hermiticity
+  positivity := hOS.os2_positivity
+
+lemma osPreInner_conj_symm {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ Φ : OSConfig ι →₀ ℂ) :
+    star (osPreInner S D.𝒮 Φ Ψ) = osPreInner S D.𝒮 Ψ Φ := by
+  unfold osPreInner
+  rw [Finsupp.sum_comm]
+  rw [star_finsuppSum]
+  refine Finsupp.sum_congr (fun A _ => ?_)
+  change star (Φ.sum fun B cB => star cB * Ψ A * osKernel S D.𝒮 B A) =
+    Φ.sum fun B cB => star (Ψ A) * cB * osKernel S D.𝒮 A B
+  rw [star_finsuppSum]
+  refine Finsupp.sum_congr (fun B _ => ?_)
+  change star (star (Φ B) * Ψ A * osKernel S D.𝒮 B A) =
+    star (Ψ A) * Φ B * osKernel S D.𝒮 A B
+  rw [star_mul', star_mul', star_star, osKernel_conj_symm S D.𝒮 D.hermiticity A B]
+  ring
+
+lemma osPreInner_add_left {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ₁ Ψ₂ Φ : OSConfig ι →₀ ℂ) :
+    osPreInner S D.𝒮 (Ψ₁ + Ψ₂) Φ = osPreInner S D.𝒮 Ψ₁ Φ + osPreInner S D.𝒮 Ψ₂ Φ := by
+  unfold osPreInner
+  rw [Finsupp.sum_add_index']
+  · intro A
+    simp
+  · intro A c₁ c₂
+    simp [add_mul, Finsupp.sum_add]
+
+lemma osPreInner_smul_left {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ Φ : OSConfig ι →₀ ℂ) (c : ℂ) :
+    osPreInner S D.𝒮 (c • Ψ) Φ = star c * osPreInner S D.𝒮 Ψ Φ := by
+  unfold osPreInner
+  rw [Finsupp.sum_smul_index]
+  · rw [Finsupp.mul_sum]
+    refine Finsupp.sum_congr (fun A _ => ?_)
+    rw [Finsupp.mul_sum]
+    refine Finsupp.sum_congr (fun B _ => ?_)
+    rw [star_mul']
+    ring
+  · intro A
+    simp
+
+@[ext]
+structure OSPreHilbertSpace {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) where
+  ofFinsupp ::
+  toFinsupp : OSConfig ι →₀ ℂ
+
+namespace OSPreHilbertSpace
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  (D : OSReflectionPositiveData R S)
+
+instance : Zero (OSPreHilbertSpace D) := ⟨⟨0⟩⟩
+instance : Add (OSPreHilbertSpace D) := ⟨fun x y => ⟨x.1 + y.1⟩⟩
+instance : Neg (OSPreHilbertSpace D) := ⟨fun x => ⟨-x.1⟩⟩
+instance : Sub (OSPreHilbertSpace D) := ⟨fun x y => ⟨x.1 - y.1⟩⟩
+instance {M : Type*} [SMul M (OSConfig ι →₀ ℂ)] : SMul M (OSPreHilbertSpace D) :=
+  ⟨fun c x => ⟨c • x.1⟩⟩
+
+@[simp] lemma toFinsupp_zero : (0 : OSPreHilbertSpace D).toFinsupp = 0 := rfl
+@[simp] lemma toFinsupp_add (x y : OSPreHilbertSpace D) :
+    (x + y).toFinsupp = x.toFinsupp + y.toFinsupp := rfl
+@[simp] lemma toFinsupp_neg (x : OSPreHilbertSpace D) :
+    (-x).toFinsupp = -x.toFinsupp := rfl
+@[simp] lemma toFinsupp_sub (x y : OSPreHilbertSpace D) :
+    (x - y).toFinsupp = x.toFinsupp - y.toFinsupp := rfl
+@[simp] lemma toFinsupp_smul {M : Type*} [SMul M (OSConfig ι →₀ ℂ)]
+    (c : M) (x : OSPreHilbertSpace D) :
+    (c • x).toFinsupp = c • x.toFinsupp := rfl
+
+instance : AddCommGroup (OSPreHilbertSpace D) :=
+  Function.Injective.addCommGroup toFinsupp (fun _ _ => OSPreHilbertSpace.ext)
+    rfl (fun _ _ => rfl) (fun _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl)
+
+instance : Module ℂ (OSPreHilbertSpace D) :=
+  Function.Injective.module ℂ ⟨⟨toFinsupp, rfl⟩, fun _ _ => rfl⟩
+    (fun _ _ => OSPreHilbertSpace.ext) (fun _ _ => rfl)
+
+def equivFinsupp : OSPreHilbertSpace D ≃ₗ[ℂ] (OSConfig ι →₀ ℂ) where
+  toFun := toFinsupp
+  invFun := ofFinsupp
+  left_inv x := by cases x; rfl
+  right_inv f := rfl
+  map_add' _ _ := rfl
+  map_smul' _ _ := rfl
+
+instance : PreInnerProductSpace.Core ℂ (OSPreHilbertSpace D) where
+  inner Ψ Φ := osPreInner S D.𝒮 Ψ.toFinsupp Φ.toFinsupp
+  conj_inner_symm Ψ Φ := osPreInner_conj_symm D Ψ.toFinsupp Φ.toFinsupp
+  re_inner_nonneg Ψ := D.positivity Ψ.toFinsupp
+  add_left Ψ₁ Ψ₂ Φ := osPreInner_add_left D Ψ₁.toFinsupp Ψ₂.toFinsupp Φ.toFinsupp
+  smul_left Ψ Φ c := osPreInner_smul_left D Ψ.toFinsupp Φ.toFinsupp c
+
+instance : SeminormedAddCommGroup (OSPreHilbertSpace D) :=
+  InnerProductSpace.Core.toSeminormedAddCommGroup (𝕜 := ℂ)
+
+instance : InnerProductSpace ℂ (OSPreHilbertSpace D) :=
+  InnerProductSpace.ofCore _
+
+@[simp]
+lemma inner_def (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪Ψ, Φ⟫_ℂ = osPreInner S D.𝒮 Ψ.toFinsupp Φ.toFinsupp := rfl
+
+end OSPreHilbertSpace
+
+def osBasisPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A : OSConfig ι) : OSPreHilbertSpace D :=
+  ⟨Finsupp.single A 1⟩
+
+def osVacuumPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : OSPreHilbertSpace D :=
+  osBasisPre D (osVacuumConfig ι)
+
+@[simp]
+lemma inner_osBasisPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A B : OSConfig ι) :
+    ⟪osBasisPre D A, osBasisPre D B⟫_ℂ = osKernel S D.𝒮 A B := by
+  change osPreInner S D.𝒮 (Finsupp.single A 1) (Finsupp.single B 1) = osKernel S D.𝒮 A B
+  unfold osPreInner
+  simp
+
+theorem osPreHilbert_cauchy_schwarz {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ Φ : OSPreHilbertSpace D) :
+    ‖⟪Ψ, Φ⟫_ℂ‖ ≤ ‖Ψ‖ * ‖Φ‖ :=
+  norm_inner_le_norm Ψ Φ
+
+abbrev OSSepQuotient {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Type _ :=
+  SeparationQuotient (OSPreHilbertSpace D)
+
+abbrev OSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Type _ :=
+  UniformSpace.Completion (OSPreHilbertSpace D)
+
+def toOSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : OSPreHilbertSpace D →L[ℂ] OSHilbert D :=
+  UniformSpace.Completion.toComplL
+
+@[simp]
+lemma inner_toOSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪toOSHilbert D Ψ, toOSHilbert D Φ⟫_ℂ = ⟪Ψ, Φ⟫_ℂ :=
+  UniformSpace.Completion.inner_coe Ψ Φ
+
+@[simp]
+lemma norm_toOSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ : OSPreHilbertSpace D) :
+    ‖toOSHilbert D Ψ‖ = ‖Ψ‖ :=
+  UniformSpace.Completion.norm_coe Ψ
+
+def osBasis {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A : OSConfig ι) : OSHilbert D :=
+  toOSHilbert D (osBasisPre D A)
+
+def osVacuum {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : OSHilbert D :=
+  toOSHilbert D (osVacuumPre D)
+
+@[simp]
+lemma inner_osBasis {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A B : OSConfig ι) :
+    ⟪osBasis D A, osBasis D B⟫_ℂ = osKernel S D.𝒮 A B := by
+  dsimp [osBasis]
+  rw [inner_toOSHilbert, inner_osBasisPre]
+
+def osLiftConfigMap {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (g : OSConfig ι → OSConfig ι) :
+    OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D :=
+  (OSPreHilbertSpace.equivFinsupp D).symm.toLinearMap.comp
+    ((Finsupp.lmapDomain ℂ ℂ g).comp (OSPreHilbertSpace.equivFinsupp D).toLinearMap)
+
+@[simp]
+lemma toFinsupp_osLiftConfigMap {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (g : OSConfig ι → OSConfig ι)
+    (Ψ : OSPreHilbertSpace D) :
+    (osLiftConfigMap D g Ψ).toFinsupp = Finsupp.mapDomain g Ψ.toFinsupp := rfl
+
+@[simp]
+lemma osLiftConfigMap_id {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    osLiftConfigMap D id = LinearMap.id := by
+  ext Ψ : 1
+  apply OSPreHilbertSpace.ext
+  simp
+
+lemma osLiftConfigMap_comp {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (g₁ g₂ : OSConfig ι → OSConfig ι) :
+    osLiftConfigMap D (g₁ ∘ g₂) = (osLiftConfigMap D g₁).comp (osLiftConfigMap D g₂) := by
+  ext Ψ : 1
+  apply OSPreHilbertSpace.ext
+  simp [Finsupp.mapDomain_comp]
+
+@[simp]
+lemma osLiftConfigMap_osBasisPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (g : OSConfig ι → OSConfig ι) (A : OSConfig ι) :
+    osLiftConfigMap D g (osBasisPre D A) = osBasisPre D (g A) := by
+  apply OSPreHilbertSpace.ext
+  simp [osBasisPre]
+
+lemma inner_osLiftConfigMap {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (g₁ g₂ : OSConfig ι → OSConfig ι)
+    (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪osLiftConfigMap D g₁ Ψ, osLiftConfigMap D g₂ Φ⟫_ℂ =
+      Ψ.toFinsupp.sum fun A cA =>
+        Φ.toFinsupp.sum fun B cB =>
+          star cA * cB * osKernel S D.𝒮 (g₁ A) (g₂ B) := by
+  rw [OSPreHilbertSpace.inner_def, toFinsupp_osLiftConfigMap, toFinsupp_osLiftConfigMap]
+  unfold osPreInner
+  rw [Finsupp.sum_mapDomain_index (fun _ => by simp)
+    (fun _ _ _ => by simp [add_mul, Finsupp.sum_add])]
+  refine Finsupp.sum_congr (fun A _ => ?_)
+  rw [Finsupp.sum_mapDomain_index (fun _ => by simp)
+    (fun _ _ _ => by ring)]
+
+def euclidTimeVec (τ : ℝ) : Fin 4 → ℝ :=
+  fun μ => if μ = 0 then τ else 0
+
+@[simp]
+lemma euclidTimeVec_zero : euclidTimeVec 0 = 0 := by
+  ext μ
+  simp [euclidTimeVec]
+
+lemma euclidTimeVec_add (τ₁ τ₂ : ℝ) :
+    euclidTimeVec (τ₁ + τ₂) = euclidTimeVec τ₁ + euclidTimeVec τ₂ := by
+  ext μ
+  by_cases hμ : μ = 0 <;> simp [euclidTimeVec, hμ]
+
+lemma euclidTimeVec_smul (c τ : ℝ) :
+    c • euclidTimeVec τ = euclidTimeVec (c * τ) := by
+  ext μ
+  by_cases hμ : μ = 0 <;> simp [euclidTimeVec, hμ]
+
+@[simp]
+lemma euclidTimeReflect_euclidTimeVec (τ : ℝ) :
+    euclidTimeReflect (euclidTimeVec τ) = -euclidTimeVec τ := by
+  ext μ
+  fin_cases μ <;> simp [euclidTimeReflect, euclidTimeVec]
+
+@[simp]
+lemma euclidInner_euclidTimeVec_right (x : Fin 4 → ℝ) (τ : ℝ) :
+    euclidInner x (euclidTimeVec τ) = x 0 * τ := by
+  simp [euclidInner_explicit, euclidTimeVec]
+
+lemma timeShift_mem_posOrderedEuclidN (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ posOrderedEuclidN n) {τ : ℝ} (hτ : 0 ≤ τ) :
+    (fun i => x i + euclidTimeVec τ) ∈ posOrderedEuclidN n := by
+  refine ⟨fun i => ?_, shift_mem_orderedEuclidN n hx.2 (euclidTimeVec τ)⟩
+  simp only [Pi.add_apply, euclidTimeVec, ↓reduceIte]
+  linarith [hx.1 i]
+
+def osConfigTimeShift (τ : ℝ) (hτ : 0 ≤ τ) (A : OSConfig ι) : OSConfig ι :=
+  ⟨A.1, (A.2.1, ⟨fun i => A.2.2.val i + euclidTimeVec τ,
+    timeShift_mem_posOrderedEuclidN A.1 A.2.2.property hτ⟩)⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigTimeShift_zero (A : OSConfig ι) :
+    osConfigTimeShift 0 le_rfl A = A := by
+  rcases A with ⟨n, α, x, hx⟩
+  dsimp [osConfigTimeShift]
+  congr 2
+  ext i μ
+  simp
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfigTimeShift_add (τ₁ τ₂ : ℝ) (h₁ : 0 ≤ τ₁) (h₂ : 0 ≤ τ₂) (A : OSConfig ι) :
+    osConfigTimeShift (τ₁ + τ₂) (add_nonneg h₁ h₂) A =
+      osConfigTimeShift τ₁ h₁ (osConfigTimeShift τ₂ h₂ A) := by
+  rcases A with ⟨n, α, x, hx⟩
+  dsimp [osConfigTimeShift]
+  congr 2
+  ext i μ
+  simp [euclidTimeVec_add, add_assoc, add_comm (euclidTimeVec τ₁ μ)]
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigTimeShift_vacuum (τ : ℝ) (hτ : 0 ≤ τ) :
+    osConfigTimeShift τ hτ (osVacuumConfig ι) = osVacuumConfig ι := by
+  dsimp [osConfigTimeShift, osVacuumConfig]
+  congr 2
+  ext i μ
+  exact Fin.elim0 i
+
+lemma osConcatPoint_timeShift_add (j k : ℕ) (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ)
+    (τ : ℝ) :
+    (fun m => osConcatPoint j k (fun i => x i + euclidTimeVec τ) y m + euclidTimeVec τ) =
+      osConcatPoint j k x (fun i => y i + euclidTimeVec τ) := by
+  ext m μ
+  by_cases hm : m.val < j
+  · have h_eq : m = Fin.castAdd k ⟨m.val, hm⟩ := by ext; rfl
+    rw [h_eq, osConcatPoint_castAdd, osConcatPoint_castAdd]
+    rw [euclidTimeReflect_add, euclidTimeReflect_euclidTimeVec]
+    simp
+  · have h_ge : j ≤ m.val := by omega
+    have h_eq : m = Fin.natAdd j ⟨m.val - j, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+      ext; dsimp; omega
+    rw [h_eq, osConcatPoint_natAdd, osConcatPoint_natAdd]
+
+theorem osKernel_timeShift_symm {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) (htrans : OSTranslationInvariant 𝒮)
+    (τ : ℝ) (hτ : 0 ≤ τ) (A B : OSConfig ι) :
+    osKernel S 𝒮 (osConfigTimeShift τ hτ A) B =
+      osKernel S 𝒮 A (osConfigTimeShift τ hτ B) := by
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  dsimp [osKernel, osConfigTimeShift]
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  congr 1
+  have h_ord : osConcatPoint j k (fun i => x i + euclidTimeVec τ) y ∈ orderedEuclidN (j + k) :=
+    osConcatPoint_mem_orderedEuclidN j k (timeShift_mem_posOrderedEuclidN j hx hτ) hy
+  rw [← htrans (j + k) (osConcatIdx j k β α')
+    (osConcatPoint j k (fun i => x i + euclidTimeVec τ) y) h_ord (euclidTimeVec τ)]
+  rw [osConcatPoint_timeShift_add]
+
+def osTimeShiftLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (τ : ℝ) (hτ : 0 ≤ τ) :
+    OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D :=
+  osLiftConfigMap D (osConfigTimeShift τ hτ)
+
+@[simp]
+lemma osTimeShiftLM_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    osTimeShiftLM D 0 le_rfl = LinearMap.id := by
+  dsimp [osTimeShiftLM]
+  have h_id : osConfigTimeShift 0 le_rfl = (id : OSConfig ι → OSConfig ι) := by
+    ext A
+    exact osConfigTimeShift_zero A
+  rw [h_id, osLiftConfigMap_id]
+
+lemma osTimeShiftLM_add {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (τ₁ τ₂ : ℝ) (h₁ : 0 ≤ τ₁) (h₂ : 0 ≤ τ₂) :
+    osTimeShiftLM D (τ₁ + τ₂) (add_nonneg h₁ h₂) =
+      (osTimeShiftLM D τ₁ h₁).comp (osTimeShiftLM D τ₂ h₂) := by
+  dsimp [osTimeShiftLM]
+  have h_comp : osConfigTimeShift (τ₁ + τ₂) (add_nonneg h₁ h₂) =
+      (osConfigTimeShift τ₁ h₁ : OSConfig ι → OSConfig ι) ∘ osConfigTimeShift τ₂ h₂ := by
+    ext A
+    exact osConfigTimeShift_add τ₁ τ₂ h₁ h₂ A
+  rw [h_comp, osLiftConfigMap_comp]
+
+@[simp]
+lemma osTimeShiftLM_vacuumPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (τ : ℝ) (hτ : 0 ≤ τ) :
+    osTimeShiftLM D τ hτ (osVacuumPre D) = osVacuumPre D := by
+  dsimp [osTimeShiftLM, osVacuumPre]
+  rw [osLiftConfigMap_osBasisPre, osConfigTimeShift_vacuum]
+
+theorem osTimeShiftLM_isSymmetric {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osTimeShiftLM D τ hτ).IsSymmetric := by
+  intro Ψ Φ
+  unfold osTimeShiftLM
+  have hL := inner_osLiftConfigMap D (osConfigTimeShift τ hτ) id Ψ Φ
+  have hR := inner_osLiftConfigMap D id (osConfigTimeShift τ hτ) Ψ Φ
+  rw [osLiftConfigMap_id, LinearMap.id_apply] at hL hR
+  rw [hL, hR]
+  refine Finsupp.sum_congr (fun A _ => Finsupp.sum_congr (fun B _ => ?_))
+  rw [id_eq, id_eq, osKernel_timeShift_symm S D.𝒮 htrans τ hτ A B]
+
+theorem inner_osTimeShiftLM_self_eq_norm_sq_half
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D) :
+    ⟪osTimeShiftLM D τ hτ Ψ, Ψ⟫_ℂ = (‖osTimeShiftLM D (τ / 2) (by linarith) Ψ‖ ^ 2 : ℂ) := by
+  have h_half : 0 ≤ τ / 2 := by linarith
+  have h_eq : osTimeShiftLM D τ hτ Ψ =
+      osTimeShiftLM D (τ / 2) h_half (osTimeShiftLM D (τ / 2) h_half Ψ) := by
+    rw [← LinearMap.comp_apply, ← osTimeShiftLM_add D (τ / 2) (τ / 2) h_half h_half]
+    congr 2
+    ring
+  rw [h_eq, osTimeShiftLM_isSymmetric D htrans (τ / 2) h_half]
+  exact inner_self_eq_norm_sq_to_K (𝕜 := ℂ) (osTimeShiftLM D (τ / 2) h_half Ψ)
+
+theorem osTimeShiftLM_re_inner_nonneg {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D) :
+    0 ≤ RCLike.re ⟪osTimeShiftLM D τ hτ Ψ, Ψ⟫_ℂ := by
+  rw [inner_osTimeShiftLM_self_eq_norm_sq_half D htrans τ hτ Ψ]
+  have h_re : RCLike.re (‖osTimeShiftLM D (τ / 2) (by linarith) Ψ‖ ^ 2 : ℂ) =
+      ‖osTimeShiftLM D (τ / 2) (by linarith) Ψ‖ ^ 2 := by
+    norm_cast
+  rw [h_re]
+  exact sq_nonneg _
+
+theorem norm_sq_osTimeShiftLM_le {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D) :
+    ‖osTimeShiftLM D τ hτ Ψ‖ ^ 2 ≤
+      ‖Ψ‖ * ‖osTimeShiftLM D (2 * τ) (by linarith) Ψ‖ := by
+  have h2τ : 0 ≤ 2 * τ := by linarith
+  have h_id : ‖osTimeShiftLM D τ hτ Ψ‖ ^ 2 =
+      RCLike.re ⟪Ψ, osTimeShiftLM D (2 * τ) h2τ Ψ⟫_ℂ := by
+    rw [← osTimeShiftLM_isSymmetric D htrans (2 * τ) h2τ Ψ Ψ]
+    rw [inner_osTimeShiftLM_self_eq_norm_sq_half D htrans (2 * τ) h2τ Ψ]
+    have h_eq : osTimeShiftLM D (2 * τ / 2) (by linarith) Ψ = osTimeShiftLM D τ hτ Ψ := by
+      congr 2
+      ring
+    rw [h_eq]
+    norm_cast
+  rw [h_id]
+  calc RCLike.re ⟪Ψ, osTimeShiftLM D (2 * τ) h2τ Ψ⟫_ℂ
+    _ ≤ ‖⟪Ψ, osTimeShiftLM D (2 * τ) h2τ Ψ⟫_ℂ‖ := RCLike.re_le_norm _
+    _ ≤ ‖Ψ‖ * ‖osTimeShiftLM D (2 * τ) h2τ Ψ‖ := norm_inner_le_norm _ _
+
+theorem norm_pow_two_pow_osTimeShiftLM_le {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (m : ℕ) (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D) :
+    ‖osTimeShiftLM D τ hτ Ψ‖ ^ (2 ^ m) ≤
+      ‖Ψ‖ ^ (2 ^ m - 1) *
+        ‖osTimeShiftLM D ((2 : ℝ) ^ m * τ) (mul_nonneg (by positivity) hτ) Ψ‖ := by
+  induction m generalizing τ with
+  | zero =>
+    simp
+  | succ m ih =>
+    have h2τ : 0 ≤ 2 * τ := by linarith
+    have h_step := norm_sq_osTimeShiftLM_le D htrans τ hτ Ψ
+    have h_pow : (‖osTimeShiftLM D τ hτ Ψ‖ ^ 2) ^ (2 ^ m) ≤
+        (‖Ψ‖ * ‖osTimeShiftLM D (2 * τ) h2τ Ψ‖) ^ (2 ^ m) :=
+      pow_le_pow_left₀ (by positivity) h_step (2 ^ m)
+    rw [← pow_mul, mul_comm 2 (2 ^ m), ← pow_succ, mul_pow] at h_pow
+    have h_ih := ih (2 * τ) h2τ
+    have h_mul := mul_le_mul_of_nonneg_left h_ih (pow_nonneg (norm_nonneg Ψ) (2 ^ m))
+    refine le_trans h_pow (le_trans h_mul ?_)
+    rw [← mul_assoc, ← pow_add]
+    have h_exp : 2 ^ m + (2 ^ m - 1) = 2 ^ (m + 1) - 1 := by
+      have h_pos : 1 ≤ 2 ^ m := Nat.one_le_two_pow
+      omega
+    rw [h_exp]
+    have h_time : osTimeShiftLM D ((2 : ℝ) ^ m * (2 * τ)) (mul_nonneg (by positivity) h2τ) Ψ =
+        osTimeShiftLM D ((2 : ℝ) ^ (m + 1) * τ) (mul_nonneg (by positivity) hτ) Ψ := by
+      congr 2
+      ring
+    rw [h_time]
+
+def OSContractionCondition {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Prop :=
+  ∀ (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D),
+    ‖osTimeShiftLM D τ hτ Ψ‖ ≤ ‖Ψ‖
+
+def osTimeShiftPreCLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    OSPreHilbertSpace D →L[ℂ] OSPreHilbertSpace D :=
+  (osTimeShiftLM D τ hτ).mkContinuous 1 (fun Ψ => by simpa using hcontr τ hτ Ψ)
+
+@[simp]
+lemma osTimeShiftPreCLM_apply {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D) :
+    osTimeShiftPreCLM D hcontr τ hτ Ψ = osTimeShiftLM D τ hτ Ψ := rfl
+
+def osContractionSemigroup {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  (osTimeShiftPreCLM D hcontr τ hτ).completion
+
+@[simp]
+lemma osContractionSemigroup_toOSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D) :
+    osContractionSemigroup D hcontr τ hτ (toOSHilbert D Ψ) =
+      toOSHilbert D (osTimeShiftLM D τ hτ Ψ) :=
+  ContinuousLinearMap.completion_apply_coe (osTimeShiftPreCLM D hcontr τ hτ) Ψ
+
+@[simp]
+theorem osContractionSemigroup_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D) :
+    osContractionSemigroup D hcontr 0 le_rfl = ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osContractionSemigroup D hcontr 0 le_rfl (toOSHilbert D Ψ) = toOSHilbert D Ψ
+    rw [osContractionSemigroup_toOSHilbert, osTimeShiftLM_zero, LinearMap.id_apply]
+
+theorem osContractionSemigroup_add {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (τ₁ τ₂ : ℝ) (h₁ : 0 ≤ τ₁) (h₂ : 0 ≤ τ₂) :
+    osContractionSemigroup D hcontr (τ₁ + τ₂) (add_nonneg h₁ h₂) =
+      (osContractionSemigroup D hcontr τ₁ h₁).comp (osContractionSemigroup D hcontr τ₂ h₂) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osContractionSemigroup D hcontr (τ₁ + τ₂) (add_nonneg h₁ h₂) (toOSHilbert D Ψ) =
+      osContractionSemigroup D hcontr τ₁ h₁
+        (osContractionSemigroup D hcontr τ₂ h₂ (toOSHilbert D Ψ))
+    rw [osContractionSemigroup_toOSHilbert, osContractionSemigroup_toOSHilbert,
+        osContractionSemigroup_toOSHilbert, osTimeShiftLM_add, LinearMap.comp_apply]
+
+@[simp]
+theorem osContractionSemigroup_vacuum {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    osContractionSemigroup D hcontr τ hτ (osVacuum D) = osVacuum D := by
+  dsimp [osVacuum]
+  rw [osContractionSemigroup_toOSHilbert, osTimeShiftLM_vacuumPre]
+
+theorem norm_osContractionSemigroup_le {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (τ : ℝ) (hτ : 0 ≤ τ) (x : OSHilbert D) :
+    ‖osContractionSemigroup D hcontr τ hτ x‖ ≤ ‖x‖ := by
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_le (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change ‖osContractionSemigroup D hcontr τ hτ (toOSHilbert D Ψ)‖ ≤ ‖toOSHilbert D Ψ‖
+    rw [osContractionSemigroup_toOSHilbert, norm_toOSHilbert, norm_toOSHilbert]
+    exact hcontr τ hτ Ψ
+
+theorem opNorm_osContractionSemigroup_le_one {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    ‖osContractionSemigroup D hcontr τ hτ‖ ≤ 1 :=
+  ContinuousLinearMap.opNorm_le_bound _ zero_le_one (fun x => by
+    simpa using norm_osContractionSemigroup_le D hcontr τ hτ x)
+
+theorem osContractionSemigroup_isSymmetric {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D) (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osContractionSemigroup D hcontr τ hτ : OSHilbert D →ₗ[ℂ] OSHilbert D).IsSymmetric := by
+  intro x y
+  induction x, y using UniformSpace.Completion.induction_on₂ with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ Φ =>
+    change ⟪osContractionSemigroup D hcontr τ hτ (toOSHilbert D Ψ), toOSHilbert D Φ⟫_ℂ =
+      ⟪toOSHilbert D Ψ, osContractionSemigroup D hcontr τ hτ (toOSHilbert D Φ)⟫_ℂ
+    rw [osContractionSemigroup_toOSHilbert, osContractionSemigroup_toOSHilbert,
+        inner_toOSHilbert, inner_toOSHilbert]
+    exact osTimeShiftLM_isSymmetric D htrans τ hτ Ψ Φ
+
+theorem osContractionSemigroup_isPositive {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D) (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osContractionSemigroup D hcontr τ hτ : OSHilbert D →ₗ[ℂ] OSHilbert D).IsPositive := by
+  refine ⟨osContractionSemigroup_isSymmetric D htrans hcontr τ hτ, fun x => ?_⟩
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_le (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change 0 ≤ RCLike.re ⟪osContractionSemigroup D hcontr τ hτ (toOSHilbert D Ψ), toOSHilbert D Ψ⟫_ℂ
+    rw [osContractionSemigroup_toOSHilbert, inner_toOSHilbert]
+    exact osTimeShiftLM_re_inner_nonneg D htrans τ hτ Ψ
+
+def euclidSpatialVec (a : Fin 3 → ℝ) : Fin 4 → ℝ :=
+  Fin.cons 0 a
+
+@[simp]
+lemma euclidSpatialVec_zero_apply (a : Fin 3 → ℝ) :
+    euclidSpatialVec a 0 = 0 := rfl
+
+@[simp]
+lemma euclidSpatialVec_zero : euclidSpatialVec 0 = 0 := by
+  ext μ
+  fin_cases μ <;> rfl
+
+lemma euclidSpatialVec_add (a b : Fin 3 → ℝ) :
+    euclidSpatialVec (a + b) = euclidSpatialVec a + euclidSpatialVec b := by
+  ext μ
+  refine Fin.cases ?_ ?_ μ
+  · simp [euclidSpatialVec]
+  · intro i
+    simp [euclidSpatialVec]
+
+@[simp]
+lemma euclidTimeReflect_euclidSpatialVec_eq (a : Fin 3 → ℝ) :
+    euclidTimeReflect (euclidSpatialVec a) = euclidSpatialVec a := by
+  ext μ
+  fin_cases μ <;> simp [euclidTimeReflect, euclidSpatialVec]
+
+lemma spatialShift_mem_posOrderedEuclidN (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ posOrderedEuclidN n) (a : Fin 3 → ℝ) :
+    (fun i => x i + euclidSpatialVec a) ∈ posOrderedEuclidN n := by
+  refine ⟨fun i => ?_, shift_mem_orderedEuclidN n hx.2 (euclidSpatialVec a)⟩
+  simp only [Pi.add_apply, euclidSpatialVec_zero_apply, add_zero]
+  exact hx.1 i
+
+def osConfigSpatialShift (a : Fin 3 → ℝ) (A : OSConfig ι) : OSConfig ι :=
+  ⟨A.1, (A.2.1, ⟨fun i => A.2.2.val i + euclidSpatialVec a,
+    spatialShift_mem_posOrderedEuclidN A.1 A.2.2.property a⟩)⟩
+
+lemma osConcatPoint_spatialShift (j k : ℕ) (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ)
+    (a : Fin 3 → ℝ) :
+    osConcatPoint j k (fun i => x i + euclidSpatialVec a) (fun i => y i + euclidSpatialVec a) =
+      fun m => osConcatPoint j k x y m + euclidSpatialVec a := by
+  ext m μ
+  by_cases hm : m.val < j
+  · have h_eq : m = Fin.castAdd k ⟨m.val, hm⟩ := by ext; rfl
+    rw [h_eq, osConcatPoint_castAdd, Pi.add_apply, osConcatPoint_castAdd]
+    rw [euclidTimeReflect_add, euclidTimeReflect_euclidSpatialVec_eq]
+    rfl
+  · have h_ge : j ≤ m.val := by omega
+    have h_eq : m = Fin.natAdd j ⟨m.val - j, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+      ext; dsimp; omega
+    rw [h_eq, osConcatPoint_natAdd, Pi.add_apply, osConcatPoint_natAdd]
+    rfl
+
+theorem osKernel_spatialShift_invariant {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) (htrans : OSTranslationInvariant 𝒮)
+    (a : Fin 3 → ℝ) (A B : OSConfig ι) :
+    osKernel S 𝒮 (osConfigSpatialShift a A) (osConfigSpatialShift a B) =
+      osKernel S 𝒮 A B := by
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  dsimp [osKernel, osConfigSpatialShift]
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  congr 1
+  rw [osConcatPoint_spatialShift]
+  exact htrans (j + k) (osConcatIdx j k β α') (osConcatPoint j k x y)
+    (osConcatPoint_mem_orderedEuclidN j k hx hy) (euclidSpatialVec a)
+
+def osSpatialTranslateLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (a : Fin 3 → ℝ) :
+    OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D :=
+  osLiftConfigMap D (osConfigSpatialShift a)
+
+theorem inner_osSpatialTranslateLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪osSpatialTranslateLM D a Ψ, osSpatialTranslateLM D a Φ⟫_ℂ = ⟪Ψ, Φ⟫_ℂ := by
+  unfold osSpatialTranslateLM
+  rw [inner_osLiftConfigMap D (osConfigSpatialShift a) (osConfigSpatialShift a) Ψ Φ,
+      OSPreHilbertSpace.inner_def]
+  unfold osPreInner
+  refine Finsupp.sum_congr (fun A _ => Finsupp.sum_congr (fun B _ => ?_))
+  rw [osKernel_spatialShift_invariant S D.𝒮 htrans a A B]
+
+theorem norm_osSpatialTranslateLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) (Ψ : OSPreHilbertSpace D) :
+    ‖osSpatialTranslateLM D a Ψ‖ = ‖Ψ‖ := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), norm_eq_sqrt_re_inner (𝕜 := ℂ),
+      inner_osSpatialTranslateLM D htrans a Ψ Ψ]
+
+def osSpatialTranslatePreCLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) :
+    OSPreHilbertSpace D →L[ℂ] OSPreHilbertSpace D :=
+  (osSpatialTranslateLM D a).mkContinuous 1 (fun Ψ => by
+    rw [one_mul, norm_osSpatialTranslateLM D htrans a Ψ])
+
+def osSpatialTranslate {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  (osSpatialTranslatePreCLM D htrans a).completion
+
+@[simp]
+lemma osSpatialTranslate_toOSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) (Ψ : OSPreHilbertSpace D) :
+    osSpatialTranslate D htrans a (toOSHilbert D Ψ) =
+      toOSHilbert D (osSpatialTranslateLM D a Ψ) :=
+  ContinuousLinearMap.completion_apply_coe (osSpatialTranslatePreCLM D htrans a) Ψ
+
+theorem inner_osSpatialTranslate {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) (x y : OSHilbert D) :
+    ⟪osSpatialTranslate D htrans a x, osSpatialTranslate D htrans a y⟫_ℂ = ⟪x, y⟫_ℂ := by
+  induction x, y using UniformSpace.Completion.induction_on₂ with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ Φ =>
+    change ⟪osSpatialTranslate D htrans a (toOSHilbert D Ψ),
+        osSpatialTranslate D htrans a (toOSHilbert D Φ)⟫_ℂ =
+      ⟪toOSHilbert D Ψ, toOSHilbert D Φ⟫_ℂ
+    rw [osSpatialTranslate_toOSHilbert, osSpatialTranslate_toOSHilbert,
+        inner_toOSHilbert, inner_toOSHilbert, inner_osSpatialTranslateLM D htrans a Ψ Φ]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfigSpatialShift_comm_osConfigTimeShift
+    (a : Fin 3 → ℝ) (τ : ℝ) (hτ : 0 ≤ τ) :
+    osConfigSpatialShift (ι := ι) a ∘ osConfigTimeShift τ hτ =
+      osConfigTimeShift τ hτ ∘ osConfigSpatialShift a := by
+  ext A : 1
+  rcases A with ⟨m, α, ⟨y, hy⟩⟩
+  dsimp [osConfigSpatialShift, osConfigTimeShift]
+  congr 2
+  ext i μ
+  simp only [Pi.add_apply]
+  ring
+
+theorem osSpatialTranslate_comm_osContractionSemigroup
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D) (a : Fin 3 → ℝ) (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osSpatialTranslate D htrans a).comp (osContractionSemigroup D hcontr τ hτ) =
+      (osContractionSemigroup D hcontr τ hτ).comp (osSpatialTranslate D htrans a) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpatialTranslate D htrans a (osContractionSemigroup D hcontr τ hτ (toOSHilbert D Ψ)) =
+      osContractionSemigroup D hcontr τ hτ (osSpatialTranslate D htrans a (toOSHilbert D Ψ))
+    rw [osContractionSemigroup_toOSHilbert, osSpatialTranslate_toOSHilbert,
+        osSpatialTranslate_toOSHilbert, osContractionSemigroup_toOSHilbert]
+    congr 1
+    dsimp [osSpatialTranslateLM, osTimeShiftLM]
+    rw [← LinearMap.comp_apply, ← LinearMap.comp_apply,
+        ← osLiftConfigMap_comp, ← osLiftConfigMap_comp,
+        osConfigSpatialShift_comm_osConfigTimeShift]
+
+def su2Conj (U : SU2) : SU2 :=
+  ⟨(U⁻¹).valᵀ, by
+    have hUinv := Matrix.mem_specialUnitaryGroup_iff.mp (U⁻¹).property
+    have h_unit' : (U⁻¹).valᴴ * (U⁻¹).val = 1 :=
+      Matrix.mem_unitaryGroup_iff'.mp hUinv.1
+    rw [Matrix.mem_specialUnitaryGroup_iff, Matrix.mem_unitaryGroup_iff]
+    refine ⟨?_, by rw [Matrix.det_transpose, hUinv.2]⟩
+    change (U⁻¹).valᵀ * ((U⁻¹).valᵀ)ᴴ = 1
+    have h_ct : ((U⁻¹).valᵀ)ᴴ = ((U⁻¹).valᴴ)ᵀ := (Matrix.conjTranspose_transpose (U⁻¹).val).symm
+    rw [h_ct, ← Matrix.transpose_mul, h_unit', Matrix.transpose_one]⟩
+
+@[simp]
+lemma su2Conj_val_transpose (U : SU2) :
+    (su2Conj U).valᵀ = (U⁻¹).val :=
+  Matrix.transpose_transpose (U⁻¹).val
+
+lemma vec_to_spinor_wickEmbed_euclidTimeVec (τ : ℝ) :
+    vec_to_spinor (wickEmbed (euclidTimeVec τ)) =
+      (Complex.I * (τ : ℂ)) • (1 : Matrix (Fin 2) (Fin 2) ℂ) := by
+  ext i j
+  fin_cases i <;> fin_cases j <;> simp [vec_to_spinor, wickEmbed, euclidTimeVec, mul_comm]
+
+theorem euclidRotApply_su2Conj_euclidTimeVec (U : SU2) (τ : ℝ) :
+    euclidRotApply U (su2Conj U) (euclidTimeVec τ) = euclidTimeVec τ := by
+  apply wickEmbed_injective
+  rw [wickEmbed_euclidRotApply]
+  have h_act : vec_to_spinor (spinorPhi (su2ToSL2C U, su2ToSL2C (su2Conj U)) •
+      wickEmbed (euclidTimeVec τ)) =
+      U.val * vec_to_spinor (wickEmbed (euclidTimeVec τ)) * (su2Conj U).valᵀ := by
+    change vec_to_spinor (spinorPhi_matrix (su2ToSL2C U) (su2ToSL2C (su2Conj U)) *ᵥ
+      wickEmbed (euclidTimeVec τ)) = _
+    rw [spinorPhi_matrix_mulVec]
+    simp [spinor_action, vec_to_spinor_right_inv, su2ToSL2C]
+  have h_eq : vec_to_spinor (spinorPhi (su2ToSL2C U, su2ToSL2C (su2Conj U)) •
+      wickEmbed (euclidTimeVec τ)) = vec_to_spinor (wickEmbed (euclidTimeVec τ)) := by
+    rw [h_act, su2Conj_val_transpose, vec_to_spinor_wickEmbed_euclidTimeVec]
+    rw [Matrix.mul_smul, Matrix.smul_mul, Matrix.mul_one]
+    have hU : U.val * (U⁻¹).val = 1 := by
+      change (U * U⁻¹).val = 1
+      rw [mul_inv_cancel]
+      rfl
+    rw [hU]
+  simpa only [spinor_to_vec_left_inv] using congrArg spinor_to_vec h_eq
+
+@[simp]
+theorem euclidRotApply_su2Conj_time (U : SU2) (x : Fin 4 → ℝ) :
+    euclidRotApply U (su2Conj U) x 0 = x 0 := by
+  have h1 : euclidRotApply U (su2Conj U) x 0 =
+      euclidInner (euclidRotApply U (su2Conj U) x) (euclidTimeVec 1) := by
+    rw [euclidInner_euclidTimeVec_right, mul_one]
+  rw [h1]
+  conv_lhs => rw [← euclidRotApply_su2Conj_euclidTimeVec U 1]
+  rw [euclidInner_euclidRotApply, euclidInner_euclidTimeVec_right, mul_one]
+
+theorem euclidTimeReflect_euclidRotApply_su2Conj (U : SU2) (x : Fin 4 → ℝ) :
+    euclidTimeReflect (euclidRotApply U (su2Conj U) x) =
+      euclidRotApply U (su2Conj U) (euclidTimeReflect x) := by
+  have h_decomp : ∀ y : Fin 4 → ℝ,
+      euclidTimeReflect y = y + (-2 * y 0) • euclidTimeVec 1 := by
+    intro y
+    ext μ
+    fin_cases μ <;> · simp [euclidTimeReflect, euclidTimeVec]; try ring
+  rw [h_decomp, h_decomp, euclidRotApply_add, euclidRotApply_smul,
+      euclidRotApply_su2Conj_euclidTimeVec, euclidRotApply_su2Conj_time]
+
+theorem euclidRotN_su2Conj_mem_posOrderedEuclidN (n : ℕ) (U : SU2)
+    {x : Fin n → Fin 4 → ℝ} (hx : x ∈ posOrderedEuclidN n) :
+    euclidRotN n U (su2Conj U) x ∈ posOrderedEuclidN n := by
+  refine ⟨fun i => ?_, fun i hi => ?_⟩
+  · dsimp [euclidRotN]
+    rw [euclidRotOfSU2_mulVec, euclidRotApply_su2Conj_time]
+    exact hx.1 i
+  · dsimp [euclidRotN]
+    rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec,
+        euclidRotApply_su2Conj_time, euclidRotApply_su2Conj_time]
+    exact hx.2 i hi
+
+def osConfigPointRot (U : SU2) (A : OSConfig ι) : OSConfig ι :=
+  ⟨A.1, (A.2.1, ⟨euclidRotN A.1 U (su2Conj U) A.2.2.val,
+    euclidRotN_su2Conj_mem_posOrderedEuclidN A.1 U A.2.2.property⟩)⟩
+
+lemma osConcatPoint_euclidRotN_su2Conj (j k : ℕ) (U : SU2)
+    (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ) :
+    osConcatPoint j k (euclidRotN j U (su2Conj U) x) (euclidRotN k U (su2Conj U) y) =
+      euclidRotN (j + k) U (su2Conj U) (osConcatPoint j k x y) := by
+  ext m μ
+  by_cases hm : m.val < j
+  · have h_eq : m = Fin.castAdd k ⟨m.val, hm⟩ := by ext; rfl
+    rw [h_eq, osConcatPoint_castAdd]
+    change euclidTimeReflect (euclidRotOfSU2 U (su2Conj U) *ᵥ x (Fin.rev ⟨m.val, hm⟩)) μ =
+      (euclidRotOfSU2 U (su2Conj U) *ᵥ osConcatPoint j k x y (Fin.castAdd k ⟨m.val, hm⟩)) μ
+    rw [osConcatPoint_castAdd, euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec,
+        euclidTimeReflect_euclidRotApply_su2Conj]
+  · have h_ge : j ≤ m.val := by omega
+    have h_eq : m = Fin.natAdd j ⟨m.val - j, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+      ext; dsimp; omega
+    rw [h_eq, osConcatPoint_natAdd]
+    change (euclidRotOfSU2 U (su2Conj U) *ᵥ y ⟨m.val - j, _⟩) μ =
+      (euclidRotOfSU2 U (su2Conj U) *ᵥ osConcatPoint j k x y (Fin.natAdd j ⟨m.val - j, _⟩)) μ
+    rw [osConcatPoint_natAdd]
+
+def OSScalarRotInvariant (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ (n : ℕ) (U : SU2) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n →
+    𝒮 n α (euclidRotN n U (su2Conj U) x) = 𝒮 n α x
+
+theorem osKernel_pointRot_invariant {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) (hrot : OSScalarRotInvariant 𝒮)
+    (U : SU2) (A B : OSConfig ι) :
+    osKernel S 𝒮 (osConfigPointRot U A) (osConfigPointRot U B) =
+      osKernel S 𝒮 A B := by
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  dsimp [osKernel, osConfigPointRot]
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  congr 1
+  rw [osConcatPoint_euclidRotN_su2Conj]
+  exact hrot (j + k) U (osConcatIdx j k β α') (osConcatPoint j k x y)
+    (osConcatPoint_mem_orderedEuclidN j k hx hy)
+
+def osSpatialRotLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2) :
+    OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D :=
+  osLiftConfigMap D (osConfigPointRot U)
+
+theorem inner_osSpatialRotLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSScalarRotInvariant D.𝒮)
+    (U : SU2) (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪osSpatialRotLM D U Ψ, osSpatialRotLM D U Φ⟫_ℂ = ⟪Ψ, Φ⟫_ℂ := by
+  unfold osSpatialRotLM
+  rw [inner_osLiftConfigMap D (osConfigPointRot U) (osConfigPointRot U) Ψ Φ,
+      OSPreHilbertSpace.inner_def]
+  unfold osPreInner
+  refine Finsupp.sum_congr (fun A _ => Finsupp.sum_congr (fun B _ => ?_))
+  rw [osKernel_pointRot_invariant S D.𝒮 hrot U A B]
+
+theorem norm_osSpatialRotLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSScalarRotInvariant D.𝒮)
+    (U : SU2) (Ψ : OSPreHilbertSpace D) :
+    ‖osSpatialRotLM D U Ψ‖ = ‖Ψ‖ := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), norm_eq_sqrt_re_inner (𝕜 := ℂ),
+      inner_osSpatialRotLM D hrot U Ψ Ψ]
+
+def osSpatialRotPreCLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSScalarRotInvariant D.𝒮) (U : SU2) :
+    OSPreHilbertSpace D →L[ℂ] OSPreHilbertSpace D :=
+  (osSpatialRotLM D U).mkContinuous 1 (fun Ψ => by
+    rw [one_mul, norm_osSpatialRotLM D hrot U Ψ])
+
+def osSpatialRot {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSScalarRotInvariant D.𝒮) (U : SU2) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  (osSpatialRotPreCLM D hrot U).completion
+
+@[simp]
+lemma osSpatialRot_toOSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSScalarRotInvariant D.𝒮)
+    (U : SU2) (Ψ : OSPreHilbertSpace D) :
+    osSpatialRot D hrot U (toOSHilbert D Ψ) =
+      toOSHilbert D (osSpatialRotLM D U Ψ) :=
+  ContinuousLinearMap.completion_apply_coe (osSpatialRotPreCLM D hrot U) Ψ
+
+theorem inner_osSpatialRot {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSScalarRotInvariant D.𝒮)
+    (U : SU2) (x y : OSHilbert D) :
+    ⟪osSpatialRot D hrot U x, osSpatialRot D hrot U y⟫_ℂ = ⟪x, y⟫_ℂ := by
+  induction x, y using UniformSpace.Completion.induction_on₂ with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ Φ =>
+    change ⟪osSpatialRot D hrot U (toOSHilbert D Ψ),
+        osSpatialRot D hrot U (toOSHilbert D Φ)⟫_ℂ =
+      ⟪toOSHilbert D Ψ, toOSHilbert D Φ⟫_ℂ
+    rw [osSpatialRot_toOSHilbert, osSpatialRot_toOSHilbert,
+        inner_toOSHilbert, inner_toOSHilbert, inner_osSpatialRotLM D hrot U Ψ Φ]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfigPointRot_comm_osConfigTimeShift
+    (U : SU2) (τ : ℝ) (hτ : 0 ≤ τ) :
+    osConfigPointRot (ι := ι) U ∘ osConfigTimeShift τ hτ =
+      osConfigTimeShift τ hτ ∘ osConfigPointRot U := by
+  ext A : 1
+  rcases A with ⟨m, α, ⟨y, hy⟩⟩
+  dsimp [osConfigPointRot, osConfigTimeShift]
+  congr 2
+  ext i μ
+  dsimp [euclidRotN]
+  rw [euclidRotOfSU2_mulVec, euclidRotApply_add, euclidRotApply_su2Conj_euclidTimeVec,
+      ← euclidRotOfSU2_mulVec]
+  rfl
+
+theorem osSpatialRot_comm_osContractionSemigroup
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSScalarRotInvariant D.𝒮)
+    (hcontr : OSContractionCondition D) (U : SU2) (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osSpatialRot D hrot U).comp (osContractionSemigroup D hcontr τ hτ) =
+      (osContractionSemigroup D hcontr τ hτ).comp (osSpatialRot D hrot U) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpatialRot D hrot U (osContractionSemigroup D hcontr τ hτ (toOSHilbert D Ψ)) =
+      osContractionSemigroup D hcontr τ hτ (osSpatialRot D hrot U (toOSHilbert D Ψ))
+    rw [osContractionSemigroup_toOSHilbert, osSpatialRot_toOSHilbert,
+        osSpatialRot_toOSHilbert, osContractionSemigroup_toOSHilbert]
+    congr 1
+    dsimp [osSpatialRotLM, osTimeShiftLM]
+    rw [← LinearMap.comp_apply, ← LinearMap.comp_apply,
+        ← osLiftConfigMap_comp, ← osLiftConfigMap_comp,
+        osConfigPointRot_comm_osConfigTimeShift]
+
+def rightHalfPlane : Set ℂ := {z : ℂ | 0 ≤ z.re}
+
+def openRightHalfPlane : Set ℂ := {z : ℂ | 0 < z.re}
+
+lemma zero_mem_rightHalfPlane : (0 : ℂ) ∈ rightHalfPlane := by
+  simp [rightHalfPlane]
+
+lemma add_mem_rightHalfPlane {z₁ z₂ : ℂ}
+    (h₁ : z₁ ∈ rightHalfPlane) (h₂ : z₂ ∈ rightHalfPlane) :
+    z₁ + z₂ ∈ rightHalfPlane := by
+  simp only [rightHalfPlane, Set.mem_setOf_eq, Complex.add_re] at h₁ h₂ ⊢
+  linarith
+
+lemma ofReal_mem_rightHalfPlane {τ : ℝ} (hτ : 0 ≤ τ) :
+    (τ : ℂ) ∈ rightHalfPlane := by
+  simpa [rightHalfPlane] using hτ
+
+lemma star_mem_rightHalfPlane {z : ℂ} (hz : z ∈ rightHalfPlane) :
+    star z ∈ rightHalfPlane := by
+  simpa [rightHalfPlane] using hz
+
+lemma mul_I_mem_rightHalfPlane (t : ℝ) :
+    Complex.I * (t : ℂ) ∈ rightHalfPlane := by
+  simp [rightHalfPlane]
+
+lemma add_mul_I_mem_rightHalfPlane {τ : ℝ} (hτ : 0 ≤ τ) (t : ℝ) :
+    (τ : ℂ) + Complex.I * (t : ℂ) ∈ rightHalfPlane :=
+  add_mem_rightHalfPlane (ofReal_mem_rightHalfPlane hτ) (mul_I_mem_rightHalfPlane t)
+
+structure OSHolomorphicSemigroup {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D) where
+  Z : ∀ z : ℂ, z ∈ rightHalfPlane → (OSHilbert D →L[ℂ] OSHilbert D)
+  real_eq : ∀ (τ : ℝ) (hτ : 0 ≤ τ),
+    Z (τ : ℂ) (ofReal_mem_rightHalfPlane hτ) = osContractionSemigroup D hcontr τ hτ
+  map_add : ∀ (z₁ z₂ : ℂ) (h₁ : z₁ ∈ rightHalfPlane) (h₂ : z₂ ∈ rightHalfPlane),
+    Z (z₁ + z₂) (add_mem_rightHalfPlane h₁ h₂) = (Z z₁ h₁).comp (Z z₂ h₂)
+  vacuum : ∀ (z : ℂ) (hz : z ∈ rightHalfPlane),
+    Z z hz (osVacuum D) = osVacuum D
+  contraction : ∀ (z : ℂ) (hz : z ∈ rightHalfPlane) (x : OSHilbert D),
+    ‖Z z hz x‖ ≤ ‖x‖
+  adjoint_symm : ∀ (z : ℂ) (hz : z ∈ rightHalfPlane) (x y : OSHilbert D),
+    ⟪Z z hz x, y⟫_ℂ = ⟪x, Z (star z) (star_mem_rightHalfPlane hz) y⟫_ℂ
+  comm_spatial : ∀ (htrans : OSTranslationInvariant D.𝒮) (a : Fin 3 → ℝ)
+    (z : ℂ) (hz : z ∈ rightHalfPlane),
+    (osSpatialTranslate D htrans a).comp (Z z hz) =
+      (Z z hz).comp (osSpatialTranslate D htrans a)
+
+namespace OSHolomorphicSemigroup
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+
+@[simp]
+theorem map_zero (ℰ : OSHolomorphicSemigroup D hcontr) :
+    ℰ.Z 0 zero_mem_rightHalfPlane = ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  have h := ℰ.real_eq 0 le_rfl
+  simpa using h.trans (osContractionSemigroup_zero D hcontr)
+
+theorem opNorm_le_one (ℰ : OSHolomorphicSemigroup D hcontr)
+    (z : ℂ) (hz : z ∈ rightHalfPlane) :
+    ‖ℰ.Z z hz‖ ≤ 1 :=
+  ContinuousLinearMap.opNorm_le_bound _ zero_le_one (fun x => by
+    simpa using ℰ.contraction z hz x)
+
+theorem decomp_real_imag (ℰ : OSHolomorphicSemigroup D hcontr)
+    (τ : ℝ) (hτ : 0 ≤ τ) (t : ℝ) :
+    ℰ.Z ((τ : ℂ) + Complex.I * (t : ℂ)) (add_mul_I_mem_rightHalfPlane hτ t) =
+      (osContractionSemigroup D hcontr τ hτ).comp
+        (ℰ.Z (Complex.I * (t : ℂ)) (mul_I_mem_rightHalfPlane t)) := by
+  rw [ℰ.map_add (τ : ℂ) (Complex.I * (t : ℂ)) (ofReal_mem_rightHalfPlane hτ)
+      (mul_I_mem_rightHalfPlane t), ℰ.real_eq]
+
+def realTimeUnitary (ℰ : OSHolomorphicSemigroup D hcontr) (t : ℝ) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  ℰ.Z (Complex.I * (t : ℂ)) (mul_I_mem_rightHalfPlane t)
+
+@[simp]
+theorem realTimeUnitary_zero (ℰ : OSHolomorphicSemigroup D hcontr) :
+    ℰ.realTimeUnitary 0 = ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  unfold realTimeUnitary
+  have h0 : Complex.I * ((0 : ℝ) : ℂ) = 0 := by simp
+  have h_congr : ℰ.Z (Complex.I * ((0 : ℝ) : ℂ)) (mul_I_mem_rightHalfPlane 0) =
+      ℰ.Z 0 zero_mem_rightHalfPlane := by
+    congr 1
+  rw [h_congr, ℰ.map_zero]
+
+theorem realTimeUnitary_add (ℰ : OSHolomorphicSemigroup D hcontr) (t₁ t₂ : ℝ) :
+    ℰ.realTimeUnitary (t₁ + t₂) =
+      (ℰ.realTimeUnitary t₁).comp (ℰ.realTimeUnitary t₂) := by
+  unfold realTimeUnitary
+  have h_eq : Complex.I * ((t₁ + t₂ : ℝ) : ℂ) =
+      Complex.I * (t₁ : ℂ) + Complex.I * (t₂ : ℂ) := by
+    push_cast; ring
+  have h_congr : ℰ.Z (Complex.I * ((t₁ + t₂ : ℝ) : ℂ)) (mul_I_mem_rightHalfPlane (t₁ + t₂)) =
+      ℰ.Z (Complex.I * (t₁ : ℂ) + Complex.I * (t₂ : ℂ))
+        (add_mem_rightHalfPlane (mul_I_mem_rightHalfPlane t₁) (mul_I_mem_rightHalfPlane t₂)) := by
+    congr 1
+  rw [h_congr, ℰ.map_add]
+
+@[simp]
+theorem realTimeUnitary_vacuum (ℰ : OSHolomorphicSemigroup D hcontr) (t : ℝ) :
+    ℰ.realTimeUnitary t (osVacuum D) = osVacuum D :=
+  ℰ.vacuum _ _
+
+theorem realTimeUnitary_neg_comp (ℰ : OSHolomorphicSemigroup D hcontr) (t : ℝ) :
+    (ℰ.realTimeUnitary (-t)).comp (ℰ.realTimeUnitary t) =
+      ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  rw [← ℰ.realTimeUnitary_add, neg_add_cancel, ℰ.realTimeUnitary_zero]
+
+theorem realTimeUnitary_comp_neg (ℰ : OSHolomorphicSemigroup D hcontr) (t : ℝ) :
+    (ℰ.realTimeUnitary t).comp (ℰ.realTimeUnitary (-t)) =
+      ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  rw [← ℰ.realTimeUnitary_add, add_neg_cancel, ℰ.realTimeUnitary_zero]
+
+theorem inner_realTimeUnitary (ℰ : OSHolomorphicSemigroup D hcontr)
+    (t : ℝ) (x y : OSHilbert D) :
+    ⟪ℰ.realTimeUnitary t x, ℰ.realTimeUnitary t y⟫_ℂ = ⟪x, y⟫_ℂ := by
+  unfold realTimeUnitary
+  rw [ℰ.adjoint_symm]
+  have h_star : star (Complex.I * (t : ℂ)) = Complex.I * ((-t : ℝ) : ℂ) := by
+    simp [Complex.conj_I, mul_comm]
+  have h_congr : ℰ.Z (star (Complex.I * (t : ℂ)))
+      (star_mem_rightHalfPlane (mul_I_mem_rightHalfPlane t)) =
+      ℰ.realTimeUnitary (-t) := by
+    unfold realTimeUnitary
+    congr 1
+  rw [h_congr]
+  change ⟪x, ((ℰ.realTimeUnitary (-t)).comp (ℰ.realTimeUnitary t)) y⟫_ℂ = ⟪x, y⟫_ℂ
+  rw [ℰ.realTimeUnitary_neg_comp, ContinuousLinearMap.id_apply]
+
+@[simp]
+theorem norm_realTimeUnitary (ℰ : OSHolomorphicSemigroup D hcontr)
+    (t : ℝ) (x : OSHilbert D) :
+    ‖ℰ.realTimeUnitary t x‖ = ‖x‖ := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), norm_eq_sqrt_re_inner (𝕜 := ℂ),
+      ℰ.inner_realTimeUnitary t x x]
+
+end OSHolomorphicSemigroup
+
+def spatialPart (a : Fin 4 → ℝ) : Fin 3 → ℝ :=
+  fun i => a i.succ
+
+@[simp]
+lemma spatialPart_zero : spatialPart 0 = 0 := rfl
+
+@[simp]
+lemma spatialPart_add (a b : Fin 4 → ℝ) :
+    spatialPart (a + b) = spatialPart a + spatialPart b := rfl
+
+@[simp]
+lemma spatialPart_euclidSpatialVec (a : Fin 3 → ℝ) :
+    spatialPart (euclidSpatialVec a) = a := by
+  ext i
+  simp [spatialPart, euclidSpatialVec]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfigSpatialShift_zero :
+    osConfigSpatialShift (ι := ι) 0 = id := by
+  ext A : 1
+  rcases A with ⟨m, α, ⟨y, hy⟩⟩
+  dsimp [osConfigSpatialShift]
+  congr 2
+  ext i μ
+  simp [euclidSpatialVec_zero]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfigSpatialShift_add (a b : Fin 3 → ℝ) :
+    osConfigSpatialShift (ι := ι) (a + b) =
+      osConfigSpatialShift a ∘ osConfigSpatialShift b := by
+  ext A : 1
+  rcases A with ⟨m, α, ⟨y, hy⟩⟩
+  dsimp [osConfigSpatialShift]
+  congr 2
+  ext i μ
+  change (y i + euclidSpatialVec (a + b)) μ = (y i + euclidSpatialVec b + euclidSpatialVec a) μ
+  rw [euclidSpatialVec_add]
+  simp only [Pi.add_apply]
+  ring
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigSpatialShift_vacuum (a : Fin 3 → ℝ) :
+    osConfigSpatialShift a (osVacuumConfig ι) = osVacuumConfig ι := by
+  dsimp [osConfigSpatialShift, osVacuumConfig]
+  congr 2
+  ext i
+  exact Fin.elim0 i
+
+@[simp]
+theorem osSpatialTranslateLM_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    osSpatialTranslateLM D 0 = LinearMap.id := by
+  unfold osSpatialTranslateLM
+  rw [osConfigSpatialShift_zero, osLiftConfigMap_id]
+
+theorem osSpatialTranslateLM_add {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (a b : Fin 3 → ℝ) :
+    osSpatialTranslateLM D (a + b) =
+      (osSpatialTranslateLM D a).comp (osSpatialTranslateLM D b) := by
+  unfold osSpatialTranslateLM
+  rw [osConfigSpatialShift_add, osLiftConfigMap_comp]
+
+@[simp]
+theorem osSpatialTranslateLM_vacuumPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (a : Fin 3 → ℝ) :
+    osSpatialTranslateLM D a (osVacuumPre D) = osVacuumPre D := by
+  dsimp [osSpatialTranslateLM, osVacuumPre]
+  rw [osLiftConfigMap_osBasisPre, osConfigSpatialShift_vacuum]
+
+@[simp]
+theorem osSpatialTranslate_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮) :
+    osSpatialTranslate D htrans 0 = ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpatialTranslate D htrans 0 (toOSHilbert D Ψ) = toOSHilbert D Ψ
+    rw [osSpatialTranslate_toOSHilbert, osSpatialTranslateLM_zero, LinearMap.id_apply]
+
+theorem osSpatialTranslate_add {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a b : Fin 3 → ℝ) :
+    osSpatialTranslate D htrans (a + b) =
+      (osSpatialTranslate D htrans a).comp (osSpatialTranslate D htrans b) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpatialTranslate D htrans (a + b) (toOSHilbert D Ψ) =
+      osSpatialTranslate D htrans a (osSpatialTranslate D htrans b (toOSHilbert D Ψ))
+    rw [osSpatialTranslate_toOSHilbert, osSpatialTranslate_toOSHilbert,
+        osSpatialTranslate_toOSHilbert, osSpatialTranslateLM_add, LinearMap.comp_apply]
+
+@[simp]
+theorem osSpatialTranslate_vacuum {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) :
+    osSpatialTranslate D htrans a (osVacuum D) = osVacuum D := by
+  dsimp [osVacuum]
+  rw [osSpatialTranslate_toOSHilbert, osSpatialTranslateLM_vacuumPre]
+
+namespace OSHolomorphicSemigroup
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+
+theorem comm_realTimeUnitary_spatial (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (a : Fin 3 → ℝ) (t : ℝ) :
+    (osSpatialTranslate D htrans a).comp (ℰ.realTimeUnitary t) =
+      (ℰ.realTimeUnitary t).comp (osSpatialTranslate D htrans a) :=
+  ℰ.comm_spatial htrans a (Complex.I * (t : ℂ)) (mul_I_mem_rightHalfPlane t)
+
+def spacetimeTranslate (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (a : Fin 4 → ℝ) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  (ℰ.realTimeUnitary (a 0)).comp (osSpatialTranslate D htrans (spatialPart a))
+
+@[simp]
+theorem spacetimeTranslate_zero (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) :
+    ℰ.spacetimeTranslate htrans 0 = ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  unfold spacetimeTranslate
+  simp [spatialPart_zero, ℰ.realTimeUnitary_zero, osSpatialTranslate_zero]
+
+theorem spacetimeTranslate_add (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (a b : Fin 4 → ℝ) :
+    ℰ.spacetimeTranslate htrans (a + b) =
+      (ℰ.spacetimeTranslate htrans a).comp (ℰ.spacetimeTranslate htrans b) := by
+  unfold spacetimeTranslate
+  rw [Pi.add_apply, spatialPart_add, ℰ.realTimeUnitary_add, osSpatialTranslate_add]
+  ext x
+  simp only [ContinuousLinearMap.comp_apply]
+  have h_comm := ℰ.comm_realTimeUnitary_spatial htrans (spatialPart a) (b 0)
+  have h_comm_x := congrArg (fun L => L (osSpatialTranslate D htrans (spatialPart b) x)) h_comm
+  dsimp at h_comm_x
+  rw [← h_comm_x]
+
+@[simp]
+theorem spacetimeTranslate_vacuum (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (a : Fin 4 → ℝ) :
+    ℰ.spacetimeTranslate htrans a (osVacuum D) = osVacuum D := by
+  unfold spacetimeTranslate
+  simp [osSpatialTranslate_vacuum, ℰ.realTimeUnitary_vacuum]
+
+theorem inner_spacetimeTranslate (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (a : Fin 4 → ℝ) (x y : OSHilbert D) :
+    ⟪ℰ.spacetimeTranslate htrans a x, ℰ.spacetimeTranslate htrans a y⟫_ℂ = ⟪x, y⟫_ℂ := by
+  unfold spacetimeTranslate
+  simp only [ContinuousLinearMap.comp_apply]
+  rw [ℰ.inner_realTimeUnitary, inner_osSpatialTranslate]
+
+@[simp]
+theorem norm_spacetimeTranslate (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (a : Fin 4 → ℝ) (x : OSHilbert D) :
+    ‖ℰ.spacetimeTranslate htrans a x‖ = ‖x‖ := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), norm_eq_sqrt_re_inner (𝕜 := ℂ),
+      ℰ.inner_spacetimeTranslate htrans a x x]
+
+def complexSpacetimeStep (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (z : ℂ) (hz : z ∈ rightHalfPlane) (a : Fin 3 → ℝ) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  (ℰ.Z z hz).comp (osSpatialTranslate D htrans a)
+
+theorem norm_complexSpacetimeStep_le (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (z : ℂ) (hz : z ∈ rightHalfPlane)
+    (a : Fin 3 → ℝ) (x : OSHilbert D) :
+    ‖ℰ.complexSpacetimeStep htrans z hz a x‖ ≤ ‖x‖ := by
+  unfold complexSpacetimeStep
+  simp only [ContinuousLinearMap.comp_apply]
+  have h1 := ℰ.contraction z hz (osSpatialTranslate D htrans a x)
+  have h2 : ‖osSpatialTranslate D htrans a x‖ = ‖x‖ := by
+    rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), norm_eq_sqrt_re_inner (𝕜 := ℂ),
+        inner_osSpatialTranslate D htrans a x x]
+  exact h1.trans_eq h2
+
+theorem complexSpacetimeStep_real_zero_eq_contraction (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (τ : ℝ) (hτ : 0 ≤ τ) :
+    ℰ.complexSpacetimeStep htrans (τ : ℂ) (ofReal_mem_rightHalfPlane hτ) 0 =
+      osContractionSemigroup D hcontr τ hτ := by
+  unfold complexSpacetimeStep
+  rw [ℰ.real_eq, osSpatialTranslate_zero, ContinuousLinearMap.comp_id]
+
+theorem complexSpacetimeStep_imag_eq_spacetimeTranslate (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮) (a : Fin 4 → ℝ) :
+    ℰ.complexSpacetimeStep htrans (Complex.I * (a 0 : ℂ))
+      (mul_I_mem_rightHalfPlane (a 0)) (spatialPart a) =
+      ℰ.spacetimeTranslate htrans a := rfl
+
+end OSHolomorphicSemigroup
+
+section CanonicalOSHolomorphicSemigroup
+
+open scoped NNReal
+
+theorem osContractionSemigroup_nonneg {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D) (τ : ℝ) (hτ : 0 ≤ τ) :
+    0 ≤ osContractionSemigroup D hcontr τ hτ :=
+  (ContinuousLinearMap.nonneg_iff_isPositive _).mpr
+    ((ContinuousLinearMap.isPositive_toLinearMap_iff _).mp
+      (osContractionSemigroup_isPositive D htrans hcontr τ hτ))
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma continuous_osConcatPoint_timeShift_right (j k : ℕ)
+    (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ) :
+    Continuous (fun τ : ℝ => osConcatPoint j k x (fun i => y i + euclidTimeVec τ)) := by
+  refine continuous_pi (fun m => continuous_pi (fun μ => ?_))
+  by_cases hm : m.val < j
+  · have h_eq : m = Fin.castAdd k ⟨m.val, hm⟩ := by ext; rfl
+    have h_fn : (fun τ : ℝ => osConcatPoint j k x (fun i => y i + euclidTimeVec τ) m μ) =
+        fun _ : ℝ => euclidTimeReflect (x (Fin.rev ⟨m.val, hm⟩)) μ := by
+      ext τ
+      conv_lhs => rw [h_eq]
+      rw [osConcatPoint_castAdd]
+    rw [h_fn]
+    exact continuous_const
+  · have h_ge : j ≤ m.val := by omega
+    have h_eq : m = Fin.natAdd j ⟨m.val - j, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+      ext; dsimp; omega
+    have h_fn : (fun τ : ℝ => osConcatPoint j k x (fun i => y i + euclidTimeVec τ) m μ) =
+        fun τ : ℝ => y ⟨m.val - j, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ μ +
+          euclidTimeVec τ μ := by
+      ext τ
+      conv_lhs => rw [h_eq]
+      rw [osConcatPoint_natAdd, Pi.add_apply]
+    rw [h_fn]
+    refine continuous_const.add ?_
+    by_cases hμ : μ = 0
+    · subst hμ
+      have h_id : (fun τ : ℝ => euclidTimeVec τ 0) = fun τ : ℝ => τ := by
+        ext τ
+        simp [euclidTimeVec]
+      rw [h_id]
+      exact continuous_id'
+    · have h_z : (fun τ : ℝ => euclidTimeVec τ μ) = fun _ : ℝ => (0 : ℝ) := by
+        ext τ
+        simp [euclidTimeVec, hμ]
+      rw [h_z]
+      exact continuous_const
+
+lemma continuousAt_osKernel_timeShift_zero {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (𝒮 n α) (orderedEuclidN n))
+    (A B : OSConfig ι) :
+    ContinuousAt (fun t : ℝ≥0 => osKernel S 𝒮 A (osConfigTimeShift (t : ℝ) t.2 B)) 0 := by
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  rw [ContinuousAt]
+  dsimp [osKernel, osConfigTimeShift]
+  refine tendsto_finsetSum _ (fun β _ => ?_)
+  refine Tendsto.mul tendsto_const_nhds ?_
+  let φ : ℝ≥0 → (Fin (j + k) → Fin 4 → ℝ) :=
+    fun t => osConcatPoint j k x (fun i => y i + euclidTimeVec (t : ℝ))
+  have hφ_cont : Continuous φ :=
+    (continuous_osConcatPoint_timeShift_right j k x y).comp NNReal.continuous_coe
+  have hφ0 : φ 0 = osConcatPoint j k x y := by
+    dsimp [φ]
+    congr 1
+    ext i μ
+    simp
+  have h_mem : φ 0 ∈ orderedEuclidN (j + k) := by
+    rw [hφ0]
+    exact osConcatPoint_mem_orderedEuclidN j k hx hy
+  have h_schw_at : ContinuousAt (𝒮 (j + k) (osConcatIdx j k β α')) (φ 0) :=
+    (hcont (j + k) (osConcatIdx j k β α')).continuousAt
+      ((isOpen_orderedEuclidN (j + k)).mem_nhds h_mem)
+  exact (ContinuousAt.comp (g := 𝒮 (j + k) (osConcatIdx j k β α')) (f := φ)
+    h_schw_at hφ_cont.continuousAt).tendsto
+
+lemma tendsto_osContractionSemigroup_osBasis_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (A : OSConfig ι) :
+    Tendsto (fun t : ℝ≥0 => osContractionSemigroup D hcontr (t : ℝ) t.2 (osBasis D A))
+      (𝓝 0) (𝓝 (osBasis D A)) := by
+  have h_basis_shift : ∀ t : ℝ≥0,
+      osContractionSemigroup D hcontr (t : ℝ) t.2 (osBasis D A) =
+        osBasis D (osConfigTimeShift (t : ℝ) t.2 A) := by
+    intro t
+    dsimp [osBasis]
+    rw [osContractionSemigroup_toOSHilbert]
+    dsimp [osTimeShiftLM]
+    rw [osLiftConfigMap_osBasisPre]
+  have h_z0 : osConfigTimeShift ((0 : ℝ≥0) : ℝ) (0 : ℝ≥0).2 A = A :=
+    osConfigTimeShift_zero A
+  have h_k1 : Tendsto
+      (fun t : ℝ≥0 => RCLike.re (osKernel S D.𝒮 A (osConfigTimeShift (t : ℝ) t.2 A)))
+      (𝓝 0) (𝓝 (RCLike.re (osKernel S D.𝒮 A A))) := by
+    have h0 : Tendsto
+        (fun t : ℝ≥0 => osKernel S D.𝒮 A (osConfigTimeShift (t : ℝ) t.2 A))
+        (𝓝 0) (𝓝 (osKernel S D.𝒮 A A)) := by
+      have hc := (continuousAt_osKernel_timeShift_zero S D.𝒮 hcont A A).tendsto
+      rwa [h_z0] at hc
+    exact ((RCLike.reCLM (K := ℂ)).continuous.tendsto _).comp h0
+  have h_k2 : Tendsto
+      (fun t : ℝ≥0 => RCLike.re
+        (osKernel S D.𝒮 A (osConfigTimeShift (((2 * t : ℝ≥0) : ℝ)) (2 * t).2 A)))
+      (𝓝 0) (𝓝 (RCLike.re (osKernel S D.𝒮 A A))) := by
+    have h_mul : Tendsto (fun t : ℝ≥0 => (2 : ℝ≥0) * t) (𝓝 0) (𝓝 0) := by
+      have hc : Continuous (fun t : ℝ≥0 => (2 : ℝ≥0) * t) :=
+        (continuous_const (y := (2 : ℝ≥0))).mul continuous_id
+      simpa using (hc.continuousAt (x := (0 : ℝ≥0))).tendsto
+    have h0 : Tendsto
+        (fun t : ℝ≥0 => osKernel S D.𝒮 A (osConfigTimeShift (((2 * t : ℝ≥0) : ℝ)) (2 * t).2 A))
+        (𝓝 0) (𝓝 (osKernel S D.𝒮 A A)) := by
+      have hc := (continuousAt_osKernel_timeShift_zero S D.𝒮 hcont A A).tendsto.comp h_mul
+      rwa [h_z0] at hc
+    exact ((RCLike.reCLM (K := ℂ)).continuous.tendsto _).comp h0
+  have h_sq : Tendsto
+      (fun t : ℝ≥0 =>
+        ‖osContractionSemigroup D hcontr (t : ℝ) t.2 (osBasis D A) - osBasis D A‖ ^ 2)
+      (𝓝 0) (𝓝 0) := by
+    have h_eq : (fun t : ℝ≥0 =>
+        ‖osContractionSemigroup D hcontr (t : ℝ) t.2 (osBasis D A) - osBasis D A‖ ^ 2) =
+        fun t : ℝ≥0 =>
+          RCLike.re (osKernel S D.𝒮 A (osConfigTimeShift (((2 * t : ℝ≥0) : ℝ)) (2 * t).2 A)) -
+            2 * RCLike.re (osKernel S D.𝒮 A (osConfigTimeShift (t : ℝ) t.2 A)) +
+            RCLike.re (osKernel S D.𝒮 A A) := by
+      ext t
+      rw [h_basis_shift t, norm_sub_sq (𝕜 := ℂ),
+          @norm_sq_eq_re_inner ℂ (OSHilbert D) _ _ _
+            (osBasis D (osConfigTimeShift (t : ℝ) t.2 A)),
+          @norm_sq_eq_re_inner ℂ (OSHilbert D) _ _ _ (osBasis D A),
+          inner_osBasis, inner_osBasis, inner_osBasis,
+          osKernel_timeShift_symm S D.𝒮 htrans (t : ℝ) t.2 A (osConfigTimeShift (t : ℝ) t.2 A),
+          osKernel_timeShift_symm S D.𝒮 htrans (t : ℝ) t.2 A A,
+          ← osConfigTimeShift_add (t : ℝ) (t : ℝ) t.2 t.2 A]
+      have h_two : osConfigTimeShift ((t : ℝ) + (t : ℝ)) (add_nonneg t.2 t.2) A =
+          osConfigTimeShift (((2 * t : ℝ≥0) : ℝ)) (2 * t).2 A := by
+        congr 1
+        push_cast
+        ring
+      rw [h_two]
+    rw [h_eq]
+    have h_z : RCLike.re (osKernel S D.𝒮 A A) - 2 * RCLike.re (osKernel S D.𝒮 A A) +
+        RCLike.re (osKernel S D.𝒮 A A) = 0 := by ring
+    have h_lim := (h_k2.sub (h_k1.const_mul 2)).add
+      (tendsto_const_nhds (x := RCLike.re (osKernel S D.𝒮 A A)))
+    rwa [h_z] at h_lim
+  rw [Metric.tendsto_nhds_nhds]
+  intro ε hε
+  rcases Metric.tendsto_nhds_nhds.mp h_sq (ε ^ 2) (by positivity) with ⟨δ, hδ, h_δ⟩
+  refine ⟨δ, hδ, fun t ht => ?_⟩
+  rw [dist_eq_norm]
+  have h_lt_sq : ‖osContractionSemigroup D hcontr (t : ℝ) t.2 (osBasis D A) - osBasis D A‖ ^ 2 <
+      ε ^ 2 := by
+    have hd := h_δ ht
+    rwa [Real.dist_eq, sub_zero, abs_of_nonneg (sq_nonneg _)] at hd
+  exact lt_of_pow_lt_pow_left₀ 2 hε.le h_lt_sq
+
+lemma osPreHilbert_eq_sum_osBasisPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ : OSPreHilbertSpace D) :
+    Ψ = ∑ A ∈ Ψ.toFinsupp.support, Ψ.toFinsupp A • osBasisPre D A := by
+  apply OSPreHilbertSpace.ext
+  have h_map : (∑ A ∈ Ψ.toFinsupp.support, Ψ.toFinsupp A • osBasisPre D A).toFinsupp =
+      ∑ A ∈ Ψ.toFinsupp.support, Ψ.toFinsupp A • Finsupp.single A (1 : ℂ) :=
+    map_sum (OSPreHilbertSpace.equivFinsupp D) _ _
+  rw [h_map]
+  simpa [Finsupp.sum] using (Finsupp.sum_single Ψ.toFinsupp).symm
+
+lemma tendsto_osContractionSemigroup_toOSHilbert_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (Ψ : OSPreHilbertSpace D) :
+    Tendsto (fun t : ℝ≥0 => osContractionSemigroup D hcontr (t : ℝ) t.2 (toOSHilbert D Ψ))
+      (𝓝 0) (𝓝 (toOSHilbert D Ψ)) := by
+  have h_exp : toOSHilbert D Ψ =
+      ∑ A ∈ Ψ.toFinsupp.support, Ψ.toFinsupp A • osBasis D A := by
+    conv_lhs => rw [osPreHilbert_eq_sum_osBasisPre D Ψ]
+    rw [map_sum]
+    refine Finset.sum_congr rfl (fun A _ => map_smul (toOSHilbert D) _ _)
+  have h_fn : (fun t : ℝ≥0 => osContractionSemigroup D hcontr (t : ℝ) t.2 (toOSHilbert D Ψ)) =
+      fun t : ℝ≥0 => ∑ A ∈ Ψ.toFinsupp.support,
+        Ψ.toFinsupp A • osContractionSemigroup D hcontr (t : ℝ) t.2 (osBasis D A) := by
+    ext t
+    rw [h_exp, map_sum]
+    refine Finset.sum_congr rfl (fun A _ => map_smul _ _ _)
+  rw [h_fn, h_exp]
+  exact tendsto_finsetSum _ (fun A _ =>
+    (tendsto_osContractionSemigroup_osBasis_zero D htrans hcontr hcont A).const_smul _)
+
+lemma tendsto_osContractionSemigroup_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (x : OSHilbert D) :
+    Tendsto (fun t : ℝ≥0 => osContractionSemigroup D hcontr (t : ℝ) t.2 x) (𝓝 0) (𝓝 x) := by
+  rw [Metric.tendsto_nhds_nhds]
+  intro ε hε
+  rcases Metric.denseRange_iff.mp
+      (UniformSpace.Completion.denseRange_coe (α := OSPreHilbertSpace D))
+      x (ε / 3) (by positivity) with ⟨Ψ, hΨ_dist⟩
+  let y : OSHilbert D := toOSHilbert D Ψ
+  have hy_lt : ‖y - x‖ < ε / 3 := by
+    rw [dist_comm, dist_eq_norm] at hΨ_dist
+    exact hΨ_dist
+  rcases Metric.tendsto_nhds_nhds.mp
+      (tendsto_osContractionSemigroup_toOSHilbert_zero D htrans hcontr hcont Ψ)
+      (ε / 3) (by positivity) with ⟨δ, hδ, h_δ⟩
+  refine ⟨δ, hδ, fun t ht => ?_⟩
+  rw [dist_eq_norm]
+  let Tt := osContractionSemigroup D hcontr (t : ℝ) t.2
+  have h_split : Tt x - x = Tt (x - y) + (Tt y - y) + (y - x) := by
+    rw [map_sub]
+    abel
+  rw [h_split]
+  have h1 : ‖Tt (x - y)‖ ≤ ‖y - x‖ :=
+    (norm_osContractionSemigroup_le D hcontr (t : ℝ) t.2 (x - y)).trans_eq (norm_sub_rev x y)
+  have h2 : ‖Tt y - y‖ < ε / 3 := by
+    simpa [Tt, y, dist_eq_norm] using h_δ ht
+  calc ‖Tt (x - y) + (Tt y - y) + (y - x)‖
+      ≤ ‖Tt (x - y)‖ + ‖Tt y - y‖ + ‖y - x‖ :=
+        (norm_add_le _ _).trans (add_le_add (norm_add_le _ _) le_rfl)
+    _ < ε / 3 + ε / 3 + ε / 3 := by linarith
+    _ = ε := by ring
+
+theorem continuous_osContractionSemigroup_of_continuousOn
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (x : OSHilbert D) :
+    Continuous (fun t : ℝ≥0 => osContractionSemigroup D hcontr (t : ℝ) t.2 x) :=
+  continuous_semigroup_of_tendsto_zero
+    (fun s t => osContractionSemigroup_add D hcontr (s : ℝ) (t : ℝ) s.2 t.2)
+    (fun t y => norm_osContractionSemigroup_le D hcontr (t : ℝ) t.2 y)
+    (tendsto_osContractionSemigroup_zero D htrans hcontr hcont) x
+
+theorem continuous_osContractionSemigroup_of_smooth
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    (x : OSHilbert D) :
+    Continuous (fun t : ℝ≥0 => osContractionSemigroup D hcontr (t : ℝ) t.2 x) :=
+  continuous_osContractionSemigroup_of_continuousOn D htrans hcontr
+    (fun n α => (hsmooth n α).continuousOn) x
+
+def canonicalOSHolomorphicSemigroupOfContinuousOn
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n)) :
+    OSHolomorphicSemigroup D hcontr where
+  Z z hz := semigroupRightHalfPlane
+    (T := fun t : ℝ≥0 => osContractionSemigroup D hcontr (t : ℝ) t.2)
+    (fun s t => osContractionSemigroup_add D hcontr (s : ℝ) (t : ℝ) s.2 t.2)
+    (fun t => osContractionSemigroup_nonneg D htrans hcontr (t : ℝ) t.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr hcont)
+    z hz
+  real_eq τ hτ := by
+    let t : ℝ≥0 := ⟨τ, hτ⟩
+    exact semigroupRightHalfPlane_real_eq
+      (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+      (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+      (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+      (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+      (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr hcont)
+      t
+  map_add z₁ z₂ hz₁ hz₂ := semigroupRightHalfPlane_add
+    (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+    (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+    (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr hcont)
+    hz₁ hz₂
+  vacuum z hz := semigroupRightHalfPlane_fix
+    (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+    (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+    (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr hcont)
+    (fun s => osContractionSemigroup_vacuum D hcontr (s : ℝ) s.2) hz
+  contraction z hz x := norm_semigroupRightHalfPlane_apply_le
+    (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+    (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+    (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr hcont)
+    hz x
+  adjoint_symm z hz x y := inner_semigroupRightHalfPlane_adjoint
+    (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+    (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+    (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr hcont)
+    hz x y
+  comm_spatial htrans' a z hz := commute_semigroupRightHalfPlane
+    (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+    (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+    (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr hcont)
+    (osSpatialTranslate_comm_osContractionSemigroup D htrans' hcontr a 1 zero_le_one) hz
+
+def canonicalOSHolomorphicSemigroup
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n)) :
+    OSHolomorphicSemigroup D hcontr :=
+  canonicalOSHolomorphicSemigroupOfContinuousOn D htrans hcontr
+    (fun n α => (hsmooth n α).continuousOn)
+
+def canonicalOSHolomorphicSemigroupTotal
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    (z : ℂ) : OSHilbert D →L[ℂ] OSHilbert D :=
+  semigroupRightHalfPlaneTotal
+    (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+    (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+    (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr
+      (fun n α => (hsmooth n α).continuousOn))
+    z
+
+theorem canonicalOSHolomorphicSemigroupTotal_eq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    {z : ℂ} (hz : z ∈ rightHalfPlane) :
+    canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z =
+      (canonicalOSHolomorphicSemigroup D htrans hcontr hsmooth).Z z hz := by
+  unfold canonicalOSHolomorphicSemigroupTotal semigroupRightHalfPlaneTotal
+  exact dif_pos hz
+
+theorem differentiableOn_canonicalOSHolomorphicSemigroupTotal
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n)) :
+    DifferentiableOn ℂ (canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth)
+      {z : ℂ | 0 < z.re} :=
+  differentiableOn_semigroupRightHalfPlaneTotal
+    (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+    (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+    (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr
+      (fun n α => (hsmooth n α).continuousOn))
+
+theorem continuousOn_canonicalOSHolomorphicSemigroupTotal_apply
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    (x : OSHilbert D) :
+    ContinuousOn (fun z : ℂ => canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z x)
+      rightHalfPlane :=
+  continuousOn_semigroupRightHalfPlaneTotal_apply
+    (T := fun s : ℝ≥0 => osContractionSemigroup D hcontr (s : ℝ) s.2)
+    (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+    (osContractionSemigroup_zero D hcontr)
+    (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+    (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+    (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr
+      (fun n α => (hsmooth n α).continuousOn))
+    x
+
+def OSAxioms.canonicalHolomorphicSemigroup_of_contraction
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData) :
+    OSHolomorphicSemigroup hOS.toReflectionPositiveData hcontr :=
+  canonicalOSHolomorphicSemigroup hOS.toReflectionPositiveData
+    hOS.os1_translation hcontr hOS.os0_smooth
+
+end CanonicalOSHolomorphicSemigroup
+
+lemma timeUnitVec_mem_forward_light_cone :
+    euclidTimeVec 1 ∈ forward_light_cone := by
+  dsimp [forward_light_cone]
+  rw [minkowskiInner_explicit]
+  simp [euclidTimeVec]
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_eq_of_tubeExtension_eq {W₁ W₂ : WightmanFamily ι}
+    (E₁ : TubeExtension W₁) (E₂ : TubeExtension W₂)
+    (hH : ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → E₁.H n α z = E₂.H n α z) :
+    W₁ = W₂ := by
+  ext n α f
+  have hv : euclidTimeVec 1 ∈ forward_light_cone := timeUnitVec_mem_forward_light_cone
+  have hb₁ := E₁.boundary n α f (euclidTimeVec 1) hv
+  have hb₂ := E₂.boundary n α f (euclidTimeVec 1) hv
+  have h_ev : (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+      E₁.H n α (fun i k => (x i k : ℂ) + Complex.I * ((t * (i : ℕ) * euclidTimeVec 1 k : ℝ) : ℂ)) *
+        f x) =ᶠ[𝓝[>] (0 : ℝ)]
+    (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+      E₂.H n α (fun i k => (x i k : ℂ) + Complex.I * ((t * (i : ℕ) * euclidTimeVec 1 k : ℝ) : ℂ)) *
+        f x) := by
+    filter_upwards [self_mem_nhdsWithin] with t (ht : 0 < t)
+    congr 1
+    ext x
+    congr 1
+    apply hH n α
+    intro i hi
+    change (fun k : Fin 4 => -((((fun j m => (x j m : ℂ) +
+        Complex.I * ((t * (j : ℕ) * euclidTimeVec 1 m : ℝ) : ℂ)) i -
+      (fun j m => (x j m : ℂ) +
+        Complex.I * ((t * (j : ℕ) * euclidTimeVec 1 m : ℝ) : ℂ)) ⟨i.val + 1, hi⟩) k).im)) ∈
+      forward_light_cone
+    have h_im : (fun k : Fin 4 => -((((fun j m => (x j m : ℂ) +
+          Complex.I * ((t * (j : ℕ) * euclidTimeVec 1 m : ℝ) : ℂ)) i -
+        (fun j m => (x j m : ℂ) +
+          Complex.I * ((t * (j : ℕ) * euclidTimeVec 1 m : ℝ) : ℂ)) ⟨i.val + 1, hi⟩) k).im)) =
+        fun k : Fin 4 => if k = 0 then t else 0 := by
+      ext k
+      fin_cases k <;> · simp [euclidTimeVec, Complex.sub_im, Complex.add_im]; try ring
+    rw [h_im]
+    dsimp [forward_light_cone]
+    rw [minkowskiInner_explicit]
+    simp only [↓reduceIte, Fin.isValue, Fin.reduceEq, mul_zero, sub_zero]
+    exact ⟨ht, mul_pos ht ht⟩
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique (hb₁.congr' h_ev) hb₂
+
+omit [Fintype ι] [DecidableEq ι] in
+def ForwardTubeRigidFromEuclid {W₁ W₂ : WightmanFamily ι}
+    (E₁ : TubeExtension W₁) (E₂ : TubeExtension W₂) : Prop :=
+  (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → schwingerFromTube E₁ n α x = schwingerFromTube E₂ n α x) →
+  ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+    z ∈ forward_tube_n n → E₁.H n α z = E₂.H n α z
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_eq_of_schwingerFromTube_eq {W₁ W₂ : WightmanFamily ι}
+    (E₁ : TubeExtension W₁) (E₂ : TubeExtension W₂)
+    (hrigid : ForwardTubeRigidFromEuclid E₁ E₂)
+    (hS : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → schwingerFromTube E₁ n α x = schwingerFromTube E₂ n α x) :
+    W₁ = W₂ :=
+  wightman_eq_of_tubeExtension_eq E₁ E₂ (hrigid hS)
+
+structure OSReconstructedWightman (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (η : ℂ) (𝒮 : SchwingerFamily ι) where
+  osAxioms : OSAxioms R S η 𝒮
+  contraction : OSContractionCondition osAxioms.toReflectionPositiveData
+  semigroup : OSHolomorphicSemigroup osAxioms.toReflectionPositiveData contraction
+  W : WightmanFamily ι
+  E : TubeExtension W
+  schwinger_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x
+  tube_covariant : TubeCovariant R E
+  tube_pct : TubePCT η R E
+  spectrum : ZeroMomentumSpectrumCondition W
+  poincare : PoincareCovariant R W
+  weakLocality : WeakLocality η W
+  positivity : Positivity S W
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+theorem wightman_unique (P₁ P₂ : OSReconstructedWightman R S η 𝒮)
+    (hrigid : ForwardTubeRigidFromEuclid P₁.E P₂.E) :
+    P₁.W = P₂.W := by
+  apply wightman_eq_of_schwingerFromTube_eq P₁.E P₂.E hrigid
+  intro n α x hx
+  rw [← P₁.schwinger_eq n α x hx, ← P₂.schwinger_eq n α x hx]
+
+theorem complexCovariant (P : OSReconstructedWightman R S η 𝒮) :
+    ComplexCovariant R P.E :=
+  complex_covariance_of_real R P.W P.E P.tube_covariant
+
+theorem wightman_pct (P : OSReconstructedWightman R S η 𝒮) :
+    WightmanPCT η R P.W :=
+  wightman_pct_theorem R P.W P.spectrum P.poincare P.weakLocality
+
+theorem schwinger_spin_parity_selection (P : OSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (n : ℕ) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n) (α : Fin n → ι) :
+    𝒮 n α x = ε ^ n * 𝒮 n α x := by
+  rw [P.schwinger_eq n α x hx]
+  exact schwingerFromTube_spin_parity_selection R P.W P.E P.tube_covariant hε n x hx α
+
+theorem schwinger_eq_zero_of_odd_fermion (P : OSReconstructedWightman R S η 𝒮)
+    (hε : R.HasSpinParity (-1))
+    (n : ℕ) (hn : Odd n) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n)
+    (α : Fin n → ι) :
+    𝒮 n α x = 0 := by
+  rw [P.schwinger_eq n α x hx]
+  exact schwingerFromTube_eq_zero_of_odd_fermion R P.W P.E P.tube_covariant hε n hn x hx α
+
+end OSReconstructedWightman
+
+def vladimirovOSReconstruction (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (W : WightmanFamily ι) {η : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (hloc : WeakLocality η W) (hpos : Positivity S W)
+    (hherm : TubeWickHermiticity S (vladimirovTubeExtension R W hspec hP))
+    (hrp : OSReflectionPositive S (vladimirovSchwinger W))
+    (hcontr : OSContractionCondition
+      { 𝒮 := vladimirovSchwinger W
+        hermiticity := schwingerFromTube_os_hermiticity S _ hherm
+        positivity := hrp })
+    (ℰ : OSHolomorphicSemigroup
+      { 𝒮 := vladimirovSchwinger W
+        hermiticity := schwingerFromTube_os_hermiticity S _ hherm
+        positivity := hrp }
+      hcontr) :
+    OSReconstructedWightman R S η (vladimirovSchwinger W) where
+  osAxioms := schwingerFromTube_osAxioms R S W (vladimirovTubeExtension R W hspec hP)
+    (vladimirov_tubeTranslationInvariant R W hspec hP)
+    (vladimirov_tubeCovariant R W hspec hP)
+    hherm
+    (fun n α z hz => vladimirov_tube_pct_theorem R W hspec hP hloc n z hz α) hrp
+  contraction := hcontr
+  semigroup := ℰ
+  W := W
+  E := vladimirovTubeExtension R W hspec hP
+  schwinger_eq := fun _ _ _ _ => rfl
+  tube_covariant := vladimirov_tubeCovariant R W hspec hP
+  tube_pct := fun n α z hz => vladimirov_tube_pct_theorem R W hspec hP hloc n z hz α
+  spectrum := hspec
+  poincare := hP
+  weakLocality := hloc
+  positivity := hpos
+
+theorem osterwalder_schrader_master_theorem
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (P : OSReconstructedWightman R S η 𝒮) :
+    (∀ a b : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (a + b) =
+        (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a).comp
+          (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation b)) ∧
+    (∀ a : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a
+        (osVacuum P.osAxioms.toReflectionPositiveData) =
+        osVacuum P.osAxioms.toReflectionPositiveData) ∧
+    ComplexCovariant R P.E ∧
+    WightmanPCT η R P.W :=
+  ⟨P.semigroup.spacetimeTranslate_add P.osAxioms.os1_translation,
+   P.semigroup.spacetimeTranslate_vacuum P.osAxioms.os1_translation,
+   P.complexCovariant,
+   P.wightman_pct⟩
+
+def wickFlatLinearEquiv (n : ℕ) : (Fin n × Fin 4 → ℂ) ≃ₗ[ℂ] (Fin n → Fin 4 → ℂ) where
+  toFun w i μ := if μ = 0 then w (i, 0) * Complex.I else w (i, μ)
+  map_add' w₁ w₂ := by
+    ext i μ
+    dsimp
+    split_ifs <;> ring
+  map_smul' c w := by
+    ext i μ
+    dsimp
+    split_ifs <;> ring
+  invFun z p := if p.2 = 0 then -Complex.I * z p.1 0 else z p.1 p.2
+  left_inv w := by
+    ext ⟨i, μ⟩
+    dsimp
+    split_ifs with h
+    · subst h
+      calc -Complex.I * (w (i, 0) * Complex.I)
+          = -(Complex.I * Complex.I) * w (i, 0) := by ring
+        _ = w (i, 0) := by rw [Complex.I_mul_I]; ring
+    · rfl
+  right_inv z := by
+    ext i μ
+    dsimp
+    split_ifs with h
+    · subst h
+      calc (-Complex.I * z i 0) * Complex.I
+          = -(Complex.I * Complex.I) * z i 0 := by ring
+        _ = z i 0 := by rw [Complex.I_mul_I]; ring
+    · rfl
+
+def wickFlatCLE (n : ℕ) : (Fin n × Fin 4 → ℂ) ≃L[ℂ] (Fin n → Fin 4 → ℂ) :=
+  (wickFlatLinearEquiv n).toContinuousLinearEquiv
+
+def ofRealFlat (n : ℕ) : (Fin n × Fin 4 → ℝ) →L[ℝ] (Fin n × Fin 4 → ℂ) :=
+  ContinuousLinearMap.pi
+    (fun p => ContinuousLinearMap.comp Complex.ofRealCLM (ContinuousLinearMap.proj p))
+
+lemma ofRealFlat_apply (n : ℕ) (t : Fin n × Fin 4 → ℝ) :
+    ofRealFlat n t = fun p => (t p : ℂ) := rfl
+
+lemma wickFlatCLE_ofRealFlat (n : ℕ) (t : Fin n × Fin 4 → ℝ) :
+    wickFlatCLE n (ofRealFlat n t) = wickEmbedN n (fun i μ => t (i, μ)) := by
+  ext i μ
+  change (if μ = 0 then (t (i, 0) : ℂ) * Complex.I else (t (i, μ) : ℂ)) =
+    wickEmbed (fun m => t (i, m)) μ
+  fin_cases μ <;> simp [wickEmbed]
+
+lemma wickFlatCLE_ofRealFlat_uncurry (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    wickFlatCLE n (ofRealFlat n (fun p => x p.1 p.2)) = wickEmbedN n x := by
+  rw [wickFlatCLE_ofRealFlat]
+
+lemma wickFlatCLE_symm_wickEmbedN (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    (wickFlatCLE n).symm (wickEmbedN n x) = ofRealFlat n (fun p => x p.1 p.2) := by
+  rw [← wickFlatCLE_ofRealFlat_uncurry n x]
+  exact (wickFlatCLE n).symm_apply_apply _
+
+theorem analyticOn_forward_tube_eq_of_eventuallyEq_wickEmbedN (n : ℕ)
+    {f g : (Fin n → Fin 4 → ℂ) → ℂ}
+    (hf : AnalyticOn ℂ f (forward_tube_n n))
+    (hg : AnalyticOn ℂ g (forward_tube_n n))
+    {x₀ : Fin n → Fin 4 → ℝ} (hx₀ : x₀ ∈ orderedEuclidN n)
+    (h_ev : ∀ᶠ x in 𝓝 x₀, f (wickEmbedN n x) = g (wickEmbedN n x)) :
+    Set.EqOn f g (forward_tube_n n) := by
+  let a₀ : Fin n × Fin 4 → ℝ := fun p => x₀ p.1 p.2
+  let z₀ : Fin n → Fin 4 → ℂ := wickEmbedN n x₀
+  have hz₀ : z₀ ∈ forward_tube_n n := wickEmbedN_mem_forward_tube_n n hx₀
+  have hw₀ : wickFlatCLE n (ofRealFlat n a₀) = z₀ :=
+    wickFlatCLE_ofRealFlat_uncurry n x₀
+  have hf_z₀ : AnalyticAt ℂ f z₀ :=
+    hf.analyticAt ((forward_tube_n_isOpen n).mem_nhds hz₀)
+  have hg_z₀ : AnalyticAt ℂ g z₀ :=
+    hg.analyticAt ((forward_tube_n_isOpen n).mem_nhds hz₀)
+  have hf_comp : AnalyticAt ℂ (fun w => f (wickFlatCLE n w)) (ofRealFlat n a₀) := by
+    have hf' : AnalyticAt ℂ f (wickFlatCLE n (ofRealFlat n a₀)) := hw₀.symm ▸ hf_z₀
+    exact hf'.comp ((wickFlatCLE n).toContinuousLinearMap.analyticAt (ofRealFlat n a₀))
+  have hg_comp : AnalyticAt ℂ (fun w => g (wickFlatCLE n w)) (ofRealFlat n a₀) := by
+    have hg' : AnalyticAt ℂ g (wickFlatCLE n (ofRealFlat n a₀)) := hw₀.symm ▸ hg_z₀
+    exact hg'.comp ((wickFlatCLE n).toContinuousLinearMap.analyticAt (ofRealFlat n a₀))
+  have h_uncurry_cont :
+      Continuous (fun (t : Fin n × Fin 4 → ℝ) (i : Fin n) (μ : Fin 4) => t (i, μ)) :=
+    continuous_pi (fun i => continuous_pi (fun μ => continuous_apply (i, μ)))
+  have h_tendsto_uncurry :
+      Tendsto (fun (t : Fin n × Fin 4 → ℝ) (i : Fin n) (μ : Fin 4) => t (i, μ))
+        (𝓝 a₀) (𝓝 x₀) :=
+    h_uncurry_cont.tendsto a₀
+  have h_real_ev : ∀ᶠ t : Fin n × Fin 4 → ℝ in 𝓝 a₀,
+      f (wickFlatCLE n (ofRealFlat n t)) = g (wickFlatCLE n (ofRealFlat n t)) := by
+    filter_upwards [h_tendsto_uncurry.eventually h_ev] with t ht
+    rw [wickFlatCLE_ofRealFlat]
+    exact ht
+  have h_nhds_flat := Analysis.analytic_nhds_eq_of_real_eq_N
+    (fun w => f (wickFlatCLE n w)) (fun w => g (wickFlatCLE n w))
+    a₀ (ofRealFlat n) (ofRealFlat_apply n) hf_comp hg_comp h_real_ev
+  have h_tendsto : Tendsto (wickFlatCLE n).symm (𝓝 z₀) (𝓝 (ofRealFlat n a₀)) := by
+    rw [← wickFlatCLE_symm_wickEmbedN n x₀]
+    exact (wickFlatCLE n).symm.continuous.tendsto z₀
+  have h_nhds_z₀ : f =ᶠ[𝓝 z₀] g := by
+    filter_upwards [h_tendsto.eventually h_nhds_flat] with z hz
+    simpa only [ContinuousLinearEquiv.apply_symm_apply] using hz
+  have hf_nhd : AnalyticOnNhd ℂ f (forward_tube_n n) :=
+    (forward_tube_n_isOpen n).analyticOn_iff_analyticOnNhd.mp hf
+  have hg_nhd : AnalyticOnNhd ℂ g (forward_tube_n n) :=
+    (forward_tube_n_isOpen n).analyticOn_iff_analyticOnNhd.mp hg
+  exact hf_nhd.eqOn_of_preconnected_of_eventuallyEq hg_nhd
+    (forward_tube_is_connected n).isPreconnected hz₀ h_nhds_z₀
+
+theorem analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq (n : ℕ)
+    {f g : (Fin n → Fin 4 → ℂ) → ℂ}
+    (hf : AnalyticOn ℂ f (forward_tube_n n))
+    (hg : AnalyticOn ℂ g (forward_tube_n n))
+    (h_eq : ∀ x ∈ posOrderedEuclidN n, f (wickEmbedN n x) = g (wickEmbedN n x)) :
+    Set.EqOn f g (forward_tube_n n) := by
+  have hx₀_pos : euclidOrderedBasePoint n ∈ posOrderedEuclidN n :=
+    euclidOrderedBasePoint_mem_posOrderedEuclidN n
+  apply analyticOn_forward_tube_eq_of_eventuallyEq_wickEmbedN n hf hg hx₀_pos.2
+  filter_upwards [(isOpen_posOrderedEuclidN n).mem_nhds hx₀_pos] with x hx
+  exact h_eq x hx
+
+theorem analyticOn_forward_tube_eq_of_wickEmbedN_eq (n : ℕ)
+    {f g : (Fin n → Fin 4 → ℂ) → ℂ}
+    (hf : AnalyticOn ℂ f (forward_tube_n n))
+    (hg : AnalyticOn ℂ g (forward_tube_n n))
+    (h_eq : ∀ x ∈ orderedEuclidN n, f (wickEmbedN n x) = g (wickEmbedN n x)) :
+    Set.EqOn f g (forward_tube_n n) :=
+  analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n hf hg
+    (fun x hx => h_eq x (posOrderedEuclidN_subset_orderedEuclidN n hx))
+
+theorem analyticOn_forward_tube_eq_zero_of_posOrderedEuclidN_eq_zero (n : ℕ)
+    {f : (Fin n → Fin 4 → ℂ) → ℂ}
+    (hf : AnalyticOn ℂ f (forward_tube_n n))
+    (h_zero : ∀ x ∈ posOrderedEuclidN n, f (wickEmbedN n x) = 0) :
+    ∀ z ∈ forward_tube_n n, f z = 0 :=
+  analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n hf
+    (analyticOn_const (v := (0 : ℂ))) h_zero
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem forwardTubeRigidFromEuclid_holds {W₁ W₂ : WightmanFamily ι}
+    (E₁ : TubeExtension W₁) (E₂ : TubeExtension W₂) :
+    ForwardTubeRigidFromEuclid E₁ E₂ := by
+  intro hS n α z hz
+  exact analyticOn_forward_tube_eq_of_wickEmbedN_eq n
+    (E₁.analytic n α) (E₂.analytic n α) (hS n α) hz
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tubeExtension_eq_of_posOrdered_schwingerFromTube_eq {W₁ W₂ : WightmanFamily ι}
+    (E₁ : TubeExtension W₁) (E₂ : TubeExtension W₂)
+    (hS : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → schwingerFromTube E₁ n α x = schwingerFromTube E₂ n α x)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    E₁.H n α z = E₂.H n α z :=
+  analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (E₁.analytic n α) (E₂.analytic n α) (hS n α) hz
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tubeExtension_eq_of_schwingerFromTube_eq {W₁ W₂ : WightmanFamily ι}
+    (E₁ : TubeExtension W₁) (E₂ : TubeExtension W₂)
+    (hS : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → schwingerFromTube E₁ n α x = schwingerFromTube E₂ n α x)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    E₁.H n α z = E₂.H n α z :=
+  forwardTubeRigidFromEuclid_holds E₁ E₂ hS n α z hz
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_eq_of_schwingerFromTube_eq_unconditional {W₁ W₂ : WightmanFamily ι}
+    (E₁ : TubeExtension W₁) (E₂ : TubeExtension W₂)
+    (hS : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → schwingerFromTube E₁ n α x = schwingerFromTube E₂ n α x) :
+    W₁ = W₂ :=
+  wightman_eq_of_schwingerFromTube_eq E₁ E₂ (forwardTubeRigidFromEuclid_holds E₁ E₂) hS
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_eq_of_posOrdered_schwingerFromTube_eq {W₁ W₂ : WightmanFamily ι}
+    (E₁ : TubeExtension W₁) (E₂ : TubeExtension W₂)
+    (hS : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → schwingerFromTube E₁ n α x = schwingerFromTube E₂ n α x) :
+    W₁ = W₂ :=
+  wightman_eq_of_tubeExtension_eq E₁ E₂
+    (tubeExtension_eq_of_posOrdered_schwingerFromTube_eq E₁ E₂ hS)
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma wightman_eq_zero_of_tube_eq_zero {W : WightmanFamily ι} (E : TubeExtension W)
+    (n : ℕ) (α : Fin n → ι)
+    (hH : ∀ z ∈ forward_tube_n n, E.H n α z = 0)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    W n α f = 0 := by
+  have hv : euclidTimeVec 1 ∈ forward_light_cone := timeUnitVec_mem_forward_light_cone
+  have hb := E.boundary n α f (euclidTimeVec 1) hv
+  have h_ev : (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+      E.H n α (fun i k => (x i k : ℂ) +
+        Complex.I * ((t * (i : ℕ) * euclidTimeVec 1 k : ℝ) : ℂ)) *
+        f x) =ᶠ[𝓝[>] (0 : ℝ)] (fun _ : ℝ => (0 : ℂ)) := by
+    filter_upwards [self_mem_nhdsWithin] with t (ht : 0 < t)
+    have h_int : (fun x : Fin n → Fin 4 → ℝ =>
+        E.H n α (fun i k => (x i k : ℂ) +
+          Complex.I * ((t * (i : ℕ) * euclidTimeVec 1 k : ℝ) : ℂ)) * f x) =
+        fun _ => 0 := by
+      ext x
+      have hz : (fun i k => (x i k : ℂ) +
+          Complex.I * ((t * (i : ℕ) * euclidTimeVec 1 k : ℝ) : ℂ)) ∈ forward_tube_n n := by
+        intro i hi
+        change (fun k : Fin 4 => -((((fun j m => (x j m : ℂ) +
+            Complex.I * ((t * (j : ℕ) * euclidTimeVec 1 m : ℝ) : ℂ)) i -
+          (fun j m => (x j m : ℂ) +
+            Complex.I * ((t * (j : ℕ) * euclidTimeVec 1 m : ℝ) : ℂ))
+              ⟨i.val + 1, hi⟩) k).im)) ∈
+          forward_light_cone
+        have h_im : (fun k : Fin 4 => -((((fun j m => (x j m : ℂ) +
+              Complex.I * ((t * (j : ℕ) * euclidTimeVec 1 m : ℝ) : ℂ)) i -
+            (fun j m => (x j m : ℂ) +
+              Complex.I * ((t * (j : ℕ) * euclidTimeVec 1 m : ℝ) : ℂ))
+                ⟨i.val + 1, hi⟩) k).im)) =
+            fun k : Fin 4 => if k = 0 then t else 0 := by
+          ext k
+          fin_cases k <;> · simp [euclidTimeVec, Complex.sub_im, Complex.add_im]; try ring
+        rw [h_im]
+        dsimp [forward_light_cone]
+        rw [minkowskiInner_explicit]
+        simp only [↓reduceIte, Fin.isValue, Fin.reduceEq, mul_zero, sub_zero]
+        exact ⟨ht, mul_pos ht ht⟩
+      rw [hH _ hz, zero_mul]
+    rw [h_int, MeasureTheory.integral_zero]
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique (hb.congr' h_ev) tendsto_const_nhds
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem exists_posOrderedEuclidN_ne_zero_of_wightman_ne_zero {W : WightmanFamily ι}
+    (E : TubeExtension W) (n : ℕ) (α : Fin n → ι)
+    {f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ} (hf : W n α f ≠ 0) :
+    ∃ x ∈ posOrderedEuclidN n, schwingerFromTube E n α x ≠ 0 := by
+  by_contra! h_zero
+  have hH_zero : ∀ z ∈ forward_tube_n n, E.H n α z = 0 :=
+    analyticOn_forward_tube_eq_zero_of_posOrderedEuclidN_eq_zero n (E.analytic n α) h_zero
+  exact hf (wightman_eq_zero_of_tube_eq_zero E n α hH_zero f)
+
+theorem vladimirovSchwinger_eq_imp_wightman_eq (R : HolomorphicLorentzRep ι)
+    {W₁ W₂ : WightmanFamily ι}
+    (hspec₁ : ZeroMomentumSpectrumCondition W₁) (hP₁ : PoincareCovariant R W₁)
+    (hspec₂ : ZeroMomentumSpectrumCondition W₂) (hP₂ : PoincareCovariant R W₂)
+    (hS : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → vladimirovSchwinger W₁ n α x = vladimirovSchwinger W₂ n α x) :
+    W₁ = W₂ :=
+  wightman_eq_of_schwingerFromTube_eq_unconditional
+    (vladimirovTubeExtension R W₁ hspec₁ hP₁)
+    (vladimirovTubeExtension R W₂ hspec₂ hP₂) hS
+
+theorem vladimirovSchwinger_posOrdered_eq_imp_wightman_eq (R : HolomorphicLorentzRep ι)
+    {W₁ W₂ : WightmanFamily ι}
+    (hspec₁ : ZeroMomentumSpectrumCondition W₁) (hP₁ : PoincareCovariant R W₁)
+    (hspec₂ : ZeroMomentumSpectrumCondition W₂) (hP₂ : PoincareCovariant R W₂)
+    (hS : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → vladimirovSchwinger W₁ n α x = vladimirovSchwinger W₂ n α x) :
+    W₁ = W₂ :=
+  wightman_eq_of_posOrdered_schwingerFromTube_eq
+    (vladimirovTubeExtension R W₁ hspec₁ hP₁)
+    (vladimirovTubeExtension R W₂ hspec₂ hP₂) hS
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+theorem tube_H_unique (P₁ P₂ : OSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    P₁.E.H n α z = P₂.E.H n α z := by
+  apply tubeExtension_eq_of_schwingerFromTube_eq P₁.E P₂.E _ n α z hz
+  intro m β x hx
+  rw [← P₁.schwinger_eq m β x hx, ← P₂.schwinger_eq m β x hx]
+
+theorem wightman_unique_unconditional (P₁ P₂ : OSReconstructedWightman R S η 𝒮) :
+    P₁.W = P₂.W :=
+  P₁.wightman_unique P₂ (forwardTubeRigidFromEuclid_holds P₁.E P₂.E)
+
+end OSReconstructedWightman
+
+theorem osterwalder_schrader_complete_master_theorem
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (P : OSReconstructedWightman R S η 𝒮) :
+    (∀ a b : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (a + b) =
+        (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a).comp
+          (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation b)) ∧
+    (∀ a : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a
+        (osVacuum P.osAxioms.toReflectionPositiveData) =
+        osVacuum P.osAxioms.toReflectionPositiveData) ∧
+    ComplexCovariant R P.E ∧
+    WightmanPCT η R P.W ∧
+    (∀ P' : OSReconstructedWightman R S η 𝒮,
+      P'.W = P.W ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+        z ∈ forward_tube_n n → P'.E.H n α z = P.E.H n α z) :=
+  ⟨P.semigroup.spacetimeTranslate_add P.osAxioms.os1_translation,
+   P.semigroup.spacetimeTranslate_vacuum P.osAxioms.os1_translation,
+   P.complexCovariant,
+   P.wightman_pct,
+   fun P' => ⟨P'.wightman_unique_unconditional P, P'.tube_H_unique P⟩⟩
+
+namespace IsPoly
+
+lemma prod {κ : Type*} (s : Finset κ) (f : κ → SL2C × SL2C → ℂ)
+    (h : ∀ i ∈ s, IsPoly (f i)) : IsPoly fun p => ∏ i ∈ s, f i p := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simpa using const 1
+  | insert a s ha ih =>
+    simp only [Finset.prod_insert ha]
+    exact (h a (by simp)).mul (ih fun i hi => h i (by simp [hi]))
+
+lemma swap {f : SL2C × SL2C → ℂ} (hf : IsPoly f) :
+    IsPoly fun p => f (p.2, p.1) := by
+  rcases hf with ⟨P, hP⟩
+  refine ⟨MvPolynomial.rename Sum.swap P, fun p => ?_⟩
+  have h_pt : polyPt (p.2, p.1) = polyPt p ∘ Sum.swap := by
+    ext (a | a) <;> rfl
+  dsimp
+  rw [hP (p.2, p.1), MvPolynomial.eval_rename, h_pt]
+
+end IsPoly
+
+def rightWeylRep : HolomorphicLorentzRep (Fin 2) where
+  σ :=
+    { toFun := fun p => (p.2 : Matrix (Fin 2) (Fin 2) ℂ)
+      map_one' := by simp
+      map_mul' := fun p q => by simp }
+  polynomial i j := IsPoly.coordB i j
+
+lemma rightWeylRep_spinParity : rightWeylRep.HasSpinParity (-1) := by
+  refine ⟨?_, Or.inr rfl⟩
+  change ((-1 : SL2C) : Matrix (Fin 2) (Fin 2) ℂ) = (-1 : ℂ) • (1 : Matrix (Fin 2) (Fin 2) ℂ)
+  simp [Matrix.SpecialLinearGroup.coe_neg]
+
+def chiralSwapRep (R : HolomorphicLorentzRep ι) : HolomorphicLorentzRep ι where
+  σ :=
+    { toFun := fun p => R.σ (p.2, p.1)
+      map_one' := R.σ.map_one
+      map_mul' := fun p q => R.σ.map_mul (p.2, p.1) (q.2, q.1) }
+  polynomial i j := IsPoly.swap (R.polynomial i j)
+
+lemma chiralSwapRep_spinParity {R : HolomorphicLorentzRep ι} {ε : ℂ}
+    (hε : R.HasSpinParity ε) :
+    (chiralSwapRep R).HasSpinParity ε :=
+  hε
+
+@[simp]
+lemma chiralSwapRep_leftWeylRep : chiralSwapRep leftWeylRep = rightWeylRep := rfl
+
+@[simp]
+lemma chiralSwapRep_rightWeylRep : chiralSwapRep rightWeylRep = leftWeylRep := rfl
+
+def directSumRep {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁] [Fintype ι₂] [DecidableEq ι₂]
+    (R₁ : HolomorphicLorentzRep ι₁) (R₂ : HolomorphicLorentzRep ι₂) :
+    HolomorphicLorentzRep (ι₁ ⊕ ι₂) where
+  σ :=
+    { toFun := fun p => Matrix.fromBlocks (R₁.σ p) 0 0 (R₂.σ p)
+      map_one' := by simp [Matrix.fromBlocks_one]
+      map_mul' := fun p q => by simp [Matrix.fromBlocks_multiply] }
+  polynomial i j := by
+    rcases i with i₁ | i₂ <;> rcases j with j₁ | j₂
+    · exact R₁.polynomial i₁ j₁
+    · exact IsPoly.const 0
+    · exact IsPoly.const 0
+    · exact R₂.polynomial i₂ j₂
+
+lemma directSumRep_spinParity {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂} {ε : ℂ}
+    (h₁ : R₁.HasSpinParity ε) (h₂ : R₂.HasSpinParity ε) :
+    (directSumRep R₁ R₂).HasSpinParity ε := by
+  refine ⟨?_, h₁.2⟩
+  change Matrix.fromBlocks (R₁.σ (-1, -1)) 0 0 (R₂.σ (-1, -1)) =
+    ε • (1 : Matrix (ι₁ ⊕ ι₂) (ι₁ ⊕ ι₂) ℂ)
+  rw [h₁.1, h₂.1, ← Matrix.fromBlocks_one]
+  ext (i₁ | i₂) (j₁ | j₂) <;> simp [Matrix.one_apply]
+
+def diracRep : HolomorphicLorentzRep (Fin 2 ⊕ Fin 2) :=
+  directSumRep leftWeylRep rightWeylRep
+
+lemma diracRep_spinParity : diracRep.HasSpinParity (-1) :=
+  directSumRep_spinParity leftWeylRep_spinParity rightWeylRep_spinParity
+
+def tensorProdRep {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁] [Fintype ι₂] [DecidableEq ι₂]
+    (R₁ : HolomorphicLorentzRep ι₁) (R₂ : HolomorphicLorentzRep ι₂) :
+    HolomorphicLorentzRep (ι₁ × ι₂) where
+  σ :=
+    { toFun := fun p i j => R₁.σ p i.1 j.1 * R₂.σ p i.2 j.2
+      map_one' := by
+        ext ⟨i₁, i₂⟩ ⟨j₁, j₂⟩
+        by_cases h1 : i₁ = j₁ <;> by_cases h2 : i₂ = j₂ <;>
+          simp [h1, h2, Matrix.one_apply, Prod.ext_iff]
+      map_mul' := fun p q => by
+        ext ⟨i₁, i₂⟩ ⟨j₁, j₂⟩
+        dsimp
+        rw [R₁.σ.map_mul, R₂.σ.map_mul, Matrix.mul_apply, Matrix.mul_apply, Matrix.mul_apply,
+          Fintype.sum_prod_type, Finset.sum_mul]
+        simp_rw [Finset.mul_sum]
+        refine Finset.sum_congr rfl (fun k₁ _ => Finset.sum_congr rfl (fun k₂ _ => ?_))
+        ring }
+  polynomial i j := IsPoly.mul (R₁.polynomial i.1 j.1) (R₂.polynomial i.2 j.2)
+
+lemma tensorProdRep_spinParity {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂} {ε₁ ε₂ : ℂ}
+    (h₁ : R₁.HasSpinParity ε₁) (h₂ : R₂.HasSpinParity ε₂) :
+    (tensorProdRep R₁ R₂).HasSpinParity (ε₁ * ε₂) := by
+  refine ⟨?_, ?_⟩
+  · ext ⟨i₁, i₂⟩ ⟨j₁, j₂⟩
+    change R₁.σ (-1, -1) i₁ j₁ * R₂.σ (-1, -1) i₂ j₂ =
+      ((ε₁ * ε₂) • (1 : Matrix (ι₁ × ι₂) (ι₁ × ι₂) ℂ)) (i₁, i₂) (j₁, j₂)
+    rw [h₁.1, h₂.1]
+    simp only [Matrix.smul_apply, Matrix.one_apply, Prod.mk.injEq, smul_eq_mul]
+    by_cases h1 : i₁ = j₁ <;> by_cases h2 : i₂ = j₂ <;> simp [h1, h2]
+  · rcases h₁.2 with rfl | rfl <;> rcases h₂.2 with rfl | rfl <;> simp
+
+def multiSpinorRep (m : ℕ) (R : HolomorphicLorentzRep ι) :
+    HolomorphicLorentzRep (Fin m → ι) where
+  σ :=
+    { toFun := fun p α β => ∏ k : Fin m, R.σ p (α k) (β k)
+      map_one' := by
+        ext α β
+        rw [R.σ.map_one]
+        by_cases h : α = β
+        · subst h
+          simp
+        · rw [Matrix.one_apply_ne h]
+          obtain ⟨k, hk⟩ : ∃ k, α k ≠ β k := by
+            by_contra hc
+            push Not at hc
+            exact h (funext hc)
+          exact Finset.prod_eq_zero (Finset.mem_univ k) (Matrix.one_apply_ne hk)
+      map_mul' := fun p q => by
+        ext α β
+        rw [Matrix.mul_apply]
+        simp_rw [R.σ.map_mul, Matrix.mul_apply]
+        rw [Fintype.prod_sum]
+        refine Finset.sum_congr rfl (fun γ _ => ?_)
+        rw [Finset.prod_mul_distrib] }
+  polynomial α β :=
+    IsPoly.prod Finset.univ (fun k p => R.σ p (α k) (β k)) (fun k _ => R.polynomial (α k) (β k))
+
+lemma neg_one_pow_eq_one_or_neg_one (m : ℕ) :
+    (-1 : ℂ) ^ m = 1 ∨ (-1 : ℂ) ^ m = -1 := by
+  rcases Nat.even_or_odd m with hm | hm
+  · exact Or.inl (Even.neg_one_pow hm)
+  · exact Or.inr (Odd.neg_one_pow hm)
+
+lemma spinParity_pow {ε : ℂ} (hε : ε = 1 ∨ ε = -1) (m : ℕ) :
+    ε ^ m = 1 ∨ ε ^ m = -1 := by
+  rcases hε with rfl | rfl
+  · exact Or.inl (one_pow m)
+  · exact neg_one_pow_eq_one_or_neg_one m
+
+lemma multiSpinorRep_spinParity (m : ℕ) {R : HolomorphicLorentzRep ι} {ε : ℂ}
+    (hε : R.HasSpinParity ε) :
+    (multiSpinorRep m R).HasSpinParity (ε ^ m) := by
+  refine ⟨?_, spinParity_pow hε.2 m⟩
+  ext α β
+  change (∏ k : Fin m, R.σ (-1, -1) (α k) (β k)) =
+    (ε ^ m) * (1 : Matrix (Fin m → ι) (Fin m → ι) ℂ) α β
+  rw [prod_spinParity R ε hε m α β]
+  by_cases h : α = β <;> simp [h, Matrix.one_apply]
+
+def spinorTensorRep (m₁ m₂ : ℕ) :
+    HolomorphicLorentzRep ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) :=
+  tensorProdRep (multiSpinorRep m₁ leftWeylRep) (multiSpinorRep m₂ rightWeylRep)
+
+lemma spinorTensorRep_spinParity (m₁ m₂ : ℕ) :
+    (spinorTensorRep m₁ m₂).HasSpinParity ((-1 : ℂ) ^ (m₁ + m₂)) := by
+  rw [pow_add]
+  exact tensorProdRep_spinParity
+    (multiSpinorRep_spinParity m₁ leftWeylRep_spinParity)
+    (multiSpinorRep_spinParity m₂ rightWeylRep_spinParity)
+
+lemma rightWeylRep_hasPTScalar : rightWeylRep.HasPTScalar 1 := by
+  change ((1 : SL2C) : Matrix (Fin 2) (Fin 2) ℂ) = (1 : ℂ) • 1
+  simp
+
+lemma directSumRep_hasDiagInvolutivePT {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    (h₁ : R₁.HasDiagInvolutivePT) (h₂ : R₂.HasDiagInvolutivePT) :
+    (directSumRep R₁ R₂).HasDiagInvolutivePT := by
+  obtain ⟨δ₁, h1_sq, h1_entry⟩ := h₁
+  obtain ⟨δ₂, h2_sq, h2_entry⟩ := h₂
+  refine ⟨Sum.elim δ₁ δ₂, fun c => by rcases c with c₁ | c₂ <;> simp [h1_sq, h2_sq], ?_⟩
+  intro a b
+  rcases a with a₁ | a₂ <;> rcases b with b₁ | b₂
+  · change Matrix.fromBlocks (R₁.σ (-1, 1)) 0 0 (R₂.σ (-1, 1))
+      (Sum.inl a₁) (Sum.inl b₁) = _
+    simp [h1_entry]
+  · change Matrix.fromBlocks (R₁.σ (-1, 1)) 0 0 (R₂.σ (-1, 1))
+      (Sum.inl a₁) (Sum.inr b₂) = _
+    simp
+  · change Matrix.fromBlocks (R₁.σ (-1, 1)) 0 0 (R₂.σ (-1, 1))
+      (Sum.inr a₂) (Sum.inl b₁) = _
+    simp
+  · change Matrix.fromBlocks (R₁.σ (-1, 1)) 0 0 (R₂.σ (-1, 1))
+      (Sum.inr a₂) (Sum.inr b₂) = _
+    simp [h2_entry]
+
+lemma diracRep_hasDiagInvolutivePT : diracRep.HasDiagInvolutivePT :=
+  directSumRep_hasDiagInvolutivePT leftWeylRep_hasPTScalar.toHasDiagInvolutivePT
+    rightWeylRep_hasPTScalar.toHasDiagInvolutivePT
+
+lemma tensorProdRep_hasPTScalar {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂} {δ₁ δ₂ : ℂ}
+    (h₁ : R₁.HasPTScalar δ₁) (h₂ : R₂.HasPTScalar δ₂) :
+    (tensorProdRep R₁ R₂).HasPTScalar (δ₁ * δ₂) := by
+  ext ⟨i₁, i₂⟩ ⟨j₁, j₂⟩
+  change R₁.σ (-1, 1) i₁ j₁ * R₂.σ (-1, 1) i₂ j₂ =
+    ((δ₁ * δ₂) • (1 : Matrix (ι₁ × ι₂) (ι₁ × ι₂) ℂ)) (i₁, i₂) (j₁, j₂)
+  rw [h₁, h₂]
+  simp only [Matrix.smul_apply, Matrix.one_apply, Prod.mk.injEq, smul_eq_mul]
+  by_cases h1 : i₁ = j₁ <;> by_cases h2 : i₂ = j₂ <;> simp [h1, h2]
+
+lemma multiSpinorRep_hasPTScalar (m : ℕ) {R : HolomorphicLorentzRep ι} {δ : ℂ}
+    (h : R.HasPTScalar δ) :
+    (multiSpinorRep m R).HasPTScalar (δ ^ m) := by
+  ext α β
+  change (∏ k : Fin m, R.σ (-1, 1) (α k) (β k)) =
+    ((δ ^ m) • (1 : Matrix (Fin m → ι) (Fin m → ι) ℂ)) α β
+  rw [h]
+  by_cases hab : α = β
+  · subst hab
+    simp only [Matrix.smul_apply, Matrix.one_apply_eq, smul_eq_mul, mul_one,
+      Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+  · rw [Matrix.smul_apply, Matrix.one_apply_ne hab, smul_zero]
+    obtain ⟨k, hk⟩ : ∃ k, α k ≠ β k := by
+      by_contra hc
+      push Not at hc
+      exact hab (funext hc)
+    refine Finset.prod_eq_zero (Finset.mem_univ k) ?_
+    rw [Matrix.smul_apply, Matrix.one_apply_ne hk, smul_zero]
+
+lemma spinorTensorRep_hasPTScalar (m₁ m₂ : ℕ) :
+    (spinorTensorRep m₁ m₂).HasPTScalar ((-1 : ℂ) ^ m₁) := by
+  have h1 : ((-1 : ℂ) ^ m₁) = (-1 : ℂ) ^ m₁ * (1 : ℂ) ^ m₂ := by simp
+  rw [h1]
+  exact tensorProdRep_hasPTScalar
+    (multiSpinorRep_hasPTScalar m₁ leftWeylRep_hasPTScalar)
+    (multiSpinorRep_hasPTScalar m₂ rightWeylRep_hasPTScalar)
+
+open Geometry.MatrixAnalysis
+
+def HolomorphicLorentzRep.HasRealConj (R : HolomorphicLorentzRep ι) : Prop :=
+  ∀ A B : SL2C, (R.σ (sl2c_conj A, sl2c_conj B)).map star = R.σ (A, B)
+
+lemma leftWeylRep_hasRealConj : leftWeylRep.HasRealConj := by
+  intro A B
+  ext i j
+  change star (star (A.1 i j)) = A.1 i j
+  exact star_star _
+
+lemma rightWeylRep_hasRealConj : rightWeylRep.HasRealConj := by
+  intro A B
+  ext i j
+  change star (star (B.1 i j)) = B.1 i j
+  exact star_star _
+
+lemma chiralSwapRep_hasRealConj {R : HolomorphicLorentzRep ι} (hR : R.HasRealConj) :
+    (chiralSwapRep R).HasRealConj :=
+  fun A B => hR B A
+
+lemma tensorProdRep_hasRealConj {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    (h₁ : R₁.HasRealConj) (h₂ : R₂.HasRealConj) :
+    (tensorProdRep R₁ R₂).HasRealConj := by
+  intro A B
+  ext ⟨i₁, i₂⟩ ⟨j₁, j₂⟩
+  change star (R₁.σ (sl2c_conj A, sl2c_conj B) i₁ j₁ *
+    R₂.σ (sl2c_conj A, sl2c_conj B) i₂ j₂) =
+    R₁.σ (A, B) i₁ j₁ * R₂.σ (A, B) i₂ j₂
+  have h1' : star (R₁.σ (sl2c_conj A, sl2c_conj B) i₁ j₁) = R₁.σ (A, B) i₁ j₁ :=
+    congrFun (congrFun (h₁ A B) i₁) j₁
+  have h2' : star (R₂.σ (sl2c_conj A, sl2c_conj B) i₂ j₂) = R₂.σ (A, B) i₂ j₂ :=
+    congrFun (congrFun (h₂ A B) i₂) j₂
+  rw [star_mul', h1', h2']
+
+lemma multiSpinorRep_hasRealConj (m : ℕ) {R : HolomorphicLorentzRep ι} (hR : R.HasRealConj) :
+    (multiSpinorRep m R).HasRealConj := by
+  intro A B
+  ext α β
+  change (starRingEnd ℂ) (∏ k : Fin m, R.σ (sl2c_conj A, sl2c_conj B) (α k) (β k)) =
+    ∏ k : Fin m, R.σ (A, B) (α k) (β k)
+  rw [map_prod]
+  refine Finset.prod_congr rfl (fun k _ => ?_)
+  exact congrFun (congrFun (hR A B) (α k)) (β k)
+
+lemma spinorTensorRep_hasRealConj (m₁ m₂ : ℕ) :
+    (spinorTensorRep m₁ m₂).HasRealConj :=
+  tensorProdRep_hasRealConj
+    (multiSpinorRep_hasRealConj m₁ leftWeylRep_hasRealConj)
+    (multiSpinorRep_hasRealConj m₂ rightWeylRep_hasRealConj)
+
+def trivialStarStructure : StarStructure trivialRep where
+  C := 1
+  involutive := by ext i j; simp
+  intertwine A B := by ext i j; simp [trivialRep]
+
+def stdStarStructure : StarStructure stdRep where
+  C := 1
+  involutive := by
+    have h1 : (1 : Matrix (Fin 4) (Fin 4) ℂ).map star = 1 := by
+      ext i j; fin_cases i <;> fin_cases j <;> simp
+    rw [h1, mul_one]
+  intertwine A B := by
+    have h_conj : (stdRep.σ (sl2c_conj B, sl2c_conj A)).map star = stdRep.σ (A, B) := by
+      change Matrix.map (spinorPhi (sl2c_conj B, sl2c_conj A)).val.val star =
+        (spinorPhi (A, B)).val.val
+      rw [← spinorPhi_conj A B]
+      ext i j
+      simp [Matrix.map_apply]
+    rw [one_mul, h_conj, mul_one]
+
+def directSumStarStructure {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    (S₁ : StarStructure R₁) (S₂ : StarStructure R₂) :
+    StarStructure (directSumRep R₁ R₂) where
+  C := Matrix.fromBlocks S₁.C 0 0 S₂.C
+  involutive := by
+    have h_star : (Matrix.fromBlocks S₁.C (0 : Matrix ι₁ ι₂ ℂ) 0 S₂.C).map star =
+        Matrix.fromBlocks (S₁.C.map star) 0 0 (S₂.C.map star) := by
+      ext (i₁ | i₂) (j₁ | j₂) <;> simp [Matrix.fromBlocks]
+    rw [h_star, Matrix.fromBlocks_multiply]
+    simp only [Matrix.mul_zero, Matrix.zero_mul, add_zero, zero_add,
+      S₁.involutive, S₂.involutive, Matrix.fromBlocks_one]
+  intertwine A B := by
+    change Matrix.fromBlocks S₁.C 0 0 S₂.C *
+        Matrix.fromBlocks (R₁.σ (A, B)) 0 0 (R₂.σ (A, B)) =
+      (Matrix.fromBlocks (R₁.σ (sl2c_conj B, sl2c_conj A)) 0 0
+        (R₂.σ (sl2c_conj B, sl2c_conj A))).map star *
+        Matrix.fromBlocks S₁.C 0 0 S₂.C
+    have h_star : (Matrix.fromBlocks (R₁.σ (sl2c_conj B, sl2c_conj A)) (0 : Matrix ι₁ ι₂ ℂ) 0
+        (R₂.σ (sl2c_conj B, sl2c_conj A))).map star =
+        Matrix.fromBlocks ((R₁.σ (sl2c_conj B, sl2c_conj A)).map star) 0 0
+          ((R₂.σ (sl2c_conj B, sl2c_conj A)).map star) := by
+      ext (i₁ | i₂) (j₁ | j₂) <;> simp [Matrix.fromBlocks]
+    rw [h_star, Matrix.fromBlocks_multiply, Matrix.fromBlocks_multiply]
+    simp only [Matrix.mul_zero, Matrix.zero_mul, add_zero, zero_add,
+      S₁.intertwine A B, S₂.intertwine A B]
+
+def tensorProdStarStructure {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    (S₁ : StarStructure R₁) (S₂ : StarStructure R₂) :
+    StarStructure (tensorProdRep R₁ R₂) where
+  C i j := S₁.C i.1 j.1 * S₂.C i.2 j.2
+  involutive := by
+    ext ⟨i₁, i₂⟩ ⟨j₁, j₂⟩
+    simp only [Matrix.mul_apply, Matrix.map_apply, Fintype.sum_prod_type, star_mul']
+    have h_Prod :
+        (∑ x : ι₁, ∑ x_1 : ι₂,
+          S₁.C i₁ x * S₂.C i₂ x_1 * (star (S₁.C x j₁) * star (S₂.C x_1 j₂))) =
+        (∑ x : ι₁, S₁.C i₁ x * star (S₁.C x j₁)) *
+          (∑ x_1 : ι₂, S₂.C i₂ x_1 * star (S₂.C x_1 j₂)) := by
+      rw [Finset.sum_mul]
+      simp_rw [Finset.mul_sum]
+      refine Finset.sum_congr rfl (fun x₁ _ => Finset.sum_congr rfl (fun x₂ _ => ?_))
+      ring
+    rw [h_Prod]
+    have h1 := congrFun (congrFun S₁.involutive i₁) j₁
+    have h2 := congrFun (congrFun S₂.involutive i₂) j₂
+    simp only [Matrix.mul_apply, Matrix.map_apply] at h1 h2
+    rw [h1, h2]
+    by_cases h1' : i₁ = j₁ <;> by_cases h2' : i₂ = j₂ <;>
+      simp [h1', h2', Matrix.one_apply, Prod.ext_iff]
+  intertwine A B := by
+    ext ⟨i₁, i₂⟩ ⟨j₁, j₂⟩
+    simp only [Matrix.mul_apply, Matrix.map_apply, Fintype.sum_prod_type]
+    have h_lhs :
+        (∑ x : ι₁, ∑ y : ι₂, S₁.C i₁ x * S₂.C i₂ y *
+          ((tensorProdRep R₁ R₂).σ (A, B) (x, y) (j₁, j₂))) =
+        (∑ x : ι₁, S₁.C i₁ x * R₁.σ (A, B) x j₁) *
+          (∑ y : ι₂, S₂.C i₂ y * R₂.σ (A, B) y j₂) := by
+      rw [Finset.sum_mul]
+      simp_rw [Finset.mul_sum]
+      refine Finset.sum_congr rfl (fun x _ => Finset.sum_congr rfl (fun y _ => ?_))
+      change S₁.C i₁ x * S₂.C i₂ y * (R₁.σ (A, B) x j₁ * R₂.σ (A, B) y j₂) = _
+      ring
+    have h_rhs :
+        (∑ x : ι₁, ∑ y : ι₂,
+          star ((tensorProdRep R₁ R₂).σ (sl2c_conj B, sl2c_conj A) (i₁, i₂) (x, y)) *
+            (S₁.C x j₁ * S₂.C y j₂)) =
+        (∑ x : ι₁, star (R₁.σ (sl2c_conj B, sl2c_conj A) i₁ x) * S₁.C x j₁) *
+          (∑ y : ι₂, star (R₂.σ (sl2c_conj B, sl2c_conj A) i₂ y) * S₂.C y j₂) := by
+      rw [Finset.sum_mul]
+      simp_rw [Finset.mul_sum]
+      refine Finset.sum_congr rfl (fun x _ => Finset.sum_congr rfl (fun y _ => ?_))
+      change star (R₁.σ (sl2c_conj B, sl2c_conj A) i₁ x *
+        R₂.σ (sl2c_conj B, sl2c_conj A) i₂ y) * (S₁.C x j₁ * S₂.C y j₂) = _
+      rw [star_mul']
+      ring
+    rw [h_lhs, h_rhs]
+    have h1 := congrFun (congrFun (S₁.intertwine A B) i₁) j₁
+    have h2 := congrFun (congrFun (S₂.intertwine A B) i₂) j₂
+    simp only [Matrix.mul_apply, Matrix.map_apply] at h1 h2
+    rw [h1, h2]
+
+def chiralDoubleStarStructure (R : HolomorphicLorentzRep ι) (hR : R.HasRealConj) :
+    StarStructure (directSumRep R (chiralSwapRep R)) where
+  C := Matrix.fromBlocks (0 : Matrix ι ι ℂ) (1 : Matrix ι ι ℂ)
+    (1 : Matrix ι ι ℂ) (0 : Matrix ι ι ℂ)
+  involutive := by
+    have h_star : (Matrix.fromBlocks (0 : Matrix ι ι ℂ) (1 : Matrix ι ι ℂ)
+        (1 : Matrix ι ι ℂ) (0 : Matrix ι ι ℂ)).map star =
+        Matrix.fromBlocks (0 : Matrix ι ι ℂ) (1 : Matrix ι ι ℂ)
+          (1 : Matrix ι ι ℂ) (0 : Matrix ι ι ℂ) := by
+      ext (i₁ | i₂) (j₁ | j₂)
+      · simp
+      · by_cases hij : i₁ = j₂ <;> simp [hij]
+      · by_cases hij : i₂ = j₁ <;> simp [hij]
+      · simp
+    rw [h_star, Matrix.fromBlocks_multiply]
+    simp [Matrix.fromBlocks_one]
+  intertwine A B := by
+    change Matrix.fromBlocks (0 : Matrix ι ι ℂ) (1 : Matrix ι ι ℂ)
+        (1 : Matrix ι ι ℂ) (0 : Matrix ι ι ℂ) *
+        Matrix.fromBlocks (R.σ (A, B)) 0 0 (R.σ (B, A)) =
+      (Matrix.fromBlocks (R.σ (sl2c_conj B, sl2c_conj A)) 0 0
+        (R.σ (sl2c_conj A, sl2c_conj B))).map star *
+        Matrix.fromBlocks (0 : Matrix ι ι ℂ) (1 : Matrix ι ι ℂ)
+          (1 : Matrix ι ι ℂ) (0 : Matrix ι ι ℂ)
+    have h_star : (Matrix.fromBlocks (R.σ (sl2c_conj B, sl2c_conj A)) (0 : Matrix ι ι ℂ) 0
+        (R.σ (sl2c_conj A, sl2c_conj B))).map star =
+        Matrix.fromBlocks (R.σ (B, A)) 0 0 (R.σ (A, B)) := by
+      ext (i₁ | i₂) (j₁ | j₂)
+      · exact congrFun (congrFun (hR B A) i₁) j₁
+      · simp
+      · simp
+      · exact congrFun (congrFun (hR A B) i₂) j₂
+    rw [h_star, Matrix.fromBlocks_multiply, Matrix.fromBlocks_multiply]
+    simp
+
+def diracStarStructure : StarStructure diracRep :=
+  chiralDoubleStarStructure leftWeylRep leftWeylRep_hasRealConj
+
+def spinorTensorBispinorStarStructure (m₁ m₂ : ℕ) :
+    StarStructure (directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂))) :=
+  chiralDoubleStarStructure (spinorTensorRep m₁ m₂) (spinorTensorRep_hasRealConj m₁ m₂)
+
+def spinorTensorDiagonalStarStructure (m : ℕ) : StarStructure (spinorTensorRep m m) where
+  C i j := if i.2 = j.1 ∧ i.1 = j.2 then 1 else 0
+  involutive := by
+    ext ⟨α₁, α₂⟩ ⟨β₁, β₂⟩
+    simp only [Matrix.mul_apply, Matrix.map_apply, Fintype.sum_prod_type]
+    have h_sum : (∑ x : Fin m → Fin 2, ∑ y : Fin m → Fin 2,
+        (if α₂ = x ∧ α₁ = y then (1 : ℂ) else 0) *
+          star (if y = β₁ ∧ x = β₂ then (1 : ℂ) else 0)) =
+        if α₂ = β₂ ∧ α₁ = β₁ then 1 else 0 := by
+      simp [apply_ite star, star_one, star_zero, ite_and]
+    rw [h_sum]
+    by_cases h1 : α₁ = β₁ <;> by_cases h2 : α₂ = β₂ <;>
+      simp [h1, h2, Matrix.one_apply, Prod.ext_iff]
+  intertwine A B := by
+    ext ⟨α₁, α₂⟩ ⟨β₁, β₂⟩
+    simp only [Matrix.mul_apply, Matrix.map_apply, Fintype.sum_prod_type]
+    have h_lhs : (∑ x : Fin m → Fin 2, ∑ y : Fin m → Fin 2,
+        (if α₂ = x ∧ α₁ = y then (1 : ℂ) else 0) *
+          (spinorTensorRep m m).σ (A, B) (x, y) (β₁, β₂)) =
+        (spinorTensorRep m m).σ (A, B) (α₂, α₁) (β₁, β₂) := by
+      simp [ite_and]
+    have h_rhs : (∑ x : Fin m → Fin 2, ∑ y : Fin m → Fin 2,
+        star ((spinorTensorRep m m).σ (sl2c_conj B, sl2c_conj A) (α₁, α₂) (x, y)) *
+          (if y = β₁ ∧ x = β₂ then (1 : ℂ) else 0)) =
+        star ((spinorTensorRep m m).σ (sl2c_conj B, sl2c_conj A) (α₁, α₂) (β₂, β₁)) := by
+      simp [ite_and]
+    rw [h_lhs, h_rhs]
+    change (∏ k : Fin m, A.1 (α₂ k) (β₁ k)) * (∏ k : Fin m, B.1 (α₁ k) (β₂ k)) =
+      star ((∏ k : Fin m, (sl2c_conj B).1 (α₁ k) (β₂ k)) *
+        (∏ k : Fin m, (sl2c_conj A).1 (α₂ k) (β₁ k)))
+    rw [star_mul']
+    have hB : star (∏ k : Fin m, (sl2c_conj B).1 (α₁ k) (β₂ k)) =
+        ∏ k : Fin m, B.1 (α₁ k) (β₂ k) :=
+      congrFun (congrFun (multiSpinorRep_hasRealConj m leftWeylRep_hasRealConj B A) α₁) β₂
+    have hA : star (∏ k : Fin m, (sl2c_conj A).1 (α₂ k) (β₁ k)) =
+        ∏ k : Fin m, A.1 (α₂ k) (β₁ k) :=
+      congrFun (congrFun (multiSpinorRep_hasRealConj m rightWeylRep_hasRealConj B A) α₂) β₁
+    rw [hB, hA, mul_comm]
+
+abbrev ScalarOSReconstructedWightman (η : ℂ) (𝒮 : SchwingerFamily Unit) :=
+  OSReconstructedWightman trivialRep trivialStarStructure η 𝒮
+
+abbrev VectorOSReconstructedWightman (η : ℂ) (𝒮 : SchwingerFamily (Fin 4)) :=
+  OSReconstructedWightman stdRep stdStarStructure η 𝒮
+
+abbrev DiracOSReconstructedWightman (η : ℂ) (𝒮 : SchwingerFamily (Fin 2 ⊕ Fin 2)) :=
+  OSReconstructedWightman diracRep diracStarStructure η 𝒮
+
+abbrev SpinorTensorBispinorOSReconstructedWightman (m₁ m₂ : ℕ) (η : ℂ)
+    (𝒮 : SchwingerFamily (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))) :=
+  OSReconstructedWightman
+    (directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂)))
+    (spinorTensorBispinorStarStructure m₁ m₂) η 𝒮
+
+theorem isEmpty_starStructure_rightWeylRep : IsEmpty (StarStructure rightWeylRep) := by
+  refine ⟨fun S => ?_⟩
+  have h := S.intertwine 1 (-1)
+  have hL : rightWeylRep.σ (1, -1) = -1 := by
+    change ((-1 : SL2C) : Matrix (Fin 2) (Fin 2) ℂ) = -1
+    simp [Matrix.SpecialLinearGroup.coe_neg]
+  have hR : (rightWeylRep.σ (sl2c_conj (-1), sl2c_conj 1)).map star = 1 := by
+    rw [sl2c_conj_one]
+    change ((1 : SL2C) : Matrix (Fin 2) (Fin 2) ℂ).map star = 1
+    ext i j
+    fin_cases i <;> fin_cases j <;> simp
+  rw [hL, hR, Matrix.mul_neg, Matrix.mul_one, Matrix.one_mul] at h
+  have h2 : (2 : ℂ) • S.C = 0 := by
+    ext i j
+    have hij := congr_fun (congr_fun h i) j
+    simp only [Matrix.neg_apply, Matrix.smul_apply, Matrix.zero_apply] at hij ⊢
+    linear_combination -hij
+  have hC0 : S.C = 0 := by
+    ext i j
+    have hij := congr_fun (congr_fun h2 i) j
+    simp only [Matrix.smul_apply, Matrix.zero_apply, smul_eq_mul] at hij
+    exact (mul_eq_zero.mp hij).resolve_left two_ne_zero
+  have hinv := S.involutive
+  rw [hC0, Matrix.zero_mul] at hinv
+  have h01 := congr_fun (congr_fun hinv 0) 0
+  simp at h01
+
+lemma rightWeylRep_sigma_neg_one_one :
+    rightWeylRep.σ (-1, 1) = (1 : ℂ) • (1 : Matrix (Fin 2) (Fin 2) ℂ) := by
+  change ((1 : SL2C) : Matrix (Fin 2) (Fin 2) ℂ) = (1 : ℂ) • 1
+  simp
+
+lemma rightWeylRep_H_two_timeAxis_antisymm {W : WightmanFamily (Fin 2)}
+    (E : TubeExtension W) (h_ccov : ComplexCovariant rightWeylRep E)
+    {t : ℝ} (ht : 0 < t) :
+    E.H 2 ![0, 0] ![0, timeAxisVecC (Complex.I * (t : ℂ))] = 0 ∧
+    E.H 2 ![1, 1] ![0, timeAxisVecC (Complex.I * (t : ℂ))] = 0 ∧
+    E.H 2 ![0, 1] ![0, timeAxisVecC (Complex.I * (t : ℂ))] =
+      - E.H 2 ![1, 0] ![0, timeAxisVecC (Complex.I * (t : ℂ))] := by
+  let z_t : Fin 2 → Fin 4 → ℂ := ![0, timeAxisVecC (Complex.I * (t : ℂ))]
+  have hd3 : rightWeylRep.σ (sl2c_iSigma3, -sl2c_iSigma3) =
+      Matrix.diagonal ![-Complex.I, Complex.I] := by
+    ext i j
+    fin_cases i <;> fin_cases j <;>
+      simp [rightWeylRep, sl2c_iSigma3, Matrix.SpecialLinearGroup.coe_neg]
+  have h00 := H_two_timeAxis_eq_of_diagonal_stabilizer E h_ccov
+    sl2c_iSigma3 (-sl2c_iSigma3) sl2c_iSigma3_mul_neg_transpose
+    ![-Complex.I, Complex.I] hd3 ht ![0, 0]
+  have h11 := H_two_timeAxis_eq_of_diagonal_stabilizer E h_ccov
+    sl2c_iSigma3 (-sl2c_iSigma3) sl2c_iSigma3_mul_neg_transpose
+    ![-Complex.I, Complex.I] hd3 ht ![1, 1]
+  simp only [Matrix.cons_val_zero, Matrix.cons_val_one, neg_mul_neg, Complex.I_mul_I] at h00 h11
+  have hz_t : z_t ∈ forward_tube_n 2 := origin_timeAxisVecC_mem_forward_tube_two ht
+  have h_fix1 : spinorPhi (sl2c_iSigma1, -sl2c_iSigma1) • z_t = z_t := by
+    dsimp [z_t]
+    rw [spinorPhi_smul_origin_pair,
+      spinor_action_timeAxisVecC_of_mul_transpose_eq_one _ _ sl2c_iSigma1_mul_neg_transpose]
+  have h01 := h_ccov 2 sl2c_iSigma1 (-sl2c_iSigma1) z_t hz_t (by rwa [h_fix1]) ![0, 1]
+  rw [h_fix1] at h01
+  refine ⟨by linear_combination (1 / 2 : ℂ) * h00, by linear_combination (1 / 2 : ℂ) * h11, ?_⟩
+  let e2 : (Fin 2 × Fin 2) ≃ (Fin 2 → Fin 2) :=
+    { toFun := fun p => ![p.1, p.2]
+      invFun := fun β => (β 0, β 1)
+      left_inv := fun ⟨_, _⟩ => rfl
+      right_inv := fun β => by ext i; fin_cases i <;> rfl }
+  rw [← e2.sum_comp, Fintype.sum_prod_type] at h01
+  simp_rw [Fin.sum_univ_two] at h01
+  simp only [e2, Equiv.coe_fn_mk, Fin.prod_univ_two, Fin.isValue,
+    Matrix.cons_val_zero, Matrix.cons_val_one] at h01
+  have h_s00 : rightWeylRep.σ (sl2c_iSigma1, -sl2c_iSigma1) 0 0 = 0 := by
+    simp [rightWeylRep, sl2c_iSigma1, Matrix.SpecialLinearGroup.coe_neg]
+  have h_s11 : rightWeylRep.σ (sl2c_iSigma1, -sl2c_iSigma1) 1 1 = 0 := by
+    simp [rightWeylRep, sl2c_iSigma1, Matrix.SpecialLinearGroup.coe_neg]
+  have h_s01 : rightWeylRep.σ (sl2c_iSigma1, -sl2c_iSigma1) 0 1 = -Complex.I := by
+    simp [rightWeylRep, sl2c_iSigma1, Matrix.SpecialLinearGroup.coe_neg]
+  have h_s10 : rightWeylRep.σ (sl2c_iSigma1, -sl2c_iSigma1) 1 0 = -Complex.I := by
+    simp [rightWeylRep, sl2c_iSigma1, Matrix.SpecialLinearGroup.coe_neg]
+  rw [h_s00, h_s11, h_s01, h_s10] at h01
+  simp only [zero_mul, mul_zero, zero_add, add_zero, neg_mul_neg,
+    Complex.I_mul_I, neg_one_mul] at h01
+  exact h01
+
+theorem rightWeylRep_H_two_origin_antisymm {W : WightmanFamily (Fin 2)}
+    (E : TubeExtension W) (h_cov : TubeCovariant rightWeylRep E)
+    (α : Fin 2 → Fin 2) (w : Fin 4 → ℂ) (hw : ![0, w] ∈ forward_tube_n 2) :
+    E.H 2 α ![0, w] = (-1 : ℂ) * E.H 2 (α ∘ Fin.rev) ![0, w] := by
+  have h_ccov := complex_covariance_of_real rightWeylRep W E h_cov
+  refine H_two_origin_exchange_of_imagCone E (-1) (fun y hy β => ?_) α w hw
+  obtain ⟨t, ht, B, hB⟩ := exists_sl2c_right_orbit_imagCone hy
+  let z_t : Fin 2 → Fin 4 → ℂ := ![0, timeAxisVecC (Complex.I * (t : ℂ))]
+  have hz_t : z_t ∈ forward_tube_n 2 := origin_timeAxisVecC_mem_forward_tube_two ht
+  have hz_y : ![0, fun k => Complex.I * (y k : ℂ)] ∈ forward_tube_n 2 :=
+    imagConeVec_mem_forward_tube_two hy
+  obtain ⟨h00, h11, h01⟩ := rightWeylRep_H_two_timeAxis_antisymm E h_ccov ht
+  have h_lhs := h_ccov 2 1 B z_t hz_t (by rwa [hB]) β
+  have h_rhs := h_ccov 2 1 B z_t hz_t (by rwa [hB]) (β ∘ Fin.rev)
+  rw [hB] at h_lhs h_rhs
+  have h_eval : ∀ γ : Fin 2 → Fin 2,
+      (∑ δ : Fin 2 → Fin 2, (∏ i : Fin 2, rightWeylRep.σ (1, B) (γ i) (δ i)) * E.H 2 δ z_t) =
+        (B.1 (γ 0) 1 * B.1 (γ 1) 0 - B.1 (γ 0) 0 * B.1 (γ 1) 1) * E.H 2 ![1, 0] z_t := by
+    intro γ
+    let e2 : (Fin 2 × Fin 2) ≃ (Fin 2 → Fin 2) :=
+      { toFun := fun p => ![p.1, p.2]
+        invFun := fun δ => (δ 0, δ 1)
+        left_inv := fun ⟨_, _⟩ => rfl
+        right_inv := fun δ => by ext i; fin_cases i <;> rfl }
+    rw [← e2.sum_comp, Fintype.sum_prod_type]
+    simp_rw [Fin.sum_univ_two]
+    dsimp only [e2, Equiv.coe_fn_mk, z_t]
+    simp only [Fin.prod_univ_two, Fin.isValue, Matrix.cons_val_zero, Matrix.cons_val_one,
+      h00, h11, h01]
+    have hR : ∀ p q : Fin 2, rightWeylRep.σ (1, B) p q = B.1 p q := fun _ _ => rfl
+    simp only [hR]
+    ring
+  rw [h_lhs, h_rhs, h_eval β, h_eval (β ∘ Fin.rev)]
+  have hrev0 : (β ∘ Fin.rev) 0 = β 1 := rfl
+  have hrev1 : (β ∘ Fin.rev) 1 = β 0 := rfl
+  rw [hrev0, hrev1]
+  ring
+
+theorem dirac_os_schwinger_eq_zero_of_odd {η : ℂ} {𝒮 : SchwingerFamily (Fin 2 ⊕ Fin 2)}
+    (P : DiracOSReconstructedWightman η 𝒮)
+    (n : ℕ) (hn : Odd n) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n)
+    (α : Fin n → Fin 2 ⊕ Fin 2) :
+    𝒮 n α x = 0 :=
+  P.schwinger_eq_zero_of_odd_fermion diracRep_spinParity n hn x hx α
+
+theorem spinorTensorRep_schwinger_spin_parity_selection (m₁ m₂ : ℕ)
+    (W : WightmanFamily ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))
+    (E : TubeExtension W) (hcov : TubeCovariant (spinorTensorRep m₁ m₂) E)
+    (n : ℕ) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n)
+    (α : Fin n → (Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) :
+    schwingerFromTube E n α x = ((-1 : ℂ) ^ (m₁ + m₂)) ^ n * schwingerFromTube E n α x :=
+  schwingerFromTube_spin_parity_selection (spinorTensorRep m₁ m₂) W E hcov
+    (spinorTensorRep_spinParity m₁ m₂) n x hx α
+
+theorem spinorTensorRep_schwinger_eq_zero_of_odd (m₁ m₂ : ℕ) (hm : Odd (m₁ + m₂))
+    (W : WightmanFamily ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))
+    (E : TubeExtension W) (hcov : TubeCovariant (spinorTensorRep m₁ m₂) E)
+    (n : ℕ) (hn : Odd n) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n)
+    (α : Fin n → (Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) :
+    schwingerFromTube E n α x = 0 := by
+  have hε : (spinorTensorRep m₁ m₂).HasSpinParity (-1) := by
+    have h := spinorTensorRep_spinParity m₁ m₂
+    rwa [Odd.neg_one_pow hm] at h
+  exact schwingerFromTube_eq_zero_of_odd_fermion (spinorTensorRep m₁ m₂) W E hcov
+    hε n hn x hx α
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma neg_rev_two_eq_add_neg_sum (z : Fin 2 → Fin 4 → ℂ) :
+    -(z ∘ Fin.rev) = fun i => z i + (-(z 0 + z 1)) := by
+  ext i μ
+  fin_cases i <;>
+  · change -(z (Fin.rev _) μ) = z _ μ + -(z 0 μ + z 1 μ)
+    dsimp [Fin.rev]
+    ring
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma euclid_neg_rev_two_eq_add_neg_sum (x : Fin 2 → Fin 4 → ℝ) :
+    -(x ∘ Fin.rev) = fun i => x i + (-(x 0 + x 1)) := by
+  ext i μ
+  fin_cases i <;>
+  · change -(x (Fin.rev _) μ) = x _ μ + -(x 0 μ + x 1 μ)
+    dsimp [Fin.rev]
+    ring
+
+omit [Fintype ι] [DecidableEq ι] in
+def complexNegRevCLM (n : ℕ) : (Fin n → Fin 4 → ℂ) →L[ℂ] (Fin n → Fin 4 → ℂ) :=
+  LinearMap.toContinuousLinearMap
+    { toFun := fun z => -(z ∘ Fin.rev)
+      map_add' := fun z₁ z₂ => by ext i μ; simp [add_comm]
+      map_smul' := fun c z => by ext i μ; simp }
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma complexNegRevCLM_apply (n : ℕ) (z : Fin n → Fin 4 → ℂ) :
+    complexNegRevCLM n z = -(z ∘ Fin.rev) := rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma analyticOn_forward_tube_neg_rev (n : ℕ) {f : (Fin n → Fin 4 → ℂ) → ℂ}
+    (hf : AnalyticOn ℂ f (forward_tube_n n)) :
+    AnalyticOn ℂ (fun z => f (-(z ∘ Fin.rev))) (forward_tube_n n) :=
+  hf.comp ((complexNegRevCLM n).analyticOn (forward_tube_n n))
+    (fun z hz => neg_rev_mem_forward_tube_n n z hz)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tubeTranslationInvariant_neg_rev_two {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (α : Fin 2 → ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    E.H 2 α (-(z ∘ Fin.rev)) = E.H 2 α z := by
+  rw [neg_rev_two_eq_add_neg_sum z]
+  exact htrans 2 α z (-(z 0 + z 1)) hz
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem osTranslationInvariant_neg_rev_two {𝒮 : SchwingerFamily ι}
+    (htrans : OSTranslationInvariant 𝒮)
+    (α : Fin 2 → ι) (x : Fin 2 → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN 2) :
+    𝒮 2 α (-(x ∘ Fin.rev)) = 𝒮 2 α x := by
+  rw [euclid_neg_rev_two_eq_add_neg_sum x]
+  exact htrans 2 α x hx (-(x 0 + x 1))
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tube_neg_rev_two_eq_of_osTranslationInvariant {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : OSTranslationInvariant (schwingerFromTube E))
+    (α : Fin 2 → ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    E.H 2 α (-(z ∘ Fin.rev)) = E.H 2 α z := by
+  refine analyticOn_forward_tube_eq_of_wickEmbedN_eq 2
+    (analyticOn_forward_tube_neg_rev 2 (E.analytic 2 α))
+    (E.analytic 2 α) (fun x hx => ?_) hz
+  change E.H 2 α (-(wickEmbedN 2 x ∘ Fin.rev)) = schwingerFromTube E 2 α x
+  rw [← wickEmbedN_comp_rev, ← wickEmbedN_neg]
+  exact osTranslationInvariant_neg_rev_two htrans α x hx
+
+theorem scalar_spin_statistics_unconditional (W : WightmanFamily Unit)
+    (E : TubeExtension W) {η : ℂ}
+    (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality η E)
+    (h_nondeg : ∃ (α : Fin 2 → Unit) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = 1 := by
+  rcases h_nondeg with ⟨α, f, hf⟩
+  rcases exists_posOrderedEuclidN_ne_zero_of_wightman_ne_zero E 2 α hf with ⟨x, hx, hne⟩
+  have hz : wickEmbedN 2 x ∈ forward_tube_n 2 :=
+    wickEmbedN_mem_forward_tube_n 2 (posOrderedEuclidN_subset_orderedEuclidN 2 hx)
+  have h1 := tubeTranslationInvariant_neg_rev_two E htrans α (wickEmbedN 2 x) hz
+  have h2 := hloc 2 α (wickEmbedN 2 x) hz
+  rw [two_mul_two_sub_one_div_two, pow_one, Subsingleton.elim (α ∘ Fin.rev) α] at h2
+  have h_eq : η * schwingerFromTube E 2 α x = 1 * schwingerFromTube E 2 α x := by
+    rw [one_mul]
+    exact h2.symm.trans h1
+  exact mul_right_cancel₀ hne h_eq
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tube_twoPoint_diag_eq_eta_mul {W : WightmanFamily ι} {η : ℂ}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality η E)
+    (c : ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    E.H 2 (fun _ => c) z = η * E.H 2 (fun _ => c) z := by
+  have h1 := tubeTranslationInvariant_neg_rev_two E htrans (fun _ => c) z hz
+  have h2 := tubeWeakLocality_two hloc (fun _ => c) z hz
+  exact h1.symm.trans h2
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem fermion_tube_twoPoint_diag_eq_zero {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality (-1) E)
+    (c : ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    E.H 2 (fun _ => c) z = 0 := by
+  have h := tube_twoPoint_diag_eq_eta_mul E htrans hloc c z hz
+  linear_combination (1 / 2 : ℂ) * h
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem fermion_schwinger_twoPoint_diag_eq_zero {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality (-1) E)
+    (c : ι) (x : Fin 2 → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN 2) :
+    schwingerFromTube E 2 (fun _ => c) x = 0 :=
+  fermion_tube_twoPoint_diag_eq_zero E htrans hloc c
+    (wickEmbedN 2 x) (wickEmbedN_mem_forward_tube_n 2 hx)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem fermion_wightman_twoPoint_diag_eq_zero {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality (-1) E)
+    (c : ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    W 2 (fun _ => c) f = 0 :=
+  wightman_eq_zero_of_tube_eq_zero E 2 (fun _ => c)
+    (fermion_tube_twoPoint_diag_eq_zero E htrans hloc c) f
+
+def StarStructure.IsReal {R : HolomorphicLorentzRep ι} (S : StarStructure R) : Prop :=
+  S.C.map star = S.C
+
+lemma StarStructure.IsReal.mul_self_eq_one {R : HolomorphicLorentzRep ι}
+    {S : StarStructure R} (hS : S.IsReal) :
+    S.C * S.C = 1 := by
+  have h := S.involutive
+  rwa [hS] at h
+
+lemma trivialStarStructure_isReal : trivialStarStructure.IsReal := by
+  ext i j
+  simp [trivialStarStructure]
+
+lemma stdStarStructure_isReal : stdStarStructure.IsReal := by
+  ext i j
+  fin_cases i <;> fin_cases j <;> simp [stdStarStructure]
+
+lemma directSumStarStructure_isReal {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    {S₁ : StarStructure R₁} {S₂ : StarStructure R₂}
+    (h₁ : S₁.IsReal) (h₂ : S₂.IsReal) :
+    (directSumStarStructure S₁ S₂).IsReal := by
+  change (Matrix.fromBlocks S₁.C (0 : Matrix ι₁ ι₂ ℂ) 0 S₂.C).map star =
+    Matrix.fromBlocks S₁.C 0 0 S₂.C
+  ext (i₁ | i₂) (j₁ | j₂)
+  · exact congrFun (congrFun h₁ i₁) j₁
+  · simp
+  · simp
+  · exact congrFun (congrFun h₂ i₂) j₂
+
+lemma tensorProdStarStructure_isReal {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    {S₁ : StarStructure R₁} {S₂ : StarStructure R₂}
+    (h₁ : S₁.IsReal) (h₂ : S₂.IsReal) :
+    (tensorProdStarStructure S₁ S₂).IsReal := by
+  ext ⟨i₁, i₂⟩ ⟨j₁, j₂⟩
+  change star (S₁.C i₁ j₁ * S₂.C i₂ j₂) = S₁.C i₁ j₁ * S₂.C i₂ j₂
+  have h1' : star (S₁.C i₁ j₁) = S₁.C i₁ j₁ := congrFun (congrFun h₁ i₁) j₁
+  have h2' : star (S₂.C i₂ j₂) = S₂.C i₂ j₂ := congrFun (congrFun h₂ i₂) j₂
+  rw [star_mul', h1', h2']
+
+lemma chiralDoubleStarStructure_isReal (R : HolomorphicLorentzRep ι) (hR : R.HasRealConj) :
+    (chiralDoubleStarStructure R hR).IsReal := by
+  change (Matrix.fromBlocks (0 : Matrix ι ι ℂ) (1 : Matrix ι ι ℂ)
+    (1 : Matrix ι ι ℂ) (0 : Matrix ι ι ℂ)).map star =
+    Matrix.fromBlocks (0 : Matrix ι ι ℂ) (1 : Matrix ι ι ℂ)
+      (1 : Matrix ι ι ℂ) (0 : Matrix ι ι ℂ)
+  ext (i₁ | i₂) (j₁ | j₂)
+  · simp
+  · by_cases hij : i₁ = j₂ <;> simp [hij]
+  · by_cases hij : i₂ = j₁ <;> simp [hij]
+  · simp
+
+lemma diracStarStructure_isReal : diracStarStructure.IsReal :=
+  chiralDoubleStarStructure_isReal leftWeylRep leftWeylRep_hasRealConj
+
+lemma spinorTensorBispinorStarStructure_isReal (m₁ m₂ : ℕ) :
+    (spinorTensorBispinorStarStructure m₁ m₂).IsReal :=
+  chiralDoubleStarStructure_isReal (spinorTensorRep m₁ m₂) (spinorTensorRep_hasRealConj m₁ m₂)
+
+lemma spinorTensorDiagonalStarStructure_isReal (m : ℕ) :
+    (spinorTensorDiagonalStarStructure m).IsReal := by
+  ext ⟨α₁, α₂⟩ ⟨β₁, β₂⟩
+  change star (if α₂ = β₁ ∧ α₁ = β₂ then (1 : ℂ) else 0) =
+    if α₂ = β₁ ∧ α₁ = β₂ then (1 : ℂ) else 0
+  simp [apply_ite star]
+
+def pctMatrix {R : HolomorphicLorentzRep ι} (S : StarStructure R) : Matrix ι ι ℂ :=
+  S.C * R.σ (-1, 1)
+
+lemma sigma_tp_map_star_of_hasRealConj {R : HolomorphicLorentzRep ι} (hR : R.HasRealConj) :
+    (R.σ (1, -1)).map star = R.σ (1, -1) := by
+  have h1 : sl2c_conj (1 : SL2C) = 1 := sl2c_conj_one
+  have h2 : sl2c_conj (-1 : SL2C) = -1 := by
+    apply Subtype.ext; ext i j; fin_cases i <;> fin_cases j <;> simp [sl2c_conj]
+  have h := hR 1 (-1)
+  rwa [h1, h2] at h
+
+theorem starStructure_mul_sigma_pt_of_hasRealConj {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) (hR : R.HasRealConj) :
+    S.C * R.σ (-1, 1) = R.σ (1, -1) * S.C := by
+  rw [starStructure_intertwine_pt S, sigma_tp_map_star_of_hasRealConj hR]
+
+theorem pctMatrix_sq_eq_sigma_neg_one {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) (hR : R.HasRealConj) (hS : S.IsReal) :
+    pctMatrix S * pctMatrix S = R.σ (-1, -1) := by
+  dsimp [pctMatrix]
+  calc
+    (S.C * R.σ (-1, 1)) * (S.C * R.σ (-1, 1))
+      = (R.σ (1, -1) * S.C) * (S.C * R.σ (-1, 1)) := by
+          rw [starStructure_mul_sigma_pt_of_hasRealConj S hR]
+    _ = R.σ (1, -1) * (S.C * S.C) * R.σ (-1, 1) := by
+          simp only [Matrix.mul_assoc]
+    _ = R.σ (1, -1) * R.σ (-1, 1) := by
+          rw [hS.mul_self_eq_one, Matrix.mul_one]
+    _ = R.σ (-1, -1) := sigma_tp_mul_sigma_pt R
+
+theorem pctMatrix_sq_eq_spinParity {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) (hR : R.HasRealConj) (hS : S.IsReal)
+    {ε : ℂ} (hε : R.HasSpinParity ε) :
+    pctMatrix S * pctMatrix S = ε • (1 : Matrix ι ι ℂ) := by
+  rw [pctMatrix_sq_eq_sigma_neg_one S hR hS, hε.1]
+
+theorem dirac_pctMatrix_sq :
+    pctMatrix diracStarStructure * pctMatrix diracStarStructure =
+      (-1 : ℂ) • (1 : Matrix (Fin 2 ⊕ Fin 2) (Fin 2 ⊕ Fin 2) ℂ) := by
+  refine pctMatrix_sq_eq_spinParity diracStarStructure ?_ diracStarStructure_isReal
+    diracRep_spinParity
+  intro A B
+  ext (i₁ | i₂) (j₁ | j₂)
+  · exact congrFun (congrFun (leftWeylRep_hasRealConj A B) i₁) j₁
+  · simp [diracRep, directSumRep]
+  · simp [diracRep, directSumRep]
+  · exact congrFun (congrFun (rightWeylRep_hasRealConj A B) i₂) j₂
+
+theorem spinorTensorBispinor_pctMatrix_sq (m₁ m₂ : ℕ) :
+    pctMatrix (spinorTensorBispinorStarStructure m₁ m₂) *
+      pctMatrix (spinorTensorBispinorStarStructure m₁ m₂) =
+      ((-1 : ℂ) ^ (m₁ + m₂)) •
+        (1 : Matrix (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+          ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))
+          (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+          ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2))) ℂ) := by
+  refine pctMatrix_sq_eq_spinParity (spinorTensorBispinorStarStructure m₁ m₂) ?_
+    (spinorTensorBispinorStarStructure_isReal m₁ m₂)
+    (directSumRep_spinParity (spinorTensorRep_spinParity m₁ m₂)
+      (chiralSwapRep_spinParity (spinorTensorRep_spinParity m₁ m₂)))
+  intro A B
+  ext (i₁ | i₂) (j₁ | j₂)
+  · exact congrFun (congrFun (spinorTensorRep_hasRealConj m₁ m₂ A B) i₁) j₁
+  · simp [directSumRep]
+  · simp [directSumRep]
+  · exact congrFun (congrFun
+      (chiralSwapRep_hasRealConj (spinorTensorRep_hasRealConj m₁ m₂) A B) i₂) j₂
+
+lemma origin_sub_mem_forward_tube_two {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    ![0, z 1 - z 0] ∈ forward_tube_n 2 := by
+  intro i hi
+  fin_cases i
+  · have hw_cone : (fun k => -((z (0 : Fin 2) - z (1 : Fin 2)) k).im) ∈ forward_light_cone :=
+      hz (0 : Fin 2) (by decide)
+    have h_eq : (fun k => -((![0, z 1 - z 0] (0 : Fin 2) - ![0, z 1 - z 0] (1 : Fin 2)) k).im) =
+        fun k => -((z (0 : Fin 2) - z (1 : Fin 2)) k).im := by
+      ext k
+      simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Pi.sub_apply, Pi.zero_apply,
+        zero_sub, Complex.neg_im, Complex.sub_im]
+      ring
+    change (fun k => -((![0, z 1 - z 0] (0 : Fin 2) - ![0, z 1 - z 0] (1 : Fin 2)) k).im) ∈
+      forward_light_cone
+    rwa [h_eq]
+  · simp at hi
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma tubeTranslationInvariant_eq_origin_sub_two {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (α : Fin 2 → ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    E.H 2 α z = E.H 2 α ![0, z 1 - z 0] := by
+  have h_shift := htrans 2 α z (-z 0) hz
+  have h_arg : (fun i : Fin 2 => z i + (-z 0)) = ![0, z 1 - z 0] := by
+    ext i k
+    fin_cases i <;> simp [sub_eq_add_neg]
+  rw [h_arg] at h_shift
+  exact h_shift.symm
+
+theorem spin_statistics_of_scalar_pt_and_origin_exchange
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) (E : TubeExtension W)
+    {η ε δ : ℂ} (hδ : R.σ (-1, 1) = δ • (1 : Matrix ι ι ℂ)) (hδ_sq : δ ^ 2 = 1)
+    (htrans : TubeTranslationInvariant E) (hcov : TubeCovariant R E) (hloc : WeakLocality η W)
+    (h_orig : ∀ (α : Fin 2 → ι) (w : Fin 4 → ℂ),
+      ![0, w] ∈ forward_tube_n 2 → E.H 2 α ![0, w] = ε * E.H 2 (α ∘ Fin.rev) ![0, w])
+    (h_nondeg : ∃ (α : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = ε := by
+  rcases h_nondeg with ⟨α, f, hf⟩
+  rcases exists_posOrderedEuclidN_ne_zero_of_wightman_ne_zero E 2 α hf with ⟨x, hx, hne⟩
+  let z : Fin 2 → Fin 4 → ℂ := wickEmbedN 2 x
+  have hz : z ∈ forward_tube_n 2 :=
+    wickEmbedN_mem_forward_tube_n 2 (posOrderedEuclidN_subset_orderedEuclidN 2 hx)
+  have hrev : (α ∘ Fin.rev) ∘ Fin.rev = α := by ext i; simp [Fin.rev_rev]
+  have hpct := tubePCT_two_of_scalar_pt R E hδ hδ_sq
+    (tubePCT_of_weakLocality R W E hcov hloc) (α ∘ Fin.rev) z hz
+  rw [hrev] at hpct
+  have htr := tubeTranslationInvariant_neg_rev_two E htrans (α ∘ Fin.rev) z hz
+  have horig := h_orig (α ∘ Fin.rev) (z 1 - z 0) (origin_sub_mem_forward_tube_two hz)
+  rw [hrev, ← tubeTranslationInvariant_eq_origin_sub_two E htrans (α ∘ Fin.rev) z hz,
+      ← tubeTranslationInvariant_eq_origin_sub_two E htrans α z hz] at horig
+  exact mul_right_cancel₀ hne (hpct.symm.trans (htr.trans horig))
+
+theorem vector_spin_statistics_unconditional (W : WightmanFamily (Fin 4))
+    (E : TubeExtension W) {η : ℂ}
+    (htrans : TubeTranslationInvariant E)
+    (hcov : TubeCovariant stdRep E)
+    (hloc : WeakLocality η W)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 4) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = 1 :=
+  spin_statistics_of_scalar_pt_and_origin_exchange stdRep W E stdRep_sigma_neg_one_one
+    (by norm_num) htrans hcov hloc
+    (fun α w hw => by rw [one_mul]; exact stdRep_H_two_origin_symm E hcov α w hw) h_nondeg
+
+theorem leftWeyl_spin_statistics_unconditional (W : WightmanFamily (Fin 2))
+    (E : TubeExtension W) {η : ℂ}
+    (htrans : TubeTranslationInvariant E)
+    (hcov : TubeCovariant leftWeylRep E)
+    (hloc : WeakLocality η W)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 2) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = -1 :=
+  spin_statistics_of_scalar_pt_and_origin_exchange leftWeylRep W E leftWeylRep_sigma_neg_one_one
+    (by norm_num) htrans hcov hloc (leftWeylRep_H_two_origin_antisymm E hcov) h_nondeg
+
+theorem rightWeyl_spin_statistics_unconditional (W : WightmanFamily (Fin 2))
+    (E : TubeExtension W) {η : ℂ}
+    (htrans : TubeTranslationInvariant E)
+    (hcov : TubeCovariant rightWeylRep E)
+    (hloc : WeakLocality η W)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 2) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = -1 :=
+  spin_statistics_of_scalar_pt_and_origin_exchange rightWeylRep W E rightWeylRep_sigma_neg_one_one
+    (by norm_num) htrans hcov hloc (rightWeylRep_H_two_origin_antisymm E hcov) h_nondeg
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+theorem schwingerFromTube_translation_invariant_of_os
+    (P : OSReconstructedWightman R S η 𝒮) :
+    OSTranslationInvariant (schwingerFromTube P.E) := by
+  intro n α x hx a
+  have hxa : (fun i => x i + a) ∈ orderedEuclidN n := by
+    intro i hi
+    change x i 0 + a 0 < x ⟨i.val + 1, hi⟩ 0 + a 0
+    linarith [hx i hi]
+  rw [← P.schwinger_eq n α (fun i => x i + a) hxa,
+      ← P.schwinger_eq n α x hx]
+  exact P.osAxioms.os1_translation n α x hx a
+
+theorem tube_neg_rev_two_eq (P : OSReconstructedWightman R S η 𝒮)
+    (α : Fin 2 → ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    P.E.H 2 α (-(z ∘ Fin.rev)) = P.E.H 2 α z :=
+  tube_neg_rev_two_eq_of_osTranslationInvariant P.E
+    P.schwingerFromTube_translation_invariant_of_os α z hz
+
+theorem fermion_twoPoint_diag_wightman_eq_zero
+    (P : OSReconstructedWightman R S (-1) 𝒮)
+    (hpt : R.HasDiagInvolutivePT)
+    (c : ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    P.W 2 (fun _ => c) f = 0 := by
+  refine wightman_eq_zero_of_tube_eq_zero P.E 2 (fun _ => c) (fun z hz => ?_) f
+  have h1 := P.tube_neg_rev_two_eq (fun _ => c) z hz
+  have h2 := tubePCT_two_diag_of_hasDiagInvolutivePT R hpt P.E P.tube_pct c z hz
+  have h : P.E.H 2 (fun _ => c) z = (-1 : ℂ) * P.E.H 2 (fun _ => c) z := h1.symm.trans h2
+  linear_combination (1 / 2 : ℂ) * h
+
+end OSReconstructedWightman
+
+@[simp]
+lemma su2Conj_one : su2Conj 1 = 1 := by
+  apply Subtype.ext
+  simp [su2Conj]
+
+lemma su2Conj_mul (U₁ U₂ : SU2) :
+    su2Conj (U₁ * U₂) = su2Conj U₁ * su2Conj U₂ := by
+  apply Subtype.ext
+  change (((U₁ * U₂)⁻¹).val)ᵀ = (U₁⁻¹).valᵀ * (U₂⁻¹).valᵀ
+  have h_inv : ((U₁ * U₂)⁻¹).val = (U₂⁻¹).val * (U₁⁻¹).val := by
+    rw [_root_.mul_inv_rev]
+    rfl
+  rw [h_inv, Matrix.transpose_mul]
+
+@[simp]
+lemma su2Conj_inv (U : SU2) :
+    su2Conj U⁻¹ = (su2Conj U)⁻¹ := by
+  apply mul_left_cancel (a := su2Conj U)
+  rw [← su2Conj_mul, mul_inv_cancel, mul_inv_cancel, su2Conj_one]
+
+@[simp]
+lemma su2Conj_involutive (U : SU2) :
+    su2Conj (su2Conj U) = U := by
+  apply Subtype.ext
+  change (((su2Conj U)⁻¹).val)ᵀ = U.val
+  rw [← su2Conj_inv, su2Conj_val_transpose, inv_inv]
+
+@[simp]
+lemma negOneSU2_inv : negOneSU2⁻¹ = negOneSU2 := by
+  apply mul_left_cancel (a := negOneSU2)
+  rw [mul_inv_cancel]
+  apply Subtype.ext
+  ext i j
+  fin_cases i <;> fin_cases j <;> simp [negOneSU2]
+
+@[simp]
+lemma su2Conj_negOneSU2 : su2Conj negOneSU2 = negOneSU2 := by
+  apply Subtype.ext
+  change ((negOneSU2⁻¹).val)ᵀ = negOneSU2.val
+  rw [negOneSU2_inv]
+  ext i j
+  fin_cases i <;> fin_cases j <;> simp [negOneSU2]
+
+lemma su2Conj_val_eq_map_star (U : SU2) :
+    (su2Conj U).val = U.val.map star := by
+  have h_inv : (U⁻¹).val = U.valᴴ := rfl
+  change (U⁻¹).valᵀ = U.val.map star
+  rw [h_inv]
+  ext i j
+  simp [Matrix.transpose_apply, Matrix.conjTranspose_apply]
+
+@[simp]
+lemma su2ToSL2C_su2Conj (U : SU2) :
+    su2ToSL2C (su2Conj U) = sl2c_conj (su2ToSL2C U) := by
+  apply Subtype.ext
+  change (su2Conj U).val = (su2ToSL2C U).val.map star
+  exact su2Conj_val_eq_map_star U
+
+@[simp]
+lemma sl2c_conj_su2ToSL2C_su2Conj (U : SU2) :
+    sl2c_conj (su2ToSL2C (su2Conj U)) = su2ToSL2C U := by
+  rw [← su2ToSL2C_su2Conj, su2Conj_involutive]
+
+@[simp]
+lemma euclidRotN_one (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    euclidRotN n 1 1 x = x := by
+  ext i μ
+  dsimp [euclidRotN]
+  rw [euclidRotOfSU2_one, Matrix.one_mulVec]
+
+lemma euclidRotN_mul (n : ℕ) (U₁ U₂ V₁ V₂ : SU2) (x : Fin n → Fin 4 → ℝ) :
+    euclidRotN n (U₁ * U₂) (V₁ * V₂) x =
+      euclidRotN n U₁ V₁ (euclidRotN n U₂ V₂ x) := by
+  ext i μ
+  dsimp [euclidRotN]
+  rw [euclidRotOfSU2_mul, Matrix.mulVec_mulVec]
+
+@[simp]
+lemma euclidRotN_negOne_negOne (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    euclidRotN n negOneSU2 negOneSU2 x = x := by
+  ext i μ
+  dsimp [euclidRotN]
+  rw [euclidRotOfSU2_mulVec, euclidRotApply_negOne_negOne]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfig_mk_eq_of_val_eq {n : ℕ} {α : Fin n → ι}
+    {x₁ x₂ : posOrderedEuclidN n} (h : x₁.val = x₂.val) :
+    (⟨n, (α, x₁)⟩ : OSConfig ι) = ⟨n, (α, x₂)⟩ := by
+  cases Subtype.ext h
+  rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfigPointRot_mk (U : SU2) (n : ℕ) (α : Fin n → ι) (x : posOrderedEuclidN n) :
+    osConfigPointRot U ⟨n, (α, x)⟩ =
+      ⟨n, (α, ⟨euclidRotN n U (su2Conj U) x.val,
+        euclidRotN_su2Conj_mem_posOrderedEuclidN n U x.property⟩)⟩ := rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigPointRot_one (A : OSConfig ι) :
+    osConfigPointRot 1 A = A := by
+  rcases A with ⟨n, α, x⟩
+  rw [osConfigPointRot_mk]
+  apply osConfig_mk_eq_of_val_eq
+  change euclidRotN n 1 (su2Conj 1) x.val = x.val
+  rw [su2Conj_one, euclidRotN_one]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfigPointRot_mul (U₁ U₂ : SU2) (A : OSConfig ι) :
+    osConfigPointRot (U₁ * U₂) A = osConfigPointRot U₁ (osConfigPointRot U₂ A) := by
+  rcases A with ⟨n, α, x⟩
+  rw [osConfigPointRot_mk, osConfigPointRot_mk, osConfigPointRot_mk]
+  apply osConfig_mk_eq_of_val_eq
+  change euclidRotN n (U₁ * U₂) (su2Conj (U₁ * U₂)) x.val =
+    euclidRotN n U₁ (su2Conj U₁) (euclidRotN n U₂ (su2Conj U₂) x.val)
+  rw [su2Conj_mul, euclidRotN_mul]
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigPointRot_negOneSU2 (A : OSConfig ι) :
+    osConfigPointRot negOneSU2 A = A := by
+  rcases A with ⟨n, α, x⟩
+  rw [osConfigPointRot_mk]
+  apply osConfig_mk_eq_of_val_eq
+  change euclidRotN n negOneSU2 (su2Conj negOneSU2) x.val = x.val
+  rw [su2Conj_negOneSU2, euclidRotN_negOne_negOne]
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigPointRot_vacuum (U : SU2) :
+    osConfigPointRot U (osVacuumConfig ι) = osVacuumConfig ι := by
+  dsimp [osVacuumConfig]
+  rw [osConfigPointRot_mk]
+  apply osConfig_mk_eq_of_val_eq
+  ext i μ
+  exact Fin.elim0 i
+
+@[simp]
+lemma osSpatialRotLM_one {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    osSpatialRotLM D 1 = LinearMap.id := by
+  unfold osSpatialRotLM
+  have h_id : osConfigPointRot (ι := ι) 1 = id := funext osConfigPointRot_one
+  rw [h_id, osLiftConfigMap_id]
+
+lemma osSpatialRotLM_mul {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U₁ U₂ : SU2) :
+    osSpatialRotLM D (U₁ * U₂) = (osSpatialRotLM D U₁).comp (osSpatialRotLM D U₂) := by
+  unfold osSpatialRotLM
+  have h_mul : osConfigPointRot (ι := ι) (U₁ * U₂) =
+      osConfigPointRot U₁ ∘ osConfigPointRot U₂ := funext (osConfigPointRot_mul U₁ U₂)
+  rw [h_mul, osLiftConfigMap_comp]
+
+@[simp]
+lemma osSpatialRotLM_negOneSU2 {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    osSpatialRotLM D negOneSU2 = LinearMap.id := by
+  unfold osSpatialRotLM
+  have h_id : osConfigPointRot (ι := ι) negOneSU2 = id := funext osConfigPointRot_negOneSU2
+  rw [h_id, osLiftConfigMap_id]
+
+@[simp]
+lemma osSpatialRotLM_osVacuumPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2) :
+    osSpatialRotLM D U (osVacuumPre D) = osVacuumPre D := by
+  unfold osSpatialRotLM osVacuumPre
+  rw [osLiftConfigMap_osBasisPre, osConfigPointRot_vacuum]
+
+def osSpinorRotMatrix (R : HolomorphicLorentzRep ι) (U : SU2) : Matrix ι ι ℂ :=
+  R.σ (su2ToSL2C U, su2ToSL2C (su2Conj U))
+
+@[simp]
+lemma osSpinorRotMatrix_one (R : HolomorphicLorentzRep ι) :
+    osSpinorRotMatrix R 1 = 1 := by
+  dsimp [osSpinorRotMatrix]
+  rw [su2Conj_one, su2ToSL2C_one]
+  exact R.σ.map_one
+
+lemma osSpinorRotMatrix_mul (R : HolomorphicLorentzRep ι) (U₁ U₂ : SU2) :
+    osSpinorRotMatrix R (U₁ * U₂) = osSpinorRotMatrix R U₁ * osSpinorRotMatrix R U₂ := by
+  dsimp [osSpinorRotMatrix]
+  rw [su2Conj_mul, su2ToSL2C_mul, su2ToSL2C_mul]
+  exact R.σ.map_mul (su2ToSL2C U₁, su2ToSL2C (su2Conj U₁))
+    (su2ToSL2C U₂, su2ToSL2C (su2Conj U₂))
+
+@[simp]
+lemma osSpinorRotMatrix_inv_mul_self (R : HolomorphicLorentzRep ι) (U : SU2) :
+    osSpinorRotMatrix R U⁻¹ * osSpinorRotMatrix R U = 1 := by
+  rw [← osSpinorRotMatrix_mul, inv_mul_cancel, osSpinorRotMatrix_one]
+
+@[simp]
+lemma osSpinorRotMatrix_mul_inv_self (R : HolomorphicLorentzRep ι) (U : SU2) :
+    osSpinorRotMatrix R U * osSpinorRotMatrix R U⁻¹ = 1 := by
+  rw [← osSpinorRotMatrix_mul, mul_inv_cancel, osSpinorRotMatrix_one]
+
+lemma osSpinorRotMatrix_negOneSU2 (R : HolomorphicLorentzRep ι) {ε : ℂ}
+    (hε : R.HasSpinParity ε) :
+    osSpinorRotMatrix R negOneSU2 = ε • 1 := by
+  dsimp [osSpinorRotMatrix]
+  rw [su2Conj_negOneSU2, su2ToSL2C_negOneSU2]
+  exact hε.1
+
+@[simp]
+lemma osSpinorRotMatrix_trivialRep (U : SU2) :
+    osSpinorRotMatrix trivialRep U = 1 := rfl
+
+theorem starStructure_intertwine_osSpinorRotMatrix {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) (U : SU2) :
+    S.C * osSpinorRotMatrix R U = (osSpinorRotMatrix R U).map star * S.C := by
+  dsimp [osSpinorRotMatrix]
+  have h := S.intertwine (su2ToSL2C U) (su2ToSL2C (su2Conj U))
+  rwa [sl2c_conj_su2ToSL2C_su2Conj, ← su2ToSL2C_su2Conj] at h
+
+theorem star_osSpinorRotMatrix_inv_mul_C_mul {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) (U : SU2) :
+    (osSpinorRotMatrix R U⁻¹).map star * S.C * osSpinorRotMatrix R U = S.C := by
+  rw [Matrix.mul_assoc, starStructure_intertwine_osSpinorRotMatrix S U,
+      ← Matrix.mul_assoc]
+  have h_inv : (osSpinorRotMatrix R U⁻¹).map star * (osSpinorRotMatrix R U).map star = 1 := by
+    ext a b
+    have h1 := congrFun (congrFun (osSpinorRotMatrix_inv_mul_self R U) a) b
+    have h2 := congrArg (starRingEnd ℂ) h1
+    simp only [Matrix.mul_apply, Matrix.map_apply, map_sum, map_mul, starRingEnd_apply] at h2 ⊢
+    rw [h2]
+    by_cases hab : a = b <;> simp [hab, Matrix.one_apply]
+  rw [h_inv, Matrix.one_mul]
+
+lemma osPreHilbert_eq_finsupp_sum_osBasisPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ : OSPreHilbertSpace D) :
+    Ψ = Ψ.toFinsupp.sum (fun A c => c • osBasisPre D A) := by
+  apply OSPreHilbertSpace.ext
+  have h_map : (Ψ.toFinsupp.sum (fun A c => c • osBasisPre D A)).toFinsupp =
+      Ψ.toFinsupp.sum (fun A c => c • (osBasisPre D A).toFinsupp) :=
+    map_finsuppSum (OSPreHilbertSpace.equivFinsupp D).toLinearMap Ψ.toFinsupp
+      (fun A c => c • osBasisPre D A)
+  rw [h_map]
+  have h_single : (fun (A : OSConfig ι) (c : ℂ) => c • (osBasisPre D A).toFinsupp) =
+      fun A c => Finsupp.single A c := by
+    ext A c B
+    simp [osBasisPre]
+  rw [h_single, Finsupp.sum_single]
+
+lemma osPreHilbert_linearMap_ext {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {E : Type*} [AddCommMonoid E] [Module ℂ E]
+    {L₁ L₂ : OSPreHilbertSpace D →ₗ[ℂ] E}
+    (h : ∀ A : OSConfig ι, L₁ (osBasisPre D A) = L₂ (osBasisPre D A)) :
+    L₁ = L₂ := by
+  ext Ψ
+  rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ, map_finsuppSum, map_finsuppSum]
+  refine Finsupp.sum_congr (fun A _ => ?_)
+  rw [L₁.map_smul, L₂.map_smul, h A]
+
+lemma osPreHilbert_inner_map_eq_of_osBasisPre₂ {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (L₁ L₂ : OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D)
+    (h : ∀ A B : OSConfig ι,
+      ⟪L₁ (osBasisPre D A), L₁ (osBasisPre D B)⟫_ℂ =
+        ⟪L₂ (osBasisPre D A), L₂ (osBasisPre D B)⟫_ℂ)
+    (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪L₁ Ψ, L₁ Φ⟫_ℂ = ⟪L₂ Ψ, L₂ Φ⟫_ℂ := by
+  have hL : ∀ (L : OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D) (X : OSPreHilbertSpace D),
+      L X = ∑ A ∈ X.toFinsupp.support, X.toFinsupp A • L (osBasisPre D A) := by
+    intro L X
+    conv_lhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D X]
+    rw [map_finsuppSum]
+    unfold Finsupp.sum
+    refine Finset.sum_congr rfl (fun A _ => L.map_smul _ _)
+  rw [hL L₁ Ψ, hL L₁ Φ, hL L₂ Ψ, hL L₂ Φ, sum_inner, sum_inner]
+  refine Finset.sum_congr rfl (fun A _ => ?_)
+  rw [inner_smul_left, inner_smul_left, inner_sum, inner_sum]
+  congr 1
+  refine Finset.sum_congr rfl (fun B _ => ?_)
+  rw [inner_smul_right, inner_smul_right, h A B]
+
+def osConfigSetIdx (A : OSConfig ι) (δ : Fin A.1 → ι) : OSConfig ι :=
+  ⟨A.1, (δ, A.2.2)⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigSetIdx_fst (A : OSConfig ι) (δ : Fin A.1 → ι) :
+    (osConfigSetIdx A δ).1 = A.1 := rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigSetIdx_snd_fst (A : OSConfig ι) (δ : Fin A.1 → ι) :
+    (osConfigSetIdx A δ).2.1 = δ := rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigSetIdx_snd_snd (A : OSConfig ι) (δ : Fin A.1 → ι) :
+    (osConfigSetIdx A δ).2.2 = A.2.2 := rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigSetIdx_self (A : OSConfig ι) :
+    osConfigSetIdx A A.2.1 = A := by
+  rcases A with ⟨n, α, x⟩
+  rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConfigSetIdx_osConfigSetIdx (A : OSConfig ι) (δ γ : Fin A.1 → ι) :
+    osConfigSetIdx (osConfigSetIdx A δ) γ = osConfigSetIdx A γ := rfl
+
+def osSpinorIdxSingle {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (M : Matrix ι ι ℂ) (A : OSConfig ι) :
+    OSPreHilbertSpace D :=
+  ∑ δ : Fin A.1 → ι,
+    (∏ i : Fin A.1, M (A.2.1 i) (δ i)) • osBasisPre D (osConfigSetIdx A δ)
+
+def osSpinorIdxLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (M : Matrix ι ι ℂ) :
+    OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D :=
+  (Finsupp.lsum ℂ (fun A =>
+    LinearMap.toSpanSingleton ℂ (OSPreHilbertSpace D) (osSpinorIdxSingle D M A))).comp
+    (OSPreHilbertSpace.equivFinsupp D).toLinearMap
+
+@[simp]
+lemma osSpinorIdxLM_osBasisPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (M : Matrix ι ι ℂ) (A : OSConfig ι) :
+    osSpinorIdxLM D M (osBasisPre D A) = osSpinorIdxSingle D M A := by
+  dsimp [osSpinorIdxLM, osBasisPre, OSPreHilbertSpace.equivFinsupp]
+  simp
+
+lemma osSpinorIdxSingle_smul_one {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (c : ℂ) (A : OSConfig ι) :
+    osSpinorIdxSingle D (c • (1 : Matrix ι ι ℂ)) A = (c ^ A.1) • osBasisPre D A := by
+  unfold osSpinorIdxSingle
+  have h_prod : ∀ δ : Fin A.1 → ι,
+      (∏ i : Fin A.1, (c • (1 : Matrix ι ι ℂ)) (A.2.1 i) (δ i)) =
+        if A.2.1 = δ then c ^ A.1 else 0 := by
+    intro δ
+    by_cases h : A.2.1 = δ
+    · subst h
+      simp
+    · rw [if_neg h]
+      obtain ⟨i, hi⟩ : ∃ i, A.2.1 i ≠ δ i := by
+        by_contra hc
+        push Not at hc
+        exact h (funext hc)
+      exact Finset.prod_eq_zero (Finset.mem_univ i) (by simp [Matrix.one_apply_ne hi])
+  simp_rw [h_prod, ite_smul, zero_smul]
+  simp
+
+@[simp]
+lemma osSpinorIdxLM_one {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    osSpinorIdxLM D 1 = LinearMap.id := by
+  apply osPreHilbert_linearMap_ext
+  intro A
+  have h := osSpinorIdxSingle_smul_one D 1 A
+  rw [one_smul, one_pow, one_smul] at h
+  rw [osSpinorIdxLM_osBasisPre, h, LinearMap.id_apply]
+
+@[simp]
+lemma osSpinorIdxLM_osVacuumPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (M : Matrix ι ι ℂ) :
+    osSpinorIdxLM D M (osVacuumPre D) = osVacuumPre D := by
+  unfold osVacuumPre
+  rw [osSpinorIdxLM_osBasisPre]
+  unfold osSpinorIdxSingle osVacuumConfig
+  dsimp only
+  rw [Finset.univ_unique, Finset.sum_singleton]
+  have h_prod : (∏ i : Fin 0, M (Fin.elim0 i) ((default : Fin 0 → ι) i)) = 1 :=
+    Finset.prod_eq_one (fun i _ => Fin.elim0 i)
+  have h_idx : (default : Fin 0 → ι) = Fin.elim0 := Subsingleton.elim _ _
+  rw [h_prod, one_smul, h_idx]
+  rfl
+
+lemma osSpinorIdxLM_comp {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (M₁ M₂ : Matrix ι ι ℂ) :
+    (osSpinorIdxLM D M₁).comp (osSpinorIdxLM D M₂) = osSpinorIdxLM D (M₂ * M₁) := by
+  apply osPreHilbert_linearMap_ext
+  intro A
+  rw [LinearMap.comp_apply, osSpinorIdxLM_osBasisPre, osSpinorIdxLM_osBasisPre]
+  unfold osSpinorIdxSingle
+  rw [map_sum]
+  simp_rw [map_smul, osSpinorIdxLM_osBasisPre]
+  unfold osSpinorIdxSingle
+  simp_rw [osConfigSetIdx_fst, osConfigSetIdx_snd_fst, osConfigSetIdx_osConfigSetIdx,
+    Finset.smul_sum, smul_smul]
+  have h_comm :
+      (∑ δ : Fin A.1 → ι, ∑ γ : Fin A.1 → ι,
+        ((∏ i : Fin A.1, M₂ (A.2.1 i) (δ i)) * ∏ i : Fin A.1, M₁ (δ i) (γ i)) •
+          osBasisPre D (osConfigSetIdx A γ)) =
+      ∑ γ : Fin A.1 → ι, ∑ δ : Fin A.1 → ι,
+        ((∏ i : Fin A.1, M₂ (A.2.1 i) (δ i)) * ∏ i : Fin A.1, M₁ (δ i) (γ i)) •
+          osBasisPre D (osConfigSetIdx A γ) := Finset.sum_comm
+  refine h_comm.trans ?_
+  refine Finset.sum_congr rfl (fun γ _ => ?_)
+  rw [← Finset.sum_smul]
+  congr 1
+  simp_rw [← Finset.prod_mul_distrib]
+  have h_ps := (Fintype.prod_sum
+    (fun (i : Fin A.1) (d : ι) => M₂ (A.2.1 i) d * M₁ d (γ i))).symm
+  rw [h_ps]
+  refine Finset.prod_congr rfl (fun i _ => ?_)
+  simp [Matrix.mul_apply]
+
+lemma osSpatialRotLM_comp_osSpinorIdxLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2) (M : Matrix ι ι ℂ) :
+    (osSpatialRotLM D U).comp (osSpinorIdxLM D M) =
+      (osSpinorIdxLM D M).comp (osSpatialRotLM D U) := by
+  apply osPreHilbert_linearMap_ext
+  intro A
+  rw [LinearMap.comp_apply, LinearMap.comp_apply, osSpinorIdxLM_osBasisPre]
+  unfold osSpatialRotLM
+  rw [osLiftConfigMap_osBasisPre, osSpinorIdxLM_osBasisPre]
+  unfold osSpinorIdxSingle
+  rw [map_sum]
+  refine Finset.sum_congr rfl (fun δ _ => ?_)
+  rw [map_smul, osLiftConfigMap_osBasisPre]
+  rfl
+
+lemma osTimeShiftLM_comp_osSpinorIdxLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (τ : ℝ) (hτ : 0 ≤ τ) (M : Matrix ι ι ℂ) :
+    (osTimeShiftLM D τ hτ).comp (osSpinorIdxLM D M) =
+      (osSpinorIdxLM D M).comp (osTimeShiftLM D τ hτ) := by
+  apply osPreHilbert_linearMap_ext
+  intro A
+  rw [LinearMap.comp_apply, LinearMap.comp_apply, osSpinorIdxLM_osBasisPre]
+  unfold osTimeShiftLM
+  rw [osLiftConfigMap_osBasisPre, osSpinorIdxLM_osBasisPre]
+  unfold osSpinorIdxSingle
+  rw [map_sum]
+  refine Finset.sum_congr rfl (fun δ _ => ?_)
+  rw [map_smul, osLiftConfigMap_osBasisPre]
+  rfl
+
+def OSSpinorRotCovariant (R : HolomorphicLorentzRep ι) (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ (n : ℕ) (U : SU2) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n →
+    𝒮 n α (euclidRotN n U (su2Conj U) x) =
+      ∑ β : Fin n → ι,
+        (∏ i : Fin n, osSpinorRotMatrix R U (α i) (β i)) * 𝒮 n β x
+
+lemma euclidRotN_su2Conj_mem_orderedEuclidN (n : ℕ) (U : SU2)
+    {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    euclidRotN n U (su2Conj U) x ∈ orderedEuclidN n := by
+  intro i hi
+  dsimp [euclidRotN]
+  rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec,
+      euclidRotApply_su2Conj_time, euclidRotApply_su2Conj_time]
+  exact hx i hi
+
+lemma EuclidRotCovariant.osSpinorRotCovariant {R : HolomorphicLorentzRep ι}
+    {𝒮 : SchwingerFamily ι} (hrot : EuclidRotCovariant R 𝒮) :
+    OSSpinorRotCovariant R 𝒮 := by
+  intro n U α x hx
+  exact hrot n U (su2Conj U) x hx
+    (euclidRotN_su2Conj_mem_orderedEuclidN n U hx) α
+
+lemma OSAxioms.osSpinorRotCovariant {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι} (hOS : OSAxioms R S η 𝒮) :
+    OSSpinorRotCovariant R 𝒮 :=
+  hOS.os1_rotation.osSpinorRotCovariant
+
+theorem inner_osSpatialRotLM_eq_osSpinorIdxLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (U : SU2) (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪osSpatialRotLM D U Ψ, osSpatialRotLM D U Φ⟫_ℂ =
+      ⟪osSpinorIdxLM D (osSpinorRotMatrix R U) Ψ,
+        osSpinorIdxLM D (osSpinorRotMatrix R U) Φ⟫_ℂ := by
+  refine osPreHilbert_inner_map_eq_of_osBasisPre₂ D
+    (osSpatialRotLM D U) (osSpinorIdxLM D (osSpinorRotMatrix R U)) (fun A B => ?_) Ψ Φ
+  unfold osSpatialRotLM
+  rw [osLiftConfigMap_osBasisPre, osLiftConfigMap_osBasisPre, inner_osBasisPre,
+      osSpinorIdxLM_osBasisPre, osSpinorIdxLM_osBasisPre]
+  unfold osSpinorIdxSingle
+  rw [sum_inner]
+  simp_rw [inner_smul_left, inner_sum, inner_smul_right, inner_osBasisPre]
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  unfold osKernel osConfigPointRot osConfigSetIdx
+  dsimp only
+  have h_ord : osConcatPoint j k x y ∈ orderedEuclidN (j + k) :=
+    osConcatPoint_mem_orderedEuclidN j k hx hy
+  have h_lhs_term : ∀ β : Fin j → ι,
+      (∏ i : Fin j, S.C (α i) (β i)) *
+        D.𝒮 (j + k) (osConcatIdx j k β α')
+          (osConcatPoint j k (euclidRotN j U (su2Conj U) x) (euclidRotN k U (su2Conj U) y)) =
+      ∑ δL : Fin j → ι, ∑ δR : Fin k → ι,
+        (∏ i : Fin j, S.C (α i) (β i) * osSpinorRotMatrix R U (β i) (δL i)) *
+          ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+            D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) := by
+    intro β
+    rw [osConcatPoint_euclidRotN_su2Conj,
+        hrot (j + k) U (osConcatIdx j k β α') (osConcatPoint j k x y) h_ord,
+        ← (osConcatIdxEquiv j k).sum_comp, Fintype.sum_prod_type, Finset.mul_sum]
+    refine Finset.sum_congr rfl (fun δL _ => ?_)
+    rw [Finset.mul_sum]
+    refine Finset.sum_congr rfl (fun δR _ => ?_)
+    dsimp [osConcatIdxEquiv]
+    rw [prod_osConcatIdx j k (fun a b => osSpinorRotMatrix R U a b) β δL α' δR]
+    have h_mul : (∏ i : Fin j, S.C (α i) (β i)) *
+        (∏ i : Fin j, osSpinorRotMatrix R U (β i) (δL i)) =
+        ∏ i : Fin j, S.C (α i) (β i) * osSpinorRotMatrix R U (β i) (δL i) :=
+      (Finset.prod_mul_distrib).symm
+    calc (∏ i : Fin j, S.C (α i) (β i)) *
+          (((∏ i : Fin j, osSpinorRotMatrix R U (β i) (δL i)) *
+            ∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+            D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y))
+      _ = ((∏ i : Fin j, S.C (α i) (β i)) *
+            ∏ i : Fin j, osSpinorRotMatrix R U (β i) (δL i)) *
+            ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+              D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) := by ring
+      _ = (∏ i : Fin j, S.C (α i) (β i) * osSpinorRotMatrix R U (β i) (δL i)) *
+            ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+              D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) := by rw [h_mul]
+  simp_rw [h_lhs_term]
+  rw [Finset.sum_comm]
+  have h_lhs_collapse : ∀ δL : Fin j → ι,
+      (∑ β : Fin j → ι, ∑ δR : Fin k → ι,
+        (∏ i : Fin j, S.C (α i) (β i) * osSpinorRotMatrix R U (β i) (δL i)) *
+          ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+            D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y))) =
+      ∑ δR : Fin k → ι,
+        (∏ i : Fin j, (S.C * osSpinorRotMatrix R U) (α i) (δL i)) *
+          ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+            D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) := by
+    intro δL
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl (fun δR _ => ?_)
+    rw [← Finset.sum_mul]
+    congr 1
+    have h_ps := (Fintype.prod_sum
+      (fun (i : Fin j) (b : ι) => S.C (α i) b * osSpinorRotMatrix R U b (δL i))).symm
+    rw [h_ps]
+    refine Finset.prod_congr rfl (fun i _ => ?_)
+    simp [Matrix.mul_apply]
+  simp_rw [h_lhs_collapse, starStructure_intertwine_osSpinorRotMatrix S U]
+  have h_rhs :
+      (∑ δ : Fin j → ι, (starRingEnd ℂ) (∏ i : Fin j, osSpinorRotMatrix R U (α i) (δ i)) *
+        ∑ δR : Fin k → ι, (∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+          ∑ δL : Fin j → ι, (∏ i : Fin j, S.C (δ i) (δL i)) *
+            D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) =
+      ∑ δR : Fin k → ι, ∑ δL : Fin j → ι,
+        (∏ i : Fin j, ((osSpinorRotMatrix R U).map star * S.C) (α i) (δL i)) *
+          ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+            D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) := by
+    simp_rw [Finset.mul_sum]
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl (fun δR _ => ?_)
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl (fun δL _ => ?_)
+    have h_inner : ∀ δ : Fin j → ι,
+        (starRingEnd ℂ) (∏ i : Fin j, osSpinorRotMatrix R U (α i) (δ i)) *
+          ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+            ((∏ i : Fin j, S.C (δ i) (δL i)) *
+              D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y))) =
+        (∏ i : Fin j, star (osSpinorRotMatrix R U (α i) (δ i)) * S.C (δ i) (δL i)) *
+          ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+            D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) := by
+      intro δ
+      rw [map_prod]
+      have h_pm : (∏ i : Fin j, (starRingEnd ℂ) (osSpinorRotMatrix R U (α i) (δ i))) *
+          (∏ i : Fin j, S.C (δ i) (δL i)) =
+          ∏ i : Fin j, star (osSpinorRotMatrix R U (α i) (δ i)) * S.C (δ i) (δL i) :=
+        (Finset.prod_mul_distrib).symm
+      calc (∏ i : Fin j, (starRingEnd ℂ) (osSpinorRotMatrix R U (α i) (δ i))) *
+            ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+              ((∏ i : Fin j, S.C (δ i) (δL i)) *
+                D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)))
+        _ = ((∏ i : Fin j, (starRingEnd ℂ) (osSpinorRotMatrix R U (α i) (δ i))) *
+              ∏ i : Fin j, S.C (δ i) (δL i)) *
+              ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+                D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) := by ring
+        _ = (∏ i : Fin j, star (osSpinorRotMatrix R U (α i) (δ i)) * S.C (δ i) (δL i)) *
+              ((∏ r : Fin k, osSpinorRotMatrix R U (α' r) (δR r)) *
+                D.𝒮 (j + k) (osConcatIdx j k δL δR) (osConcatPoint j k x y)) := by rw [h_pm]
+    simp_rw [h_inner, ← Finset.sum_mul]
+    congr 1
+    have h_ps := (Fintype.prod_sum
+      (fun (i : Fin j) (d : ι) => star (osSpinorRotMatrix R U (α i) d) * S.C d (δL i))).symm
+    rw [h_ps]
+    refine Finset.prod_congr rfl (fun i _ => ?_)
+    simp [Matrix.mul_apply]
+  rw [h_rhs, Finset.sum_comm]
+
+def osSpinorRotLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2) :
+    OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D :=
+  (osSpatialRotLM D U).comp (osSpinorIdxLM D (osSpinorRotMatrix R U⁻¹))
+
+@[simp]
+lemma osSpinorRotLM_one {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    osSpinorRotLM D 1 = LinearMap.id := by
+  unfold osSpinorRotLM
+  rw [inv_one, osSpinorRotMatrix_one, osSpinorIdxLM_one, osSpatialRotLM_one, LinearMap.id_comp]
+
+lemma osSpinorRotLM_mul {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U₁ U₂ : SU2) :
+    osSpinorRotLM D (U₁ * U₂) = (osSpinorRotLM D U₁).comp (osSpinorRotLM D U₂) := by
+  unfold osSpinorRotLM
+  rw [_root_.mul_inv_rev, osSpinorRotMatrix_mul, ← osSpinorIdxLM_comp, osSpatialRotLM_mul]
+  calc ((osSpatialRotLM D U₁).comp (osSpatialRotLM D U₂)).comp
+        ((osSpinorIdxLM D (osSpinorRotMatrix R U₁⁻¹)).comp
+          (osSpinorIdxLM D (osSpinorRotMatrix R U₂⁻¹)))
+    _ = (osSpatialRotLM D U₁).comp
+          (((osSpatialRotLM D U₂).comp (osSpinorIdxLM D (osSpinorRotMatrix R U₁⁻¹))).comp
+            (osSpinorIdxLM D (osSpinorRotMatrix R U₂⁻¹))) := by
+        ext Ψ; rfl
+    _ = (osSpatialRotLM D U₁).comp
+          (((osSpinorIdxLM D (osSpinorRotMatrix R U₁⁻¹)).comp (osSpatialRotLM D U₂)).comp
+            (osSpinorIdxLM D (osSpinorRotMatrix R U₂⁻¹))) := by
+        rw [osSpatialRotLM_comp_osSpinorIdxLM]
+    _ = ((osSpatialRotLM D U₁).comp (osSpinorIdxLM D (osSpinorRotMatrix R U₁⁻¹))).comp
+          ((osSpatialRotLM D U₂).comp (osSpinorIdxLM D (osSpinorRotMatrix R U₂⁻¹))) := by
+        ext Ψ; rfl
+
+@[simp]
+lemma osSpinorRotLM_osVacuumPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2) :
+    osSpinorRotLM D U (osVacuumPre D) = osVacuumPre D := by
+  unfold osSpinorRotLM
+  rw [LinearMap.comp_apply, osSpinorIdxLM_osVacuumPre, osSpatialRotLM_osVacuumPre]
+
+theorem osSpinorRotLM_negOneSU2_osBasisPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {ε : ℂ} (hε : R.HasSpinParity ε) (A : OSConfig ι) :
+    osSpinorRotLM D negOneSU2 (osBasisPre D A) = (ε ^ A.1) • osBasisPre D A := by
+  unfold osSpinorRotLM
+  rw [LinearMap.comp_apply, negOneSU2_inv, osSpinorRotMatrix_negOneSU2 R hε,
+      osSpinorIdxLM_osBasisPre, osSpinorIdxSingle_smul_one, osSpatialRotLM_negOneSU2,
+      LinearMap.id_apply]
+
+lemma osSpinorRotLM_comm_osTimeShiftLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2) (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osSpinorRotLM D U).comp (osTimeShiftLM D τ hτ) =
+      (osTimeShiftLM D τ hτ).comp (osSpinorRotLM D U) := by
+  unfold osSpinorRotLM
+  have h_pt : (osSpatialRotLM D U).comp (osTimeShiftLM D τ hτ) =
+      (osTimeShiftLM D τ hτ).comp (osSpatialRotLM D U) := by
+    unfold osSpatialRotLM osTimeShiftLM
+    rw [← osLiftConfigMap_comp, ← osLiftConfigMap_comp,
+        osConfigPointRot_comm_osConfigTimeShift]
+  calc ((osSpatialRotLM D U).comp (osSpinorIdxLM D (osSpinorRotMatrix R U⁻¹))).comp
+        (osTimeShiftLM D τ hτ)
+    _ = (osSpatialRotLM D U).comp
+          ((osSpinorIdxLM D (osSpinorRotMatrix R U⁻¹)).comp (osTimeShiftLM D τ hτ)) := by
+        ext Ψ; rfl
+    _ = (osSpatialRotLM D U).comp
+          ((osTimeShiftLM D τ hτ).comp (osSpinorIdxLM D (osSpinorRotMatrix R U⁻¹))) := by
+        rw [← osTimeShiftLM_comp_osSpinorIdxLM]
+    _ = ((osSpatialRotLM D U).comp (osTimeShiftLM D τ hτ)).comp
+          (osSpinorIdxLM D (osSpinorRotMatrix R U⁻¹)) := by
+        ext Ψ; rfl
+    _ = (osTimeShiftLM D τ hτ).comp
+          ((osSpatialRotLM D U).comp (osSpinorIdxLM D (osSpinorRotMatrix R U⁻¹))) := by
+        rw [h_pt]; ext Ψ; rfl
+
+theorem inner_osSpinorRotLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (U : SU2) (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪osSpinorRotLM D U Ψ, osSpinorRotLM D U Φ⟫_ℂ = ⟪Ψ, Φ⟫_ℂ := by
+  unfold osSpinorRotLM
+  rw [LinearMap.comp_apply, LinearMap.comp_apply,
+      inner_osSpatialRotLM_eq_osSpinorIdxLM D hrot U,
+      ← LinearMap.comp_apply, ← LinearMap.comp_apply,
+      osSpinorIdxLM_comp, osSpinorRotMatrix_inv_mul_self,
+      osSpinorIdxLM_one, LinearMap.id_apply, LinearMap.id_apply]
+
+theorem norm_osSpinorRotLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (U : SU2) (Ψ : OSPreHilbertSpace D) :
+    ‖osSpinorRotLM D U Ψ‖ = ‖Ψ‖ := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), norm_eq_sqrt_re_inner (𝕜 := ℂ),
+      inner_osSpinorRotLM D hrot U Ψ Ψ]
+
+def osSpinorRotPreCLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮) (U : SU2) :
+    OSPreHilbertSpace D →L[ℂ] OSPreHilbertSpace D :=
+  (osSpinorRotLM D U).mkContinuous 1 (fun Ψ => by
+    rw [one_mul, norm_osSpinorRotLM D hrot U Ψ])
+
+def osSpinorRot {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮) (U : SU2) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  (osSpinorRotPreCLM D hrot U).completion
+
+@[simp]
+lemma osSpinorRot_toOSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (U : SU2) (Ψ : OSPreHilbertSpace D) :
+    osSpinorRot D hrot U (toOSHilbert D Ψ) =
+      toOSHilbert D (osSpinorRotLM D U Ψ) :=
+  ContinuousLinearMap.completion_apply_coe (osSpinorRotPreCLM D hrot U) Ψ
+
+theorem inner_osSpinorRot {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (U : SU2) (x y : OSHilbert D) :
+    ⟪osSpinorRot D hrot U x, osSpinorRot D hrot U y⟫_ℂ = ⟪x, y⟫_ℂ := by
+  induction x, y using UniformSpace.Completion.induction_on₂ with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ Φ =>
+    change ⟪osSpinorRot D hrot U (toOSHilbert D Ψ),
+        osSpinorRot D hrot U (toOSHilbert D Φ)⟫_ℂ =
+      ⟪toOSHilbert D Ψ, toOSHilbert D Φ⟫_ℂ
+    rw [osSpinorRot_toOSHilbert, osSpinorRot_toOSHilbert,
+        inner_toOSHilbert, inner_toOSHilbert, inner_osSpinorRotLM D hrot U Ψ Φ]
+
+@[simp]
+theorem norm_osSpinorRot {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (U : SU2) (x : OSHilbert D) :
+    ‖osSpinorRot D hrot U x‖ = ‖x‖ := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), norm_eq_sqrt_re_inner (𝕜 := ℂ),
+      inner_osSpinorRot D hrot U x x]
+
+@[simp]
+theorem osSpinorRot_one {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮) :
+    osSpinorRot D hrot 1 = ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpinorRot D hrot 1 (toOSHilbert D Ψ) = toOSHilbert D Ψ
+    rw [osSpinorRot_toOSHilbert, osSpinorRotLM_one, LinearMap.id_apply]
+
+theorem osSpinorRot_mul {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (U₁ U₂ : SU2) :
+    osSpinorRot D hrot (U₁ * U₂) =
+      (osSpinorRot D hrot U₁).comp (osSpinorRot D hrot U₂) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpinorRot D hrot (U₁ * U₂) (toOSHilbert D Ψ) =
+      osSpinorRot D hrot U₁ (osSpinorRot D hrot U₂ (toOSHilbert D Ψ))
+    rw [osSpinorRot_toOSHilbert, osSpinorRot_toOSHilbert, osSpinorRot_toOSHilbert,
+        osSpinorRotLM_mul, LinearMap.comp_apply]
+
+@[simp]
+theorem osSpinorRot_inv_comp {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮) (U : SU2) :
+    (osSpinorRot D hrot U⁻¹).comp (osSpinorRot D hrot U) =
+      ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  rw [← osSpinorRot_mul, inv_mul_cancel, osSpinorRot_one]
+
+@[simp]
+theorem osSpinorRot_comp_inv {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮) (U : SU2) :
+    (osSpinorRot D hrot U).comp (osSpinorRot D hrot U⁻¹) =
+      ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  rw [← osSpinorRot_mul, mul_inv_cancel, osSpinorRot_one]
+
+@[simp]
+theorem osSpinorRot_osVacuum {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮) (U : SU2) :
+    osSpinorRot D hrot U (osVacuum D) = osVacuum D := by
+  dsimp [osVacuum]
+  rw [osSpinorRot_toOSHilbert, osSpinorRotLM_osVacuumPre]
+
+theorem osSpinorRot_negOneSU2_osBasis {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε) (A : OSConfig ι) :
+    osSpinorRot D hrot negOneSU2 (osBasis D A) = (ε ^ A.1) • osBasis D A := by
+  dsimp [osBasis]
+  rw [osSpinorRot_toOSHilbert, osSpinorRotLM_negOneSU2_osBasisPre D hε A, map_smul]
+
+theorem osSpinorRot_comm_osContractionSemigroup
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (hcontr : OSContractionCondition D) (U : SU2) (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osSpinorRot D hrot U).comp (osContractionSemigroup D hcontr τ hτ) =
+      (osContractionSemigroup D hcontr τ hτ).comp (osSpinorRot D hrot U) := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpinorRot D hrot U (osContractionSemigroup D hcontr τ hτ (toOSHilbert D Ψ)) =
+      osContractionSemigroup D hcontr τ hτ (osSpinorRot D hrot U (toOSHilbert D Ψ))
+    rw [osContractionSemigroup_toOSHilbert, osSpinorRot_toOSHilbert,
+        osSpinorRot_toOSHilbert, osContractionSemigroup_toOSHilbert,
+        ← LinearMap.comp_apply, ← LinearMap.comp_apply,
+        osSpinorRotLM_comm_osTimeShiftLM]
+
+theorem osSpinorRot_eq_osSpatialRot_of_matrix_eq_one
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (hscalar : OSScalarRotInvariant D.𝒮) (U : SU2)
+    (hU : osSpinorRotMatrix R U⁻¹ = 1) :
+    osSpinorRot D hrot U = osSpatialRot D hscalar U := by
+  ext x
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpinorRot D hrot U (toOSHilbert D Ψ) =
+      osSpatialRot D hscalar U (toOSHilbert D Ψ)
+    rw [osSpinorRot_toOSHilbert, osSpatialRot_toOSHilbert]
+    congr 1
+    unfold osSpinorRotLM
+    rw [hU, osSpinorIdxLM_one, LinearMap.comp_id]
+
+theorem osKernel_osVacuumConfig_left {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) (A : OSConfig ι) :
+    osKernel S 𝒮 (osVacuumConfig ι) A = 𝒮 A.1 A.2.1 A.2.2.val := by
+  rcases A with ⟨n, α, x, hx⟩
+  unfold osKernel osVacuumConfig
+  dsimp only
+  rw [Finset.univ_unique, Finset.sum_singleton]
+  have h_prod : (∏ i : Fin 0, S.C (Fin.elim0 i) ((default : Fin 0 → ι) i)) = 1 :=
+    Finset.prod_eq_one (fun i _ => Fin.elim0 i)
+  rw [h_prod, one_mul]
+  rw [← schwinger_congr_n 𝒮 (Nat.zero_add n).symm]
+  congr 1
+  · ext i
+    have hi : finCongr (Nat.zero_add n).symm i = Fin.natAdd 0 i := by ext; simp
+    rw [Function.comp_apply, hi, osConcatIdx_natAdd]
+  · ext i μ
+    have hi : finCongr (Nat.zero_add n).symm i = Fin.natAdd 0 i := by ext; simp
+    rw [Function.comp_apply, hi, osConcatPoint_natAdd]
+
+@[simp]
+theorem inner_osVacuumPre_osBasisPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A : OSConfig ι) :
+    ⟪osVacuumPre D, osBasisPre D A⟫_ℂ = D.𝒮 A.1 A.2.1 A.2.2.val := by
+  unfold osVacuumPre
+  rw [inner_osBasisPre, osKernel_osVacuumConfig_left]
+
+@[simp]
+theorem inner_osVacuum_osBasis {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A : OSConfig ι) :
+    ⟪osVacuum D, osBasis D A⟫_ℂ = D.𝒮 A.1 A.2.1 A.2.2.val := by
+  dsimp [osVacuum, osBasis]
+  rw [inner_toOSHilbert, inner_osVacuumPre_osBasisPre]
+
+def osPrependPoint (n : ℕ) (x₀ : Fin 4 → ℝ) (x : Fin n → Fin 4 → ℝ) :
+    Fin (n + 1) → Fin 4 → ℝ :=
+  Fin.cons x₀ (fun i => x i + euclidTimeVec (x₀ 0))
+
+lemma osPrependPoint_mem_posOrderedEuclidN (n : ℕ) {x₀ : Fin 4 → ℝ} (hx₀ : 0 < x₀ 0)
+    {x : Fin n → Fin 4 → ℝ} (hx : x ∈ posOrderedEuclidN n) :
+    osPrependPoint n x₀ x ∈ posOrderedEuclidN (n + 1) := by
+  refine ⟨fun i => ?_, fun i hi => ?_⟩
+  · refine Fin.cases ?_ (fun j => ?_) i
+    · simpa [osPrependPoint] using hx₀
+    · simp only [osPrependPoint, Fin.cons_succ, Pi.add_apply, euclidTimeVec, ↓reduceIte]
+      linarith [hx.1 j]
+  · revert hi
+    refine Fin.cases ?_ (fun j => ?_) i
+    · intro hi
+      have h0 : 0 < n := by
+        change 0 + 1 < n + 1 at hi
+        omega
+      have h1 : (⟨(0 : Fin (n + 1)).val + 1, hi⟩ : Fin (n + 1)) =
+          Fin.succ ⟨0, h0⟩ := by ext; rfl
+      rw [h1]
+      simp only [osPrependPoint, Fin.cons_zero, Fin.cons_succ, Pi.add_apply,
+        euclidTimeVec, ↓reduceIte]
+      linarith [hx.1 ⟨0, h0⟩]
+    · intro hi
+      have hj : j.val + 1 < n := by
+        change j.val + 1 + 1 < n + 1 at hi
+        omega
+      have h1 : (⟨(Fin.succ j).val + 1, hi⟩ : Fin (n + 1)) =
+          Fin.succ ⟨j.val + 1, hj⟩ := by ext; rfl
+      rw [h1]
+      simp only [osPrependPoint, Fin.cons_succ, Pi.add_apply, euclidTimeVec, ↓reduceIte]
+      linarith [hx.2 j hj]
+
+lemma osPrependPoint_euclidRotN_su2Conj (n : ℕ) (U : SU2)
+    (x₀ : Fin 4 → ℝ) (x : Fin n → Fin 4 → ℝ) :
+    euclidRotN (n + 1) U (su2Conj U) (osPrependPoint n x₀ x) =
+      osPrependPoint n (euclidRotApply U (su2Conj U) x₀)
+        (euclidRotN n U (su2Conj U) x) := by
+  ext i μ
+  refine Fin.cases ?_ (fun j => ?_) i
+  · simp only [osPrependPoint, euclidRotN, Fin.cons_zero, euclidRotOfSU2_mulVec]
+  · simp only [osPrependPoint, euclidRotN, Fin.cons_succ, euclidRotOfSU2_mulVec,
+      euclidRotApply_add, euclidRotApply_su2Conj_euclidTimeVec, euclidRotApply_su2Conj_time]
+
+omit [Fintype ι] [DecidableEq ι] in
+def osFieldPrependConfig (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (A : OSConfig ι) :
+    OSConfig ι :=
+  ⟨A.1 + 1, (Fin.cons α₀ A.2.1,
+    ⟨osPrependPoint A.1 x₀ A.2.2.val,
+      osPrependPoint_mem_posOrderedEuclidN A.1 hx₀ A.2.2.property⟩)⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfigPointRot_osFieldPrependConfig (U : SU2)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (A : OSConfig ι) :
+    osConfigPointRot U (osFieldPrependConfig α₀ x₀ hx₀ A) =
+      osFieldPrependConfig α₀ (euclidRotApply U (su2Conj U) x₀)
+        (by rw [euclidRotApply_su2Conj_time]; exact hx₀)
+        (osConfigPointRot U A) := by
+  rcases A with ⟨n, α, x⟩
+  dsimp [osFieldPrependConfig]
+  rw [osConfigPointRot_mk, osConfigPointRot_mk]
+  apply osConfig_mk_eq_of_val_eq
+  exact osPrependPoint_euclidRotN_su2Conj n U x₀ x.val
+
+def osFieldPrependLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) :
+    OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D :=
+  osLiftConfigMap D (osFieldPrependConfig α₀ x₀ hx₀)
+
+theorem osSpatialRotLM_comp_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) :
+    (osSpatialRotLM D U).comp (osFieldPrependLM D α₀ x₀ hx₀) =
+      (osFieldPrependLM D α₀ (euclidRotApply U (su2Conj U) x₀)
+        (by rw [euclidRotApply_su2Conj_time]; exact hx₀)).comp
+        (osSpatialRotLM D U) := by
+  unfold osSpatialRotLM osFieldPrependLM
+  rw [← osLiftConfigMap_comp, ← osLiftConfigMap_comp]
+  congr 1
+  ext A : 1
+  exact osConfigPointRot_osFieldPrependConfig U α₀ x₀ hx₀ A
+
+@[simp]
+theorem inner_osVacuumPre_osFieldPrependLM_osBasisPre
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (A : OSConfig ι) :
+    ⟪osVacuumPre D, osFieldPrependLM D α₀ x₀ hx₀ (osBasisPre D A)⟫_ℂ =
+      D.𝒮 (A.1 + 1) (Fin.cons α₀ A.2.1) (osPrependPoint A.1 x₀ A.2.2.val) := by
+  unfold osFieldPrependLM
+  rw [osLiftConfigMap_osBasisPre, inner_osVacuumPre_osBasisPre]
+  rfl
+
+def finConsEquiv (n : ℕ) (ι : Type*) : (ι × (Fin n → ι)) ≃ (Fin (n + 1) → ι) where
+  toFun p := Fin.cons p.1 p.2
+  invFun δ := (δ 0, Fin.tail δ)
+  left_inv p := by
+    rcases p with ⟨b, δ⟩
+    simp
+  right_inv δ := Fin.cons_self_tail δ
+
+theorem osSpinorIdxLM_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (M : Matrix ι ι ℂ)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (Ψ : OSPreHilbertSpace D) :
+    osSpinorIdxLM D M (osFieldPrependLM D α₀ x₀ hx₀ Ψ) =
+      ∑ β₀ : ι, M α₀ β₀ • osFieldPrependLM D β₀ x₀ hx₀ (osSpinorIdxLM D M Ψ) := by
+  have h_eq : (osSpinorIdxLM D M).comp (osFieldPrependLM D α₀ x₀ hx₀) =
+      ∑ β₀ : ι, M α₀ β₀ • ((osFieldPrependLM D β₀ x₀ hx₀).comp (osSpinorIdxLM D M)) := by
+    apply osPreHilbert_linearMap_ext
+    intro A
+    rcases A with ⟨n, α, x⟩
+    rw [LinearMap.comp_apply]
+    unfold osFieldPrependLM
+    rw [osLiftConfigMap_osBasisPre, osSpinorIdxLM_osBasisPre]
+    unfold osSpinorIdxSingle osFieldPrependConfig
+    dsimp only [osConfigSetIdx]
+    rw [← (finConsEquiv n ι).sum_comp, Fintype.sum_prod_type]
+    rw [LinearMap.sum_apply]
+    refine Finset.sum_congr rfl (fun β₀ _ => ?_)
+    rw [LinearMap.smul_apply, LinearMap.comp_apply, osSpinorIdxLM_osBasisPre]
+    unfold osSpinorIdxSingle
+    rw [map_sum, Finset.smul_sum]
+    refine Finset.sum_congr rfl (fun δ' _ => ?_)
+    rw [map_smul, osLiftConfigMap_osBasisPre, smul_smul]
+    congr 1
+    dsimp [finConsEquiv]
+    rw [Fin.prod_univ_succ]
+    simp
+  have h1 := LinearMap.congr_fun h_eq Ψ
+  simpa [LinearMap.comp_apply, LinearMap.sum_apply, LinearMap.smul_apply] using h1
+
+theorem osSpinorRotLM_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (Ψ : OSPreHilbertSpace D) :
+    osSpinorRotLM D U (osFieldPrependLM D α₀ x₀ hx₀ Ψ) =
+      ∑ β₀ : ι, osSpinorRotMatrix R U⁻¹ α₀ β₀ •
+        osFieldPrependLM D β₀ (euclidRotApply U (su2Conj U) x₀)
+          (by rw [euclidRotApply_su2Conj_time]; exact hx₀)
+          (osSpinorRotLM D U Ψ) := by
+  unfold osSpinorRotLM
+  rw [LinearMap.comp_apply, osSpinorIdxLM_osFieldPrependLM, map_sum]
+  refine Finset.sum_congr rfl (fun β₀ _ => ?_)
+  rw [map_smul]
+  congr 1
+  rw [← LinearMap.comp_apply, osSpatialRotLM_comp_osFieldPrependLM,
+      LinearMap.comp_apply, LinearMap.comp_apply]
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+abbrev osData (P : OSReconstructedWightman R S η 𝒮) : OSReflectionPositiveData R S :=
+  P.osAxioms.toReflectionPositiveData
+
+abbrev Hilbert (P : OSReconstructedWightman R S η 𝒮) : Type _ :=
+  OSHilbert P.osData
+
+def vacuum (P : OSReconstructedWightman R S η 𝒮) : P.Hilbert :=
+  osVacuum P.osData
+
+def spinorRot (P : OSReconstructedWightman R S η 𝒮) (U : SU2) :
+    P.Hilbert →L[ℂ] P.Hilbert :=
+  osSpinorRot P.osData P.osAxioms.osSpinorRotCovariant U
+
+theorem inner_spinorRot (P : OSReconstructedWightman R S η 𝒮) (U : SU2)
+    (x y : P.Hilbert) :
+    ⟪P.spinorRot U x, P.spinorRot U y⟫_ℂ = ⟪x, y⟫_ℂ :=
+  inner_osSpinorRot P.osData P.osAxioms.osSpinorRotCovariant U x y
+
+@[simp]
+theorem spinorRot_one (P : OSReconstructedWightman R S η 𝒮) :
+    P.spinorRot 1 = ContinuousLinearMap.id ℂ P.Hilbert :=
+  osSpinorRot_one P.osData P.osAxioms.osSpinorRotCovariant
+
+theorem spinorRot_mul (P : OSReconstructedWightman R S η 𝒮) (U₁ U₂ : SU2) :
+    P.spinorRot (U₁ * U₂) = (P.spinorRot U₁).comp (P.spinorRot U₂) :=
+  osSpinorRot_mul P.osData P.osAxioms.osSpinorRotCovariant U₁ U₂
+
+@[simp]
+theorem spinorRot_vacuum (P : OSReconstructedWightman R S η 𝒮) (U : SU2) :
+    P.spinorRot U P.vacuum = P.vacuum :=
+  osSpinorRot_osVacuum P.osData P.osAxioms.osSpinorRotCovariant U
+
+theorem spinorRot_negOneSU2_osBasis (P : OSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε) (A : OSConfig ι) :
+    P.spinorRot negOneSU2 (osBasis P.osData A) = (ε ^ A.1) • osBasis P.osData A :=
+  osSpinorRot_negOneSU2_osBasis P.osData P.osAxioms.osSpinorRotCovariant hε A
+
+@[simp]
+theorem inner_vacuum_osBasis (P : OSReconstructedWightman R S η 𝒮) (A : OSConfig ι) :
+    ⟪P.vacuum, osBasis P.osData A⟫_ℂ = 𝒮 A.1 A.2.1 A.2.2.val :=
+  inner_osVacuum_osBasis P.osData A
+
+end OSReconstructedWightman
+
+lemma one_add_mul_two_pow_le_pow_two_pow {δ : ℝ} (hδ : 0 ≤ δ) (m : ℕ) :
+    1 + (2 : ℝ) ^ m * δ ≤ (1 + δ) ^ (2 ^ m) := by
+  induction m with
+  | zero => simp
+  | succ m ih =>
+    rw [pow_succ (2 : ℝ) m, pow_succ 2 m, pow_mul]
+    have h1 : 0 ≤ 1 + (2 : ℝ) ^ m * δ := by positivity
+    have h_sq : (1 + (2 : ℝ) ^ m * δ) ^ 2 ≤ ((1 + δ) ^ (2 ^ m)) ^ 2 :=
+      pow_le_pow_left₀ h1 ih 2
+    refine le_trans ?_ h_sq
+    have h_nonneg : 0 ≤ ((2 : ℝ) ^ m * δ) ^ 2 := sq_nonneg _
+    linarith
+
+lemma exists_lt_mul_pow_two_pow {c r : ℝ} (hc : 0 < c) (hr : 1 < r) (C : ℝ) :
+    ∃ m : ℕ, C < c * r ^ (2 ^ m) := by
+  have hδ : 0 < r - 1 := sub_pos.mpr hr
+  obtain ⟨N, hN⟩ := exists_nat_gt ((C / c - 1) / (r - 1))
+  use N
+  have hN_le : (N : ℝ) ≤ (2 : ℝ) ^ N := by
+    exact_mod_cast Nat.le_of_lt Nat.lt_two_pow_self
+  have h1 : C / c - 1 < (N : ℝ) * (r - 1) := (div_lt_iff₀ hδ).mp hN
+  have h2 : (N : ℝ) * (r - 1) ≤ (2 : ℝ) ^ N * (r - 1) :=
+    mul_le_mul_of_nonneg_right hN_le hδ.le
+  have h3 : C / c < 1 + (2 : ℝ) ^ N * (r - 1) := by linarith
+  have h4 : 1 + (2 : ℝ) ^ N * (r - 1) ≤ r ^ (2 ^ N) := by
+    have := one_add_mul_two_pow_le_pow_two_pow hδ.le N
+    rwa [add_sub_cancel] at this
+  have h5 : C / c < r ^ (2 ^ N) := lt_of_lt_of_le h3 h4
+  have h6 := (div_lt_iff₀ hc).mp h5
+  linarith
+
+theorem le_of_pow_two_pow_le_mul_subexponential {a b : ℝ} (hb : 0 ≤ b)
+    {M : ℕ → ℝ} (h_iter : ∀ m : ℕ, a ^ (2 ^ m) ≤ b ^ (2 ^ m - 1) * M m)
+    (h_subexp : ∀ c > 0, ∀ r > 1, ∃ m : ℕ, M m < c * r ^ (2 ^ m)) :
+    a ≤ b := by
+  by_contra h_lt
+  push Not at h_lt
+  rcases eq_or_lt_of_le hb with rfl | hb_pos
+  · have h1 := h_iter 1
+    norm_num at h1
+    linarith
+  · have hr : 1 < a / b := (one_lt_div hb_pos).mpr h_lt
+    obtain ⟨m, hm⟩ := h_subexp b hb_pos (a / b) hr
+    have h_pos_b : 0 < b ^ (2 ^ m - 1) := pow_pos hb_pos _
+    have h_step := h_iter m
+    have h_strict : b ^ (2 ^ m - 1) * M m < b ^ (2 ^ m - 1) * (b * (a / b) ^ (2 ^ m)) :=
+      mul_lt_mul_of_pos_left hm h_pos_b
+    have h_id : b ^ (2 ^ m - 1) * (b * (a / b) ^ (2 ^ m)) = a ^ (2 ^ m) := by
+      rw [← mul_assoc, ← pow_succ, div_pow]
+      have h_exp : 2 ^ m - 1 + 1 = 2 ^ m := Nat.sub_add_cancel Nat.one_le_two_pow
+      rw [h_exp, mul_div_cancel₀ _ (ne_of_gt (pow_pos hb_pos (2 ^ m)))]
+    rw [h_id] at h_strict
+    linarith
+
+theorem le_of_pow_two_pow_le_mul_const {a b C : ℝ} (hb : 0 ≤ b)
+    (h_iter : ∀ m : ℕ, a ^ (2 ^ m) ≤ b ^ (2 ^ m - 1) * C) :
+    a ≤ b :=
+  le_of_pow_two_pow_le_mul_subexponential hb h_iter
+    (fun _ hc _ hr => exists_lt_mul_pow_two_pow hc hr C)
+
+def OSTimeShiftSubexponential {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Prop :=
+  ∀ (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D),
+    ∀ c > 0, ∀ r > 1, ∃ m : ℕ,
+      ‖osTimeShiftLM D ((2 : ℝ) ^ m * τ) (mul_nonneg (by positivity) hτ) Ψ‖ <
+        c * r ^ (2 ^ m)
+
+def OSTimeShiftBounded {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Prop :=
+  ∀ Ψ : OSPreHilbertSpace D, ∃ C : ℝ, ∀ (τ : ℝ) (hτ : 0 ≤ τ),
+    ‖osTimeShiftLM D τ hτ Ψ‖ ≤ C
+
+def OSBasisTimeShiftBounded {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Prop :=
+  ∀ A : OSConfig ι, ∃ C : ℝ, ∀ (τ : ℝ) (hτ : 0 ≤ τ),
+    ‖osTimeShiftLM D τ hτ (osBasisPre D A)‖ ≤ C
+
+def OSDiagonalKernelBounded {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ A : OSConfig ι, ∃ C : ℝ, ∀ (τ : ℝ) (hτ : 0 ≤ τ),
+    ‖osKernel S 𝒮 (osConfigTimeShift τ hτ A) (osConfigTimeShift τ hτ A)‖ ≤ C
+
+lemma OSTimeShiftBounded.toSubexponential {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} (h : OSTimeShiftBounded D) :
+    OSTimeShiftSubexponential D := by
+  intro τ hτ Ψ c hc r hr
+  obtain ⟨C, hC⟩ := h Ψ
+  obtain ⟨m, hm⟩ := exists_lt_mul_pow_two_pow hc hr C
+  exact ⟨m, lt_of_le_of_lt (hC ((2 : ℝ) ^ m * τ) (mul_nonneg (by positivity) hτ)) hm⟩
+
+lemma OSBasisTimeShiftBounded.toTimeShiftBounded
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} (h : OSBasisTimeShiftBounded D) :
+    OSTimeShiftBounded D := by
+  intro Ψ
+  choose C hC using h
+  refine ⟨∑ A ∈ Ψ.toFinsupp.support, ‖Ψ.toFinsupp A‖ * C A, fun τ hτ => ?_⟩
+  have hΨ : osTimeShiftLM D τ hτ Ψ =
+      ∑ A ∈ Ψ.toFinsupp.support, Ψ.toFinsupp A • osTimeShiftLM D τ hτ (osBasisPre D A) := by
+    conv_lhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ]
+    rw [map_finsuppSum]
+    unfold Finsupp.sum
+    refine Finset.sum_congr rfl (fun A _ => (osTimeShiftLM D τ hτ).map_smul _ _)
+  rw [hΨ]
+  refine le_trans (norm_sum_le _ _) (Finset.sum_le_sum (fun A _ => ?_))
+  rw [norm_smul]
+  exact mul_le_mul_of_nonneg_left (hC A τ hτ) (norm_nonneg _)
+
+lemma OSDiagonalKernelBounded.toBasisTimeShiftBounded
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (h : OSDiagonalKernelBounded S D.𝒮) :
+    OSBasisTimeShiftBounded D := by
+  intro A
+  obtain ⟨C, hC⟩ := h A
+  refine ⟨Real.sqrt C, fun τ hτ => ?_⟩
+  unfold osTimeShiftLM
+  rw [osLiftConfigMap_osBasisPre, norm_eq_sqrt_re_inner (𝕜 := ℂ), inner_osBasisPre]
+  apply Real.sqrt_le_sqrt
+  exact le_trans (RCLike.re_le_norm _) (hC τ hτ)
+
+theorem osContractionCondition_of_subexponential
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hsub : OSTimeShiftSubexponential D) :
+    OSContractionCondition D := by
+  intro τ hτ Ψ
+  exact le_of_pow_two_pow_le_mul_subexponential (norm_nonneg _)
+    (fun m => norm_pow_two_pow_osTimeShiftLM_le D htrans m τ hτ Ψ)
+    (hsub τ hτ Ψ)
+
+theorem osContractionCondition_of_bounded
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hbdd : OSTimeShiftBounded D) :
+    OSContractionCondition D :=
+  osContractionCondition_of_subexponential D htrans hbdd.toSubexponential
+
+theorem osContractionCondition_of_basisBounded
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hbdd : OSBasisTimeShiftBounded D) :
+    OSContractionCondition D :=
+  osContractionCondition_of_bounded D htrans hbdd.toTimeShiftBounded
+
+theorem osContractionCondition_of_diagonalKernelBounded
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hbdd : OSDiagonalKernelBounded S D.𝒮) :
+    OSContractionCondition D :=
+  osContractionCondition_of_basisBounded D htrans (hbdd.toBasisTimeShiftBounded D)
+
+def OSVacuumNormalized (𝒮 : SchwingerFamily ι) : Prop :=
+  𝒮 0 Fin.elim0 (euclidOrderedBasePoint 0) = 1
+
+@[simp]
+theorem inner_osVacuumPre_self {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    ⟪osVacuumPre D, osVacuumPre D⟫_ℂ = D.𝒮 0 Fin.elim0 (euclidOrderedBasePoint 0) :=
+  inner_osVacuumPre_osBasisPre D (osVacuumConfig ι)
+
+@[simp]
+theorem inner_osVacuum_self {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    ⟪osVacuum D, osVacuum D⟫_ℂ = D.𝒮 0 Fin.elim0 (euclidOrderedBasePoint 0) :=
+  inner_osVacuum_osBasis D (osVacuumConfig ι)
+
+theorem inner_osVacuum_self_of_normalized {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hnorm : OSVacuumNormalized D.𝒮) :
+    ⟪osVacuum D, osVacuum D⟫_ℂ = 1 := by
+  rw [inner_osVacuum_self, hnorm]
+
+theorem norm_osVacuum_of_normalized {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hnorm : OSVacuumNormalized D.𝒮) :
+    ‖osVacuum D‖ = 1 := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), inner_osVacuum_self_of_normalized D hnorm]
+  simp
+
+@[simp]
+theorem inner_osBasisPre_osVacuumPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A : OSConfig ι) :
+    ⟪osBasisPre D A, osVacuumPre D⟫_ℂ = star (D.𝒮 A.1 A.2.1 A.2.2.val) := by
+  rw [← inner_conj_symm, inner_osVacuumPre_osBasisPre]
+  rfl
+
+@[simp]
+theorem inner_osBasis_osVacuum {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A : OSConfig ι) :
+    ⟪osBasis D A, osVacuum D⟫_ℂ = star (D.𝒮 A.1 A.2.1 A.2.2.val) := by
+  rw [← inner_conj_symm, inner_osVacuum_osBasis]
+  rfl
+
+lemma inner_osPreHilbert_osVacuumPre_left {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Φ : OSPreHilbertSpace D) :
+    ⟪osVacuumPre D, Φ⟫_ℂ =
+      Φ.toFinsupp.sum (fun B cB => cB * osKernel S D.𝒮 (osVacuumConfig ι) B) := by
+  change osPreInner S D.𝒮 (Finsupp.single (osVacuumConfig ι) 1) Φ.toFinsupp = _
+  unfold osPreInner
+  simp
+
+lemma inner_osPreHilbert_osVacuumPre_right {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ : OSPreHilbertSpace D) :
+    ⟪Ψ, osVacuumPre D⟫_ℂ =
+      Ψ.toFinsupp.sum (fun A cA => star cA * osKernel S D.𝒮 A (osVacuumConfig ι)) := by
+  change osPreInner S D.𝒮 Ψ.toFinsupp (Finsupp.single (osVacuumConfig ι) 1) = _
+  unfold osPreInner
+  refine Finsupp.sum_congr (fun A _ => ?_)
+  simp
+
+lemma inner_osVacuumPre_mul_inner_eq_finsupp_sum
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (Ψ Φ : OSPreHilbertSpace D) :
+    ⟪Ψ, osVacuumPre D⟫_ℂ * ⟪osVacuumPre D, Φ⟫_ℂ =
+      Ψ.toFinsupp.sum (fun A cA =>
+        Φ.toFinsupp.sum (fun B cB =>
+          star cA * cB *
+            (osKernel S D.𝒮 A (osVacuumConfig ι) *
+              osKernel S D.𝒮 (osVacuumConfig ι) B))) := by
+  rw [inner_osPreHilbert_osVacuumPre_right, inner_osPreHilbert_osVacuumPre_left,
+      Finsupp.sum_mul]
+  refine Finsupp.sum_congr (fun A _ => ?_)
+  rw [Finsupp.mul_sum]
+  refine Finsupp.sum_congr (fun B _ => ?_)
+  ring
+
+@[simp]
+theorem norm_osSpatialTranslate {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) (x : OSHilbert D) :
+    ‖osSpatialTranslate D htrans a x‖ = ‖x‖ := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), norm_eq_sqrt_re_inner (𝕜 := ℂ),
+      inner_osSpatialTranslate D htrans a x x]
+
+@[simp]
+theorem osSpatialTranslate_neg_comp {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) :
+    (osSpatialTranslate D htrans (-a)).comp (osSpatialTranslate D htrans a) =
+      ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  rw [← osSpatialTranslate_add, neg_add_cancel, osSpatialTranslate_zero]
+
+@[simp]
+theorem osSpatialTranslate_comp_neg {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (a : Fin 3 → ℝ) :
+    (osSpatialTranslate D htrans a).comp (osSpatialTranslate D htrans (-a)) =
+      ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  rw [← osSpatialTranslate_add, add_neg_cancel, osSpatialTranslate_zero]
+
+def OSTimeClusterDecomposition {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Prop :=
+  ∀ A B : OSConfig ι,
+    Tendsto
+      (fun τ : ℝ =>
+        osKernel S D.𝒮 A (osConfigTimeShift (max τ 0) (le_max_right τ 0) B))
+      atTop
+      (𝓝 (osKernel S D.𝒮 A (osVacuumConfig ι) *
+        osKernel S D.𝒮 (osVacuumConfig ι) B))
+
+def OSSpatialClusterAlong {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (a : Fin 3 → ℝ) : Prop :=
+  ∀ A B : OSConfig ι,
+    Tendsto
+      (fun t : ℝ =>
+        osKernel S D.𝒮 A (osConfigSpatialShift (t • a) B))
+      atTop
+      (𝓝 (osKernel S D.𝒮 A (osVacuumConfig ι) *
+        osKernel S D.𝒮 (osVacuumConfig ι) B))
+
+def OSSpatialClusterDecomposition {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Prop :=
+  ∀ a : Fin 3 → ℝ, a ≠ 0 → OSSpatialClusterAlong D a
+
+theorem tendsto_inner_osTimeShiftLM_atTop
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcluster : OSTimeClusterDecomposition D)
+    (Ψ Φ : OSPreHilbertSpace D) :
+    Tendsto
+      (fun τ : ℝ =>
+        ⟪Ψ, osTimeShiftLM D (max τ 0) (le_max_right τ 0) Φ⟫_ℂ)
+      atTop
+      (𝓝 (⟪Ψ, osVacuumPre D⟫_ℂ * ⟪osVacuumPre D, Φ⟫_ℂ)) := by
+  have h_eq : (fun τ : ℝ => ⟪Ψ, osTimeShiftLM D (max τ 0) (le_max_right τ 0) Φ⟫_ℂ) =
+      fun τ : ℝ =>
+        Ψ.toFinsupp.sum (fun A cA =>
+          Φ.toFinsupp.sum (fun B cB =>
+            star cA * cB *
+              osKernel S D.𝒮 A (osConfigTimeShift (max τ 0) (le_max_right τ 0) B))) := by
+    ext τ
+    unfold osTimeShiftLM
+    have hR := inner_osLiftConfigMap D id (osConfigTimeShift (max τ 0) (le_max_right τ 0)) Ψ Φ
+    rw [osLiftConfigMap_id, LinearMap.id_apply] at hR
+    exact hR
+  rw [h_eq, inner_osVacuumPre_mul_inner_eq_finsupp_sum]
+  unfold Finsupp.sum
+  refine tendsto_finsetSum _ (fun A _ => ?_)
+  refine tendsto_finsetSum _ (fun B _ => ?_)
+  exact Tendsto.const_mul (star (Ψ.toFinsupp A) * Φ.toFinsupp B) (hcluster A B)
+
+theorem tendsto_inner_osSpatialTranslateLM_atTop
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {a : Fin 3 → ℝ}
+    (hcluster : OSSpatialClusterAlong D a)
+    (Ψ Φ : OSPreHilbertSpace D) :
+    Tendsto
+      (fun t : ℝ =>
+        ⟪Ψ, osSpatialTranslateLM D (t • a) Φ⟫_ℂ)
+      atTop
+      (𝓝 (⟪Ψ, osVacuumPre D⟫_ℂ * ⟪osVacuumPre D, Φ⟫_ℂ)) := by
+  have h_eq : (fun t : ℝ => ⟪Ψ, osSpatialTranslateLM D (t • a) Φ⟫_ℂ) =
+      fun t : ℝ =>
+        Ψ.toFinsupp.sum (fun A cA =>
+          Φ.toFinsupp.sum (fun B cB =>
+            star cA * cB *
+              osKernel S D.𝒮 A (osConfigSpatialShift (t • a) B))) := by
+    ext t
+    unfold osSpatialTranslateLM
+    have hR := inner_osLiftConfigMap D id (osConfigSpatialShift (t • a)) Ψ Φ
+    rw [osLiftConfigMap_id, LinearMap.id_apply] at hR
+    exact hR
+  rw [h_eq, inner_osVacuumPre_mul_inner_eq_finsupp_sum]
+  unfold Finsupp.sum
+  refine tendsto_finsetSum _ (fun A _ => ?_)
+  refine tendsto_finsetSum _ (fun B _ => ?_)
+  exact Tendsto.const_mul (star (Ψ.toFinsupp A) * Φ.toFinsupp B) (hcluster A B)
+
+lemma tendsto_of_forall_pos_exists_approx {f : ℝ → ℂ} {L : ℂ}
+    (h : ∀ δ > 0, ∃ (g : ℝ → ℂ) (L' : ℂ),
+      Tendsto g atTop (𝓝 L') ∧ (∀ t : ℝ, ‖f t - g t‖ ≤ δ) ∧ ‖L' - L‖ ≤ δ) :
+    Tendsto f atTop (𝓝 L) := by
+  rw [Metric.tendsto_nhds]
+  intro ε hε
+  obtain ⟨g, L', hg, hfg, hLL'⟩ := h (ε / 3) (by linarith)
+  have hg' := (Metric.tendsto_nhds.mp hg) (ε / 3) (by linarith)
+  filter_upwards [hg'] with t ht
+  rw [dist_eq_norm] at ht ⊢
+  have h_eq : f t - L = (f t - g t) + (g t - L') + (L' - L) := by ring
+  have h_tri1 := norm_add_le ((f t - g t) + (g t - L')) (L' - L)
+  have h_tri2 := norm_add_le (f t - g t) (g t - L')
+  rw [h_eq]
+  linarith [hfg t]
+
+theorem tendsto_inner_completion_of_norm_le_one
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (T : ℝ → OSHilbert D →L[ℂ] OSHilbert D)
+    (hT_norm : ∀ (t : ℝ) (z : OSHilbert D), ‖T t z‖ ≤ ‖z‖)
+    (hT_dense : ∀ Ψ Φ : OSPreHilbertSpace D,
+      Tendsto (fun t : ℝ => ⟪toOSHilbert D Ψ, T t (toOSHilbert D Φ)⟫_ℂ)
+        atTop (𝓝 (⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ * ⟪osVacuum D, toOSHilbert D Φ⟫_ℂ)))
+    (x y : OSHilbert D) :
+    Tendsto (fun t : ℝ => ⟪x, T t y⟫_ℂ)
+      atTop (𝓝 (⟪x, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ)) := by
+  have h_dense : DenseRange (toOSHilbert D) := UniformSpace.Completion.denseRange_coe
+  have h_step1 : ∀ Ψ : OSPreHilbertSpace D,
+      Tendsto (fun t : ℝ => ⟪toOSHilbert D Ψ, T t y⟫_ℂ)
+        atTop (𝓝 (⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ)) := by
+    intro Ψ
+    apply tendsto_of_forall_pos_exists_approx
+    intro δ hδ
+    let M : ℝ := max (‖toOSHilbert D Ψ‖) (‖toOSHilbert D Ψ‖ * ‖osVacuum D‖ * ‖osVacuum D‖) + 1
+    have hM_pos : 0 < M := by positivity
+    obtain ⟨_, ⟨Φ, rfl⟩, hΦ⟩ := Metric.mem_closure_iff.mp (h_dense y) (δ / M) (div_pos hδ hM_pos)
+    rw [dist_eq_norm] at hΦ
+    refine ⟨fun t => ⟪toOSHilbert D Ψ, T t (toOSHilbert D Φ)⟫_ℂ,
+      ⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ * ⟪osVacuum D, toOSHilbert D Φ⟫_ℂ,
+      hT_dense Ψ Φ, fun t => ?_, ?_⟩
+    · have h_sub : ⟪toOSHilbert D Ψ, T t y⟫_ℂ - ⟪toOSHilbert D Ψ, T t (toOSHilbert D Φ)⟫_ℂ =
+          ⟪toOSHilbert D Ψ, T t (y - toOSHilbert D Φ)⟫_ℂ := by
+        rw [← inner_sub_right, map_sub]
+      rw [h_sub]
+      have h1 : ‖⟪toOSHilbert D Ψ, T t (y - toOSHilbert D Φ)⟫_ℂ‖ ≤
+          ‖toOSHilbert D Ψ‖ * ‖y - toOSHilbert D Φ‖ := by
+        refine le_trans (norm_inner_le_norm _ _) ?_
+        exact mul_le_mul_of_nonneg_left (hT_norm t (y - toOSHilbert D Φ)) (norm_nonneg _)
+      have h2 : ‖toOSHilbert D Ψ‖ ≤ M := by
+        dsimp [M]
+        linarith [le_max_left (‖toOSHilbert D Ψ‖)
+          (‖toOSHilbert D Ψ‖ * ‖osVacuum D‖ * ‖osVacuum D‖)]
+      have h3 : ‖toOSHilbert D Ψ‖ * ‖y - toOSHilbert D Φ‖ ≤ M * (δ / M) :=
+        mul_le_mul h2 hΦ.le (norm_nonneg _) hM_pos.le
+      rw [mul_div_cancel₀ _ (ne_of_gt hM_pos)] at h3
+      exact le_trans h1 h3
+    · have h_sub : ⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ * ⟪osVacuum D, toOSHilbert D Φ⟫_ℂ -
+          ⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ =
+          ⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ * ⟪osVacuum D, toOSHilbert D Φ - y⟫_ℂ := by
+        rw [← mul_sub, inner_sub_right]
+      rw [h_sub, norm_mul]
+      have ha := norm_inner_le_norm (𝕜 := ℂ) (toOSHilbert D Ψ) (osVacuum D)
+      have hb := norm_inner_le_norm (𝕜 := ℂ) (osVacuum D) (toOSHilbert D Φ - y)
+      rw [norm_sub_rev] at hb
+      have h1 : ‖⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ‖ * ‖⟪osVacuum D, toOSHilbert D Φ - y⟫_ℂ‖ ≤
+          (‖toOSHilbert D Ψ‖ * ‖osVacuum D‖ * ‖osVacuum D‖) * ‖y - toOSHilbert D Φ‖ := by
+        calc ‖⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ‖ * ‖⟪osVacuum D, toOSHilbert D Φ - y⟫_ℂ‖
+          _ ≤ (‖toOSHilbert D Ψ‖ * ‖osVacuum D‖) * (‖osVacuum D‖ * ‖y - toOSHilbert D Φ‖) :=
+            mul_le_mul ha hb (norm_nonneg _) (by positivity)
+          _ = (‖toOSHilbert D Ψ‖ * ‖osVacuum D‖ * ‖osVacuum D‖) * ‖y - toOSHilbert D Φ‖ := by
+            ring
+      have h2 : ‖toOSHilbert D Ψ‖ * ‖osVacuum D‖ * ‖osVacuum D‖ ≤ M := by
+        dsimp [M]
+        linarith [le_max_right (‖toOSHilbert D Ψ‖)
+          (‖toOSHilbert D Ψ‖ * ‖osVacuum D‖ * ‖osVacuum D‖)]
+      have h3 : (‖toOSHilbert D Ψ‖ * ‖osVacuum D‖ * ‖osVacuum D‖) * ‖y - toOSHilbert D Φ‖ ≤
+          M * (δ / M) :=
+        mul_le_mul h2 hΦ.le (norm_nonneg _) hM_pos.le
+      rw [mul_div_cancel₀ _ (ne_of_gt hM_pos)] at h3
+      exact le_trans h1 h3
+  apply tendsto_of_forall_pos_exists_approx
+  intro δ hδ
+  let M : ℝ := max (‖y‖) (‖osVacuum D‖ * ‖osVacuum D‖ * ‖y‖) + 1
+  have hM_pos : 0 < M := by positivity
+  obtain ⟨_, ⟨Ψ, rfl⟩, hΨ⟩ := Metric.mem_closure_iff.mp (h_dense x) (δ / M) (div_pos hδ hM_pos)
+  rw [dist_eq_norm] at hΨ
+  refine ⟨fun t => ⟪toOSHilbert D Ψ, T t y⟫_ℂ,
+    ⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ,
+    h_step1 Ψ, fun t => ?_, ?_⟩
+  · have h_sub : ⟪x, T t y⟫_ℂ - ⟪toOSHilbert D Ψ, T t y⟫_ℂ =
+        ⟪x - toOSHilbert D Ψ, T t y⟫_ℂ := (inner_sub_left _ _ _).symm
+    rw [h_sub]
+    have h1 : ‖⟪x - toOSHilbert D Ψ, T t y⟫_ℂ‖ ≤ ‖x - toOSHilbert D Ψ‖ * ‖y‖ := by
+      refine le_trans (norm_inner_le_norm (𝕜 := ℂ) _ _) ?_
+      exact mul_le_mul_of_nonneg_left (hT_norm t y) (norm_nonneg _)
+    have h2 : ‖y‖ ≤ M := by
+      dsimp [M]
+      linarith [le_max_left (‖y‖) (‖osVacuum D‖ * ‖osVacuum D‖ * ‖y‖)]
+    have h3 : ‖x - toOSHilbert D Ψ‖ * ‖y‖ ≤ (δ / M) * M :=
+      mul_le_mul hΨ.le h2 (norm_nonneg _) (by positivity)
+    rw [div_mul_cancel₀ _ (ne_of_gt hM_pos)] at h3
+    exact le_trans h1 h3
+  · have h_sub : ⟪toOSHilbert D Ψ, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ -
+        ⟪x, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ =
+        ⟪toOSHilbert D Ψ - x, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ := by
+      rw [← sub_mul, inner_sub_left]
+    rw [h_sub, norm_mul]
+    have ha := norm_inner_le_norm (𝕜 := ℂ) (toOSHilbert D Ψ - x) (osVacuum D)
+    rw [norm_sub_rev] at ha
+    have hb := norm_inner_le_norm (𝕜 := ℂ) (osVacuum D) y
+    have h1 : ‖⟪toOSHilbert D Ψ - x, osVacuum D⟫_ℂ‖ * ‖⟪osVacuum D, y⟫_ℂ‖ ≤
+        ‖x - toOSHilbert D Ψ‖ * (‖osVacuum D‖ * ‖osVacuum D‖ * ‖y‖) := by
+      calc ‖⟪toOSHilbert D Ψ - x, osVacuum D⟫_ℂ‖ * ‖⟪osVacuum D, y⟫_ℂ‖
+        _ ≤ (‖x - toOSHilbert D Ψ‖ * ‖osVacuum D‖) * (‖osVacuum D‖ * ‖y‖) :=
+          mul_le_mul ha hb (norm_nonneg _) (by positivity)
+        _ = ‖x - toOSHilbert D Ψ‖ * (‖osVacuum D‖ * ‖osVacuum D‖ * ‖y‖) := by ring
+    have h2 : ‖osVacuum D‖ * ‖osVacuum D‖ * ‖y‖ ≤ M := by
+      dsimp [M]
+      linarith [le_max_right (‖y‖) (‖osVacuum D‖ * ‖osVacuum D‖ * ‖y‖)]
+    have h3 : ‖x - toOSHilbert D Ψ‖ * (‖osVacuum D‖ * ‖osVacuum D‖ * ‖y‖) ≤
+        (δ / M) * M :=
+      mul_le_mul hΨ.le h2 (by positivity) (by positivity)
+    rw [div_mul_cancel₀ _ (ne_of_gt hM_pos)] at h3
+    exact le_trans h1 h3
+
+theorem tendsto_inner_osContractionSemigroup_atTop
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (hcluster : OSTimeClusterDecomposition D)
+    (x y : OSHilbert D) :
+    Tendsto
+      (fun τ : ℝ =>
+        ⟪x, osContractionSemigroup D hcontr (max τ 0) (le_max_right τ 0) y⟫_ℂ)
+      atTop
+      (𝓝 (⟪x, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ)) := by
+  refine tendsto_inner_completion_of_norm_le_one D
+    (fun τ => osContractionSemigroup D hcontr (max τ 0) (le_max_right τ 0))
+    (fun τ z => norm_osContractionSemigroup_le D hcontr (max τ 0) (le_max_right τ 0) z)
+    (fun Ψ Φ => ?_) x y
+  dsimp [osVacuum]
+  rw [inner_toOSHilbert, inner_toOSHilbert]
+  have h_eq : (fun t : ℝ =>
+      ⟪toOSHilbert D Ψ,
+        osContractionSemigroup D hcontr (max t 0) (le_max_right t 0) (toOSHilbert D Φ)⟫_ℂ) =
+      fun t : ℝ => ⟪Ψ, osTimeShiftLM D (max t 0) (le_max_right t 0) Φ⟫_ℂ := by
+    ext t
+    rw [osContractionSemigroup_toOSHilbert, inner_toOSHilbert]
+  rw [h_eq]
+  exact tendsto_inner_osTimeShiftLM_atTop D hcluster Ψ Φ
+
+theorem tendsto_inner_osSpatialTranslate_atTop
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    {a : Fin 3 → ℝ} (hcluster : OSSpatialClusterAlong D a)
+    (x y : OSHilbert D) :
+    Tendsto
+      (fun t : ℝ =>
+        ⟪x, osSpatialTranslate D htrans (t • a) y⟫_ℂ)
+      atTop
+      (𝓝 (⟪x, osVacuum D⟫_ℂ * ⟪osVacuum D, y⟫_ℂ)) := by
+  refine tendsto_inner_completion_of_norm_le_one D
+    (fun t => osSpatialTranslate D htrans (t • a))
+    (fun t z => (norm_osSpatialTranslate D htrans (t • a) z).le)
+    (fun Ψ Φ => ?_) x y
+  dsimp [osVacuum]
+  rw [inner_toOSHilbert, inner_toOSHilbert]
+  have h_eq : (fun t : ℝ =>
+      ⟪toOSHilbert D Ψ, osSpatialTranslate D htrans (t • a) (toOSHilbert D Φ)⟫_ℂ) =
+      fun t : ℝ => ⟪Ψ, osSpatialTranslateLM D (t • a) Φ⟫_ℂ := by
+    ext t
+    rw [osSpatialTranslate_toOSHilbert, inner_toOSHilbert]
+  rw [h_eq]
+  exact tendsto_inner_osSpatialTranslateLM_atTop D hcluster Ψ Φ
+
+theorem osTimeShiftSubexponential_of_timeCluster
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcluster : OSTimeClusterDecomposition D) :
+    OSTimeShiftSubexponential D := by
+  intro τ hτ Ψ c hc r hr
+  rcases eq_or_lt_of_le hτ with rfl | hτ_pos
+  · obtain ⟨m, hm⟩ := exists_lt_mul_pow_two_pow hc hr ‖Ψ‖
+    refine ⟨m, ?_⟩
+    have h0 : osTimeShiftLM D ((2 : ℝ) ^ m * 0) (mul_nonneg (by positivity) le_rfl) Ψ = Ψ := by
+      have h_eq : osTimeShiftLM D ((2 : ℝ) ^ m * 0) (mul_nonneg (by positivity) le_rfl) =
+          osTimeShiftLM D 0 le_rfl := by congr 2; ring
+      rw [h_eq, osTimeShiftLM_zero, LinearMap.id_apply]
+    rwa [h0]
+  · let L : ℂ := ⟪Ψ, osVacuumPre D⟫_ℂ * ⟪osVacuumPre D, Ψ⟫_ℂ
+    have h_tendsto := tendsto_inner_osTimeShiftLM_atTop D hcluster Ψ Ψ
+    have h_ev := (Metric.tendsto_nhds.mp h_tendsto) 1 zero_lt_one
+    rw [Filter.eventually_atTop] at h_ev
+    obtain ⟨S₀, hS₀⟩ := h_ev
+    obtain ⟨N₁, hN₁⟩ := exists_nat_gt (S₀ / (2 * τ))
+    obtain ⟨N₂, hN₂⟩ := exists_lt_mul_pow_two_pow hc hr (Real.sqrt (‖L‖ + 1))
+    let m : ℕ := max N₁ N₂
+    refine ⟨m, ?_⟩
+    have hm1 : N₁ ≤ m := le_max_left N₁ N₂
+    have hm2 : N₂ ≤ m := le_max_right N₁ N₂
+    have h_sm : S₀ ≤ 2 * ((2 : ℝ) ^ m * τ) := by
+      have h_lt : (N₁ : ℝ) < (2 : ℝ) ^ m := by
+        calc (N₁ : ℝ)
+          _ ≤ (m : ℝ) := by exact_mod_cast hm1
+          _ < (2 : ℝ) ^ m := by exact_mod_cast Nat.lt_two_pow_self
+      have h_div : S₀ < (N₁ : ℝ) * (2 * τ) := (div_lt_iff₀ (by positivity)).mp hN₁
+      have h_le : (N₁ : ℝ) * (2 * τ) ≤ (2 : ℝ) ^ m * (2 * τ) :=
+        mul_le_mul_of_nonneg_right h_lt.le (by positivity)
+      linarith
+    have h_dist := hS₀ (2 * ((2 : ℝ) ^ m * τ)) h_sm
+    rw [dist_eq_norm] at h_dist
+    have h_max : max (2 * ((2 : ℝ) ^ m * τ)) 0 = 2 * ((2 : ℝ) ^ m * τ) :=
+      max_eq_left (by positivity)
+    have h_norm_inner :
+        ‖⟪Ψ, osTimeShiftLM D (2 * ((2 : ℝ) ^ m * τ)) (by positivity) Ψ⟫_ℂ‖ ≤ ‖L‖ + 1 := by
+      have h_congr : osTimeShiftLM D (max (2 * ((2 : ℝ) ^ m * τ)) 0)
+          (le_max_right (2 * ((2 : ℝ) ^ m * τ)) 0) Ψ =
+          osTimeShiftLM D (2 * ((2 : ℝ) ^ m * τ)) (by positivity) Ψ := by
+        congr 2
+      rw [h_congr] at h_dist
+      have h_tri := norm_add_le
+        (⟪Ψ, osTimeShiftLM D (2 * ((2 : ℝ) ^ m * τ)) (by positivity) Ψ⟫_ℂ - L) L
+      rw [sub_add_cancel] at h_tri
+      linarith
+    have h_sq : ‖osTimeShiftLM D ((2 : ℝ) ^ m * τ) (mul_nonneg (by positivity) hτ) Ψ‖ ^ 2 ≤
+        ‖L‖ + 1 := by
+      have h_id : ‖osTimeShiftLM D ((2 : ℝ) ^ m * τ) (mul_nonneg (by positivity) hτ) Ψ‖ ^ 2 =
+          RCLike.re ⟪Ψ, osTimeShiftLM D (2 * ((2 : ℝ) ^ m * τ)) (by positivity) Ψ⟫_ℂ := by
+        rw [← osTimeShiftLM_isSymmetric D htrans (2 * ((2 : ℝ) ^ m * τ)) (by positivity) Ψ Ψ]
+        rw [inner_osTimeShiftLM_self_eq_norm_sq_half D htrans
+          (2 * ((2 : ℝ) ^ m * τ)) (by positivity) Ψ]
+        have h_half : osTimeShiftLM D (2 * ((2 : ℝ) ^ m * τ) / 2) (by positivity) Ψ =
+            osTimeShiftLM D ((2 : ℝ) ^ m * τ) (mul_nonneg (by positivity) hτ) Ψ := by
+          congr 2
+          ring
+        rw [h_half]
+        norm_cast
+      rw [h_id]
+      exact le_trans (RCLike.re_le_norm _) h_norm_inner
+    have h_le_sqrt :
+        ‖osTimeShiftLM D ((2 : ℝ) ^ m * τ) (mul_nonneg (by positivity) hτ) Ψ‖ ≤
+          Real.sqrt (‖L‖ + 1) := by
+      rw [← Real.sqrt_sq (norm_nonneg _)]
+      exact Real.sqrt_le_sqrt h_sq
+    have h_pow_mono : c * r ^ (2 ^ N₂) ≤ c * r ^ (2 ^ m) := by
+      apply mul_le_mul_of_nonneg_left _ hc.le
+      exact pow_le_pow_right₀ hr.le (Nat.pow_le_pow_right (by norm_num) hm2)
+    exact lt_of_le_of_lt h_le_sqrt (lt_of_lt_of_le hN₂ h_pow_mono)
+
+theorem osContractionCondition_of_timeCluster
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcluster : OSTimeClusterDecomposition D) :
+    OSContractionCondition D :=
+  osContractionCondition_of_subexponential D htrans
+    (osTimeShiftSubexponential_of_timeCluster D htrans hcluster)
+
+theorem eq_smul_osVacuum_of_osContractionSemigroup_fixed
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (hcluster : OSTimeClusterDecomposition D)
+    {Ψ : OSHilbert D}
+    (hfixed : ∀ (τ : ℝ) (hτ : 0 ≤ τ),
+      osContractionSemigroup D hcontr τ hτ Ψ = Ψ) :
+    Ψ = ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D := by
+  have h_inner_eq : ∀ x : OSHilbert D,
+      ⟪x, Ψ⟫_ℂ = ⟪x, ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D⟫_ℂ := by
+    intro x
+    have h_tendsto := tendsto_inner_osContractionSemigroup_atTop D hcontr hcluster x Ψ
+    have h_const_fn : (fun τ : ℝ =>
+        ⟪x, osContractionSemigroup D hcontr (max τ 0) (le_max_right τ 0) Ψ⟫_ℂ) =
+        fun _ : ℝ => ⟪x, Ψ⟫_ℂ := by
+      ext τ
+      rw [hfixed (max τ 0) (le_max_right τ 0)]
+    rw [h_const_fn] at h_tendsto
+    have h_lim : ⟪x, Ψ⟫_ℂ = ⟪x, osVacuum D⟫_ℂ * ⟪osVacuum D, Ψ⟫_ℂ :=
+      tendsto_nhds_unique tendsto_const_nhds h_tendsto
+    rw [h_lim, inner_smul_right, mul_comm]
+  have h_diff : ⟪Ψ - ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D,
+      Ψ - ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D⟫_ℂ = 0 := by
+    rw [inner_sub_right, h_inner_eq (Ψ - ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D), sub_self]
+  exact sub_eq_zero.mp (inner_self_eq_zero.mp h_diff)
+
+theorem eq_zero_of_osContractionSemigroup_fixed_of_inner_osVacuum_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (hcluster : OSTimeClusterDecomposition D)
+    {Ψ : OSHilbert D}
+    (hfixed : ∀ (τ : ℝ) (hτ : 0 ≤ τ),
+      osContractionSemigroup D hcontr τ hτ Ψ = Ψ)
+    (horth : ⟪osVacuum D, Ψ⟫_ℂ = 0) :
+    Ψ = 0 := by
+  rw [eq_smul_osVacuum_of_osContractionSemigroup_fixed D hcontr hcluster hfixed,
+      horth, zero_smul]
+
+theorem eq_smul_osVacuum_of_osSpatialTranslate_fixed
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    {a : Fin 3 → ℝ} (hcluster : OSSpatialClusterAlong D a)
+    {Ψ : OSHilbert D}
+    (hfixed : ∀ t : ℝ, osSpatialTranslate D htrans (t • a) Ψ = Ψ) :
+    Ψ = ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D := by
+  have h_inner_eq : ∀ x : OSHilbert D,
+      ⟪x, Ψ⟫_ℂ = ⟪x, ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D⟫_ℂ := by
+    intro x
+    have h_tendsto := tendsto_inner_osSpatialTranslate_atTop D htrans hcluster x Ψ
+    have h_const_fn : (fun t : ℝ =>
+        ⟪x, osSpatialTranslate D htrans (t • a) Ψ⟫_ℂ) =
+        fun _ : ℝ => ⟪x, Ψ⟫_ℂ := by
+      ext t
+      rw [hfixed t]
+    rw [h_const_fn] at h_tendsto
+    have h_lim : ⟪x, Ψ⟫_ℂ = ⟪x, osVacuum D⟫_ℂ * ⟪osVacuum D, Ψ⟫_ℂ :=
+      tendsto_nhds_unique tendsto_const_nhds h_tendsto
+    rw [h_lim, inner_smul_right, mul_comm]
+  have h_diff : ⟪Ψ - ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D,
+      Ψ - ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D⟫_ℂ = 0 := by
+    rw [inner_sub_right, h_inner_eq (Ψ - ⟪osVacuum D, Ψ⟫_ℂ • osVacuum D), sub_self]
+  exact sub_eq_zero.mp (inner_self_eq_zero.mp h_diff)
+
+theorem eq_zero_of_osSpatialTranslate_fixed_of_inner_osVacuum_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    {a : Fin 3 → ℝ} (hcluster : OSSpatialClusterAlong D a)
+    {Ψ : OSHilbert D}
+    (hfixed : ∀ t : ℝ, osSpatialTranslate D htrans (t • a) Ψ = Ψ)
+    (horth : ⟪osVacuum D, Ψ⟫_ℂ = 0) :
+    Ψ = 0 := by
+  rw [eq_smul_osVacuum_of_osSpatialTranslate_fixed D htrans hcluster hfixed,
+      horth, zero_smul]
+
+theorem tendsto_inner_osContractionSemigroup_eq_zero_of_inner_osVacuum_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (hcluster : OSTimeClusterDecomposition D)
+    (x : OSHilbert D) {y : OSHilbert D} (horth : ⟪osVacuum D, y⟫_ℂ = 0) :
+    Tendsto
+      (fun τ : ℝ =>
+        ⟪x, osContractionSemigroup D hcontr (max τ 0) (le_max_right τ 0) y⟫_ℂ)
+      atTop (𝓝 0) := by
+  have h := tendsto_inner_osContractionSemigroup_atTop D hcontr hcluster x y
+  rwa [horth, mul_zero] at h
+
+theorem tendsto_inner_osSpatialTranslate_eq_zero_of_inner_osVacuum_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    {a : Fin 3 → ℝ} (hcluster : OSSpatialClusterAlong D a)
+    (x : OSHilbert D) {y : OSHilbert D} (horth : ⟪osVacuum D, y⟫_ℂ = 0) :
+    Tendsto
+      (fun t : ℝ => ⟪x, osSpatialTranslate D htrans (t • a) y⟫_ℂ)
+      atTop (𝓝 0) := by
+  have h := tendsto_inner_osSpatialTranslate_atTop D htrans hcluster x y
+  rwa [horth, mul_zero] at h
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+def spatialTranslate (P : OSReconstructedWightman R S η 𝒮) (a : Fin 3 → ℝ) :
+    P.Hilbert →L[ℂ] P.Hilbert :=
+  osSpatialTranslate P.osData P.osAxioms.os1_translation a
+
+def timeContraction (P : OSReconstructedWightman R S η 𝒮) (τ : ℝ) (hτ : 0 ≤ τ) :
+    P.Hilbert →L[ℂ] P.Hilbert :=
+  osContractionSemigroup P.osData P.contraction τ hτ
+
+theorem norm_vacuum_of_normalized (P : OSReconstructedWightman R S η 𝒮)
+    (hnorm : OSVacuumNormalized 𝒮) :
+    ‖P.vacuum‖ = 1 :=
+  norm_osVacuum_of_normalized P.osData hnorm
+
+theorem vacuum_unique_of_timeCluster (P : OSReconstructedWightman R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition P.osData)
+    {Ψ : P.Hilbert}
+    (hfixed : ∀ (τ : ℝ) (hτ : 0 ≤ τ), P.timeContraction τ hτ Ψ = Ψ) :
+    Ψ = ⟪P.vacuum, Ψ⟫_ℂ • P.vacuum :=
+  eq_smul_osVacuum_of_osContractionSemigroup_fixed P.osData P.contraction hcluster hfixed
+
+theorem vacuum_unique_of_spatialCluster (P : OSReconstructedWightman R S η 𝒮)
+    {a : Fin 3 → ℝ} (hcluster : OSSpatialClusterAlong P.osData a)
+    {Ψ : P.Hilbert}
+    (hfixed : ∀ t : ℝ, P.spatialTranslate (t • a) Ψ = Ψ) :
+    Ψ = ⟪P.vacuum, Ψ⟫_ℂ • P.vacuum :=
+  eq_smul_osVacuum_of_osSpatialTranslate_fixed P.osData P.osAxioms.os1_translation hcluster hfixed
+
+end OSReconstructedWightman
+
+lemma mem_forward_tube_one (z : Fin 1 → Fin 4 → ℂ) : z ∈ forward_tube_n 1 := by
+  intro i hi
+  omega
+
+lemma mem_orderedEuclidN_one (x : Fin 1 → Fin 4 → ℝ) : x ∈ orderedEuclidN 1 := by
+  intro i hi
+  omega
+
+def diagShiftCLM (n : ℕ) : (Fin 4 → ℂ) →L[ℂ] (Fin n → Fin 4 → ℂ) :=
+  ContinuousLinearMap.pi (fun _ : Fin n => ContinuousLinearMap.id ℂ (Fin 4 → ℂ))
+
+@[simp]
+lemma diagShiftCLM_apply (n : ℕ) (a : Fin 4 → ℂ) (i : Fin n) :
+    diagShiftCLM n a i = a := rfl
+
+lemma analyticOn_forward_tube_shift (n : ℕ) {f : (Fin n → Fin 4 → ℂ) → ℂ}
+    (hf : AnalyticOn ℂ f (forward_tube_n n)) (a : Fin 4 → ℂ) :
+    AnalyticOn ℂ (fun z => f (fun i => z i + a)) (forward_tube_n n) := by
+  have h_aff : AnalyticOn ℂ (fun z : Fin n → Fin 4 → ℂ => z + fun _ => a) (forward_tube_n n) :=
+    ((ContinuousLinearMap.id ℂ (Fin n → Fin 4 → ℂ)).analyticOn (forward_tube_n n)).add
+      analyticOn_const
+  exact hf.comp h_aff (fun z hz => shift_mem_forward_tube_n hz a)
+
+lemma analyticOn_univ_shift_param (n : ℕ) {f : (Fin n → Fin 4 → ℂ) → ℂ}
+    (hf : AnalyticOn ℂ f (forward_tube_n n))
+    {z : Fin n → Fin 4 → ℂ} (hz : z ∈ forward_tube_n n) :
+    AnalyticOn ℂ (fun a : Fin 4 → ℂ => f (fun i => z i + a)) Set.univ := by
+  have h_aff : AnalyticOn ℂ (fun a : Fin 4 → ℂ => z + diagShiftCLM n a) Set.univ :=
+    analyticOn_const.add ((diagShiftCLM n).analyticOn Set.univ)
+  exact hf.comp h_aff (fun a _ => shift_mem_forward_tube_n hz a)
+
+theorem analyticOn_univ_eq_of_eventuallyEq_wickEmbed
+    {g₁ g₂ : (Fin 4 → ℂ) → ℂ}
+    (hg₁ : AnalyticOn ℂ g₁ Set.univ) (hg₂ : AnalyticOn ℂ g₂ Set.univ)
+    (x₀ : Fin 4 → ℝ)
+    (h_ev : ∀ᶠ x in 𝓝 x₀, g₁ (wickEmbed x) = g₂ (wickEmbed x)) :
+    ∀ a : Fin 4 → ℂ, g₁ a = g₂ a := by
+  intro a
+  let proj0 : (Fin 1 → Fin 4 → ℂ) →L[ℂ] (Fin 4 → ℂ) := ContinuousLinearMap.proj (0 : Fin 1)
+  have hf₁ : AnalyticOn ℂ (fun w : Fin 1 → Fin 4 → ℂ => g₁ (proj0 w)) (forward_tube_n 1) :=
+    hg₁.comp (proj0.analyticOn _) (fun _ _ => Set.mem_univ _)
+  have hf₂ : AnalyticOn ℂ (fun w : Fin 1 → Fin 4 → ℂ => g₂ (proj0 w)) (forward_tube_n 1) :=
+    hg₂.comp (proj0.analyticOn _) (fun _ _ => Set.mem_univ _)
+  have h_cont : Continuous (fun y : Fin 1 → Fin 4 → ℝ => y 0) := continuous_apply 0
+  have h_tendsto : Tendsto (fun y : Fin 1 → Fin 4 → ℝ => y 0) (𝓝 (fun _ => x₀)) (𝓝 x₀) :=
+    h_cont.tendsto (fun _ => x₀)
+  have h_ev1 : ∀ᶠ y : Fin 1 → Fin 4 → ℝ in 𝓝 (fun _ => x₀),
+      g₁ (proj0 (wickEmbedN 1 y)) = g₂ (proj0 (wickEmbedN 1 y)) :=
+    h_tendsto.eventually h_ev
+  exact analyticOn_forward_tube_eq_of_eventuallyEq_wickEmbedN 1 hf₁ hf₂
+    (mem_orderedEuclidN_one (fun _ => x₀)) h_ev1 (mem_forward_tube_one (fun _ => a))
+
+theorem analyticOn_univ_eq_of_wickEmbed_eq
+    {g₁ g₂ : (Fin 4 → ℂ) → ℂ}
+    (hg₁ : AnalyticOn ℂ g₁ Set.univ) (hg₂ : AnalyticOn ℂ g₂ Set.univ)
+    (h_eq : ∀ x : Fin 4 → ℝ, g₁ (wickEmbed x) = g₂ (wickEmbed x)) :
+    ∀ a : Fin 4 → ℂ, g₁ a = g₂ a :=
+  analyticOn_univ_eq_of_eventuallyEq_wickEmbed hg₁ hg₂ 0
+    (Filter.Eventually.of_forall h_eq)
+
+lemma wickEmbedN_shift (n : ℕ) (x : Fin n → Fin 4 → ℝ) (a : Fin 4 → ℝ) :
+    wickEmbedN n (fun i => x i + a) = fun i => wickEmbedN n x i + wickEmbed a := by
+  ext i μ
+  exact congrFun (wickEmbed_add (x i) a) μ
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tube_wickEmbed_shift_eq_of_posOrderedEuclidN_eq {W : WightmanFamily ι}
+    (E : TubeExtension W) (n : ℕ) (α : Fin n → ι) (x_a : Fin 4 → ℝ)
+    (h_shift : ∀ x ∈ posOrderedEuclidN n,
+      schwingerFromTube E n α (fun i => x i + x_a) = schwingerFromTube E n α x)
+    (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    E.H n α (fun i => z i + wickEmbed x_a) = E.H n α z := by
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (analyticOn_forward_tube_shift n (E.analytic n α) (wickEmbed x_a))
+    (E.analytic n α) (fun x hx => ?_) hz
+  change E.H n α (fun i => wickEmbedN n x i + wickEmbed x_a) = schwingerFromTube E n α x
+  rw [← wickEmbedN_shift n x x_a]
+  exact h_shift x hx
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tubeTranslationInvariant_of_posOrdered_posTimeShift {W : WightmanFamily ι}
+    (E : TubeExtension W)
+    (h_pos : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → ∀ x_a : Fin 4 → ℝ, 0 < x_a 0 →
+      schwingerFromTube E n α (fun i => x i + x_a) = schwingerFromTube E n α x) :
+    TubeTranslationInvariant E := by
+  intro n α z a hz
+  have h_open : IsOpen {x_a : Fin 4 → ℝ | 0 < x_a 0} :=
+    isOpen_lt continuous_const (continuous_apply 0)
+  have h_mem : euclidTimeVec 1 ∈ {x_a : Fin 4 → ℝ | 0 < x_a 0} := by
+    simp [euclidTimeVec]
+  apply analyticOn_univ_eq_of_eventuallyEq_wickEmbed
+    (analyticOn_univ_shift_param n (E.analytic n α) hz)
+    (analyticOn_const (v := E.H n α z))
+    (euclidTimeVec 1) _ a
+  filter_upwards [h_open.mem_nhds h_mem] with x_a hx_a
+  exact tube_wickEmbed_shift_eq_of_posOrderedEuclidN_eq E n α x_a
+    (fun x hx => h_pos n α x hx x_a hx_a) z hz
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tubeTranslationInvariant_of_osTranslationInvariant {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : OSTranslationInvariant (schwingerFromTube E)) :
+    TubeTranslationInvariant E :=
+  tubeTranslationInvariant_of_posOrdered_posTimeShift E
+    (fun n α x hx x_a _ =>
+      htrans n α x (posOrderedEuclidN_subset_orderedEuclidN n hx) x_a)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tubeTranslationInvariant_iff_osTranslationInvariant {W : WightmanFamily ι}
+    (E : TubeExtension W) :
+    TubeTranslationInvariant E ↔ OSTranslationInvariant (schwingerFromTube E) :=
+  ⟨schwingerFromTube_translation_invariant E,
+   tubeTranslationInvariant_of_osTranslationInvariant E⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tube_eq_sub_point_of_tubeTranslationInvariant {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n)
+    (k : Fin n) :
+    E.H n α z = E.H n α (fun i => z i - z k) := by
+  have h := (htrans n α z (-z k) hz).symm
+  simpa [sub_eq_add_neg] using h
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tube_onePoint_eq_zero_eval_of_tubeTranslationInvariant {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (α : Fin 1 → ι) (z : Fin 1 → Fin 4 → ℂ) :
+    E.H 1 α z = E.H 1 α 0 := by
+  have h := tube_eq_sub_point_of_tubeTranslationInvariant E htrans 1 α z
+    (mem_forward_tube_one z) 0
+  have h0 : (fun i : Fin 1 => z i - z 0) = 0 := by
+    ext i μ
+    fin_cases i
+    simp
+  rwa [h0] at h
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem osTranslationInvariant_onePoint_eq_zero_eval {𝒮 : SchwingerFamily ι}
+    (htrans : OSTranslationInvariant 𝒮)
+    (α : Fin 1 → ι) (x : Fin 1 → Fin 4 → ℝ) :
+    𝒮 1 α x = 𝒮 1 α 0 := by
+  have h := htrans 1 α x (mem_orderedEuclidN_one x) (-x 0)
+  have h0 : (fun i : Fin 1 => x i + -x 0) = 0 := by
+    ext i μ
+    fin_cases i
+    simp
+  rw [h0] at h
+  exact h.symm
+
+theorem wightman_eq_zero_of_odd_fermion (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (E : TubeExtension W) (hcov : TubeCovariant R E)
+    (hε : R.HasSpinParity (-1))
+    (n : ℕ) (hn : Odd n) (α : Fin n → ι)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    W n α f = 0 :=
+  wightman_eq_zero_of_tube_eq_zero E n α
+    (fun z hz => tube_eq_zero_of_odd_fermion R W E hcov hε n hn z hz α) f
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+theorem osTranslationInvariant_schwingerFromTube (P : OSReconstructedWightman R S η 𝒮) :
+    OSTranslationInvariant (schwingerFromTube P.E) := by
+  intro n α x hx a
+  have hxa : (fun i => x i + a) ∈ orderedEuclidN n :=
+    shift_mem_orderedEuclidN n hx a
+  rw [← P.schwinger_eq n α (fun i => x i + a) hxa,
+      ← P.schwinger_eq n α x hx]
+  exact P.osAxioms.os1_translation n α x hx a
+
+theorem tube_translationInvariant (P : OSReconstructedWightman R S η 𝒮) :
+    TubeTranslationInvariant P.E :=
+  tubeTranslationInvariant_of_osTranslationInvariant P.E
+    P.osTranslationInvariant_schwingerFromTube
+
+theorem tube_H_shift (P : OSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ)
+    (hz : z ∈ forward_tube_n n) :
+    P.E.H n α (fun i => z i + a) = P.E.H n α z :=
+  P.tube_translationInvariant n α z a hz
+
+theorem tube_H_sub_point (P : OSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n)
+    (k : Fin n) :
+    P.E.H n α z = P.E.H n α (fun i => z i - z k) :=
+  tube_eq_sub_point_of_tubeTranslationInvariant P.E P.tube_translationInvariant n α z hz k
+
+theorem tube_onePoint_eq_zero_eval (P : OSReconstructedWightman R S η 𝒮)
+    (α : Fin 1 → ι) (z : Fin 1 → Fin 4 → ℂ) :
+    P.E.H 1 α z = P.E.H 1 α 0 :=
+  tube_onePoint_eq_zero_eval_of_tubeTranslationInvariant P.E P.tube_translationInvariant α z
+
+theorem tube_neg_rev_two (P : OSReconstructedWightman R S η 𝒮)
+    (α : Fin 2 → ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    P.E.H 2 α (-(z ∘ Fin.rev)) = P.E.H 2 α z :=
+  tubeTranslationInvariant_neg_rev_two P.E P.tube_translationInvariant α z hz
+
+lemma subsingleton_hasPTScalar [Subsingleton ι] (R : HolomorphicLorentzRep ι) (a : ι) :
+    R.HasPTScalar (R.σ (-1, 1) a a) := by
+  ext i j
+  rw [Subsingleton.elim i a, Subsingleton.elim j a]
+  simp
+
+lemma subsingleton_sigma_pt_sq_eq_one [Subsingleton ι] (R : HolomorphicLorentzRep ι) (a : ι) :
+    (R.σ (-1, 1) a a) ^ 2 = 1 := by
+  have h := congrFun (congrFun (sigma_pt_mul_self R) a) a
+  simp only [Matrix.mul_apply, Matrix.one_apply_eq] at h
+  rw [Fintype.sum_subsingleton _ a] at h
+  simpa [sq] using h
+
+lemma subsingleton_hasDiagInvolutivePT [Subsingleton ι] (R : HolomorphicLorentzRep ι) :
+    R.HasDiagInvolutivePT := by
+  by_cases hne : Nonempty ι
+  · rcases hne with ⟨a⟩
+    exact (subsingleton_hasPTScalar R a).toHasDiagInvolutivePT
+  · exact ⟨fun _ => 1, fun c => False.elim (hne ⟨c⟩), fun a _ => False.elim (hne ⟨a⟩)⟩
+
+theorem fermion_tube_twoPoint_diag_eq_zero
+    (P : OSReconstructedWightman R S (-1) 𝒮)
+    (hpt : R.HasDiagInvolutivePT)
+    (c : ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    P.E.H 2 (fun _ => c) z = 0 := by
+  have h1 := P.tube_neg_rev_two (fun _ => c) z hz
+  have h2 := tubePCT_two_diag_of_hasDiagInvolutivePT R hpt P.E P.tube_pct c z hz
+  have h : P.E.H 2 (fun _ => c) z = (-1 : ℂ) * P.E.H 2 (fun _ => c) z := h1.symm.trans h2
+  linear_combination (1 / 2 : ℂ) * h
+
+theorem fermion_wightman_twoPoint_diag_eq_zero
+    (P : OSReconstructedWightman R S (-1) 𝒮)
+    (hpt : R.HasDiagInvolutivePT)
+    (c : ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    P.W 2 (fun _ => c) f = 0 :=
+  P.fermion_twoPoint_diag_wightman_eq_zero hpt c f
+
+theorem wightman_eq_zero_of_odd_fermion (P : OSReconstructedWightman R S η 𝒮)
+    (hε : R.HasSpinParity (-1))
+    (n : ℕ) (hn : Odd n) (α : Fin n → ι)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    P.W n α f = 0 :=
+  _root_.QFT.wightman_eq_zero_of_odd_fermion R P.W P.E P.tube_covariant hε n hn α f
+
+end OSReconstructedWightman
+
+theorem osterwalder_schrader_grand_synthesis_theorem
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (P : OSReconstructedWightman R S η 𝒮) :
+    TubeTranslationInvariant P.E ∧
+    ComplexCovariant R P.E ∧
+    WightmanPCT η R P.W ∧
+    (∀ P' : OSReconstructedWightman R S η 𝒮, P'.W = P.W) ∧
+    (∀ U₁ U₂ : SU2, P.spinorRot (U₁ * U₂) = (P.spinorRot U₁).comp (P.spinorRot U₂)) ∧
+    (∀ U : SU2, P.spinorRot U P.vacuum = P.vacuum) ∧
+    (∀ A : OSConfig ι, ⟪P.vacuum, osBasis P.osData A⟫_ℂ = 𝒮 A.1 A.2.1 A.2.2.val) ∧
+    (OSTimeClusterDecomposition P.osData →
+      ∀ Ψ : P.Hilbert, (∀ (τ : ℝ) (hτ : 0 ≤ τ), P.timeContraction τ hτ Ψ = Ψ) →
+        Ψ = ⟪P.vacuum, Ψ⟫_ℂ • P.vacuum) :=
+  ⟨P.tube_translationInvariant,
+   P.complexCovariant,
+   P.wightman_pct,
+   fun P' => P'.wightman_unique_unconditional P,
+   P.spinorRot_mul,
+   P.spinorRot_vacuum,
+   P.inner_vacuum_osBasis,
+   fun hcluster _Ψ hfixed => P.vacuum_unique_of_timeCluster hcluster hfixed⟩
+
+lemma orderedEuclidN_pos_of_zero_pos (j : ℕ) {y : Fin j → Fin 4 → ℝ}
+    (hy : y ∈ orderedEuclidN j)
+    (h0 : ∀ hj : 0 < j, 0 < y ⟨0, hj⟩ 0) :
+    y ∈ posOrderedEuclidN j := by
+  refine ⟨fun ⟨k, hk⟩ => ?_, hy⟩
+  induction k with
+  | zero => exact h0 hk
+  | succ m ih =>
+    have hm : m < j := Nat.lt_of_succ_lt hk
+    exact lt_trans (ih hm) (hy ⟨m, hm⟩ hk)
+
+lemma exists_timeShift_mem_posOrderedEuclidN (n : ℕ) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    ∃ τ : ℝ, (fun i => x i + euclidTimeVec τ) ∈ posOrderedEuclidN n := by
+  by_cases hn : 0 < n
+  · refine ⟨1 - x ⟨0, hn⟩ 0, orderedEuclidN_pos_of_zero_pos n
+      (shift_mem_orderedEuclidN n hx (euclidTimeVec (1 - x ⟨0, hn⟩ 0))) (fun _ => ?_)⟩
+    simp [euclidTimeVec]
+  · refine ⟨0, orderedEuclidN_pos_of_zero_pos n
+      (shift_mem_orderedEuclidN n hx (euclidTimeVec 0)) (fun h0 => (hn h0).elim)⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma schwinger_eq_zero_of_posOrderedEuclidN_eq_zero {𝒮 : SchwingerFamily ι}
+    (htrans : OSTranslationInvariant 𝒮) (n : ℕ) (α : Fin n → ι)
+    (h_pos : ∀ x ∈ posOrderedEuclidN n, 𝒮 n α x = 0)
+    {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    𝒮 n α x = 0 := by
+  obtain ⟨τ, hτ⟩ := exists_timeShift_mem_posOrderedEuclidN n hx
+  rw [← htrans n α x hx (euclidTimeVec τ)]
+  exact h_pos _ hτ
+
+def osSplitOneTimeShift (j : ℕ) (x : Fin (1 + j) → Fin 4 → ℝ) : ℝ :=
+  if hj : 0 < j then
+    -(x (Fin.castAdd j 0) 0 + x (Fin.natAdd 1 ⟨0, hj⟩) 0) / 2
+  else
+    -x (Fin.castAdd j 0) 0 - 1
+
+def osSplitOneLeft (j : ℕ) (x : Fin (1 + j) → Fin 4 → ℝ) : Fin 1 → Fin 4 → ℝ :=
+  fun _ => euclidTimeReflect (x (Fin.castAdd j 0) + euclidTimeVec (osSplitOneTimeShift j x))
+
+def osSplitOneRight (j : ℕ) (x : Fin (1 + j) → Fin 4 → ℝ) : Fin j → Fin 4 → ℝ :=
+  fun i => x (Fin.natAdd 1 i) + euclidTimeVec (osSplitOneTimeShift j x)
+
+lemma osSplitOne_first_lt_second (j : ℕ) {x : Fin (1 + j) → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN (1 + j)) (hj : 0 < j) :
+    x (Fin.castAdd j 0) 0 < x (Fin.natAdd 1 ⟨0, hj⟩) 0 := by
+  have hlt : (Fin.castAdd j (0 : Fin 1)).val + 1 < 1 + j := by
+    dsimp
+    omega
+  have h_eq : (⟨(Fin.castAdd j (0 : Fin 1)).val + 1, hlt⟩ : Fin (1 + j)) =
+      Fin.natAdd 1 ⟨0, hj⟩ := by
+    ext
+    rfl
+  simpa [h_eq] using hx (Fin.castAdd j 0) hlt
+
+lemma osSplitOneLeft_mem_posOrderedEuclidN (j : ℕ) {x : Fin (1 + j) → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN (1 + j)) :
+    osSplitOneLeft j x ∈ posOrderedEuclidN 1 := by
+  refine ⟨fun _ => ?_, mem_orderedEuclidN_one _⟩
+  simp only [osSplitOneLeft, euclidTimeReflect, Pi.add_apply, euclidTimeVec, ↓reduceIte]
+  unfold osSplitOneTimeShift
+  split_ifs with hj
+  · have h01 := osSplitOne_first_lt_second j hx hj
+    linarith
+  · linarith
+
+lemma osSplitOneRight_mem_posOrderedEuclidN (j : ℕ) {x : Fin (1 + j) → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN (1 + j)) :
+    osSplitOneRight j x ∈ posOrderedEuclidN j := by
+  refine orderedEuclidN_pos_of_zero_pos j (fun i hi => ?_) (fun hj => ?_)
+  · simp only [osSplitOneRight, Pi.add_apply, euclidTimeVec, ↓reduceIte]
+    have hlt : (Fin.natAdd 1 i).val + 1 < 1 + j := by
+      dsimp
+      omega
+    have h_eq : (⟨(Fin.natAdd 1 i).val + 1, hlt⟩ : Fin (1 + j)) =
+        Fin.natAdd 1 ⟨i.val + 1, hi⟩ := by
+      ext
+      rfl
+    have h_step := hx (Fin.natAdd 1 i) hlt
+    rw [h_eq] at h_step
+    linarith
+  · simp only [osSplitOneRight, Pi.add_apply, euclidTimeVec, ↓reduceIte]
+    unfold osSplitOneTimeShift
+    rw [dif_pos hj]
+    have h01 := osSplitOne_first_lt_second j hx hj
+    linarith
+
+theorem osConcatPoint_osSplitOne (j : ℕ) (x : Fin (1 + j) → Fin 4 → ℝ) :
+    osConcatPoint 1 j (osSplitOneLeft j x) (osSplitOneRight j x) =
+      fun m => x m + euclidTimeVec (osSplitOneTimeShift j x) := by
+  ext m μ
+  by_cases hm : m.val < 1
+  · have h_eq : m = Fin.castAdd j 0 := by
+      ext
+      dsimp
+      omega
+    rw [h_eq, osConcatPoint_castAdd]
+    exact congrFun (euclidTimeReflect_involutive _) μ
+  · have h_ge : 1 ≤ m.val := by omega
+    have h_eq : m = Fin.natAdd 1 ⟨m.val - 1, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+      ext
+      dsimp
+      omega
+    rw [h_eq, osConcatPoint_natAdd]
+    rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConcatIdx_one_left (j : ℕ) (α : Fin (1 + j) → ι) :
+    osConcatIdx 1 j (fun _ => α (Fin.castAdd j 0)) (fun i => α (Fin.natAdd 1 i)) = α := by
+  ext m
+  by_cases hm : m.val < 1
+  · have h_eq : m = Fin.castAdd j 0 := by
+      ext
+      dsimp
+      omega
+    rw [h_eq, osConcatIdx_castAdd]
+  · have h_ge : 1 ≤ m.val := by omega
+    have h_eq : m = Fin.natAdd 1 ⟨m.val - 1, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+      ext
+      dsimp
+      omega
+    rw [h_eq, osConcatIdx_natAdd]
+
+omit [Fintype ι] [DecidableEq ι] in
+def osSplitOneLeftConfig (j : ℕ) (c : ι) (x : Fin (1 + j) → Fin 4 → ℝ)
+    (hx : x ∈ orderedEuclidN (1 + j)) : OSConfig ι :=
+  ⟨1, (fun _ => c, ⟨osSplitOneLeft j x, osSplitOneLeft_mem_posOrderedEuclidN j hx⟩)⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+def osSplitOneRightConfig (j : ℕ) (α : Fin (1 + j) → ι) (x : Fin (1 + j) → Fin 4 → ℝ)
+    (hx : x ∈ orderedEuclidN (1 + j)) : OSConfig ι :=
+  ⟨j, (fun i => α (Fin.natAdd 1 i),
+    ⟨osSplitOneRight j x, osSplitOneRight_mem_posOrderedEuclidN j hx⟩)⟩
+
+theorem schwinger_one_add_eq_sum_osKernel
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R) (𝒮 : SchwingerFamily ι)
+    (htrans : OSTranslationInvariant 𝒮)
+    (j : ℕ) (α : Fin (1 + j) → ι) {x : Fin (1 + j) → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN (1 + j)) :
+    𝒮 (1 + j) α x =
+      ∑ c : ι, star (S.C (α (Fin.castAdd j 0)) c) *
+        osKernel S 𝒮 (osSplitOneLeftConfig j c x hx) (osSplitOneRightConfig j α x hx) := by
+  have h_kern : ∀ c : ι,
+      osKernel S 𝒮 (osSplitOneLeftConfig j c x hx) (osSplitOneRightConfig j α x hx) =
+        ∑ β : Fin 1 → ι, S.C c (β 0) *
+          𝒮 (1 + j) (osConcatIdx 1 j β (fun i => α (Fin.natAdd 1 i)))
+            (osConcatPoint 1 j (osSplitOneLeft j x) (osSplitOneRight j x)) := by
+    intro c
+    unfold osKernel osSplitOneLeftConfig osSplitOneRightConfig
+    dsimp only
+    refine Finset.sum_congr rfl (fun β _ => ?_)
+    rw [Fin.prod_univ_one]
+  simp_rw [h_kern, Finset.mul_sum]
+  rw [Finset.sum_comm]
+  have h_collapse : ∀ β : Fin 1 → ι,
+      (∑ c : ι, star (S.C (α (Fin.castAdd j 0)) c) *
+        (S.C c (β 0) *
+          𝒮 (1 + j) (osConcatIdx 1 j β (fun i => α (Fin.natAdd 1 i)))
+            (osConcatPoint 1 j (osSplitOneLeft j x) (osSplitOneRight j x)))) =
+      (if (fun _ : Fin 1 => α (Fin.castAdd j 0)) = β then 1 else 0) *
+        𝒮 (1 + j) (osConcatIdx 1 j β (fun i => α (Fin.natAdd 1 i)))
+          (osConcatPoint 1 j (osSplitOneLeft j x) (osSplitOneRight j x)) := by
+    intro β
+    have h_assoc : ∀ c : ι,
+        star (S.C (α (Fin.castAdd j 0)) c) *
+          (S.C c (β 0) *
+            𝒮 (1 + j) (osConcatIdx 1 j β (fun i => α (Fin.natAdd 1 i)))
+              (osConcatPoint 1 j (osSplitOneLeft j x) (osSplitOneRight j x))) =
+        (star (S.C (α (Fin.castAdd j 0)) c) * S.C c (β 0)) *
+          𝒮 (1 + j) (osConcatIdx 1 j β (fun i => α (Fin.natAdd 1 i)))
+            (osConcatPoint 1 j (osSplitOneLeft j x) (osSplitOneRight j x)) :=
+      fun _ => (mul_assoc _ _ _).symm
+    simp_rw [h_assoc, ← Finset.sum_mul]
+    congr 1
+    have h_unit := sum_prod_star_C_mul_C S 1 (fun _ : Fin 1 => α (Fin.castAdd j 0)) β
+    simp only [Fin.prod_univ_one] at h_unit
+    rw [← h_unit]
+    exact (Fintype.sum_equiv (Equiv.funUnique (Fin 1) ι)
+      (fun γ : Fin 1 → ι => star (S.C (α (Fin.castAdd j 0)) (γ 0)) * S.C (γ 0) (β 0))
+      (fun c : ι => star (S.C (α (Fin.castAdd j 0)) c) * S.C c (β 0))
+      (fun _ => rfl)).symm
+  simp_rw [h_collapse, ite_mul, one_mul, zero_mul]
+  rw [Finset.sum_ite_eq, if_pos (Finset.mem_univ _), osConcatIdx_one_left,
+      osConcatPoint_osSplitOne]
+  exact (htrans (1 + j) α x hx (euclidTimeVec (osSplitOneTimeShift j x))).symm
+
+theorem schwinger_one_add_eq_sum_inner_osBasisPre
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (j : ℕ) (α : Fin (1 + j) → ι) {x : Fin (1 + j) → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN (1 + j)) :
+    D.𝒮 (1 + j) α x =
+      ∑ c : ι, star (S.C (α (Fin.castAdd j 0)) c) *
+        ⟪osBasisPre D (osSplitOneLeftConfig j c x hx),
+          osBasisPre D (osSplitOneRightConfig j α x hx)⟫_ℂ := by
+  simp_rw [inner_osBasisPre]
+  exact schwinger_one_add_eq_sum_osKernel S D.𝒮 htrans j α hx
+
+theorem schwinger_one_add_eq_sum_inner_osBasis
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (j : ℕ) (α : Fin (1 + j) → ι) {x : Fin (1 + j) → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN (1 + j)) :
+    D.𝒮 (1 + j) α x =
+      ∑ c : ι, star (S.C (α (Fin.castAdd j 0)) c) *
+        ⟪osBasis D (osSplitOneLeftConfig j c x hx),
+          osBasis D (osSplitOneRightConfig j α x hx)⟫_ℂ := by
+  simp_rw [inner_osBasis]
+  exact schwinger_one_add_eq_sum_osKernel S D.𝒮 htrans j α hx
+
+lemma norm_osBasisPre_eq_zero_of_osKernel_self_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {A : OSConfig ι}
+    (hA : osKernel S D.𝒮 A A = 0) :
+    ‖osBasisPre D A‖ = 0 := by
+  rw [norm_eq_sqrt_re_inner (𝕜 := ℂ), inner_osBasisPre, hA]
+  simp
+
+lemma inner_osBasisPre_eq_zero_of_osKernel_self_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {A : OSConfig ι}
+    (hA : osKernel S D.𝒮 A A = 0) (Φ : OSPreHilbertSpace D) :
+    ⟪osBasisPre D A, Φ⟫_ℂ = 0 := by
+  have h_cs := osPreHilbert_cauchy_schwarz D (osBasisPre D A) Φ
+  rw [norm_osBasisPre_eq_zero_of_osKernel_self_eq_zero D hA, zero_mul] at h_cs
+  exact norm_le_zero_iff.mp h_cs
+
+theorem osBasis_eq_zero_of_osKernel_self_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {A : OSConfig ι}
+    (hA : osKernel S D.𝒮 A A = 0) :
+    osBasis D A = 0 := by
+  rw [← norm_eq_zero]
+  dsimp [osBasis]
+  rw [norm_toOSHilbert]
+  exact norm_osBasisPre_eq_zero_of_osKernel_self_eq_zero D hA
+
+theorem schwinger_one_add_eq_zero_of_component_onePoint_osKernel_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (α₀ : ι)
+    (h1 : ∀ (c : ι) (y : posOrderedEuclidN 1),
+      S.C α₀ c ≠ 0 → osKernel S D.𝒮 ⟨1, (fun _ => c, y)⟩ ⟨1, (fun _ => c, y)⟩ = 0)
+    (j : ℕ) (α : Fin (1 + j) → ι) (hα₀ : α (Fin.castAdd j 0) = α₀)
+    {x : Fin (1 + j) → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN (1 + j)) :
+    D.𝒮 (1 + j) α x = 0 := by
+  rw [schwinger_one_add_eq_sum_inner_osBasisPre D htrans j α hx]
+  refine Finset.sum_eq_zero (fun c _ => ?_)
+  by_cases hc : S.C α₀ c = 0
+  · rw [hα₀, hc, star_zero, zero_mul]
+  · have h_zero : ⟪osBasisPre D (osSplitOneLeftConfig j c x hx),
+        osBasisPre D (osSplitOneRightConfig j α x hx)⟫_ℂ = 0 :=
+      inner_osBasisPre_eq_zero_of_osKernel_self_eq_zero D
+        (h1 c ⟨osSplitOneLeft j x, osSplitOneLeft_mem_posOrderedEuclidN j hx⟩ hc)
+        (osBasisPre D (osSplitOneRightConfig j α x hx))
+    rw [h_zero, mul_zero]
+
+theorem schwinger_eq_zero_of_onePoint_osKernel_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (h1 : ∀ (c : ι) (y : posOrderedEuclidN 1),
+      osKernel S D.𝒮 ⟨1, (fun _ => c, y)⟩ ⟨1, (fun _ => c, y)⟩ = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    D.𝒮 n α x = 0 := by
+  have hn_eq : 1 + (n - 1) = n := Nat.add_sub_of_le hn
+  rw [← schwinger_congr_n D.𝒮 hn_eq α x]
+  have hx' : x ∘ finCongr hn_eq ∈ orderedEuclidN (1 + (n - 1)) := by
+    intro i hi
+    have hi' : (finCongr hn_eq i).val + 1 < n := by
+      dsimp [finCongr]
+      omega
+    exact hx (finCongr hn_eq i) hi'
+  exact schwinger_one_add_eq_zero_of_component_onePoint_osKernel_eq_zero D htrans
+    ((α ∘ finCongr hn_eq) (Fin.castAdd (n - 1) 0))
+    (fun c y _ => h1 c y) (n - 1) (α ∘ finCongr hn_eq) rfl hx'
+
+omit [Fintype ι] [DecidableEq ι] in
+def osTwoPointMat (𝒮 : SchwingerFamily ι) (y : posOrderedEuclidN 1) : Matrix ι ι ℂ :=
+  fun b c => 𝒮 2 (osConcatIdx 1 1 (fun _ => b) (fun _ => c)) (osConcatPoint 1 1 y.val y.val)
+
+lemma osKernel_onePoint_eq_mul_osTwoPointMat
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R) (𝒮 : SchwingerFamily ι)
+    (y : posOrderedEuclidN 1) (a c : ι) :
+    osKernel S 𝒮 ⟨1, (fun _ => a, y)⟩ ⟨1, (fun _ => c, y)⟩ =
+      (S.C * osTwoPointMat 𝒮 y) a c := by
+  unfold osKernel osTwoPointMat
+  dsimp only
+  rw [← (Equiv.funUnique (Fin 1) ι).symm.sum_comp]
+  simp only [Matrix.mul_apply, Fin.prod_univ_one]
+  refine Finset.sum_congr rfl fun b _ => ?_
+  rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConcatIdx_one_one (b c : ι) :
+    osConcatIdx 1 1 (fun _ => b) (fun _ => c) = twoPointIdx b c := by
+  ext i
+  fin_cases i <;> rfl
+
+lemma osTwoPointMat_psd
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (y : posOrderedEuclidN 1) (u : ι → ℂ) :
+    0 ≤ matrixSesq (S.C * osTwoPointMat D.𝒮 y) u u := by
+  let Ψ : OSPreHilbertSpace D := ∑ a : ι, u a • osBasisPre D ⟨1, (fun _ => a, y)⟩
+  have h_re : 0 ≤ (⟪Ψ, Ψ⟫_ℂ).re := D.positivity Ψ.toFinsupp
+  have h_im : (⟪Ψ, Ψ⟫_ℂ).im = 0 := by
+    have h_im_eq := congrArg Complex.im (inner_conj_symm Ψ Ψ)
+    rw [Complex.conj_im] at h_im_eq
+    linarith
+  have h_nonneg : 0 ≤ ⟪Ψ, Ψ⟫_ℂ := Complex.nonneg_iff.mpr ⟨h_re, h_im.symm⟩
+  have h_eq : ⟪Ψ, Ψ⟫_ℂ = matrixSesq (S.C * osTwoPointMat D.𝒮 y) u u := by
+    dsimp only [Ψ]
+    rw [sum_inner]
+    unfold matrixSesq
+    refine Finset.sum_congr rfl fun a _ => ?_
+    rw [inner_sum]
+    refine Finset.sum_congr rfl fun c _ => ?_
+    rw [inner_smul_left, inner_smul_right, inner_osBasisPre,
+      osKernel_onePoint_eq_mul_osTwoPointMat]
+    simp only [Complex.star_def]
+    ring
+  rwa [h_eq] at h_nonneg
+
+lemma osTwoPointMat_pct
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮) (y : posOrderedEuclidN 1) :
+    osTwoPointMat 𝒮 y =
+      η • (R.σ (-1, 1) * (osTwoPointMat 𝒮 y).transpose * (R.σ (-1, 1)).transpose) := by
+  ext b c
+  let x : Fin 2 → Fin 4 → ℝ := osConcatPoint 1 1 y.val y.val
+  have hx : x ∈ orderedEuclidN 2 := osConcatPoint_mem_orderedEuclidN 1 1 y.property y.property
+  have h_tr := osTranslationInvariant_neg_rev_two hOS.os1_translation (twoPointIdx b c) x hx
+  have h_sym := hOS.os3_symmetry 2 (twoPointIdx b c) x hx
+  rw [two_mul_two_sub_one_div_two, pow_one] at h_sym
+  let e2 : (ι × ι) ≃ (Fin 2 → ι) :=
+    { toFun := fun p => twoPointIdx p.1 p.2
+      invFun := fun β => (β 0, β 1)
+      left_inv := fun ⟨_, _⟩ => rfl
+      right_inv := fun β => by ext i; fin_cases i <;> rfl }
+  have h_rhs :
+      (∑ β : Fin 2 → ι,
+        (∏ i : Fin 2, R.σ (-1, 1) (twoPointIdx b c i) (β i)) * 𝒮 2 (β ∘ Fin.rev) x) =
+      (R.σ (-1, 1) * (osTwoPointMat 𝒮 y).transpose * (R.σ (-1, 1)).transpose) b c := by
+    rw [← e2.sum_comp, Fintype.sum_prod_type, Finset.sum_comm]
+    simp only [Matrix.mul_apply, Matrix.transpose_apply, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun d₂ _ => Finset.sum_congr rfl fun d₁ _ => ?_
+    rw [Fin.prod_univ_two]
+    have h_rev : e2 (d₁, d₂) ∘ Fin.rev = osConcatIdx 1 1 (fun _ => d₂) (fun _ => d₁) := by
+      ext i
+      fin_cases i <;> rfl
+    rw [h_rev]
+    have he0 : e2 (d₁, d₂) 0 = d₁ := rfl
+    have he1 : e2 (d₁, d₂) 1 = d₂ := rfl
+    simp only [twoPointIdx_zero, twoPointIdx_one, he0, he1]
+    have h_mat : osTwoPointMat 𝒮 y d₂ d₁ =
+        𝒮 2 (osConcatIdx 1 1 (fun _ => d₂) (fun _ => d₁)) x := rfl
+    rw [h_mat]
+    ring
+  have h_lhs : osTwoPointMat 𝒮 y b c =
+      𝒮 2 (osConcatIdx 1 1 (fun _ => b) (fun _ => c)) x := rfl
+  rw [h_lhs, osConcatIdx_one_one, ← h_tr, h_sym, h_rhs, Matrix.smul_apply, smul_eq_mul]
+
+theorem osTwoPointMat_eq_zero_of_wrong_statistics
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η ε : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮) (hε : R.HasSpinParity ε) (h_wrong : η ≠ ε)
+    (y : posOrderedEuclidN 1) :
+    osTwoPointMat 𝒮 y = 0 :=
+  eq_zero_of_psd_pct_pair_ne_spinParity
+    S.map_star_mul_self
+    (sigma_pt_mul_self R)
+    (S.mul_sigma_pt_eq_spinParity hε)
+    hε.2
+    (osTwoPointMat_pct hOS y)
+    (osTwoPointMat_pct hOS y)
+    (osTwoPointMat_psd hOS.toReflectionPositiveData y)
+    (osTwoPointMat_psd hOS.toReflectionPositiveData y)
+    h_wrong
+
+theorem osAxioms_wrong_statistics_schwinger_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η ε : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮) (hε : R.HasSpinParity ε) (h_wrong : η ≠ ε)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    𝒮 n α x = 0 := by
+  refine schwinger_eq_zero_of_onePoint_osKernel_eq_zero
+    hOS.toReflectionPositiveData hOS.os1_translation (fun c y => ?_) n hn α hx
+  change osKernel S 𝒮 ⟨1, (fun _ => c, y)⟩ ⟨1, (fun _ => c, y)⟩ = 0
+  rw [osKernel_onePoint_eq_mul_osTwoPointMat S 𝒮 y c c,
+    osTwoPointMat_eq_zero_of_wrong_statistics hOS hε h_wrong y,
+    mul_zero, Matrix.zero_apply]
+
+theorem osAxioms_spin_statistics
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η ε : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮) (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) :
+    η = ε := by
+  by_contra h_wrong
+  rcases h_nondeg with ⟨n, hn, α, x, hx, hne⟩
+  exact hne (osAxioms_wrong_statistics_schwinger_eq_zero hOS hε h_wrong n hn α hx)
+
+theorem scalar_spin_statistics_of_spectrumCondition
+    (W : WightmanFamily Unit) {η : ℂ}
+    (hspec : SpectrumCondition W) (hP : PoincareCovariant trivialRep W)
+    (hpos : Positivity trivialStarStructure W) (hloc : WeakLocality η W)
+    (h_nondeg : ∃ β : Fin 2 → Unit, W 2 β ≠ 0) :
+    η = 1 :=
+  spin_statistics_of_spectrumCondition trivialStarStructure W hspec hP hpos
+    trivialRep_spinParity hloc h_nondeg
+
+theorem vector_spin_statistics_of_spectrumCondition
+    (W : WightmanFamily (Fin 4)) {η : ℂ}
+    (hspec : SpectrumCondition W) (hP : PoincareCovariant stdRep W)
+    (hpos : Positivity stdStarStructure W) (hloc : WeakLocality η W)
+    (h_nondeg : ∃ β : Fin 2 → Fin 4, W 2 β ≠ 0) :
+    η = 1 :=
+  spin_statistics_of_spectrumCondition stdStarStructure W hspec hP hpos
+    stdRep_spinParity hloc h_nondeg
+
+theorem dirac_spin_statistics_of_spectrumCondition
+    (W : WightmanFamily (Fin 2 ⊕ Fin 2)) {η : ℂ}
+    (hspec : SpectrumCondition W) (hP : PoincareCovariant diracRep W)
+    (hpos : Positivity diracStarStructure W) (hloc : WeakLocality η W)
+    (h_nondeg : ∃ β : Fin 2 → Fin 2 ⊕ Fin 2, W 2 β ≠ 0) :
+    η = -1 :=
+  spin_statistics_of_spectrumCondition diracStarStructure W hspec hP hpos
+    diracRep_spinParity hloc h_nondeg
+
+theorem spinorTensorBispinor_spin_statistics_of_spectrumCondition
+    (m₁ m₂ : ℕ)
+    (W : WightmanFamily (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))) {η : ℂ}
+    (hspec : SpectrumCondition W)
+    (hP : PoincareCovariant
+      (directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂))) W)
+    (hpos : Positivity (spinorTensorBispinorStarStructure m₁ m₂) W)
+    (hloc : WeakLocality η W)
+    (h_nondeg : ∃ β : Fin 2 → ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)), W 2 β ≠ 0) :
+    η = (-1 : ℂ) ^ (m₁ + m₂) :=
+  spin_statistics_of_spectrumCondition (spinorTensorBispinorStarStructure m₁ m₂) W
+    hspec hP hpos
+    (directSumRep_spinParity (spinorTensorRep_spinParity m₁ m₂)
+      (chiralSwapRep_spinParity (spinorTensorRep_spinParity m₁ m₂)))
+    hloc h_nondeg
+
+lemma osKernel_eq_zero_of_schwinger_eq_zero
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R) (𝒮 : SchwingerFamily ι)
+    (A B : OSConfig ι)
+    (hS : ∀ (γ : Fin (A.1 + B.1) → ι) (z : Fin (A.1 + B.1) → Fin 4 → ℝ),
+      z ∈ orderedEuclidN (A.1 + B.1) → 𝒮 (A.1 + B.1) γ z = 0) :
+    osKernel S 𝒮 A B = 0 := by
+  unfold osKernel
+  refine Finset.sum_eq_zero (fun β _ => ?_)
+  rw [hS _ _ (osConcatPoint_mem_orderedEuclidN A.1 B.1 A.2.2.property B.2.2.property), mul_zero]
+
+theorem schwinger_eq_zero_of_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → D.𝒮 2 β y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    D.𝒮 n α x = 0 := by
+  refine schwinger_eq_zero_of_onePoint_osKernel_eq_zero D htrans (fun c y => ?_) n hn α hx
+  exact osKernel_eq_zero_of_schwinger_eq_zero S D.𝒮 ⟨1, (fun _ => c, y)⟩ ⟨1, (fun _ => c, y)⟩ h2
+
+theorem schwinger_all_nPoint_eq_zero_iff_twoPoint_posOrdered_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → D.𝒮 n α x = 0) ↔
+    (∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ posOrderedEuclidN 2 → D.𝒮 2 β y = 0) := by
+  constructor
+  · intro hall β y hy
+    exact hall 2 (by omega) β y (posOrderedEuclidN_subset_orderedEuclidN 2 hy)
+  · intro h2_pos n hn α x hx
+    refine schwinger_eq_zero_of_twoPoint_eq_zero D htrans (fun β y hy => ?_) n hn α hx
+    exact schwinger_eq_zero_of_posOrderedEuclidN_eq_zero htrans 2 β (h2_pos β) hy
+
+theorem osKernel_eq_zero_of_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → D.𝒮 2 β y = 0)
+    (A B : OSConfig ι) (hAB : 1 ≤ A.1 + B.1) :
+    osKernel S D.𝒮 A B = 0 :=
+  osKernel_eq_zero_of_schwinger_eq_zero S D.𝒮 A B
+    (fun γ _z hz => schwinger_eq_zero_of_twoPoint_eq_zero D htrans h2 (A.1 + B.1) hAB γ hz)
+
+theorem osBasis_eq_zero_of_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → D.𝒮 2 β y = 0)
+    (A : OSConfig ι) (hA : 1 ≤ A.1) :
+    osBasis D A = 0 :=
+  osBasis_eq_zero_of_osKernel_self_eq_zero D
+    (osKernel_eq_zero_of_twoPoint_eq_zero D htrans h2 A A (by omega))
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfig_eq_osVacuumConfig_of_fst_eq_zero {A : OSConfig ι} (hA : A.1 = 0) :
+    A = osVacuumConfig ι := by
+  rcases A with ⟨n, α, x, hx⟩
+  dsimp at hA
+  subst hA
+  unfold osVacuumConfig
+  congr 1
+  ext i
+  · exact Fin.elim0 i
+  · exact Fin.elim0 i
+
+theorem toOSHilbert_eq_coeff_smul_osVacuum_of_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → D.𝒮 2 β y = 0)
+    (Ψ : OSPreHilbertSpace D) :
+    toOSHilbert D Ψ = (Ψ.toFinsupp (osVacuumConfig ι)) • osVacuum D := by
+  classical
+  conv_lhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ]
+  rw [map_finsuppSum]
+  unfold Finsupp.sum
+  have h_term : ∀ A ∈ Ψ.toFinsupp.support,
+      toOSHilbert D (Ψ.toFinsupp A • osBasisPre D A) =
+        if A = osVacuumConfig ι then (Ψ.toFinsupp (osVacuumConfig ι)) • osVacuum D else 0 := by
+    intro A _
+    rw [(toOSHilbert D).map_smul]
+    change Ψ.toFinsupp A • osBasis D A = _
+    by_cases hA : A = osVacuumConfig ι
+    · subst hA
+      rw [if_pos rfl]
+      rfl
+    · rw [if_neg hA]
+      have hA_pos : 1 ≤ A.1 := by
+        by_contra hc
+        have h0 : A.1 = 0 := by omega
+        exact hA (osConfig_eq_osVacuumConfig_of_fst_eq_zero h0)
+      rw [osBasis_eq_zero_of_twoPoint_eq_zero D htrans h2 A hA_pos, smul_zero]
+  rw [Finset.sum_congr rfl h_term, Finset.sum_ite_eq']
+  split_ifs with hmem
+  · rfl
+  · rw [Finsupp.notMem_support_iff.mp hmem, zero_smul]
+
+theorem eq_smul_osVacuum_of_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hnorm : OSVacuumNormalized D.𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → D.𝒮 2 β y = 0)
+    (Φ : OSHilbert D) :
+    Φ = ⟪osVacuum D, Φ⟫_ℂ • osVacuum D := by
+  induction Φ using UniformSpace.Completion.induction_on with
+  | hp =>
+    exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change toOSHilbert D Ψ = ⟪osVacuum D, toOSHilbert D Ψ⟫_ℂ • osVacuum D
+    have hΨ := toOSHilbert_eq_coeff_smul_osVacuum_of_twoPoint_eq_zero D htrans h2 Ψ
+    rw [hΨ, inner_smul_right, inner_osVacuum_self_of_normalized D hnorm, mul_one]
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+theorem schwinger_eq_zero_of_twoPoint_eq_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    𝒮 n α x = 0 :=
+  _root_.QFT.schwinger_eq_zero_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+    h2 n hn α hx
+
+theorem tube_eq_zero_of_twoPoint_eq_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) :
+    ∀ w ∈ forward_tube_n n, P.E.H n α w = 0 := by
+  intro w hw
+  refine analyticOn_forward_tube_eq_zero_of_posOrderedEuclidN_eq_zero n
+    (P.E.analytic n α) (fun x hx => ?_) w hw
+  have hx' := posOrderedEuclidN_subset_orderedEuclidN n hx
+  change schwingerFromTube P.E n α x = 0
+  rw [← P.schwinger_eq n α x hx']
+  exact P.schwinger_eq_zero_of_twoPoint_eq_zero h2 n hn α hx'
+
+theorem wightman_eq_zero_of_twoPoint_eq_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    P.W n α f = 0 :=
+  wightman_eq_zero_of_tube_eq_zero P.E n α
+    (fun w hw => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α w hw) f
+
+theorem wrong_statistics_all_nPoint_eq_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_wrong : η ≠ ε) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → P.E.H n α z = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ∧
+    (OSVacuumNormalized 𝒮 → ∀ Φ : P.Hilbert, Φ = ⟪P.vacuum, Φ⟫_ℂ • P.vacuum) := by
+  have h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0 :=
+    fun β _y hy => osAxioms_wrong_statistics_schwinger_eq_zero P.osAxioms hε h_wrong 2 (by omega)
+      β hy
+  refine ⟨fun n hn α x hx => P.schwinger_eq_zero_of_twoPoint_eq_zero h2 n hn α hx,
+    fun n hn α z hz => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α z hz,
+    fun n hn α f => P.wightman_eq_zero_of_twoPoint_eq_zero h2 n hn α f,
+    fun hnorm Φ => eq_smul_osVacuum_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+      hnorm h2 Φ⟩
+
+theorem spin_statistics_from_schwinger
+    (P : OSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (α : Fin 2 → ι) (x : Fin 2 → Fin 4 → ℝ),
+      x ∈ orderedEuclidN 2 ∧ 𝒮 2 α x ≠ 0) :
+    η = ε := by
+  rcases h_nondeg with ⟨α, x, hx, hne⟩
+  exact osAxioms_spin_statistics P.osAxioms hε ⟨2, by omega, α, x, hx, hne⟩
+
+theorem spin_statistics_of_any_schwinger_ne_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) :
+    η = ε :=
+  osAxioms_spin_statistics P.osAxioms hε h_nondeg
+
+theorem spin_statistics_of_any_wightman_ne_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = ε := by
+  by_contra h_wrong
+  rcases h_nondeg with ⟨n, hn, α, f, hf⟩
+  exact hf ((P.wrong_statistics_all_nPoint_eq_zero hε h_wrong).2.2.1 n hn α f)
+
+theorem spin_statistics_of_twoPoint_ne_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (α : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 α f ≠ 0) :
+    η = ε := by
+  rcases h_nondeg with ⟨α, f, hf⟩
+  exact P.spin_statistics_of_any_wightman_ne_zero hε ⟨2, by omega, α, f, hf⟩
+
+theorem spin_statistics_of_subsingleton_unconditional [Subsingleton ι]
+    (P : OSReconstructedWightman R S η 𝒮) (hε : R.HasSpinParity 1)
+    (h_nondeg : ∃ (α : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 α f ≠ 0) :
+    η = 1 :=
+  P.spin_statistics_of_twoPoint_ne_zero hε h_nondeg
+
+theorem spin_statistics_of_subsingleton_any_wightman_ne_zero [Subsingleton ι]
+    (P : OSReconstructedWightman R S η 𝒮) (hε : R.HasSpinParity 1)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = 1 :=
+  P.spin_statistics_of_any_wightman_ne_zero hε h_nondeg
+
+theorem subsingleton_fermion_all_nPoint_eq_zero [Subsingleton ι]
+    (P : OSReconstructedWightman R S (-1) 𝒮) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → P.E.H n α z = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ∧
+    (OSVacuumNormalized 𝒮 → ∀ Φ : P.Hilbert, Φ = ⟪P.vacuum, Φ⟫_ℂ • P.vacuum) := by
+  have h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0 := by
+    intro β y hy
+    have hβ : β = fun _ => β 0 := by
+      ext i
+      exact Subsingleton.elim _ _
+    rw [hβ, P.schwinger_eq 2 (fun _ => β 0) y hy]
+    exact P.fermion_tube_twoPoint_diag_eq_zero (subsingleton_hasDiagInvolutivePT R) (β 0)
+      (wickEmbedN 2 y) (wickEmbedN_mem_forward_tube_n 2 hy)
+  refine ⟨fun n hn α x hx => P.schwinger_eq_zero_of_twoPoint_eq_zero h2 n hn α hx,
+    fun n hn α z hz => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α z hz,
+    fun n hn α f => P.wightman_eq_zero_of_twoPoint_eq_zero h2 n hn α f,
+    fun hnorm Φ => eq_smul_osVacuum_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+      hnorm h2 Φ⟩
+
+end OSReconstructedWightman
+
+theorem scalar_os_spin_statistics_unconditional {η : ℂ} {𝒮 : SchwingerFamily Unit}
+    (P : ScalarOSReconstructedWightman η 𝒮)
+    (h_nondeg : ∃ (α : Fin 2 → Unit) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 α f ≠ 0) :
+    η = 1 :=
+  P.spin_statistics_of_twoPoint_ne_zero trivialRep_spinParity h_nondeg
+
+theorem scalar_os_spin_statistics_any_nPoint {η : ℂ} {𝒮 : SchwingerFamily Unit}
+    (P : ScalarOSReconstructedWightman η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Unit)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = 1 :=
+  P.spin_statistics_of_any_wightman_ne_zero trivialRep_spinParity h_nondeg
+
+omit [Fintype ι] [DecidableEq ι] in
+def TubeBoundaryInjective {W : WightmanFamily ι} (E : TubeExtension W) : Prop :=
+  ∀ (n : ℕ) (α : Fin n → ι),
+    (∀ f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ, W n α f = 0) →
+    ∀ z ∈ forward_tube_n n, E.H n α z = 0
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_H_eq_zero_of_wightman_eq_zero {W : WightmanFamily ι}
+    (n : ℕ) (α : Fin n → ι)
+    (hW : ∀ f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ, W n α f = 0)
+    (z : Fin n → Fin 4 → ℂ) :
+    vladimirov_H W n α z = 0 :=
+  hW (invMinkowskiFourierCLM n (vladimirov_psi_schwartz n 1 Real.zero_lt_one z))
+
+theorem vladimirov_tubeBoundaryInjective (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W) :
+    TubeBoundaryInjective (vladimirovTubeExtension R W hspec hP) :=
+  fun n α hW z _ => vladimirov_H_eq_zero_of_wightman_eq_zero n α hW z
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_eq_zero_iff_tube_eq_zero {W : WightmanFamily ι}
+    (E : TubeExtension W) (hinj : TubeBoundaryInjective E)
+    (n : ℕ) (α : Fin n → ι) :
+    (∀ f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ, W n α f = 0) ↔
+      (∀ z ∈ forward_tube_n n, E.H n α z = 0) :=
+  ⟨hinj n α, fun hH f => wightman_eq_zero_of_tube_eq_zero E n α hH f⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem schwingerFromTube_eq_zero_of_wightman_eq_zero {W : WightmanFamily ι}
+    (E : TubeExtension W) (hinj : TubeBoundaryInjective E)
+    (n : ℕ) (α : Fin n → ι)
+    (hW : ∀ f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ, W n α f = 0)
+    {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    schwingerFromTube E n α x = 0 :=
+  hinj n α hW (wickEmbedN n x) (wickEmbedN_mem_forward_tube_n n hx)
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+theorem all_nPoint_eq_zero_of_wightman_twoPoint_eq_zero
+    (P : OSReconstructedWightman R S η 𝒮) (hinj : TubeBoundaryInjective P.E)
+    (hW2 : ∀ (β : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 β f = 0) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → P.E.H n α z = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ∧
+    (OSVacuumNormalized 𝒮 → ∀ Φ : P.Hilbert, Φ = ⟪P.vacuum, Φ⟫_ℂ • P.vacuum) := by
+  have h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0 := by
+    intro β y hy
+    rw [P.schwinger_eq 2 β y hy]
+    exact schwingerFromTube_eq_zero_of_wightman_eq_zero P.E hinj 2 β (hW2 β) hy
+  refine ⟨fun n hn α x hx => P.schwinger_eq_zero_of_twoPoint_eq_zero h2 n hn α hx,
+    fun n hn α z hz => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α z hz,
+    fun n hn α f => P.wightman_eq_zero_of_twoPoint_eq_zero h2 n hn α f,
+    fun hnorm Φ => eq_smul_osVacuum_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+      hnorm h2 Φ⟩
+
+theorem wightman_all_nPoint_eq_zero_iff_wightman_twoPoint_eq_zero
+    (P : OSReconstructedWightman R S η 𝒮) (hinj : TubeBoundaryInjective P.E) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ↔
+    (∀ (β : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 β f = 0) :=
+  ⟨fun hall β f => hall 2 (by omega) β f,
+   fun hW2 => (P.all_nPoint_eq_zero_of_wightman_twoPoint_eq_zero hinj hW2).2.2.1⟩
+
+end OSReconstructedWightman
+
+theorem vladimirovOSReconstruction_wightman_all_nPoint_eq_zero_iff_twoPoint_eq_zero
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (W : WightmanFamily ι) {η : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (hloc : WeakLocality η W) (hpos : Positivity S W)
+    (hherm : TubeWickHermiticity S (vladimirovTubeExtension R W hspec hP))
+    (hrp : OSReflectionPositive S (vladimirovSchwinger W))
+    (hcontr : OSContractionCondition
+      { 𝒮 := vladimirovSchwinger W
+        hermiticity := schwingerFromTube_os_hermiticity S _ hherm
+        positivity := hrp })
+    (ℰ : OSHolomorphicSemigroup
+      { 𝒮 := vladimirovSchwinger W
+        hermiticity := schwingerFromTube_os_hermiticity S _ hherm
+        positivity := hrp }
+      hcontr) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      W n α f = 0) ↔
+    (∀ (β : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 β f = 0) :=
+  (vladimirovOSReconstruction R S W hspec hP hloc hpos hherm hrp hcontr ℰ)
+    |>.wightman_all_nPoint_eq_zero_iff_wightman_twoPoint_eq_zero
+      (vladimirov_tubeBoundaryInjective R W hspec hP)
+
+def DiagonalStarStructure {R : HolomorphicLorentzRep ι} (S : StarStructure R) : Prop :=
+  ∀ a b : ι, a ≠ b → S.C a b = 0
+
+lemma diagonalStarStructure_of_C_eq_one {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) (hC : S.C = 1) :
+    DiagonalStarStructure S := by
+  intro a b hab
+  rw [hC, Matrix.one_apply_ne hab]
+
+lemma diagonalStarStructure_trivialStarStructure :
+    DiagonalStarStructure trivialStarStructure :=
+  diagonalStarStructure_of_C_eq_one trivialStarStructure rfl
+
+lemma diagonalStarStructure_stdStarStructure :
+    DiagonalStarStructure stdStarStructure :=
+  diagonalStarStructure_of_C_eq_one stdStarStructure rfl
+
+lemma diagonalStarStructure_directSum {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    {S₁ : StarStructure R₁} {S₂ : StarStructure R₂}
+    (h₁ : DiagonalStarStructure S₁) (h₂ : DiagonalStarStructure S₂) :
+    DiagonalStarStructure (directSumStarStructure S₁ S₂) := by
+  rintro (a₁ | a₂) (b₁ | b₂) hab
+  · exact h₁ a₁ b₁ (fun h => hab (congrArg Sum.inl h))
+  · rfl
+  · rfl
+  · exact h₂ a₂ b₂ (fun h => hab (congrArg Sum.inr h))
+
+lemma diagonalStarStructure_tensorProd {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    {S₁ : StarStructure R₁} {S₂ : StarStructure R₂}
+    (h₁ : DiagonalStarStructure S₁) (h₂ : DiagonalStarStructure S₂) :
+    DiagonalStarStructure (tensorProdStarStructure S₁ S₂) := by
+  rintro ⟨a₁, a₂⟩ ⟨b₁, b₂⟩ hab
+  change S₁.C a₁ b₁ * S₂.C a₂ b₂ = 0
+  by_cases h : a₁ = b₁
+  · have h' : a₂ ≠ b₂ := fun h2 => hab (Prod.ext h h2)
+    rw [h₂ a₂ b₂ h', mul_zero]
+  · rw [h₁ a₁ b₁ h, zero_mul]
+
+lemma diagonalStarStructure_mul_star_self {R : HolomorphicLorentzRep ι}
+    {S : StarStructure R} (hdiag : DiagonalStarStructure S) (c : ι) :
+    S.C c c * star (S.C c c) = 1 := by
+  have h := congrFun (congrFun S.involutive c) c
+  simp only [Matrix.mul_apply, Matrix.map_apply, Matrix.one_apply_eq] at h
+  rw [← h]
+  symm
+  refine Finset.sum_eq_single c (fun b _ hbc => ?_) (fun hc => False.elim (hc (Finset.mem_univ c)))
+  rw [hdiag c b (Ne.symm hbc), zero_mul]
+
+lemma diagonalStarStructure_diag_ne_zero {R : HolomorphicLorentzRep ι}
+    {S : StarStructure R} (hdiag : DiagonalStarStructure S) (c : ι) :
+    S.C c c ≠ 0 := by
+  intro hc
+  have h := diagonalStarStructure_mul_star_self hdiag c
+  rw [hc, zero_mul] at h
+  exact zero_ne_one h
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma osConcatIdx_one_one_const (c : ι) :
+    osConcatIdx 1 1 (fun _ => c) (fun _ => c) = fun _ => c := by
+  ext i
+  dsimp [osConcatIdx]
+  by_cases hi : i.val < 1
+  · rw [fin_append_apply_lt _ _ i hi]
+    rfl
+  · rw [fin_append_apply_ge _ _ i (by omega)]
+
+theorem osKernel_onePoint_self_of_diagonalStarStructure
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (hdiag : DiagonalStarStructure S) (𝒮 : SchwingerFamily ι)
+    (c : ι) (y : posOrderedEuclidN 1) :
+    osKernel S 𝒮 ⟨1, (fun _ => c, y)⟩ ⟨1, (fun _ => c, y)⟩ =
+      S.C c c * 𝒮 2 (fun _ => c) (osConcatPoint 1 1 y.val y.val) := by
+  unfold osKernel
+  dsimp only
+  refine (Finset.sum_eq_single (fun _ : Fin 1 => c) (fun β _ hβ => ?_)
+    (fun hc => False.elim (hc (Finset.mem_univ _)))).trans ?_
+  · have hβ0 : β 0 ≠ c := by
+      intro h0
+      apply hβ
+      ext i
+      fin_cases i
+      exact h0
+    rw [Fin.prod_univ_one, hdiag c (β 0) (Ne.symm hβ0), zero_mul]
+  · rw [Fin.prod_univ_one, osConcatIdx_one_one_const]
+
+theorem schwinger_one_add_eq_zero_of_diag_twoPoint_component_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hdiag : DiagonalStarStructure S) (c : ι)
+    (hc2 : ∀ y ∈ orderedEuclidN 2, D.𝒮 2 (fun _ => c) y = 0)
+    (j : ℕ) (α : Fin (1 + j) → ι) (hα₀ : α (Fin.castAdd j 0) = c)
+    {x : Fin (1 + j) → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN (1 + j)) :
+    D.𝒮 (1 + j) α x = 0 := by
+  refine schwinger_one_add_eq_zero_of_component_onePoint_osKernel_eq_zero D htrans c
+    (fun b y hcb => ?_) j α hα₀ hx
+  have hbc : c = b := by
+    by_contra hne
+    exact hcb (hdiag c b hne)
+  subst hbc
+  rw [osKernel_onePoint_self_of_diagonalStarStructure hdiag D.𝒮 c y,
+      hc2 _ (osConcatPoint_mem_orderedEuclidN 1 1 y.property y.property), mul_zero]
+
+theorem schwinger_eq_zero_of_diag_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hdiag : DiagonalStarStructure S)
+    (h2_diag : ∀ (c : ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → D.𝒮 2 (fun _ => c) y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    D.𝒮 n α x = 0 := by
+  refine schwinger_eq_zero_of_onePoint_osKernel_eq_zero D htrans (fun c y => ?_) n hn α hx
+  rw [osKernel_onePoint_self_of_diagonalStarStructure hdiag D.𝒮 c y,
+      h2_diag c _ (osConcatPoint_mem_orderedEuclidN 1 1 y.property y.property), mul_zero]
+
+theorem schwinger_all_nPoint_eq_zero_iff_diag_twoPoint_posOrdered_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hdiag : DiagonalStarStructure S) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → D.𝒮 n α x = 0) ↔
+    (∀ (c : ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ posOrderedEuclidN 2 → D.𝒮 2 (fun _ => c) y = 0) := by
+  constructor
+  · intro hall c y hy
+    exact hall 2 (by omega) (fun _ => c) y (posOrderedEuclidN_subset_orderedEuclidN 2 hy)
+  · intro h2_pos n hn α x hx
+    refine schwinger_eq_zero_of_diag_twoPoint_eq_zero D htrans hdiag (fun c y hy => ?_) n hn α hx
+    exact schwinger_eq_zero_of_posOrderedEuclidN_eq_zero htrans 2 (fun _ => c) (h2_pos c) hy
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tube_twoPoint_diag_eq_zero_of_eta_ne_one {W : WightmanFamily ι} {η : ℂ}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality η E) (hη : η ≠ 1)
+    (c : ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    E.H 2 (fun _ => c) z = 0 := by
+  have h := tube_twoPoint_diag_eq_eta_mul E htrans hloc c z hz
+  have h_sub : (1 - η) * E.H 2 (fun _ => c) z = 0 := by
+    linear_combination h
+  exact (mul_eq_zero.mp h_sub).resolve_left (sub_ne_zero.mpr hη.symm)
+
+namespace OSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+theorem schwinger_twoPoint_diag_eq_zero_of_eta_ne_one
+    (P : OSReconstructedWightman R S η 𝒮) (hpt : R.HasDiagInvolutivePT) (hη : η ≠ 1)
+    (c : ι) {y : Fin 2 → Fin 4 → ℝ} (hy : y ∈ orderedEuclidN 2) :
+    𝒮 2 (fun _ => c) y = 0 := by
+  rw [P.schwinger_eq 2 (fun _ => c) y hy]
+  have hz : wickEmbedN 2 y ∈ forward_tube_n 2 := wickEmbedN_mem_forward_tube_n 2 hy
+  have h1 := P.tube_neg_rev_two (fun _ => c) (wickEmbedN 2 y) hz
+  have h2 := tubePCT_two_diag_of_hasDiagInvolutivePT R hpt P.E P.tube_pct c (wickEmbedN 2 y) hz
+  have h : (1 - η) * P.E.H 2 (fun _ => c) (wickEmbedN 2 y) = 0 := by
+    linear_combination h1.symm.trans h2
+  exact (mul_eq_zero.mp h).resolve_left (sub_ne_zero.mpr hη.symm)
+
+theorem all_nPoint_eq_zero_of_diagonalStarStructure_of_eta_ne_one
+    (P : OSReconstructedWightman R S η 𝒮)
+    (hpt : R.HasDiagInvolutivePT) (hdiag : DiagonalStarStructure S) (hη : η ≠ 1) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → P.E.H n α z = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ∧
+    (OSVacuumNormalized 𝒮 → ∀ Φ : P.Hilbert, Φ = ⟪P.vacuum, Φ⟫_ℂ • P.vacuum) := by
+  have h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0 :=
+    fun β _y hy => schwinger_eq_zero_of_diag_twoPoint_eq_zero P.osData
+      P.osAxioms.os1_translation hdiag
+      (fun c _z hz => P.schwinger_twoPoint_diag_eq_zero_of_eta_ne_one hpt hη c hz)
+      2 (by omega) β hy
+  refine ⟨fun n hn α x hx => P.schwinger_eq_zero_of_twoPoint_eq_zero h2 n hn α hx,
+    fun n hn α z hz => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α z hz,
+    fun n hn α f => P.wightman_eq_zero_of_twoPoint_eq_zero h2 n hn α f,
+    fun hnorm Φ => eq_smul_osVacuum_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+      hnorm h2 Φ⟩
+
+theorem spin_statistics_of_diagonalStarStructure_any_schwinger_ne_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    (hpt : R.HasDiagInvolutivePT) (hdiag : DiagonalStarStructure S)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) :
+    η = 1 := by
+  by_contra hη
+  rcases h_nondeg with ⟨n, hn, α, x, hx, hne⟩
+  exact hne
+    ((P.all_nPoint_eq_zero_of_diagonalStarStructure_of_eta_ne_one hpt hdiag hη).1 n hn α x hx)
+
+theorem spin_statistics_of_diagonalStarStructure_any_wightman_ne_zero
+    (P : OSReconstructedWightman R S η 𝒮)
+    (hpt : R.HasDiagInvolutivePT) (hdiag : DiagonalStarStructure S)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = 1 := by
+  by_contra hη
+  rcases h_nondeg with ⟨n, hn, α, f, hf⟩
+  exact hf
+    ((P.all_nPoint_eq_zero_of_diagonalStarStructure_of_eta_ne_one hpt hdiag hη).2.2.1 n hn α f)
+
+end OSReconstructedWightman
+
+theorem vector_os_spin_statistics_unconditional {η : ℂ} {𝒮 : SchwingerFamily (Fin 4)}
+    (P : VectorOSReconstructedWightman η 𝒮)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 4) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 α f ≠ 0) :
+    η = 1 := by
+  rcases h_nondeg with ⟨α, f, hf⟩
+  exact P.spin_statistics_of_diagonalStarStructure_any_wightman_ne_zero
+    stdRep_hasDiagInvolutivePT diagonalStarStructure_stdStarStructure ⟨2, by omega, α, f, hf⟩
+
+theorem vector_os_spin_statistics_any_nPoint_unconditional {η : ℂ} {𝒮 : SchwingerFamily (Fin 4)}
+    (P : VectorOSReconstructedWightman η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Fin 4)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = 1 :=
+  P.spin_statistics_of_diagonalStarStructure_any_wightman_ne_zero
+    stdRep_hasDiagInvolutivePT diagonalStarStructure_stdStarStructure h_nondeg
+
+theorem vector_os_fermion_all_nPoint_eq_zero {𝒮 : SchwingerFamily (Fin 4)}
+    (P : VectorOSReconstructedWightman (-1) 𝒮) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → Fin 4) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → Fin 4) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → P.E.H n α z = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → Fin 4) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ∧
+    (OSVacuumNormalized 𝒮 → ∀ Φ : P.Hilbert, Φ = ⟪P.vacuum, Φ⟫_ℂ • P.vacuum) :=
+  P.all_nPoint_eq_zero_of_diagonalStarStructure_of_eta_ne_one
+    stdRep_hasDiagInvolutivePT diagonalStarStructure_stdStarStructure (by norm_num)
+
+lemma constOne_mem_posOrderedEuclidN {x₀ : Fin 4 → ℝ} (hx₀ : 0 < x₀ 0) :
+    (fun _ : Fin 1 => x₀) ∈ posOrderedEuclidN 1 :=
+  orderedEuclidN_pos_of_zero_pos 1 (mem_orderedEuclidN_one _) (fun _ => hx₀)
+
+theorem osFieldPrependLM_osVacuumPre
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) :
+    osFieldPrependLM D α₀ x₀ hx₀ (osVacuumPre D) =
+      osBasisPre D ⟨1, (fun _ => α₀, ⟨fun _ => x₀, constOne_mem_posOrderedEuclidN hx₀⟩)⟩ := by
+  unfold osFieldPrependLM osVacuumPre
+  rw [osLiftConfigMap_osBasisPre]
+  congr 1
+  unfold osFieldPrependConfig osVacuumConfig
+  congr 1
+  ext i
+  · fin_cases i
+    rfl
+  · fin_cases i
+    rfl
+
+theorem toOSHilbert_osFieldPrependLM_osVacuumPre_eq_zero_of_diag_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hdiag : DiagonalStarStructure S) (c : ι)
+    (hc2 : ∀ y ∈ orderedEuclidN 2, D.𝒮 2 (fun _ => c) y = 0)
+    (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) :
+    toOSHilbert D (osFieldPrependLM D c x₀ hx₀ (osVacuumPre D)) = 0 := by
+  rw [osFieldPrependLM_osVacuumPre]
+  let y1 : posOrderedEuclidN 1 := ⟨fun _ => x₀, constOne_mem_posOrderedEuclidN hx₀⟩
+  change osBasis D ⟨1, (fun _ => c, y1)⟩ = 0
+  refine osBasis_eq_zero_of_osKernel_self_eq_zero D ?_
+  rw [osKernel_onePoint_self_of_diagonalStarStructure hdiag D.𝒮 c y1,
+      hc2 _ (osConcatPoint_mem_orderedEuclidN 1 1 y1.property y1.property), mul_zero]
+
+theorem toOSHilbert_osFieldPrependLM_eq_zero_of_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → D.𝒮 2 β y = 0)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (Ψ : OSPreHilbertSpace D) :
+    toOSHilbert D (osFieldPrependLM D α₀ x₀ hx₀ Ψ) = 0 := by
+  classical
+  conv_lhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ]
+  rw [map_finsuppSum, map_finsuppSum]
+  unfold Finsupp.sum
+  refine Finset.sum_eq_zero (fun A _ => ?_)
+  dsimp only
+  rw [LinearMap.map_smul, (toOSHilbert D).map_smul]
+  unfold osFieldPrependLM
+  rw [osLiftConfigMap_osBasisPre]
+  change Ψ.toFinsupp A • osBasis D (osFieldPrependConfig α₀ x₀ hx₀ A) = 0
+  have h_pos : 1 ≤ (osFieldPrependConfig α₀ x₀ hx₀ A).1 := by
+    dsimp [osFieldPrependConfig]
+    omega
+  rw [osBasis_eq_zero_of_twoPoint_eq_zero D htrans h2 _ h_pos, smul_zero]
+
+theorem inner_osVacuumPre_osFieldPrependLM_eq_zero_of_component_onePoint_osKernel_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (α₀ : ι)
+    (h1 : ∀ (c : ι) (y : posOrderedEuclidN 1),
+      S.C α₀ c ≠ 0 → osKernel S D.𝒮 ⟨1, (fun _ => c, y)⟩ ⟨1, (fun _ => c, y)⟩ = 0)
+    (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (Ψ : OSPreHilbertSpace D) :
+    ⟪osVacuumPre D, osFieldPrependLM D α₀ x₀ hx₀ Ψ⟫_ℂ = 0 := by
+  classical
+  conv_lhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ]
+  rw [map_finsuppSum]
+  unfold Finsupp.sum
+  rw [inner_sum]
+  refine Finset.sum_eq_zero (fun A _ => ?_)
+  dsimp only
+  rw [LinearMap.map_smul, inner_smul_right, inner_osVacuumPre_osFieldPrependLM_osBasisPre]
+  have h_ord : osPrependPoint A.1 x₀ A.2.2.val ∈ orderedEuclidN (A.1 + 1) :=
+    posOrderedEuclidN_subset_orderedEuclidN (A.1 + 1)
+      (osPrependPoint_mem_posOrderedEuclidN A.1 hx₀ A.2.2.property)
+  have h_eq : D.𝒮 (A.1 + 1) (Fin.cons α₀ A.2.1) (osPrependPoint A.1 x₀ A.2.2.val) = 0 := by
+    rw [← schwinger_congr_n D.𝒮 (Nat.add_comm 1 A.1)]
+    have h_ord' : osPrependPoint A.1 x₀ A.2.2.val ∘ finCongr (Nat.add_comm 1 A.1) ∈
+        orderedEuclidN (1 + A.1) := by
+      intro i hi
+      have hi' : (finCongr (Nat.add_comm 1 A.1) i).val + 1 < A.1 + 1 := by
+        dsimp [finCongr]
+        omega
+      exact h_ord (finCongr (Nat.add_comm 1 A.1) i) hi'
+    exact schwinger_one_add_eq_zero_of_component_onePoint_osKernel_eq_zero D htrans α₀ h1 A.1
+      (Fin.cons α₀ A.2.1 ∘ finCongr (Nat.add_comm 1 A.1)) rfl h_ord'
+  rw [h_eq, mul_zero]
+
+theorem schwinger_one_add_eq_zero_of_last_component_onePoint_osKernel_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hdiag : DiagonalStarStructure S) (c : ι)
+    (h1 : ∀ y : posOrderedEuclidN 1,
+      osKernel S D.𝒮 ⟨1, (fun _ => c, y)⟩ ⟨1, (fun _ => c, y)⟩ = 0)
+    (j : ℕ) (α : Fin (1 + j) → ι)
+    (hα_last : α (Fin.rev (Fin.castAdd j 0)) = c)
+    {x : Fin (1 + j) → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN (1 + j)) :
+    D.𝒮 (1 + j) α x = 0 := by
+  rw [← star_eq_zero, D.hermiticity (1 + j) α x hx]
+  refine Finset.sum_eq_zero (fun β _ => ?_)
+  by_cases hβ : β (Fin.rev (Fin.castAdd j 0)) = c
+  · have h_zero : D.𝒮 (1 + j) (β ∘ Fin.rev) (euclidTimeReflectRev (1 + j) x) = 0 := by
+      refine schwinger_one_add_eq_zero_of_component_onePoint_osKernel_eq_zero D htrans c
+        (fun b y hcb => ?_) j (β ∘ Fin.rev) hβ
+        (euclidTimeReflectRev_mem_orderedEuclidN (1 + j) hx)
+      have hbc : c = b := by
+        by_contra hne
+        exact hcb (hdiag c b hne)
+      subst hbc
+      exact h1 y
+    rw [h_zero, mul_zero]
+  · have h_prod : (∏ i : Fin (1 + j), S.C (α i) (β i)) = 0 := by
+      refine Finset.prod_eq_zero (Finset.mem_univ (Fin.rev (Fin.castAdd j 0))) ?_
+      rw [hα_last]
+      exact hdiag c (β (Fin.rev (Fin.castAdd j 0))) (Ne.symm hβ)
+    rw [h_prod, zero_mul]
+
+theorem schwinger_eq_zero_of_first_or_last_component_diag_twoPoint_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hdiag : DiagonalStarStructure S) (c : ι)
+    (hc2 : ∀ y ∈ orderedEuclidN 2, D.𝒮 2 (fun _ => c) y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι)
+    (hα : α ⟨0, hn⟩ = c ∨ α (Fin.rev ⟨0, hn⟩) = c)
+    {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    D.𝒮 n α x = 0 := by
+  have hn_eq : 1 + (n - 1) = n := Nat.add_sub_of_le hn
+  rw [← schwinger_congr_n D.𝒮 hn_eq α x]
+  have hx' : x ∘ finCongr hn_eq ∈ orderedEuclidN (1 + (n - 1)) := by
+    intro i hi
+    have hi' : (finCongr hn_eq i).val + 1 < n := by
+      dsimp [finCongr]
+      omega
+    exact hx (finCongr hn_eq i) hi'
+  rcases hα with h_first | h_last
+  · refine schwinger_one_add_eq_zero_of_diag_twoPoint_component_eq_zero D htrans hdiag c hc2
+      (n - 1) (α ∘ finCongr hn_eq) ?_ hx'
+    exact h_first
+  · refine schwinger_one_add_eq_zero_of_last_component_onePoint_osKernel_eq_zero D htrans hdiag c
+      (fun y => ?_) (n - 1) (α ∘ finCongr hn_eq) ?_ hx'
+    · rw [osKernel_onePoint_self_of_diagonalStarStructure hdiag D.𝒮 c y,
+          hc2 _ (osConcatPoint_mem_orderedEuclidN 1 1 y.property y.property), mul_zero]
+    · have h_idx : finCongr hn_eq (Fin.rev (Fin.castAdd (n - 1) 0)) = Fin.rev ⟨0, hn⟩ := by
+        ext
+        dsimp [finCongr, Fin.rev]
+        omega
+      change α (finCongr hn_eq (Fin.rev (Fin.castAdd (n - 1) 0))) = c
+      rwa [h_idx]
+
+def diagImagMatrix : Matrix (Fin 2) (Fin 2) ℂ :=
+  !![Complex.I, 0; 0, -Complex.I]
+
+def diagImagSL2C : SL2C :=
+  ⟨diagImagMatrix, by
+    unfold diagImagMatrix
+    rw [Matrix.det_fin_two_of]
+    simp⟩
+
+@[simp]
+lemma diagImagSL2C_val : diagImagSL2C.1 = diagImagMatrix := rfl
+
+def symplecticMatrix : Matrix (Fin 2) (Fin 2) ℂ :=
+  !![0, -1; 1, 0]
+
+def symplecticSL2C : SL2C :=
+  ⟨symplecticMatrix, by
+    unfold symplecticMatrix
+    rw [Matrix.det_fin_two_of]
+    ring⟩
+
+@[simp]
+lemma symplecticSL2C_val : symplecticSL2C.1 = symplecticMatrix := rfl
+
+def finTwoFunEquiv (α : Type*) : (Fin 2 → α) ≃ (α × α) where
+  toFun β := (β 0, β 1)
+  invFun p := ![p.1, p.2]
+  left_inv β := by
+    ext i
+    fin_cases i <;> rfl
+  right_inv p := by
+    rcases p with ⟨a, b⟩
+    rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma finTwo_eq_vecCons (β : Fin 2 → ι) :
+    β = ![β 0, β 1] := by
+  ext i
+  fin_cases i <;> rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma finTwo_comp_rev_vecCons (a b : ι) :
+    (![a, b] : Fin 2 → ι) ∘ Fin.rev = ![b, a] := by
+  ext i
+  fin_cases i <;> rfl
+
+omit [DecidableEq ι] in
+lemma sum_fin_two_fun (F : (Fin 2 → ι) → ℂ) :
+    (∑ β : Fin 2 → ι, F β) = ∑ a : ι, ∑ b : ι, F ![a, b] :=
+  ((finTwoFunEquiv ι).symm.sum_comp F).symm.trans (Fintype.sum_prod_type _)
+
+theorem finTwo_antisymm_of_diagImag_symplectic
+    (F : (Fin 2 → Fin 2) → ℂ)
+    (h_diag : ∀ α : Fin 2 → Fin 2,
+      F α = ∑ β : Fin 2 → Fin 2, (∏ i : Fin 2, diagImagMatrix (α i) (β i)) * F β)
+    (h_symp : ∀ α : Fin 2 → Fin 2,
+      F α = ∑ β : Fin 2 → Fin 2, (∏ i : Fin 2, symplecticMatrix (α i) (β i)) * F β)
+    (α : Fin 2 → Fin 2) :
+    F α = (-1 : ℂ) * F (α ∘ Fin.rev) := by
+  have h00 : F ![0, 0] = 0 := by
+    have h := h_diag ![0, 0]
+    rw [sum_fin_two_fun, Fin.sum_univ_two] at h
+    simp only [Fin.sum_univ_two, Fin.prod_univ_two, Fin.isValue, Matrix.cons_val_zero,
+      Matrix.cons_val_one, diagImagMatrix, Matrix.of_apply, mul_zero,
+      zero_mul, add_zero, Complex.I_mul_I] at h
+    linear_combination (1 / 2 : ℂ) * h
+  have h11 : F ![1, 1] = 0 := by
+    have h := h_diag ![1, 1]
+    rw [sum_fin_two_fun, Fin.sum_univ_two] at h
+    simp only [Fin.sum_univ_two, Fin.prod_univ_two, Fin.isValue, Matrix.cons_val_zero,
+      Matrix.cons_val_one, diagImagMatrix, Matrix.of_apply, mul_zero,
+      zero_mul, add_zero, zero_add, neg_mul_neg, Complex.I_mul_I] at h
+    linear_combination (1 / 2 : ℂ) * h
+  have h01 : F ![0, 1] = -F ![1, 0] := by
+    have h := h_symp ![0, 1]
+    rw [sum_fin_two_fun, Fin.sum_univ_two] at h
+    simp only [Fin.sum_univ_two, Fin.prod_univ_two, Fin.isValue, Matrix.cons_val_zero,
+      Matrix.cons_val_one, symplecticMatrix, Matrix.of_apply,
+      zero_mul, add_zero, zero_add, neg_one_mul] at h
+    linear_combination h
+  rw [finTwo_eq_vecCons α, finTwo_comp_rev_vecCons]
+  generalize α 0 = a
+  generalize α 1 = b
+  fin_cases a <;> fin_cases b
+  · change F ![0, 0] = -1 * F ![0, 0]; rw [h00]; ring
+  · change F ![0, 1] = -1 * F ![1, 0]; rw [h01]; ring
+  · change F ![1, 0] = -1 * F ![0, 1]; rw [h01]; ring
+  · change F ![1, 1] = -1 * F ![1, 1]; rw [h11]; ring
+
+theorem vladimirov_H_zero_twoPointIndexExchange_leftWeylRep
+    (W : WightmanFamily (Fin 2))
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant leftWeylRep W)
+    (α : Fin 2 → Fin 2) :
+    vladimirov_H W 2 α 0 = (-1 : ℂ) * vladimirov_H W 2 (α ∘ Fin.rev) 0 := by
+  refine finTwo_antisymm_of_diagImag_symplectic (fun β => vladimirov_H W 2 β 0)
+    (fun β => ?_) (fun β => ?_) α
+  · exact vladimirov_H_zero_complexCovariant leftWeylRep W hspec hP 2 diagImagSL2C 1 β
+  · exact vladimirov_H_zero_complexCovariant leftWeylRep W hspec hP 2 symplecticSL2C 1 β
+
+theorem vladimirov_H_zero_twoPointIndexExchange_rightWeylRep
+    (W : WightmanFamily (Fin 2))
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant rightWeylRep W)
+    (α : Fin 2 → Fin 2) :
+    vladimirov_H W 2 α 0 = (-1 : ℂ) * vladimirov_H W 2 (α ∘ Fin.rev) 0 := by
+  refine finTwo_antisymm_of_diagImag_symplectic (fun β => vladimirov_H W 2 β 0)
+    (fun β => ?_) (fun β => ?_) α
+  · exact vladimirov_H_zero_complexCovariant rightWeylRep W hspec hP 2 1 diagImagSL2C β
+  · exact vladimirov_H_zero_complexCovariant rightWeylRep W hspec hP 2 1 symplecticSL2C β
+
+lemma sum_directSumRep_inl_two {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    (R₁ : HolomorphicLorentzRep ι₁) (R₂ : HolomorphicLorentzRep ι₂)
+    (A B : SL2C) (F : (Fin 2 → ι₁ ⊕ ι₂) → ℂ) (α : Fin 2 → ι₁) :
+    (∑ β : Fin 2 → ι₁ ⊕ ι₂,
+      (∏ i : Fin 2, (directSumRep R₁ R₂).σ (A, B) (Sum.inl (α i)) (β i)) * F β) =
+    ∑ β : Fin 2 → ι₁,
+      (∏ i : Fin 2, R₁.σ (A, B) (α i) (β i)) * F (Sum.inl ∘ β) := by
+  rw [sum_fin_two_fun (ι := ι₁ ⊕ ι₂), sum_fin_two_fun (ι := ι₁)]
+  simp only [Fintype.sum_sum_type, Fin.prod_univ_two, Fin.isValue, Matrix.cons_val_zero,
+    Matrix.cons_val_one]
+  have h_zero : ∀ x : ι₁, ∀ y : ι₂,
+      (directSumRep R₁ R₂).σ (A, B) (Sum.inl x) (Sum.inr y) = 0 := fun _ _ => rfl
+  have h_inl : ∀ x y : ι₁,
+      (directSumRep R₁ R₂).σ (A, B) (Sum.inl x) (Sum.inl y) = R₁.σ (A, B) x y := fun _ _ => rfl
+  simp only [h_zero, h_inl, mul_zero, zero_mul, Finset.sum_const_zero, add_zero]
+  refine Finset.sum_congr rfl (fun b₀ _ => Finset.sum_congr rfl (fun b₁ _ => ?_))
+  congr 1
+  congr 1
+  ext i
+  fin_cases i <;> rfl
+
+lemma sum_directSumRep_inr_two {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    (R₁ : HolomorphicLorentzRep ι₁) (R₂ : HolomorphicLorentzRep ι₂)
+    (A B : SL2C) (F : (Fin 2 → ι₁ ⊕ ι₂) → ℂ) (α : Fin 2 → ι₂) :
+    (∑ β : Fin 2 → ι₁ ⊕ ι₂,
+      (∏ i : Fin 2, (directSumRep R₁ R₂).σ (A, B) (Sum.inr (α i)) (β i)) * F β) =
+    ∑ β : Fin 2 → ι₂,
+      (∏ i : Fin 2, R₂.σ (A, B) (α i) (β i)) * F (Sum.inr ∘ β) := by
+  rw [sum_fin_two_fun (ι := ι₁ ⊕ ι₂), sum_fin_two_fun (ι := ι₂)]
+  simp only [Fintype.sum_sum_type, Fin.prod_univ_two, Fin.isValue, Matrix.cons_val_zero,
+    Matrix.cons_val_one]
+  have h_zero : ∀ x : ι₂, ∀ y : ι₁,
+      (directSumRep R₁ R₂).σ (A, B) (Sum.inr x) (Sum.inl y) = 0 := fun _ _ => rfl
+  have h_inr : ∀ x y : ι₂,
+      (directSumRep R₁ R₂).σ (A, B) (Sum.inr x) (Sum.inr y) = R₂.σ (A, B) x y := fun _ _ => rfl
+  simp only [h_zero, h_inr, mul_zero, zero_mul, Finset.sum_const_zero, zero_add]
+  refine Finset.sum_congr rfl (fun b₀ _ => Finset.sum_congr rfl (fun b₁ _ => ?_))
+  congr 1
+  congr 1
+  ext i
+  fin_cases i <;> rfl
+
+theorem vladimirov_H_zero_diracRep_inl_inr_eq_zero
+    (W : WightmanFamily (Fin 2 ⊕ Fin 2))
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant diracRep W)
+    (a b : Fin 2) :
+    vladimirov_H W 2 ![Sum.inl a, Sum.inr b] 0 = 0 := by
+  have h_cov := vladimirov_H_zero_complexCovariant diracRep W hspec hP 2 (-1) 1
+    ![Sum.inl a, Sum.inr b]
+  have h_prod : ∀ β : Fin 2 → Fin 2 ⊕ Fin 2,
+      (∏ i : Fin 2, diracRep.σ (-1, 1) (![Sum.inl a, Sum.inr b] i) (β i)) =
+        if β = ![Sum.inl a, Sum.inr b] then -1 else 0 := by
+    intro β
+    rw [Fin.prod_univ_two]
+    simp only [Fin.isValue, Matrix.cons_val_zero, Matrix.cons_val_one]
+    have h0 : diracRep.σ (-1, 1) (Sum.inl a) (β 0) =
+        if β 0 = Sum.inl a then -1 else 0 := by
+      rcases hβ0 : β 0 with x | x
+      · change (-1 : SL2C).1 a x = if Sum.inl x = Sum.inl a then -1 else 0
+        by_cases hax : x = a
+        · subst hax; simp
+        · have hne : a ≠ x := Ne.symm hax
+          simp [hax, Matrix.one_apply_ne hne]
+      · simp [diracRep, directSumRep]
+    have h1 : diracRep.σ (-1, 1) (Sum.inr b) (β 1) =
+        if β 1 = Sum.inr b then 1 else 0 := by
+      rcases hβ1 : β 1 with y | y
+      · simp [diracRep, directSumRep]
+      · change (1 : SL2C).1 b y = if Sum.inr y = Sum.inr b then 1 else 0
+        by_cases hby : y = b
+        · subst hby; simp
+        · have hne : b ≠ y := Ne.symm hby
+          simp [hby, Matrix.one_apply_ne hne]
+    rw [h0, h1]
+    by_cases hβ : β = ![Sum.inl a, Sum.inr b]
+    · subst hβ; simp
+    · rw [if_neg hβ]
+      by_cases h0' : β 0 = Sum.inl a
+      · have h1' : β 1 ≠ Sum.inr b := by
+          intro hc
+          apply hβ
+          rw [finTwo_eq_vecCons β, h0', hc]
+        simp [h0', h1']
+      · simp [h0']
+  simp_rw [h_prod, ite_mul, neg_one_mul, zero_mul] at h_cov
+  rw [Finset.sum_ite_eq', if_pos (Finset.mem_univ _)] at h_cov
+  linear_combination (1 / 2 : ℂ) * h_cov
+
+theorem vladimirov_H_zero_diracRep_inr_inl_eq_zero
+    (W : WightmanFamily (Fin 2 ⊕ Fin 2))
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant diracRep W)
+    (a b : Fin 2) :
+    vladimirov_H W 2 ![Sum.inr a, Sum.inl b] 0 = 0 := by
+  have h_cov := vladimirov_H_zero_complexCovariant diracRep W hspec hP 2 (-1) 1
+    ![Sum.inr a, Sum.inl b]
+  have h_prod : ∀ β : Fin 2 → Fin 2 ⊕ Fin 2,
+      (∏ i : Fin 2, diracRep.σ (-1, 1) (![Sum.inr a, Sum.inl b] i) (β i)) =
+        if β = ![Sum.inr a, Sum.inl b] then -1 else 0 := by
+    intro β
+    rw [Fin.prod_univ_two]
+    simp only [Fin.isValue, Matrix.cons_val_zero, Matrix.cons_val_one]
+    have h0 : diracRep.σ (-1, 1) (Sum.inr a) (β 0) =
+        if β 0 = Sum.inr a then 1 else 0 := by
+      rcases hβ0 : β 0 with x | x
+      · simp [diracRep, directSumRep]
+      · change (1 : SL2C).1 a x = if Sum.inr x = Sum.inr a then 1 else 0
+        by_cases hax : x = a
+        · subst hax; simp
+        · have hne : a ≠ x := Ne.symm hax
+          simp [hax, Matrix.one_apply_ne hne]
+    have h1 : diracRep.σ (-1, 1) (Sum.inl b) (β 1) =
+        if β 1 = Sum.inl b then -1 else 0 := by
+      rcases hβ1 : β 1 with y | y
+      · change (-1 : SL2C).1 b y = if Sum.inl y = Sum.inl b then -1 else 0
+        by_cases hby : y = b
+        · subst hby; simp
+        · have hne : b ≠ y := Ne.symm hby
+          simp [hby, Matrix.one_apply_ne hne]
+      · simp [diracRep, directSumRep]
+    rw [h0, h1]
+    by_cases hβ : β = ![Sum.inr a, Sum.inl b]
+    · subst hβ; simp
+    · rw [if_neg hβ]
+      by_cases h0' : β 0 = Sum.inr a
+      · have h1' : β 1 ≠ Sum.inl b := by
+          intro hc
+          apply hβ
+          rw [finTwo_eq_vecCons β, h0', hc]
+        simp [h0', h1']
+      · simp [h0']
+  simp_rw [h_prod, ite_mul, neg_one_mul, zero_mul] at h_cov
+  rw [Finset.sum_ite_eq', if_pos (Finset.mem_univ _)] at h_cov
+  linear_combination (1 / 2 : ℂ) * h_cov
+
+theorem vladimirov_H_zero_twoPointIndexExchange_diracRep
+    (W : WightmanFamily (Fin 2 ⊕ Fin 2))
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant diracRep W)
+    (α : Fin 2 → Fin 2 ⊕ Fin 2) :
+    vladimirov_H W 2 α 0 = (-1 : ℂ) * vladimirov_H W 2 (α ∘ Fin.rev) 0 := by
+  have h_inl : ∀ γ : Fin 2 → Fin 2,
+      vladimirov_H W 2 (Sum.inl ∘ γ) 0 =
+        (-1 : ℂ) * vladimirov_H W 2 (Sum.inl ∘ (γ ∘ Fin.rev)) 0 := by
+    refine finTwo_antisymm_of_diagImag_symplectic (fun γ => vladimirov_H W 2 (Sum.inl ∘ γ) 0)
+      (fun γ => ?_) (fun γ => ?_)
+    · have h := vladimirov_H_zero_complexCovariant diracRep W hspec hP 2
+        diagImagSL2C 1 (Sum.inl ∘ γ)
+      rw [h]
+      exact sum_directSumRep_inl_two leftWeylRep rightWeylRep diagImagSL2C 1
+        (fun β => vladimirov_H W 2 β 0) γ
+    · have h := vladimirov_H_zero_complexCovariant diracRep W hspec hP 2
+        symplecticSL2C 1 (Sum.inl ∘ γ)
+      rw [h]
+      exact sum_directSumRep_inl_two leftWeylRep rightWeylRep symplecticSL2C 1
+        (fun β => vladimirov_H W 2 β 0) γ
+  have h_inr : ∀ γ : Fin 2 → Fin 2,
+      vladimirov_H W 2 (Sum.inr ∘ γ) 0 =
+        (-1 : ℂ) * vladimirov_H W 2 (Sum.inr ∘ (γ ∘ Fin.rev)) 0 := by
+    refine finTwo_antisymm_of_diagImag_symplectic (fun γ => vladimirov_H W 2 (Sum.inr ∘ γ) 0)
+      (fun γ => ?_) (fun γ => ?_)
+    · have h := vladimirov_H_zero_complexCovariant diracRep W hspec hP 2
+        1 diagImagSL2C (Sum.inr ∘ γ)
+      rw [h]
+      exact sum_directSumRep_inr_two leftWeylRep rightWeylRep 1 diagImagSL2C
+        (fun β => vladimirov_H W 2 β 0) γ
+    · have h := vladimirov_H_zero_complexCovariant diracRep W hspec hP 2
+        1 symplecticSL2C (Sum.inr ∘ γ)
+      rw [h]
+      exact sum_directSumRep_inr_two leftWeylRep rightWeylRep 1 symplecticSL2C
+        (fun β => vladimirov_H W 2 β 0) γ
+  rw [finTwo_eq_vecCons α, finTwo_comp_rev_vecCons]
+  rcases h0 : α 0 with a | a <;> rcases h1 : α 1 with b | b
+  · have h := h_inl ![a, b]
+    have h_l : ((Sum.inl : Fin 2 → Fin 2 ⊕ Fin 2) ∘ (![a, b] : Fin 2 → Fin 2)) =
+        ![Sum.inl a, Sum.inl b] := by
+      ext i; fin_cases i <;> rfl
+    have h_r : ((Sum.inl : Fin 2 → Fin 2 ⊕ Fin 2) ∘
+        ((![a, b] : Fin 2 → Fin 2) ∘ Fin.rev)) = ![Sum.inl b, Sum.inl a] := by
+      ext i; fin_cases i <;> rfl
+    rwa [h_l, h_r] at h
+  · rw [vladimirov_H_zero_diracRep_inl_inr_eq_zero W hspec hP a b,
+        vladimirov_H_zero_diracRep_inr_inl_eq_zero W hspec hP b a, mul_zero]
+  · rw [vladimirov_H_zero_diracRep_inr_inl_eq_zero W hspec hP a b,
+        vladimirov_H_zero_diracRep_inl_inr_eq_zero W hspec hP b a, mul_zero]
+  · have h := h_inr ![a, b]
+    have h_l : ((Sum.inr : Fin 2 → Fin 2 ⊕ Fin 2) ∘ (![a, b] : Fin 2 → Fin 2)) =
+        ![Sum.inr a, Sum.inr b] := by
+      ext i; fin_cases i <;> rfl
+    have h_r : ((Sum.inr : Fin 2 → Fin 2 ⊕ Fin 2) ∘
+        ((![a, b] : Fin 2 → Fin 2) ∘ Fin.rev)) = ![Sum.inr b, Sum.inr a] := by
+      ext i; fin_cases i <;> rfl
+    rwa [h_l, h_r] at h
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_twoPointIndexExchange_of_vladimirov_H_zero
+    {W : WightmanFamily ι} {ε : ℂ} (hspec : ZeroMomentumSpectrumCondition W)
+    (h_exch : ∀ α : Fin 2 → ι, vladimirov_H W 2 α 0 = ε * vladimirov_H W 2 (α ∘ Fin.rev) 0)
+    (α : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    W 2 α f = ε * W 2 (α ∘ Fin.rev) f := by
+  rw [W_n_eq_vladimirov_H_zero_mul_integral hspec 2 α f,
+      W_n_eq_vladimirov_H_zero_mul_integral hspec 2 (α ∘ Fin.rev) f,
+      h_exch α, mul_assoc]
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem spin_statistics_of_vladimirov_H_zero_twoPointIndexExchange
+    {W : WightmanFamily ι} {η ε : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hloc : WeakLocality η W)
+    (h_exch : ∀ α : Fin 2 → ι, vladimirov_H W 2 α 0 = ε * vladimirov_H W 2 (α ∘ Fin.rev) 0)
+    (h_nondeg : ∃ (α : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = ε := by
+  rcases h_nondeg with ⟨α, f, hf⟩
+  have hH_ne : vladimirov_H W 2 α 0 ≠ 0 := by
+    intro h0
+    apply hf
+    rw [W_n_eq_vladimirov_H_zero_mul_integral hspec 2 α f, h0, zero_mul]
+  have h_loc := vladimirov_H_zero_weakLocality hspec hloc 2 (α ∘ Fin.rev)
+  rw [two_mul_two_sub_one_div_two, pow_one] at h_loc
+  have h_rev : (α ∘ Fin.rev) ∘ Fin.rev = α := by
+    ext i; simp [Fin.rev_rev]
+  rw [h_rev] at h_loc
+  have h_sp := h_exch (α ∘ Fin.rev)
+  rw [h_rev] at h_sp
+  exact mul_right_cancel₀ hH_ne (h_loc.symm.trans h_sp)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_twoPoint_eq_zero_of_vladimirov_H_zero_twoPointIndexExchange
+    {W : WightmanFamily ι} {η ε : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hloc : WeakLocality η W)
+    (h_exch : ∀ α : Fin 2 → ι, vladimirov_H W 2 α 0 = ε * vladimirov_H W 2 (α ∘ Fin.rev) 0)
+    (h_wrong : η ≠ ε)
+    (α : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    W 2 α f = 0 := by
+  by_contra h_ne
+  exact h_wrong
+    (spin_statistics_of_vladimirov_H_zero_twoPointIndexExchange hspec hloc h_exch ⟨α, f, h_ne⟩)
+
+theorem leftWeyl_wightman_spin_statistics_unconditional
+    (W : WightmanFamily (Fin 2)) {η : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant leftWeylRep W)
+    (hloc : WeakLocality η W)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 2)
+      (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = -1 :=
+  spin_statistics_of_vladimirov_H_zero_twoPointIndexExchange hspec hloc
+    (vladimirov_H_zero_twoPointIndexExchange_leftWeylRep W hspec hP) h_nondeg
+
+theorem rightWeyl_wightman_spin_statistics_unconditional
+    (W : WightmanFamily (Fin 2)) {η : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant rightWeylRep W)
+    (hloc : WeakLocality η W)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 2)
+      (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = -1 :=
+  spin_statistics_of_vladimirov_H_zero_twoPointIndexExchange hspec hloc
+    (vladimirov_H_zero_twoPointIndexExchange_rightWeylRep W hspec hP) h_nondeg
+
+theorem dirac_wightman_spin_statistics_unconditional
+    (W : WightmanFamily (Fin 2 ⊕ Fin 2)) {η : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant diracRep W)
+    (hloc : WeakLocality η W)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 2 ⊕ Fin 2)
+      (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 α f ≠ 0) :
+    η = -1 :=
+  spin_statistics_of_vladimirov_H_zero_twoPointIndexExchange hspec hloc
+    (vladimirov_H_zero_twoPointIndexExchange_diracRep W hspec hP) h_nondeg
+
+theorem dirac_os_spin_statistics_unconditional
+    {η : ℂ} {𝒮 : SchwingerFamily (Fin 2 ⊕ Fin 2)}
+    (P : DiracOSReconstructedWightman η 𝒮)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 2 ⊕ Fin 2)
+      (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 α f ≠ 0) :
+    η = -1 :=
+  dirac_wightman_spin_statistics_unconditional P.W P.spectrum P.poincare P.weakLocality h_nondeg
+
+def finAppendRevEquiv (j k : ℕ) :
+    ((Fin j → Fin 4 → ℝ) × (Fin k → Fin 4 → ℝ)) ≃ᵐ (Fin (j + k) → Fin 4 → ℝ) where
+  toEquiv := {
+    toFun := fun p m => Fin.addCases (fun i => p.1 (Fin.rev i)) p.2 m
+    invFun := fun x => (fun i => x (Fin.castAdd k (Fin.rev i)), fun i => x (Fin.natAdd j i))
+    left_inv := fun ⟨y, z⟩ => by
+      ext i m
+      · simp [Fin.addCases_left, Fin.rev_rev]
+      · simp [Fin.addCases_right]
+    right_inv := fun x => by
+      ext m
+      refine Fin.addCases (fun i => ?_) (fun i => ?_) m
+      · simp [Fin.addCases_left, Fin.rev_rev]
+      · simp [Fin.addCases_right]
+  }
+  measurable_toFun := by
+    refine (continuous_pi fun m => ?_).measurable
+    refine Fin.addCases (fun i => ?_) (fun i => ?_) m
+    · dsimp
+      simp_rw [Fin.addCases_left]
+      exact (continuous_apply (Fin.rev i)).comp continuous_fst
+    · dsimp
+      simp_rw [Fin.addCases_right]
+      exact (continuous_apply i).comp continuous_snd
+  measurable_invFun := by
+    refine Measurable.prodMk ?_ ?_
+    · exact measurable_pi_lambda _ (fun i => measurable_pi_apply (Fin.castAdd k (Fin.rev i)))
+    · exact measurable_pi_lambda _ (fun i => measurable_pi_apply (Fin.natAdd j i))
+
+lemma continuous_finAppendRevEquiv (j k : ℕ) :
+    Continuous (finAppendRevEquiv j k) := by
+  refine continuous_pi (fun m => ?_)
+  refine Fin.addCases (fun i => ?_) (fun i => ?_) m
+  · dsimp [finAppendRevEquiv]
+    simp_rw [Fin.addCases_left]
+    exact (continuous_apply (Fin.rev i)).comp continuous_fst
+  · dsimp [finAppendRevEquiv]
+    simp_rw [Fin.addCases_right]
+    exact (continuous_apply i).comp continuous_snd
+
+lemma measurePreserving_finAppendRevEquiv (j k : ℕ) :
+    MeasurePreserving (finAppendRevEquiv j k) volume volume := by
+  refine ⟨(finAppendRevEquiv j k).measurable, ?_⟩
+  refine (MeasureTheory.Measure.pi_eq fun s hs => ?_).symm
+  rw [MeasureTheory.Measure.map_apply (finAppendRevEquiv j k).measurable
+    (MeasurableSet.univ_pi hs)]
+  have h_pre : (finAppendRevEquiv j k) ⁻¹' (Set.pi Set.univ s) =
+      (Set.pi Set.univ (fun i : Fin j => s (Fin.castAdd k (Fin.rev i)))) ×ˢ
+      (Set.pi Set.univ (fun i : Fin k => s (Fin.natAdd j i))) := by
+    ext ⟨y, z⟩
+    simp only [Set.mem_preimage, Set.mem_pi, Set.mem_univ, forall_true_left, Set.mem_prod]
+    constructor
+    · intro h
+      refine ⟨fun i => ?_, fun i => ?_⟩
+      · simpa [finAppendRevEquiv, Fin.addCases_left] using h (Fin.castAdd k (Fin.rev i))
+      · simpa [finAppendRevEquiv, Fin.addCases_right] using h (Fin.natAdd j i)
+    · rintro ⟨h1, h2⟩ m
+      refine Fin.addCases (fun i => ?_) (fun i => ?_) m
+      · have := h1 (Fin.rev i)
+        simpa [finAppendRevEquiv, Fin.addCases_left, Fin.rev_rev] using this
+      · simpa [finAppendRevEquiv, Fin.addCases_right] using h2 i
+  rw [h_pre, MeasureTheory.Measure.volume_eq_prod, MeasureTheory.Measure.prod_prod]
+  have h1 : (volume : MeasureTheory.Measure (Fin j → Fin 4 → ℝ))
+      (Set.pi Set.univ (fun i : Fin j => s (Fin.castAdd k (Fin.rev i)))) =
+      ∏ i : Fin j, volume (s (Fin.castAdd k (Fin.rev i))) := by
+    rw [MeasureTheory.volume_pi, MeasureTheory.Measure.pi_pi]
+  have h2 : (volume : MeasureTheory.Measure (Fin k → Fin 4 → ℝ))
+      (Set.pi Set.univ (fun i : Fin k => s (Fin.natAdd j i))) =
+      ∏ i : Fin k, volume (s (Fin.natAdd j i)) := by
+    rw [MeasureTheory.volume_pi, MeasureTheory.Measure.pi_pi]
+  rw [h1, h2, Fin.prod_univ_add]
+  congr 1
+  exact Equiv.prod_comp Fin.revPerm (fun i : Fin j => volume (s (Fin.castAdd k i)))
+
+lemma integral_split_rev_mul (j k : ℕ)
+    (f : (Fin j → Fin 4 → ℝ) → ℂ) (g : (Fin k → Fin 4 → ℝ) → ℂ) :
+    (∫ x : Fin (j + k) → Fin 4 → ℝ,
+      f (fun i => x (Fin.castAdd k (Fin.rev i))) * g (fun i => x (Fin.natAdd j i))) =
+    (∫ y : Fin j → Fin 4 → ℝ, f y) * (∫ z : Fin k → Fin 4 → ℝ, g z) := by
+  have h_mp := measurePreserving_finAppendRevEquiv j k
+  rw [← h_mp.integral_comp (finAppendRevEquiv j k).measurableEmbedding]
+  have h_eq : (fun p : (Fin j → Fin 4 → ℝ) × (Fin k → Fin 4 → ℝ) =>
+      f (fun i => finAppendRevEquiv j k p (Fin.castAdd k (Fin.rev i))) *
+        g (fun i => finAppendRevEquiv j k p (Fin.natAdd j i))) =
+      (fun p => f p.1 * g p.2) := by
+    ext ⟨y, z⟩
+    have hy : (fun i : Fin j => finAppendRevEquiv j k (y, z) (Fin.castAdd k (Fin.rev i))) = y := by
+      ext i m
+      simp [finAppendRevEquiv, Fin.addCases_left, Fin.rev_rev]
+    have hz : (fun i : Fin k => finAppendRevEquiv j k (y, z) (Fin.natAdd j i)) = z := by
+      ext i m
+      simp [finAppendRevEquiv, Fin.addCases_right]
+    rw [hy, hz]
+  rw [h_eq, MeasureTheory.Measure.volume_eq_prod, MeasureTheory.integral_prod_mul]
+
+theorem minkowskiFourier_borchersProduct_eq (j k : ℕ)
+    (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ)
+    (G : SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ x : Fin (j + k) → Fin 4 → ℝ,
+      G x = (starRingEnd ℂ) (f (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+        g (fun i => x (Fin.natAdd j i)))
+    (p : Fin (j + k) → Fin 4 → ℝ) :
+    minkowskiFourier G p =
+      star (minkowskiFourier f (fun i => -p (Fin.castAdd k (Fin.rev i)))) *
+        minkowskiFourier g (fun i => p (Fin.natAdd j i)) := by
+  let p_left : Fin j → Fin 4 → ℝ := fun i => p (Fin.castAdd k (Fin.rev i))
+  let p_right : Fin k → Fin 4 → ℝ := fun i => p (Fin.natAdd j i)
+  have h_integrand :
+      (fun x : Fin (j + k) → Fin 4 → ℝ =>
+        G x * Complex.exp
+          (-(Complex.I * ((∑ m : Fin (j + k), minkowskiInner (p m) (x m) : ℝ) : ℂ)))) =
+      fun x : Fin (j + k) → Fin 4 → ℝ =>
+        ((fun y : Fin j → Fin 4 → ℝ =>
+          (starRingEnd ℂ) (f y *
+            Complex.exp (-(Complex.I * ((∑ i : Fin j, minkowskiInner (-p_left i) (y i) : ℝ) : ℂ)))))
+          (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+        ((fun z : Fin k → Fin 4 → ℝ =>
+          g z * Complex.exp
+            (-(Complex.I * ((∑ i : Fin k, minkowskiInner (p_right i) (z i) : ℝ) : ℂ))))
+          (fun i => x (Fin.natAdd j i))) := by
+    ext x
+    rw [hG x]
+    have h_sum :
+        (∑ m : Fin (j + k), minkowskiInner (p m) (x m)) =
+          (∑ i : Fin j, minkowskiInner (p_left i) (x (Fin.castAdd k (Fin.rev i)))) +
+          (∑ i : Fin k, minkowskiInner (p_right i) (x (Fin.natAdd j i))) := by
+      rw [Fin.sum_univ_add]
+      congr 1
+      exact (Equiv.sum_comp Fin.revPerm
+        (fun i : Fin j => minkowskiInner (p (Fin.castAdd k i)) (x (Fin.castAdd k i)))).symm
+    have h_neg :
+        (∑ i : Fin j, minkowskiInner (-p_left i) (x (Fin.castAdd k (Fin.rev i)))) =
+          -(∑ i : Fin j, minkowskiInner (p_left i) (x (Fin.castAdd k (Fin.rev i)))) := by
+      rw [← Finset.sum_neg_distrib]
+      refine Finset.sum_congr rfl (fun i _ => ?_)
+      simp [minkowskiInner_explicit]
+      ring
+    dsimp
+    rw [map_mul, ← Complex.exp_conj, map_neg, map_mul, Complex.conj_I, Complex.conj_ofReal, h_neg]
+    have h_exp_eq :
+        -( -Complex.I *
+          ((-∑ i : Fin j, minkowskiInner (p_left i) (x (Fin.castAdd k (Fin.rev i))) : ℝ) : ℂ)) +
+          -(Complex.I *
+            ((∑ i : Fin k, minkowskiInner (p_right i) (x (Fin.natAdd j i)) : ℝ) : ℂ)) =
+          -(Complex.I * ((∑ m : Fin (j + k), minkowskiInner (p m) (x m) : ℝ) : ℂ)) := by
+      rw [h_sum]
+      push_cast
+      ring
+    calc
+      (starRingEnd ℂ) (f (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          g (fun i => x (Fin.natAdd j i)) *
+          Complex.exp (-(Complex.I * ((∑ m : Fin (j + k), minkowskiInner (p m) (x m) : ℝ) : ℂ)))
+        = (starRingEnd ℂ) (f (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          g (fun i => x (Fin.natAdd j i)) *
+          (Complex.exp
+            (-(-Complex.I *
+              ((-∑ i : Fin j,
+                minkowskiInner (p_left i) (x (Fin.castAdd k (Fin.rev i))) : ℝ) : ℂ))) *
+            Complex.exp
+              (-(Complex.I *
+                ((∑ i : Fin k, minkowskiInner (p_right i) (x (Fin.natAdd j i)) : ℝ) : ℂ)))) := by
+          rw [← Complex.exp_add, h_exp_eq]
+      _ = ((starRingEnd ℂ) (f (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+            Complex.exp
+              (-(-Complex.I *
+                ((-∑ i : Fin j,
+                  minkowskiInner (p_left i) (x (Fin.castAdd k (Fin.rev i))) : ℝ) : ℂ)))) *
+          (g (fun i => x (Fin.natAdd j i)) *
+            Complex.exp
+              (-(Complex.I *
+                ((∑ i : Fin k, minkowskiInner (p_right i) (x (Fin.natAdd j i)) : ℝ) : ℂ)))) := by
+          ring
+  have h_int :
+      (∫ x : Fin (j + k) → Fin 4 → ℝ,
+        G x * Complex.exp
+          (-(Complex.I * ((∑ m : Fin (j + k), minkowskiInner (p m) (x m) : ℝ) : ℂ)))) =
+      (∫ y : Fin j → Fin 4 → ℝ,
+        (starRingEnd ℂ) (f y *
+          Complex.exp (-(Complex.I * ((∑ i : Fin j, minkowskiInner (-p_left i) (y i) : ℝ) : ℂ))))) *
+      (∫ z : Fin k → Fin 4 → ℝ,
+        g z * Complex.exp
+          (-(Complex.I * ((∑ i : Fin k, minkowskiInner (p_right i) (z i) : ℝ) : ℂ)))) := by
+    rw [h_integrand]
+    exact integral_split_rev_mul j k
+      (fun y : Fin j → Fin 4 → ℝ =>
+        (starRingEnd ℂ) (f y *
+          Complex.exp (-(Complex.I * ((∑ i : Fin j, minkowskiInner (-p_left i) (y i) : ℝ) : ℂ)))))
+      (fun z : Fin k → Fin 4 → ℝ =>
+        g z * Complex.exp
+          (-(Complex.I * ((∑ i : Fin k, minkowskiInner (p_right i) (z i) : ℝ) : ℂ))))
+  dsimp [minkowskiFourier]
+  rw [h_int, integral_conj, ← Complex.star_def]
+
+def jostProductFun (j k : ℕ) (x : Fin (j + k) → Fin 4 → ℝ) : ℂ :=
+  (starRingEnd ℂ) (jostSchwartz j (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+    jostSchwartz k (fun i => x (Fin.natAdd j i))
+
+lemma jostProductFun_contDiff (j k : ℕ) :
+    ContDiff ℝ (⊤ : ℕ∞) (jostProductFun j k) := by
+  have h_left : ContDiff ℝ (⊤ : ℕ∞)
+      (fun x : Fin (j + k) → Fin 4 → ℝ =>
+        (fun i : Fin j => x (Fin.castAdd k (Fin.rev i)))) :=
+    contDiff_pi.mpr (fun i => contDiff_apply ℝ (Fin 4 → ℝ) (Fin.castAdd k (Fin.rev i)))
+  have h_right : ContDiff ℝ (⊤ : ℕ∞)
+      (fun x : Fin (j + k) → Fin 4 → ℝ =>
+        (fun i : Fin k => x (Fin.natAdd j i))) :=
+    contDiff_pi.mpr (fun i => contDiff_apply ℝ (Fin 4 → ℝ) (Fin.natAdd j i))
+  exact (Complex.conjCLE.contDiff.comp ((jostBump_complex_contDiff j).comp h_left)).mul
+    ((jostBump_complex_contDiff k).comp h_right)
+
+lemma jostProductFun_hasCompactSupport (j k : ℕ) :
+    HasCompactSupport (jostProductFun j k) := by
+  refine HasCompactSupport.of_support_subset_isCompact
+    (((jostBump_complex_hasCompactSupport j).isCompact.prod
+      (jostBump_complex_hasCompactSupport k).isCompact).image
+      (continuous_finAppendRevEquiv j k)) ?_
+  intro x hx
+  rw [Function.mem_support] at hx
+  have h_left_ne : jostSchwartz j (fun i => x (Fin.castAdd k (Fin.rev i))) ≠ 0 := by
+    intro h0
+    apply hx
+    simp [jostProductFun, h0]
+  have h_right_ne : jostSchwartz k (fun i => x (Fin.natAdd j i)) ≠ 0 := by
+    intro h0
+    apply hx
+    simp [jostProductFun, h0]
+  refine ⟨((fun i => x (Fin.castAdd k (Fin.rev i))), (fun i => x (Fin.natAdd j i))),
+    ⟨subset_tsupport _ h_left_ne, subset_tsupport _ h_right_ne⟩, ?_⟩
+  exact (finAppendRevEquiv j k).toEquiv.right_inv x
+
+def jostProductSchwartz (j k : ℕ) : SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ :=
+  (jostProductFun_hasCompactSupport j k).toSchwartzMap (jostProductFun_contDiff j k)
+
+@[simp]
+lemma jostProductSchwartz_apply (j k : ℕ) (x : Fin (j + k) → Fin 4 → ℝ) :
+    jostProductSchwartz j k x =
+      (starRingEnd ℂ) (jostSchwartz j (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+        jostSchwartz k (fun i => x (Fin.natAdd j i)) := rfl
+
+@[simp]
+lemma star_jostSchwartz_apply (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    (starRingEnd ℂ) (jostSchwartz n x) = jostSchwartz n x := by
+  rw [jostSchwartz_apply]
+  exact Complex.conj_ofReal _
+
+lemma integral_jostProductSchwartz_eq (j k : ℕ) :
+    (∫ x : Fin (j + k) → Fin 4 → ℝ, jostProductSchwartz j k x) =
+      (∫ y : Fin j → Fin 4 → ℝ, jostSchwartz j y) *
+        (∫ z : Fin k → Fin 4 → ℝ, jostSchwartz k z) := by
+  have h_eq : (fun x : Fin (j + k) → Fin 4 → ℝ => jostProductSchwartz j k x) =
+      fun x => ((fun y => (starRingEnd ℂ) (jostSchwartz j y))
+        (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+        ((fun z => jostSchwartz k z) (fun i => x (Fin.natAdd j i))) := rfl
+  rw [h_eq, integral_split_rev_mul j k
+    (fun y => (starRingEnd ℂ) (jostSchwartz j y))
+    (fun z => jostSchwartz k z)]
+  congr 1
+  refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall (fun y => ?_))
+  exact star_jostSchwartz_apply j y
+
+@[simp]
+lemma star_integral_jostSchwartz (n : ℕ) :
+    (starRingEnd ℂ) (∫ y : Fin n → Fin 4 → ℝ, jostSchwartz n y) =
+      ∫ y : Fin n → Fin 4 → ℝ, jostSchwartz n y := by
+  rw [← integral_conj]
+  refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall (fun y => ?_))
+  exact star_jostSchwartz_apply n y
+
+def vladimirovKernel {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι) : ℂ :=
+  ∑ β : Fin j → ι,
+    (∏ i : Fin j, S.C (α i) (β i)) *
+      vladimirov_H W (j + k) (Fin.append (β ∘ Fin.rev) α') 0
+
+lemma osKernel_vladimirovSchwinger {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    {W : WightmanFamily ι} (hspec : ZeroMomentumSpectrumCondition W) (A B : OSConfig ι) :
+    osKernel S (vladimirovSchwinger W) A B =
+      vladimirovKernel S W A.1 B.1 A.2.1 B.2.1 := by
+  unfold osKernel vladimirovKernel osConcatIdx
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  rw [vladimirovSchwinger_eq_zero_eval hspec]
+
+def vladimirovSesquilinear {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (N : ℕ)
+    (u v : ∀ j : ℕ, (Fin j → ι) → ℂ) : ℂ :=
+  ∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+    ∑ α : Fin j → ι, ∑ α' : Fin k → ι,
+      star (u j α) * v k α' * vladimirovKernel S W j k α α'
+
+theorem vladimirov_H_zero_positivity {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (hspec : ZeroMomentumSpectrumCondition W) (hpos : Positivity S W)
+    (N : ℕ) (u : ∀ j : ℕ, (Fin j → ι) → ℂ) :
+    0 ≤ vladimirovSesquilinear S W N u u := by
+  let I : ℕ → ℂ := fun j => ∫ y : Fin j → Fin 4 → ℝ, jostSchwartz j y
+  let v : ∀ j : ℕ, (Fin j → ι) → ℂ := fun j α => u j α * (I j)⁻¹
+  let F : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ :=
+    fun j α => v j α • jostSchwartz j
+  let G : ∀ j k : ℕ, (Fin j → ι) → (Fin k → ι) →
+      SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ :=
+    fun j k α α' => ((starRingEnd ℂ) (v j α) * v k α') • jostProductSchwartz j k
+  have hG : ∀ j k α α' (x : Fin (j + k) → Fin 4 → ℝ),
+      G j k α α' x =
+        (starRingEnd ℂ) (F j α (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          F k α' (fun i => x (Fin.natAdd j i)) := by
+    intro j k α α' x
+    simp only [F, G, _root_.smul_apply, smul_eq_mul, map_mul, jostProductSchwartz_apply]
+    ring
+  have h_pos := hpos N F G hG
+  have h_term : ∀ j k (α : Fin j → ι) (α' : Fin k → ι) (β : Fin j → ι),
+      (∏ i, S.C (α i) (β i)) * W (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α') =
+        star (u j α) * u k α' *
+          ((∏ i, S.C (α i) (β i)) *
+            vladimirov_H W (j + k) (Fin.append (β ∘ Fin.rev) α') 0) := by
+    intro j k α α' β
+    rw [W_n_eq_vladimirov_H_zero_mul_integral hspec (j + k) (Fin.append (β ∘ Fin.rev) α')
+      (G j k α α')]
+    have h_int : (∫ x : Fin (j + k) → Fin 4 → ℝ, G j k α α' x) = star (u j α) * u k α' := by
+      change (∫ x : Fin (j + k) → Fin 4 → ℝ,
+        ((starRingEnd ℂ) (v j α) * v k α') * jostProductSchwartz j k x) = _
+      rw [MeasureTheory.integral_const_mul, integral_jostProductSchwartz_eq]
+      dsimp [v, I]
+      rw [map_mul, map_inv₀, star_integral_jostSchwartz j, ← Complex.star_def]
+      have hj := integral_jostSchwartz_ne_zero j
+      have hk := integral_jostSchwartz_ne_zero k
+      calc (star (u j α) * (∫ y, jostSchwartz j y)⁻¹ *
+            (u k α' * (∫ z, jostSchwartz k z)⁻¹)) *
+            ((∫ y, jostSchwartz j y) * ∫ z, jostSchwartz k z)
+        _ = star (u j α) * u k α' *
+              ((∫ y, jostSchwartz j y)⁻¹ * ∫ y, jostSchwartz j y) *
+              ((∫ z, jostSchwartz k z)⁻¹ * ∫ z, jostSchwartz k z) := by ring
+        _ = star (u j α) * u k α' := by
+              rw [inv_mul_cancel₀ hj, inv_mul_cancel₀ hk, mul_one, mul_one]
+    rw [h_int]
+    ring
+  simp_rw [h_term, ← Finset.mul_sum] at h_pos
+  exact h_pos
+
+lemma vladimirovSesquilinear_linear_comb {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (N : ℕ)
+    (u v : ∀ j : ℕ, (Fin j → ι) → ℂ) (z : ℂ) :
+    vladimirovSesquilinear S W N
+      (fun j α => z * u j α + v j α) (fun j α => z * u j α + v j α) =
+      (star z * z) * vladimirovSesquilinear S W N u u +
+      star z * vladimirovSesquilinear S W N u v +
+      z * vladimirovSesquilinear S W N v u +
+      vladimirovSesquilinear S W N v v := by
+  unfold vladimirovSesquilinear
+  have h_inner : ∀ j k (α : Fin j → ι) (α' : Fin k → ι),
+      star (z * u j α + v j α) * (z * u k α' + v k α') * vladimirovKernel S W j k α α' =
+        (star z * z) * (star (u j α) * u k α' * vladimirovKernel S W j k α α') +
+        star z * (star (u j α) * v k α' * vladimirovKernel S W j k α α') +
+        z * (star (v j α) * u k α' * vladimirovKernel S W j k α α') +
+        (star (v j α) * v k α' * vladimirovKernel S W j k α α') := by
+    intro j k α α'
+    rw [star_add, star_mul']
+    ring
+  simp_rw [h_inner, Finset.sum_add_distrib, ← Finset.mul_sum]
+
+lemma complex_eq_zero_of_forall_real_mul_add_nonneg {X D : ℂ}
+    (h : ∀ t : ℝ, 0 ≤ (t : ℂ) * X + D) :
+    X = 0 := by
+  have h0 := Complex.nonneg_iff.mp (h 0)
+  have h1 := Complex.nonneg_iff.mp (h 1)
+  simp only [Complex.ofReal_zero, zero_mul, zero_add] at h0
+  simp only [Complex.ofReal_one, one_mul, Complex.add_im] at h1
+  have hD_im : D.im = 0 := h0.2.symm
+  have hX_im : X.im = 0 := by linarith [h1.2]
+  have hX_re : X.re = 0 := by
+    by_contra hne
+    have ht := (Complex.nonneg_iff.mp (h (-(D.re + 1) / X.re))).1
+    simp only [Complex.add_re, Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im,
+      hX_im, mul_zero, sub_zero] at ht
+    rw [div_mul_cancel₀ _ hne] at ht
+    linarith
+  exact Complex.ext hX_re hX_im
+
+lemma complex_eq_zero_of_forall_star_mul_add_nonneg {A B D : ℂ}
+    (h : ∀ z : ℂ, 0 ≤ star z * A + z * B + D) :
+    A = 0 := by
+  have h1 : A + B = 0 := by
+    refine complex_eq_zero_of_forall_real_mul_add_nonneg (D := D) (fun t => ?_)
+    have ht := h (t : ℂ)
+    have h_eq : star (t : ℂ) * A + (t : ℂ) * B + D = (t : ℂ) * (A + B) + D := by
+      rw [Complex.star_def, Complex.conj_ofReal]
+      ring
+    rwa [h_eq] at ht
+  have h2 : Complex.I * (B - A) = 0 := by
+    refine complex_eq_zero_of_forall_real_mul_add_nonneg (D := D) (fun t => ?_)
+    have ht := h (Complex.I * (t : ℂ))
+    have h_eq : star (Complex.I * (t : ℂ)) * A + (Complex.I * (t : ℂ)) * B + D =
+        (t : ℂ) * (Complex.I * (B - A)) + D := by
+      rw [star_mul', Complex.star_def, Complex.conj_I, Complex.conj_ofReal]
+      ring
+    rwa [h_eq] at ht
+  have hI : Complex.I * (Complex.I * (B - A)) = -(B - A) := by
+    rw [← mul_assoc, Complex.I_mul_I, neg_one_mul]
+  have h2' : -(B - A) = 0 := by
+    rw [← hI, h2, mul_zero]
+  linear_combination (1 / 2 : ℂ) * h1 + (1 / 2 : ℂ) * h2'
+
+theorem vladimirovSesquilinear_eq_zero_of_diag_eq_zero
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (hspec : ZeroMomentumSpectrumCondition W) (hpos : Positivity S W)
+    (N : ℕ) (u v : ∀ j : ℕ, (Fin j → ι) → ℂ)
+    (hu : vladimirovSesquilinear S W N u u = 0) :
+    vladimirovSesquilinear S W N u v = 0 := by
+  refine complex_eq_zero_of_forall_star_mul_add_nonneg
+    (B := vladimirovSesquilinear S W N v u)
+    (D := vladimirovSesquilinear S W N v v) (fun z => ?_)
+  have h := vladimirov_H_zero_positivity S W hspec hpos N (fun j α => z * u j α + v j α)
+  rwa [vladimirovSesquilinear_linear_comb, hu, mul_zero, zero_add] at h
+
+def vladimirovDelta (j₀ : ℕ) (α₀ : Fin j₀ → ι) (j : ℕ) (α : Fin j → ι) : ℂ :=
+  if h : j = j₀ then (if h ▸ α = α₀ then 1 else 0) else 0
+
+omit [Fintype ι] in
+@[simp]
+lemma star_vladimirovDelta (j₀ : ℕ) (α₀ : Fin j₀ → ι) (j : ℕ) (α : Fin j → ι) :
+    star (vladimirovDelta j₀ α₀ j α) = vladimirovDelta j₀ α₀ j α := by
+  dsimp [vladimirovDelta]
+  split_ifs <;> simp
+
+lemma sum_vladimirovDelta_mul (N j₀ : ℕ) (hj₀ : j₀ ≤ N) (α₀ : Fin j₀ → ι)
+    (F : ∀ j : ℕ, (Fin j → ι) → ℂ) :
+    (∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι,
+      vladimirovDelta j₀ α₀ j α * F j α) = F j₀ α₀ := by
+  have h_inner : ∀ j : ℕ,
+      (∑ α : Fin j → ι, vladimirovDelta j₀ α₀ j α * F j α) =
+        if j = j₀ then F j₀ α₀ else 0 := by
+    intro j
+    by_cases hj : j = j₀
+    · subst hj
+      simp only [vladimirovDelta, ↓reduceDIte, ite_mul, one_mul, zero_mul,
+        Finset.sum_ite_eq', Finset.mem_univ, ↓reduceIte]
+    · simp [vladimirovDelta, hj]
+  simp_rw [h_inner]
+  rw [Finset.sum_ite_eq', if_pos (Finset.mem_range.mpr (Nat.lt_succ_of_le hj₀))]
+
+lemma vladimirovSesquilinear_delta {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (N j₁ j₂ : ℕ) (hj₁ : j₁ ≤ N) (hj₂ : j₂ ≤ N)
+    (α₁ : Fin j₁ → ι) (α₂ : Fin j₂ → ι) :
+    vladimirovSesquilinear S W N
+      (vladimirovDelta j₁ α₁) (vladimirovDelta j₂ α₂) =
+      vladimirovKernel S W j₁ j₂ α₁ α₂ := by
+  unfold vladimirovSesquilinear
+  simp_rw [star_vladimirovDelta, mul_assoc]
+  have h_k : ∀ j (α : Fin j → ι),
+      (∑ k ∈ Finset.range (N + 1), ∑ α' : Fin k → ι,
+        vladimirovDelta j₁ α₁ j α *
+          (vladimirovDelta j₂ α₂ k α' * vladimirovKernel S W j k α α')) =
+      vladimirovDelta j₁ α₁ j α * vladimirovKernel S W j j₂ α α₂ := by
+    intro j α
+    simp_rw [← Finset.mul_sum]
+    congr 1
+    exact sum_vladimirovDelta_mul N j₂ hj₂ α₂ (fun k α' => vladimirovKernel S W j k α α')
+  have h_j : ∀ j,
+      (∑ k ∈ Finset.range (N + 1), ∑ α : Fin j → ι, ∑ α' : Fin k → ι,
+        vladimirovDelta j₁ α₁ j α *
+          (vladimirovDelta j₂ α₂ k α' * vladimirovKernel S W j k α α')) =
+      ∑ α : Fin j → ι, vladimirovDelta j₁ α₁ j α * vladimirovKernel S W j j₂ α α₂ := by
+    intro j
+    rw [Finset.sum_comm]
+    exact Finset.sum_congr rfl (fun α _ => h_k j α)
+  simp_rw [h_j]
+  exact sum_vladimirovDelta_mul N j₁ hj₁ α₁ (fun j α => vladimirovKernel S W j j₂ α α₂)
+
+theorem vladimirovKernel_one_right_eq_zero_of_one_self_eq_zero
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (hspec : ZeroMomentumSpectrumCondition W) (hpos : Positivity S W)
+    (c : ι) (hc : vladimirovKernel S W 1 1 (fun _ => c) (fun _ => c) = 0)
+    (m : ℕ) (α' : Fin m → ι) :
+    vladimirovKernel S W 1 m (fun _ => c) α' = 0 := by
+  have h1 : 1 ≤ max 1 m := le_max_left 1 m
+  have hm : m ≤ max 1 m := le_max_right 1 m
+  rw [← vladimirovSesquilinear_delta S W (max 1 m) 1 m h1 hm (fun _ => c) α']
+  refine vladimirovSesquilinear_eq_zero_of_diag_eq_zero S W hspec hpos (max 1 m)
+    (vladimirovDelta 1 (fun _ => c)) (vladimirovDelta m α') ?_
+  rw [vladimirovSesquilinear_delta S W (max 1 m) 1 1 h1 h1 (fun _ => c) (fun _ => c)]
+  exact hc
+
+theorem vladimirov_H_one_add_eq_sum_vladimirovKernel
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (hspec : ZeroMomentumSpectrumCondition W)
+    (m : ℕ) (α : Fin (1 + m) → ι) :
+    vladimirov_H W (1 + m) α 0 =
+      ∑ c : ι, star (S.C (α (Fin.castAdd m 0)) c) *
+        vladimirovKernel S W 1 m (fun _ => c) (fun i => α (Fin.natAdd 1 i)) := by
+  have hx := euclidOrderedBasePoint_mem_orderedEuclidN (1 + m)
+  have h := schwinger_one_add_eq_sum_osKernel S (vladimirovSchwinger W)
+    (fun n β y _ a => vladimirovSchwinger_translation_invariant hspec n β y a) m α hx
+  rw [vladimirovSchwinger_eq_zero_eval hspec (1 + m) α (euclidOrderedBasePoint (1 + m))] at h
+  simp_rw [osKernel_vladimirovSchwinger S hspec] at h
+  exact h
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma vladimirov_H_zero_congr_n {W : WightmanFamily ι} {n₁ n₂ : ℕ} (h : n₁ = n₂)
+    (α : Fin n₂ → ι) :
+    vladimirov_H W n₁ (α ∘ finCongr h) 0 = vladimirov_H W n₂ α 0 := by
+  subst h
+  rfl
+
+theorem wightman_eq_zero_of_onePoint_vladimirovKernel_eq_zero
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (hspec : ZeroMomentumSpectrumCondition W) (hpos : Positivity S W)
+    (h1 : ∀ c : ι, vladimirovKernel S W 1 1 (fun _ => c) (fun _ => c) = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    W n α f = 0 := by
+  rw [W_n_eq_vladimirov_H_zero_mul_integral hspec n α f]
+  have hn_eq : 1 + (n - 1) = n := Nat.add_sub_of_le hn
+  rw [← vladimirov_H_zero_congr_n hn_eq α,
+      vladimirov_H_one_add_eq_sum_vladimirovKernel S W hspec (n - 1) (α ∘ finCongr hn_eq)]
+  have h_sum : (∑ c : ι, star (S.C ((α ∘ finCongr hn_eq) (Fin.castAdd (n - 1) 0)) c) *
+      vladimirovKernel S W 1 (n - 1) (fun _ => c)
+        (fun i => (α ∘ finCongr hn_eq) (Fin.natAdd 1 i))) = 0 := by
+    refine Finset.sum_eq_zero (fun c _ => ?_)
+    rw [vladimirovKernel_one_right_eq_zero_of_one_self_eq_zero S W hspec hpos c (h1 c), mul_zero]
+  rw [h_sum, zero_mul]
+
+theorem wightman_eq_zero_of_twoPoint_eq_zero_of_positivity
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (hspec : ZeroMomentumSpectrumCondition W) (hpos : Positivity S W)
+    (hW2 : ∀ (β : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), W 2 β f = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    W n α f = 0 := by
+  refine wightman_eq_zero_of_onePoint_vladimirovKernel_eq_zero S W hspec hpos (fun c => ?_) n hn α f
+  unfold vladimirovKernel
+  refine Finset.sum_eq_zero (fun β _ => ?_)
+  rw [vladimirov_H_eq_zero_of_wightman_eq_zero 2 _ (hW2 _) 0, mul_zero]
+
+theorem spin_statistics_any_nPoint_of_vladimirov_H_zero_twoPointIndexExchange
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) {η ε : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hloc : WeakLocality η W) (hpos : Positivity S W)
+    (h_exch : ∀ α : Fin 2 → ι, vladimirov_H W 2 α 0 = ε * vladimirov_H W 2 (α ∘ Fin.rev) 0)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), W n α f ≠ 0) :
+    η = ε := by
+  by_contra h_wrong
+  rcases h_nondeg with ⟨n, hn, α, f, hf⟩
+  exact hf (wightman_eq_zero_of_twoPoint_eq_zero_of_positivity S W hspec hpos
+    (wightman_twoPoint_eq_zero_of_vladimirov_H_zero_twoPointIndexExchange hspec hloc h_exch h_wrong)
+    n hn α f)
+
+theorem dirac_os_spin_statistics_any_nPoint_unconditional
+    {η : ℂ} {𝒮 : SchwingerFamily (Fin 2 ⊕ Fin 2)}
+    (P : DiracOSReconstructedWightman η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Fin 2 ⊕ Fin 2)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = -1 :=
+  spin_statistics_any_nPoint_of_vladimirov_H_zero_twoPointIndexExchange diracStarStructure P.W
+    P.spectrum P.weakLocality P.positivity
+    (vladimirov_H_zero_twoPointIndexExchange_diracRep P.W P.spectrum P.poincare) h_nondeg
+
+theorem dirac_os_wrong_statistics_wightman_all_nPoint_eq_zero
+    {η : ℂ} {𝒮 : SchwingerFamily (Fin 2 ⊕ Fin 2)}
+    (P : DiracOSReconstructedWightman η 𝒮) (h_wrong : η ≠ -1)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → Fin 2 ⊕ Fin 2)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    P.W n α f = 0 := by
+  by_contra h_ne
+  exact h_wrong (dirac_os_spin_statistics_any_nPoint_unconditional P ⟨n, hn, α, f, h_ne⟩)
+
+lemma sum_ite_two (a₀ a₁ : ι) (G : ι → ι → ℂ) :
+    (∑ x₀ : ι, ∑ x₁ : ι, if x₀ = a₀ then if x₁ = a₁ then G x₀ x₁ else 0 else 0) = G a₀ a₁ := by
+  have h1 : ∀ x₀ : ι,
+      (∑ x₁ : ι, if x₀ = a₀ then if x₁ = a₁ then G x₀ x₁ else 0 else 0) =
+      if x₀ = a₀ then G x₀ a₁ else 0 := by
+    intro x₀
+    by_cases hx₀ : x₀ = a₀ <;> simp [hx₀]
+  simp_rw [h1]
+  simp
+
+lemma sum_tensorProdRep_left_two {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    (R₁ : HolomorphicLorentzRep ι₁) (R₂ : HolomorphicLorentzRep ι₂)
+    (A : SL2C) (hR₂ : R₂.σ (A, 1) = 1)
+    (F : (Fin 2 → ι₁ × ι₂) → ℂ) (α₁ : Fin 2 → ι₁) (α₂ : Fin 2 → ι₂) :
+    (∑ β : Fin 2 → ι₁ × ι₂,
+      (∏ i : Fin 2, (tensorProdRep R₁ R₂).σ (A, 1) (α₁ i, α₂ i) (β i)) * F β) =
+    ∑ β₁ : Fin 2 → ι₁,
+      (∏ i : Fin 2, R₁.σ (A, 1) (α₁ i) (β₁ i)) * F (fun i => (β₁ i, α₂ i)) := by
+  rw [sum_fin_two_fun (ι := ι₁ × ι₂), sum_fin_two_fun (ι := ι₁)]
+  simp only [Fintype.sum_prod_type]
+  refine Finset.sum_congr rfl (fun b₀ _ => ?_)
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl (fun b₁ _ => ?_)
+  let c : ℂ := R₁.σ (A, 1) (α₁ 0) b₀ * R₁.σ (A, 1) (α₁ 1) b₁
+  have h_prod : ∀ r₀ r₁ : ι₂,
+      (∏ i : Fin 2, (tensorProdRep R₁ R₂).σ (A, 1) (α₁ i, α₂ i) (![(b₀, r₀), (b₁, r₁)] i)) *
+        F ![(b₀, r₀), (b₁, r₁)] =
+      if r₀ = α₂ 0 then
+        if r₁ = α₂ 1 then
+          c * F ![(b₀, r₀), (b₁, r₁)]
+        else 0
+      else 0 := by
+    intro r₀ r₁
+    rw [Fin.prod_univ_two]
+    change (R₁.σ (A, 1) (α₁ 0) b₀ * R₂.σ (A, 1) (α₂ 0) r₀) *
+        (R₁.σ (A, 1) (α₁ 1) b₁ * R₂.σ (A, 1) (α₂ 1) r₁) * F ![(b₀, r₀), (b₁, r₁)] = _
+    rw [hR₂]
+    by_cases h0 : r₀ = α₂ 0
+    · subst h0
+      by_cases h1 : r₁ = α₂ 1
+      · subst h1
+        simp [c]
+      · have hne : α₂ 1 ≠ r₁ := Ne.symm h1
+        simp [h1, Matrix.one_apply_ne hne]
+    · have hne : α₂ 0 ≠ r₀ := Ne.symm h0
+      simp [h0, Matrix.one_apply_ne hne]
+  simp_rw [h_prod]
+  refine (sum_ite_two (α₂ 0) (α₂ 1) (fun r₀ r₁ => c * F ![(b₀, r₀), (b₁, r₁)])).trans ?_
+  rw [Fin.prod_univ_two]
+  have h_arg : (![(b₀, α₂ 0), (b₁, α₂ 1)] : Fin 2 → ι₁ × ι₂) =
+      fun i => (![b₀, b₁] i, α₂ i) := by
+    ext i <;> fin_cases i <;> rfl
+  rw [h_arg]
+  rfl
+
+lemma sum_tensorProdRep_right_two {ι₁ ι₂ : Type*} [Fintype ι₁] [DecidableEq ι₁]
+    [Fintype ι₂] [DecidableEq ι₂]
+    (R₁ : HolomorphicLorentzRep ι₁) (R₂ : HolomorphicLorentzRep ι₂)
+    (B : SL2C) (hR₁ : R₁.σ (1, B) = 1)
+    (F : (Fin 2 → ι₁ × ι₂) → ℂ) (α₁ : Fin 2 → ι₁) (α₂ : Fin 2 → ι₂) :
+    (∑ β : Fin 2 → ι₁ × ι₂,
+      (∏ i : Fin 2, (tensorProdRep R₁ R₂).σ (1, B) (α₁ i, α₂ i) (β i)) * F β) =
+    ∑ β₂ : Fin 2 → ι₂,
+      (∏ i : Fin 2, R₂.σ (1, B) (α₂ i) (β₂ i)) * F (fun i => (α₁ i, β₂ i)) := by
+  rw [sum_fin_two_fun (ι := ι₁ × ι₂), sum_fin_two_fun (ι := ι₂)]
+  simp only [Fintype.sum_prod_type]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl (fun b₀ _ => ?_)
+  have h_swap : ∀ l₀ : ι₁,
+      (∑ l₁ : ι₁, ∑ b₁ : ι₂,
+        (∏ i : Fin 2, (tensorProdRep R₁ R₂).σ (1, B) (α₁ i, α₂ i) (![(l₀, b₀), (l₁, b₁)] i)) *
+          F ![(l₀, b₀), (l₁, b₁)]) =
+      ∑ b₁ : ι₂, ∑ l₁ : ι₁,
+        (∏ i : Fin 2, (tensorProdRep R₁ R₂).σ (1, B) (α₁ i, α₂ i) (![(l₀, b₀), (l₁, b₁)] i)) *
+          F ![(l₀, b₀), (l₁, b₁)] :=
+    fun _ => Finset.sum_comm
+  simp_rw [h_swap]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl (fun b₁ _ => ?_)
+  let c : ℂ := R₂.σ (1, B) (α₂ 0) b₀ * R₂.σ (1, B) (α₂ 1) b₁
+  have h_prod : ∀ l₀ l₁ : ι₁,
+      (∏ i : Fin 2, (tensorProdRep R₁ R₂).σ (1, B) (α₁ i, α₂ i) (![(l₀, b₀), (l₁, b₁)] i)) *
+        F ![(l₀, b₀), (l₁, b₁)] =
+      if l₀ = α₁ 0 then
+        if l₁ = α₁ 1 then
+          c * F ![(l₀, b₀), (l₁, b₁)]
+        else 0
+      else 0 := by
+    intro l₀ l₁
+    rw [Fin.prod_univ_two]
+    change (R₁.σ (1, B) (α₁ 0) l₀ * R₂.σ (1, B) (α₂ 0) b₀) *
+        (R₁.σ (1, B) (α₁ 1) l₁ * R₂.σ (1, B) (α₂ 1) b₁) * F ![(l₀, b₀), (l₁, b₁)] = _
+    rw [hR₁]
+    by_cases h0 : l₀ = α₁ 0
+    · subst h0
+      by_cases h1 : l₁ = α₁ 1
+      · subst h1
+        simp [c]
+      · have hne : α₁ 1 ≠ l₁ := Ne.symm h1
+        simp [h1, Matrix.one_apply_ne hne]
+    · have hne : α₁ 0 ≠ l₀ := Ne.symm h0
+      simp [h0, Matrix.one_apply_ne hne]
+  simp_rw [h_prod]
+  refine (sum_ite_two (α₁ 0) (α₁ 1) (fun l₀ l₁ => c * F ![(l₀, b₀), (l₁, b₁)])).trans ?_
+  rw [Fin.prod_univ_two]
+  have h_arg : (![(α₁ 0, b₀), (α₁ 1, b₁)] : Fin 2 → ι₁ × ι₂) =
+      fun i => (α₁ i, ![b₀, b₁] i) := by
+    ext i <;> fin_cases i <;> rfl
+  rw [h_arg]
+  rfl
+
+theorem vladimirov_H_zero_twoPointIndexExchange_tensorProd_weyl
+    (W : WightmanFamily (Fin 2 × Fin 2))
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (hP : PoincareCovariant (tensorProdRep leftWeylRep rightWeylRep) W)
+    (α : Fin 2 → Fin 2 × Fin 2) :
+    vladimirov_H W 2 α 0 = (1 : ℂ) * vladimirov_H W 2 (α ∘ Fin.rev) 0 := by
+  have h_left : ∀ (α₂ : Fin 2 → Fin 2) (α₁ : Fin 2 → Fin 2),
+      vladimirov_H W 2 (fun i => (α₁ i, α₂ i)) 0 =
+        (-1 : ℂ) * vladimirov_H W 2 (fun i => (α₁ (Fin.rev i), α₂ i)) 0 := by
+    intro α₂
+    refine finTwo_antisymm_of_diagImag_symplectic
+      (fun α₁ => vladimirov_H W 2 (fun i => (α₁ i, α₂ i)) 0)
+      (fun α₁ => ?_) (fun α₁ => ?_)
+    · have h := vladimirov_H_zero_complexCovariant
+        (tensorProdRep leftWeylRep rightWeylRep) W hspec hP 2 diagImagSL2C 1
+        (fun i => (α₁ i, α₂ i))
+      rw [h]
+      exact sum_tensorProdRep_left_two leftWeylRep rightWeylRep diagImagSL2C rfl
+        (fun β => vladimirov_H W 2 β 0) α₁ α₂
+    · have h := vladimirov_H_zero_complexCovariant
+        (tensorProdRep leftWeylRep rightWeylRep) W hspec hP 2 symplecticSL2C 1
+        (fun i => (α₁ i, α₂ i))
+      rw [h]
+      exact sum_tensorProdRep_left_two leftWeylRep rightWeylRep symplecticSL2C rfl
+        (fun β => vladimirov_H W 2 β 0) α₁ α₂
+  have h_right : ∀ (α₁ : Fin 2 → Fin 2) (α₂ : Fin 2 → Fin 2),
+      vladimirov_H W 2 (fun i => (α₁ i, α₂ i)) 0 =
+        (-1 : ℂ) * vladimirov_H W 2 (fun i => (α₁ i, α₂ (Fin.rev i))) 0 := by
+    intro α₁
+    refine finTwo_antisymm_of_diagImag_symplectic
+      (fun α₂ => vladimirov_H W 2 (fun i => (α₁ i, α₂ i)) 0)
+      (fun α₂ => ?_) (fun α₂ => ?_)
+    · have h := vladimirov_H_zero_complexCovariant
+        (tensorProdRep leftWeylRep rightWeylRep) W hspec hP 2 1 diagImagSL2C
+        (fun i => (α₁ i, α₂ i))
+      rw [h]
+      exact sum_tensorProdRep_right_two leftWeylRep rightWeylRep diagImagSL2C rfl
+        (fun β => vladimirov_H W 2 β 0) α₁ α₂
+    · have h := vladimirov_H_zero_complexCovariant
+        (tensorProdRep leftWeylRep rightWeylRep) W hspec hP 2 1 symplecticSL2C
+        (fun i => (α₁ i, α₂ i))
+      rw [h]
+      exact sum_tensorProdRep_right_two leftWeylRep rightWeylRep symplecticSL2C rfl
+        (fun β => vladimirov_H W 2 β 0) α₁ α₂
+  have hα : α = fun i => ((α i).1, (α i).2) := rfl
+  have h1 := h_left (fun i => (α i).2) (fun i => (α i).1)
+  have h2 := h_right (fun i => (α (Fin.rev i)).1) (fun i => (α i).2)
+  rw [hα, h1, h2]
+  have h_rev : (fun i : Fin 2 => ((α (Fin.rev i)).1, (α (Fin.rev i)).2)) = α ∘ Fin.rev := rfl
+  rw [h_rev]
+  ring
+
+theorem fourVectorSpinor_wightman_spin_statistics_unconditional
+    (W : WightmanFamily (Fin 2 × Fin 2))
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (hP : PoincareCovariant (tensorProdRep leftWeylRep rightWeylRep) W)
+    {η : ℂ} (hloc : WeakLocality η W)
+    (h_nondeg : ∃ (α : Fin 2 → Fin 2 × Fin 2) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ),
+      W 2 α f ≠ 0) :
+    η = 1 :=
+  spin_statistics_of_vladimirov_H_zero_twoPointIndexExchange hspec hloc
+    (vladimirov_H_zero_twoPointIndexExchange_tensorProd_weyl W hspec hP) h_nondeg
+
+theorem fourVectorSpinor_os_spin_statistics_any_nPoint_unconditional
+    {S : StarStructure (tensorProdRep leftWeylRep rightWeylRep)}
+    {η : ℂ} {𝒮 : SchwingerFamily (Fin 2 × Fin 2)}
+    (P : OSReconstructedWightman (tensorProdRep leftWeylRep rightWeylRep) S η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Fin 2 × Fin 2)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = 1 := by
+  by_contra h_wrong
+  rcases h_nondeg with ⟨n, hn, α, f, hf⟩
+  have h2_zero : ∀ (β : Fin 2 → Fin 2 × Fin 2) (g : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ),
+      P.W 2 β g = 0 :=
+    wightman_twoPoint_eq_zero_of_vladimirov_H_zero_twoPointIndexExchange
+      P.spectrum P.weakLocality
+      (vladimirov_H_zero_twoPointIndexExchange_tensorProd_weyl P.W P.spectrum P.poincare)
+      h_wrong
+  exact hf (wightman_eq_zero_of_twoPoint_eq_zero_of_positivity
+    S P.W P.spectrum P.positivity h2_zero n hn α f)
+
+theorem OSAxioms.twoPoint_eq_eta_mul_rev
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮) {δ : ℂ} (hδ : R.HasPTScalar δ)
+    (α : Fin 2 → ι) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN 2) :
+    𝒮 2 α x = η * 𝒮 2 (α ∘ Fin.rev) x := by
+  rw [← osTranslationInvariant_neg_rev_two hOS.os1_translation α x hx]
+  have h := hOS.os3_symmetry 2 α x hx
+  rw [two_mul_two_sub_one_div_two, pow_one] at h
+  have hsq : R.σ (-1, 1) * R.σ (-1, 1) = (1 : Matrix ι ι ℂ) := by
+    rw [← map_mul]
+    have h1 : ((-1 : SL2C), (1 : SL2C)) * (-1, 1) = 1 :=
+      Prod.ext (Subtype.ext (by simp)) (Subtype.ext (by simp))
+    rw [h1, map_one]
+  have h00 := congr_fun (congr_fun hsq (α 0)) (α 0)
+  rw [hδ, Matrix.smul_mul, Matrix.mul_smul, Matrix.one_mul, Matrix.smul_apply,
+    Matrix.smul_apply, Matrix.one_apply_eq, smul_eq_mul, smul_eq_mul, mul_one, ← sq] at h00
+  have h_prod : ∀ β : Fin 2 → ι,
+      (∏ i : Fin 2, R.σ (-1, 1) (α i) (β i)) = if α = β then 1 else 0 := by
+    intro β
+    rw [hδ]
+    by_cases hab : α = β
+    · subst hab
+      simp only [↓reduceIte, Matrix.smul_apply, Matrix.one_apply_eq, smul_eq_mul, mul_one,
+        Finset.prod_const, Finset.card_univ, Fintype.card_fin, h00]
+    · rw [if_neg hab]
+      obtain ⟨i, hi⟩ : ∃ i, α i ≠ β i := by
+        by_contra hc
+        push Not at hc
+        exact hab (funext hc)
+      refine Finset.prod_eq_zero (Finset.mem_univ i) ?_
+      simp only [Matrix.smul_apply, Matrix.one_apply_ne hi, smul_zero]
+  simp_rw [h_prod] at h
+  simpa using h
+
+lemma osKernel_onePoint_chiralDoubleStarStructure_inl
+    {R : HolomorphicLorentzRep ι} (hR : R.HasRealConj)
+    (𝒮 : SchwingerFamily (ι ⊕ ι)) (c : ι) (y : posOrderedEuclidN 1) :
+    osKernel (chiralDoubleStarStructure R hR) 𝒮
+      ⟨1, (fun _ => Sum.inl c, y)⟩ ⟨1, (fun _ => Sum.inl c, y)⟩ =
+      𝒮 2 ![Sum.inr c, Sum.inl c] (osConcatPoint 1 1 y.val y.val) := by
+  unfold osKernel
+  dsimp only
+  have h_term : ∀ β : Fin 1 → ι ⊕ ι,
+      (∏ i : Fin 1, (chiralDoubleStarStructure R hR).C (Sum.inl c) (β i)) *
+        𝒮 (1 + 1) (osConcatIdx 1 1 β (fun _ => Sum.inl c))
+          (osConcatPoint 1 1 y.val y.val) =
+      if β = (fun _ => Sum.inr c) then
+        𝒮 2 ![Sum.inr c, Sum.inl c] (osConcatPoint 1 1 y.val y.val)
+      else 0 := by
+    intro β
+    rw [Fin.prod_univ_one]
+    by_cases hβ : β = fun _ => Sum.inr c
+    · subst hβ
+      simp only [↓reduceIte, chiralDoubleStarStructure, Matrix.fromBlocks_apply₁₂,
+        Matrix.one_apply_eq, one_mul]
+      congr 1
+      ext i
+      fin_cases i <;> rfl
+    · rw [if_neg hβ]
+      have hβ0 : β 0 ≠ Sum.inr c := by
+        intro hc
+        apply hβ
+        ext i
+        rw [Subsingleton.elim i 0, hc]
+      have hC : (chiralDoubleStarStructure R hR).C (Sum.inl c) (β 0) = 0 := by
+        rcases h0 : β 0 with a | a
+        · rfl
+        · change (1 : Matrix ι ι ℂ) c a = 0
+          refine Matrix.one_apply_ne (fun hca => hβ0 ?_)
+          rw [h0, hca]
+      rw [hC, zero_mul]
+  simp_rw [h_term]
+  rw [Finset.sum_ite_eq', if_pos (Finset.mem_univ _)]
+
+lemma osKernel_onePoint_chiralDoubleStarStructure_inr
+    {R : HolomorphicLorentzRep ι} (hR : R.HasRealConj)
+    (𝒮 : SchwingerFamily (ι ⊕ ι)) (c : ι) (y : posOrderedEuclidN 1) :
+    osKernel (chiralDoubleStarStructure R hR) 𝒮
+      ⟨1, (fun _ => Sum.inr c, y)⟩ ⟨1, (fun _ => Sum.inr c, y)⟩ =
+      𝒮 2 ![Sum.inl c, Sum.inr c] (osConcatPoint 1 1 y.val y.val) := by
+  unfold osKernel
+  dsimp only
+  have h_term : ∀ β : Fin 1 → ι ⊕ ι,
+      (∏ i : Fin 1, (chiralDoubleStarStructure R hR).C (Sum.inr c) (β i)) *
+        𝒮 (1 + 1) (osConcatIdx 1 1 β (fun _ => Sum.inr c))
+          (osConcatPoint 1 1 y.val y.val) =
+      if β = (fun _ => Sum.inl c) then
+        𝒮 2 ![Sum.inl c, Sum.inr c] (osConcatPoint 1 1 y.val y.val)
+      else 0 := by
+    intro β
+    rw [Fin.prod_univ_one]
+    by_cases hβ : β = fun _ => Sum.inl c
+    · subst hβ
+      simp only [↓reduceIte, chiralDoubleStarStructure, Matrix.fromBlocks_apply₂₁,
+        Matrix.one_apply_eq, one_mul]
+      congr 1
+      ext i
+      fin_cases i <;> rfl
+    · rw [if_neg hβ]
+      have hβ0 : β 0 ≠ Sum.inl c := by
+        intro hc
+        apply hβ
+        ext i
+        rw [Subsingleton.elim i 0, hc]
+      have hC : (chiralDoubleStarStructure R hR).C (Sum.inr c) (β 0) = 0 := by
+        rcases h0 : β 0 with a | a
+        · change (1 : Matrix ι ι ℂ) c a = 0
+          refine Matrix.one_apply_ne (fun hca => hβ0 ?_)
+          rw [h0, hca]
+        · rfl
+      rw [hC, zero_mul]
+  simp_rw [h_term]
+  rw [Finset.sum_ite_eq', if_pos (Finset.mem_univ _)]
+
+lemma osKernel_self_re_nonneg_and_eq_ofReal
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (A : OSConfig ι) :
+    0 ≤ (osKernel S D.𝒮 A A).re ∧ osKernel S D.𝒮 A A = ((osKernel S D.𝒮 A A).re : ℂ) := by
+  have h_pos := D.positivity (Finsupp.single A 1)
+  have h_single : osPreInner S D.𝒮 (Finsupp.single A 1) (Finsupp.single A 1) =
+      osKernel S D.𝒮 A A := by
+    unfold osPreInner
+    simp
+  rw [h_single] at h_pos
+  have h_symm := osKernel_conj_symm S D.𝒮 D.hermiticity A A
+  refine ⟨h_pos, ?_⟩
+  exact (Complex.conj_eq_iff_re.mp h_symm).symm
+
+theorem osKernel_onePoint_eq_zero_of_chiralDoubleStarStructure_of_eta_ne_one
+    {R : HolomorphicLorentzRep ι} (hR : R.HasRealConj)
+    {δ : ℂ} (hδ : R.HasPTScalar δ) (hε : R.HasSpinParity 1)
+    {η : ℂ} {𝒮 : SchwingerFamily (ι ⊕ ι)}
+    (hOS : OSAxioms (directSumRep R (chiralSwapRep R)) (chiralDoubleStarStructure R hR) η 𝒮)
+    (hη : η ≠ 1) (γ : ι ⊕ ι) (y : posOrderedEuclidN 1) :
+    osKernel (chiralDoubleStarStructure R hR) 𝒮 ⟨1, (fun _ => γ, y)⟩ ⟨1, (fun _ => γ, y)⟩ = 0 := by
+  have h_pair : ∀ c : ι,
+      osKernel (chiralDoubleStarStructure R hR) 𝒮
+        ⟨1, (fun _ => Sum.inl c, y)⟩ ⟨1, (fun _ => Sum.inl c, y)⟩ = 0 ∧
+      osKernel (chiralDoubleStarStructure R hR) 𝒮
+        ⟨1, (fun _ => Sum.inr c, y)⟩ ⟨1, (fun _ => Sum.inr c, y)⟩ = 0 := by
+    intro c
+    have hsq : R.σ (-1, 1) * R.σ (-1, 1) = (1 : Matrix ι ι ℂ) := by
+      rw [← map_mul]
+      have h1 : ((-1 : SL2C), (1 : SL2C)) * (-1, 1) = 1 :=
+        Prod.ext (Subtype.ext (by simp)) (Subtype.ext (by simp))
+      rw [h1, map_one]
+    have hcc := congr_fun (congr_fun hsq c) c
+    rw [hδ, Matrix.smul_mul, Matrix.mul_smul, Matrix.one_mul, Matrix.smul_apply,
+      Matrix.smul_apply, Matrix.one_apply_eq, smul_eq_mul, smul_eq_mul, mul_one, ← sq] at hcc
+    have h_inv : R.σ (1, -1) = δ • (1 : Matrix ι ι ℂ) := by
+      have h_mul : R.σ (-1, 1) * R.σ (1, -1) = (1 : Matrix ι ι ℂ) := by
+        rw [← map_mul]
+        have h11 : ((-1 : SL2C), (1 : SL2C)) * (1, -1) = (-1, -1) :=
+          Prod.ext (Subtype.ext (by simp)) (Subtype.ext (by simp))
+        rw [h11, hε.1, one_smul]
+      calc R.σ (1, -1) = ((δ * δ) • (1 : Matrix ι ι ℂ)) * R.σ (1, -1) := by
+            rw [← sq, hcc, one_smul, Matrix.one_mul]
+        _ = (δ • (1 : Matrix ι ι ℂ)) * ((δ • (1 : Matrix ι ι ℂ)) * R.σ (1, -1)) := by
+            simp only [smul_mul_assoc, mul_smul_comm, Matrix.one_mul, mul_smul]
+        _ = (δ • (1 : Matrix ι ι ℂ)) * (1 : Matrix ι ι ℂ) := by
+            rw [← hδ, h_mul]
+        _ = δ • (1 : Matrix ι ι ℂ) := Matrix.mul_one _
+    have h_pt_direct : (directSumRep R (chiralSwapRep R)).HasPTScalar δ := by
+      ext (a₁ | a₂) (b₁ | b₂)
+      · change Matrix.fromBlocks (R.σ (-1, 1)) 0 0 (R.σ (1, -1))
+          (Sum.inl a₁) (Sum.inl b₁) = _
+        rw [hδ]
+        simp [Matrix.one_apply]
+      · change Matrix.fromBlocks (R.σ (-1, 1)) 0 0 (R.σ (1, -1))
+          (Sum.inl a₁) (Sum.inr b₂) = _
+        simp
+      · change Matrix.fromBlocks (R.σ (-1, 1)) 0 0 (R.σ (1, -1))
+          (Sum.inr a₂) (Sum.inl b₁) = _
+        simp
+      · change Matrix.fromBlocks (R.σ (-1, 1)) 0 0 (R.σ (1, -1))
+          (Sum.inr a₂) (Sum.inr b₂) = _
+        rw [h_inv]
+        simp [Matrix.one_apply]
+    set u := osKernel (chiralDoubleStarStructure R hR) 𝒮
+      ⟨1, (fun _ => Sum.inl c, y)⟩ ⟨1, (fun _ => Sum.inl c, y)⟩
+    set v := osKernel (chiralDoubleStarStructure R hR) 𝒮
+      ⟨1, (fun _ => Sum.inr c, y)⟩ ⟨1, (fun _ => Sum.inr c, y)⟩
+    have hu := osKernel_self_re_nonneg_and_eq_ofReal hOS.toReflectionPositiveData
+      ⟨1, (fun _ => Sum.inl c, y)⟩
+    have hv := osKernel_self_re_nonneg_and_eq_ofReal hOS.toReflectionPositiveData
+      ⟨1, (fun _ => Sum.inr c, y)⟩
+    change 0 ≤ u.re ∧ u = (u.re : ℂ) at hu
+    change 0 ≤ v.re ∧ v = (v.re : ℂ) at hv
+    have h_ord : osConcatPoint 1 1 y.val y.val ∈ orderedEuclidN 2 :=
+      osConcatPoint_mem_orderedEuclidN 1 1 y.property y.property
+    have huv : u = η * v := by
+      change osKernel (chiralDoubleStarStructure R hR) 𝒮
+        ⟨1, (fun _ => Sum.inl c, y)⟩ ⟨1, (fun _ => Sum.inl c, y)⟩ =
+        η * osKernel (chiralDoubleStarStructure R hR) 𝒮
+          ⟨1, (fun _ => Sum.inr c, y)⟩ ⟨1, (fun _ => Sum.inr c, y)⟩
+      rw [osKernel_onePoint_chiralDoubleStarStructure_inl,
+          osKernel_onePoint_chiralDoubleStarStructure_inr]
+      have h_rev : (![Sum.inr c, Sum.inl c] : Fin 2 → ι ⊕ ι) ∘ Fin.rev =
+          ![Sum.inl c, Sum.inr c] := finTwo_comp_rev_vecCons (Sum.inr c) (Sum.inl c)
+      rw [← h_rev]
+      exact hOS.twoPoint_eq_eta_mul_rev h_pt_direct ![Sum.inr c, Sum.inl c] h_ord
+    have hvu : v = η * u := by
+      change osKernel (chiralDoubleStarStructure R hR) 𝒮
+        ⟨1, (fun _ => Sum.inr c, y)⟩ ⟨1, (fun _ => Sum.inr c, y)⟩ =
+        η * osKernel (chiralDoubleStarStructure R hR) 𝒮
+          ⟨1, (fun _ => Sum.inl c, y)⟩ ⟨1, (fun _ => Sum.inl c, y)⟩
+      rw [osKernel_onePoint_chiralDoubleStarStructure_inr,
+          osKernel_onePoint_chiralDoubleStarStructure_inl]
+      have h_rev : (![Sum.inl c, Sum.inr c] : Fin 2 → ι ⊕ ι) ∘ Fin.rev =
+          ![Sum.inr c, Sum.inl c] := finTwo_comp_rev_vecCons (Sum.inl c) (Sum.inr c)
+      rw [← h_rev]
+      exact hOS.twoPoint_eq_eta_mul_rev h_pt_direct ![Sum.inl c, Sum.inr c] h_ord
+    by_cases hη_neg : η = -1
+    · have h_re : u.re = -v.re := by
+        rw [huv, hη_neg]
+        simp
+      have hu_re : u.re = 0 := by linarith [hu.1, hv.1, h_re]
+      have hv_re : v.re = 0 := by linarith [hu.1, hv.1, h_re]
+      exact ⟨by rw [hu.2, hu_re, Complex.ofReal_zero],
+             by rw [hv.2, hv_re, Complex.ofReal_zero]⟩
+    · have h_sq : (1 - η ^ 2) * u = 0 := by
+        calc (1 - η ^ 2) * u = u - η * (η * u) := by ring
+          _ = u - η * v := by rw [← hvu]
+          _ = 0 := by rw [← huv, sub_self]
+      have h_ne : 1 - η ^ 2 ≠ 0 := by
+        intro h0
+        have h_eq : η ^ 2 = 1 := (sub_eq_zero.mp h0).symm
+        rcases sq_eq_one_iff.mp h_eq with h1 | h2
+        · exact hη h1
+        · exact hη_neg h2
+      have hu0 : u = 0 := (mul_eq_zero.mp h_sq).resolve_left h_ne
+      have hv0 : v = 0 := by rw [hvu, hu0, mul_zero]
+      exact ⟨hu0, hv0⟩
+  rcases γ with c | c
+  · exact (h_pair c).1
+  · exact (h_pair c).2
+
+theorem all_nPoint_eq_zero_of_chiralDoubleStarStructure_of_eta_ne_one
+    {R : HolomorphicLorentzRep ι} (hR : R.HasRealConj)
+    {δ : ℂ} (hδ : R.HasPTScalar δ) (hε : R.HasSpinParity 1)
+    {η : ℂ} {𝒮 : SchwingerFamily (ι ⊕ ι)}
+    (P : OSReconstructedWightman (directSumRep R (chiralSwapRep R))
+      (chiralDoubleStarStructure R hR) η 𝒮)
+    (hη : η ≠ 1) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι ⊕ ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι ⊕ ι) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → P.E.H n α z = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι ⊕ ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ∧
+    (OSVacuumNormalized 𝒮 → ∀ Φ : P.Hilbert, Φ = ⟪P.vacuum, Φ⟫_ℂ • P.vacuum) := by
+  have h1 : ∀ (γ : ι ⊕ ι) (y : posOrderedEuclidN 1),
+      osKernel (chiralDoubleStarStructure R hR) 𝒮 ⟨1, (fun _ => γ, y)⟩ ⟨1, (fun _ => γ, y)⟩ = 0 :=
+    osKernel_onePoint_eq_zero_of_chiralDoubleStarStructure_of_eta_ne_one hR hδ hε P.osAxioms hη
+  have h_schw : ∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι ⊕ ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0 :=
+    fun n hn α x hx =>
+      schwinger_eq_zero_of_onePoint_osKernel_eq_zero P.osData P.osAxioms.os1_translation h1
+        n hn α hx
+  have h2 : ∀ (β : Fin 2 → ι ⊕ ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0 :=
+    fun β y hy => h_schw 2 (by omega) β y hy
+  exact ⟨h_schw,
+    fun n hn α z hz => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α z hz,
+    fun n hn α f => P.wightman_eq_zero_of_twoPoint_eq_zero h2 n hn α f,
+    fun hnorm Φ => eq_smul_osVacuum_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+      hnorm h2 Φ⟩
+
+lemma spinorTensorRep_sigma_neg_one_one (m₁ m₂ : ℕ)
+    (a b : (Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) :
+    (spinorTensorRep m₁ m₂).σ (-1, 1) a b =
+      if b = a then (-1 : ℂ) ^ m₁ else 0 := by
+  rcases a with ⟨a₁, a₂⟩
+  rcases b with ⟨b₁, b₂⟩
+  change (∏ k : Fin m₁, (-1 : SL2C).1 (a₁ k) (b₁ k)) *
+      (∏ k : Fin m₂, (1 : SL2C).1 (a₂ k) (b₂ k)) =
+    if (b₁, b₂) = (a₁, a₂) then (-1 : ℂ) ^ m₁ else 0
+  have h1 : (∏ k : Fin m₁, (-1 : SL2C).1 (a₁ k) (b₁ k)) =
+      if b₁ = a₁ then (-1 : ℂ) ^ m₁ else 0 := by
+    by_cases h : b₁ = a₁
+    · subst h
+      simp [Finset.prod_const]
+    · rw [if_neg h]
+      obtain ⟨k, hk⟩ : ∃ k, a₁ k ≠ b₁ k := by
+        by_contra hc
+        push Not at hc
+        exact h (funext hc).symm
+      refine Finset.prod_eq_zero (Finset.mem_univ k) ?_
+      change -((1 : Matrix (Fin 2) (Fin 2) ℂ) (a₁ k) (b₁ k)) = 0
+      rw [Matrix.one_apply_ne hk, neg_zero]
+  have h2 : (∏ k : Fin m₂, (1 : SL2C).1 (a₂ k) (b₂ k)) =
+      if b₂ = a₂ then 1 else 0 := by
+    by_cases h : b₂ = a₂
+    · subst h
+      simp
+    · rw [if_neg h]
+      obtain ⟨k, hk⟩ : ∃ k, a₂ k ≠ b₂ k := by
+        by_contra hc
+        push Not at hc
+        exact h (funext hc).symm
+      refine Finset.prod_eq_zero (Finset.mem_univ k) ?_
+      exact Matrix.one_apply_ne hk
+  rw [h1, h2]
+  by_cases h₁ : b₁ = a₁ <;> by_cases h₂ : b₂ = a₂ <;> simp [h₁, h₂, Prod.ext_iff]
+
+lemma chiralSwap_spinorTensorRep_sigma_neg_one_one (m₁ m₂ : ℕ)
+    (a b : (Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) :
+    (chiralSwapRep (spinorTensorRep m₁ m₂)).σ (-1, 1) a b =
+      if b = a then (-1 : ℂ) ^ m₂ else 0 := by
+  rcases a with ⟨a₁, a₂⟩
+  rcases b with ⟨b₁, b₂⟩
+  change (∏ k : Fin m₁, (1 : SL2C).1 (a₁ k) (b₁ k)) *
+      (∏ k : Fin m₂, (-1 : SL2C).1 (a₂ k) (b₂ k)) =
+    if (b₁, b₂) = (a₁, a₂) then (-1 : ℂ) ^ m₂ else 0
+  have h1 : (∏ k : Fin m₁, (1 : SL2C).1 (a₁ k) (b₁ k)) =
+      if b₁ = a₁ then 1 else 0 := by
+    by_cases h : b₁ = a₁
+    · subst h; simp
+    · rw [if_neg h]
+      obtain ⟨k, hk⟩ : ∃ k, a₁ k ≠ b₁ k := by
+        by_contra hc; push Not at hc; exact h (funext hc).symm
+      exact Finset.prod_eq_zero (Finset.mem_univ k) (Matrix.one_apply_ne hk)
+  have h2 : (∏ k : Fin m₂, (-1 : SL2C).1 (a₂ k) (b₂ k)) =
+      if b₂ = a₂ then (-1 : ℂ) ^ m₂ else 0 := by
+    by_cases h : b₂ = a₂
+    · subst h; simp [Finset.prod_const]
+    · rw [if_neg h]
+      obtain ⟨k, hk⟩ : ∃ k, a₂ k ≠ b₂ k := by
+        by_contra hc; push Not at hc; exact h (funext hc).symm
+      refine Finset.prod_eq_zero (Finset.mem_univ k) ?_
+      change -((1 : Matrix (Fin 2) (Fin 2) ℂ) (a₂ k) (b₂ k)) = 0
+      rw [Matrix.one_apply_ne hk, neg_zero]
+  rw [h1, h2]
+  by_cases h₁ : b₁ = a₁ <;> by_cases h₂ : b₂ = a₂ <;> simp [h₁, h₂, Prod.ext_iff]
+
+theorem vladimirov_H_zero_spinorTensorBispinor_mixed_eq_zero_of_odd
+    (m₁ m₂ : ℕ) (hm : Odd (m₁ + m₂))
+    (W : WightmanFamily (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2))))
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (hP : PoincareCovariant
+      (directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂))) W)
+    (a b : (Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) :
+    vladimirov_H W 2 ![Sum.inl a, Sum.inr b] 0 = 0 ∧
+    vladimirov_H W 2 ![Sum.inr a, Sum.inl b] 0 = 0 := by
+  let R := directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂))
+  have h_pow : (-1 : ℂ) ^ m₁ * (-1 : ℂ) ^ m₂ = -1 := by
+    rw [← pow_add]
+    exact Odd.neg_one_pow hm
+  have h_pow' : (-1 : ℂ) ^ m₂ * (-1 : ℂ) ^ m₁ = -1 := by
+    rw [mul_comm, h_pow]
+  constructor
+  · have h_cov := vladimirov_H_zero_complexCovariant R W hspec hP 2 (-1) 1
+      ![Sum.inl a, Sum.inr b]
+    have h_prod : ∀ β : Fin 2 → ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+        ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)),
+        (∏ i : Fin 2, R.σ (-1, 1) (![Sum.inl a, Sum.inr b] i) (β i)) =
+          if β = ![Sum.inl a, Sum.inr b] then -1 else 0 := by
+      intro β
+      rw [Fin.prod_univ_two]
+      simp only [Fin.isValue, Matrix.cons_val_zero, Matrix.cons_val_one]
+      have h0 : R.σ (-1, 1) (Sum.inl a) (β 0) =
+          if β 0 = Sum.inl a then (-1 : ℂ) ^ m₁ else 0 := by
+        rcases hβ0 : β 0 with x | x
+        · change (spinorTensorRep m₁ m₂).σ (-1, 1) a x =
+            if Sum.inl x = Sum.inl a then (-1 : ℂ) ^ m₁ else 0
+          rw [spinorTensorRep_sigma_neg_one_one]
+          by_cases hax : x = a <;> simp [hax]
+        · simp [R, directSumRep]
+      have h1 : R.σ (-1, 1) (Sum.inr b) (β 1) =
+          if β 1 = Sum.inr b then (-1 : ℂ) ^ m₂ else 0 := by
+        rcases hβ1 : β 1 with y | y
+        · simp [R, directSumRep]
+        · change (chiralSwapRep (spinorTensorRep m₁ m₂)).σ (-1, 1) b y =
+            if Sum.inr y = Sum.inr b then (-1 : ℂ) ^ m₂ else 0
+          rw [chiralSwap_spinorTensorRep_sigma_neg_one_one]
+          by_cases hby : y = b <;> simp [hby]
+      rw [h0, h1]
+      by_cases hβ : β = ![Sum.inl a, Sum.inr b]
+      · subst hβ; simp [h_pow]
+      · rw [if_neg hβ]
+        by_cases h0' : β 0 = Sum.inl a
+        · have h1' : β 1 ≠ Sum.inr b := by
+            intro hc; apply hβ; rw [finTwo_eq_vecCons β, h0', hc]
+          simp [h0', h1']
+        · simp [h0']
+    simp_rw [h_prod, ite_mul, neg_one_mul, zero_mul] at h_cov
+    rw [Finset.sum_ite_eq', if_pos (Finset.mem_univ _)] at h_cov
+    linear_combination (1 / 2 : ℂ) * h_cov
+  · have h_cov := vladimirov_H_zero_complexCovariant R W hspec hP 2 (-1) 1
+      ![Sum.inr a, Sum.inl b]
+    have h_prod : ∀ β : Fin 2 → ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+        ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)),
+        (∏ i : Fin 2, R.σ (-1, 1) (![Sum.inr a, Sum.inl b] i) (β i)) =
+          if β = ![Sum.inr a, Sum.inl b] then -1 else 0 := by
+      intro β
+      rw [Fin.prod_univ_two]
+      simp only [Fin.isValue, Matrix.cons_val_zero, Matrix.cons_val_one]
+      have h0 : R.σ (-1, 1) (Sum.inr a) (β 0) =
+          if β 0 = Sum.inr a then (-1 : ℂ) ^ m₂ else 0 := by
+        rcases hβ0 : β 0 with x | x
+        · simp [R, directSumRep]
+        · change (chiralSwapRep (spinorTensorRep m₁ m₂)).σ (-1, 1) a x =
+            if Sum.inr x = Sum.inr a then (-1 : ℂ) ^ m₂ else 0
+          rw [chiralSwap_spinorTensorRep_sigma_neg_one_one]
+          by_cases hax : x = a <;> simp [hax]
+      have h1 : R.σ (-1, 1) (Sum.inl b) (β 1) =
+          if β 1 = Sum.inl b then (-1 : ℂ) ^ m₁ else 0 := by
+        rcases hβ1 : β 1 with y | y
+        · change (spinorTensorRep m₁ m₂).σ (-1, 1) b y =
+            if Sum.inl y = Sum.inl b then (-1 : ℂ) ^ m₁ else 0
+          rw [spinorTensorRep_sigma_neg_one_one]
+          by_cases hby : y = b <;> simp [hby]
+        · simp [R, directSumRep]
+      rw [h0, h1]
+      by_cases hβ : β = ![Sum.inr a, Sum.inl b]
+      · subst hβ; simp [h_pow']
+      · rw [if_neg hβ]
+        by_cases h0' : β 0 = Sum.inr a
+        · have h1' : β 1 ≠ Sum.inl b := by
+            intro hc; apply hβ; rw [finTwo_eq_vecCons β, h0', hc]
+          simp [h0', h1']
+        · simp [h0']
+    simp_rw [h_prod, ite_mul, neg_one_mul, zero_mul] at h_cov
+    rw [Finset.sum_ite_eq', if_pos (Finset.mem_univ _)] at h_cov
+    linear_combination (1 / 2 : ℂ) * h_cov
+
+lemma vladimirovKernel_onePoint_chiralDoubleStarStructure
+    {R : HolomorphicLorentzRep ι} (hR : R.HasRealConj)
+    {W : WightmanFamily (ι ⊕ ι)} (hspec : ZeroMomentumSpectrumCondition W) (c : ι) :
+    vladimirovKernel (chiralDoubleStarStructure R hR) W 1 1
+      (fun _ => Sum.inl c) (fun _ => Sum.inl c) =
+      vladimirov_H W 2 ![Sum.inr c, Sum.inl c] 0 ∧
+    vladimirovKernel (chiralDoubleStarStructure R hR) W 1 1
+      (fun _ => Sum.inr c) (fun _ => Sum.inr c) =
+      vladimirov_H W 2 ![Sum.inl c, Sum.inr c] 0 := by
+  let y0 : posOrderedEuclidN 1 :=
+    ⟨euclidOrderedBasePoint 1, euclidOrderedBasePoint_mem_posOrderedEuclidN 1⟩
+  let A_inl : OSConfig (ι ⊕ ι) := ⟨1, (fun _ => Sum.inl c, y0)⟩
+  let A_inr : OSConfig (ι ⊕ ι) := ⟨1, (fun _ => Sum.inr c, y0)⟩
+  constructor
+  · have h_kern := (osKernel_vladimirovSchwinger (chiralDoubleStarStructure R hR)
+      hspec A_inl A_inl).symm
+    have h_inl := osKernel_onePoint_chiralDoubleStarStructure_inl hR
+      (vladimirovSchwinger W) c y0
+    exact h_kern.trans (h_inl.trans (vladimirovSchwinger_eq_zero_eval hspec 2 _ _))
+  · have h_kern := (osKernel_vladimirovSchwinger (chiralDoubleStarStructure R hR)
+      hspec A_inr A_inr).symm
+    have h_inr := osKernel_onePoint_chiralDoubleStarStructure_inr hR
+      (vladimirovSchwinger W) c y0
+    exact h_kern.trans (h_inr.trans (vladimirovSchwinger_eq_zero_eval hspec 2 _ _))
+
+theorem spinorTensorBispinor_os_spin_statistics_any_nPoint_unconditional
+    (m₁ m₂ : ℕ) {η : ℂ}
+    {𝒮 : SchwingerFamily (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))}
+    (P : SpinorTensorBispinorOSReconstructedWightman m₁ m₂ η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n)
+      (α : Fin n → ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+        ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = (-1 : ℂ) ^ (m₁ + m₂) := by
+  rcases Nat.even_or_odd (m₁ + m₂) with heven | hodd
+  · rw [Even.neg_one_pow heven]
+    by_contra hη
+    rcases h_nondeg with ⟨n, hn, α, f, hf⟩
+    exact hf ((all_nPoint_eq_zero_of_chiralDoubleStarStructure_of_eta_ne_one
+      (spinorTensorRep_hasRealConj m₁ m₂) (spinorTensorRep_hasPTScalar m₁ m₂)
+      (by simpa only [Even.neg_one_pow heven] using spinorTensorRep_spinParity m₁ m₂)
+      P hη).2.2.1 n hn α f)
+  · exfalso
+    rcases h_nondeg with ⟨n, hn, α, f, hf⟩
+    refine hf (wightman_eq_zero_of_onePoint_vladimirovKernel_eq_zero
+      (spinorTensorBispinorStarStructure m₁ m₂) P.W P.spectrum P.positivity (fun γ => ?_) n hn α f)
+    unfold spinorTensorBispinorStarStructure
+    rcases γ with c | c
+    · rw [(vladimirovKernel_onePoint_chiralDoubleStarStructure
+          (spinorTensorRep_hasRealConj m₁ m₂) P.spectrum c).1]
+      exact (vladimirov_H_zero_spinorTensorBispinor_mixed_eq_zero_of_odd
+        m₁ m₂ hodd P.W P.spectrum P.poincare c c).2
+    · rw [(vladimirovKernel_onePoint_chiralDoubleStarStructure
+          (spinorTensorRep_hasRealConj m₁ m₂) P.spectrum c).2]
+      exact (vladimirov_H_zero_spinorTensorBispinor_mixed_eq_zero_of_odd
+        m₁ m₂ hodd P.W P.spectrum P.poincare c c).1
+
+theorem spinorTensorBispinor_os_spin_statistics_unconditional
+    (m₁ m₂ : ℕ) {η : ℂ}
+    {𝒮 : SchwingerFamily (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))}
+    (P : SpinorTensorBispinorOSReconstructedWightman m₁ m₂ η 𝒮)
+    (h_nondeg : ∃ (α : Fin 2 → ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))
+      (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 α f ≠ 0) :
+    η = (-1 : ℂ) ^ (m₁ + m₂) := by
+  rcases h_nondeg with ⟨α, f, hf⟩
+  exact spinorTensorBispinor_os_spin_statistics_any_nPoint_unconditional m₁ m₂ P
+    ⟨2, by omega, α, f, hf⟩
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma osConfig_mk_eq {n : ℕ} {α₁ α₂ : Fin n → ι}
+    {x₁ x₂ : posOrderedEuclidN n} (hα : α₁ = α₂) (hx : x₁.val = x₂.val) :
+    (⟨n, (α₁, x₁)⟩ : OSConfig ι) = ⟨n, (α₂, x₂)⟩ := by
+  subst hα
+  exact osConfig_mk_eq_of_val_eq hx
+
+lemma osPrependPoint_timeShift (n : ℕ) (x₀ : Fin 4 → ℝ) (x : Fin n → Fin 4 → ℝ) (τ : ℝ) :
+    (fun k => osPrependPoint n x₀ x k + euclidTimeVec τ) =
+      osPrependPoint n (x₀ + euclidTimeVec τ) x := by
+  ext k μ
+  refine Fin.cases ?_ (fun i => ?_) k
+  · simp [osPrependPoint]
+  · simp only [osPrependPoint, Fin.cons_succ, Pi.add_apply]
+    have h0 : euclidTimeVec τ 0 = τ := by simp [euclidTimeVec]
+    rw [h0, euclidTimeVec_add]
+    simp only [Pi.add_apply]
+    ring
+
+lemma osPrependPoint_spatialShift (n : ℕ) (x₀ : Fin 4 → ℝ) (x : Fin n → Fin 4 → ℝ)
+    (a : Fin 3 → ℝ) :
+    (fun k => osPrependPoint n x₀ x k + euclidSpatialVec a) =
+      osPrependPoint n (x₀ + euclidSpatialVec a) (fun i => x i + euclidSpatialVec a) := by
+  ext k μ
+  refine Fin.cases ?_ (fun i => ?_) k
+  · simp [osPrependPoint]
+  · simp only [osPrependPoint, Fin.cons_succ, Pi.add_apply, euclidSpatialVec_zero_apply, add_zero]
+    ring
+
+lemma time_pos_of_add_euclidTimeVec {x₀ : Fin 4 → ℝ} (hx₀ : 0 < x₀ 0) {τ : ℝ} (hτ : 0 ≤ τ) :
+    0 < (x₀ + euclidTimeVec τ) 0 := by
+  simp only [Pi.add_apply, euclidTimeVec, ↓reduceIte]
+  linarith
+
+lemma time_pos_of_add_euclidSpatialVec {x₀ : Fin 4 → ℝ} (hx₀ : 0 < x₀ 0) (a : Fin 3 → ℝ) :
+    0 < (x₀ + euclidSpatialVec a) 0 := by
+  simpa [euclidSpatialVec] using hx₀
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem osConfigTimeShift_osFieldPrependConfig (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (τ : ℝ) (hτ : 0 ≤ τ) (A : OSConfig ι) :
+    osConfigTimeShift τ hτ (osFieldPrependConfig α₀ x₀ hx₀ A) =
+      osFieldPrependConfig α₀ (x₀ + euclidTimeVec τ)
+        (time_pos_of_add_euclidTimeVec hx₀ hτ) A := by
+  rcases A with ⟨n, α, x, hx⟩
+  dsimp [osConfigTimeShift, osFieldPrependConfig]
+  apply osConfig_mk_eq_of_val_eq
+  exact osPrependPoint_timeShift n x₀ x τ
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem osConfigSpatialShift_osFieldPrependConfig (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (a : Fin 3 → ℝ) (A : OSConfig ι) :
+    osConfigSpatialShift a (osFieldPrependConfig α₀ x₀ hx₀ A) =
+      osFieldPrependConfig α₀ (x₀ + euclidSpatialVec a)
+        (time_pos_of_add_euclidSpatialVec hx₀ a) (osConfigSpatialShift a A) := by
+  rcases A with ⟨n, α, x, hx⟩
+  dsimp [osConfigSpatialShift, osFieldPrependConfig]
+  apply osConfig_mk_eq_of_val_eq
+  exact osPrependPoint_spatialShift n x₀ x a
+
+theorem osTimeShiftLM_comp_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osTimeShiftLM D τ hτ).comp (osFieldPrependLM D α₀ x₀ hx₀) =
+      osFieldPrependLM D α₀ (x₀ + euclidTimeVec τ)
+        (time_pos_of_add_euclidTimeVec hx₀ hτ) := by
+  unfold osTimeShiftLM osFieldPrependLM
+  rw [← osLiftConfigMap_comp]
+  congr 1
+  ext A : 1
+  exact osConfigTimeShift_osFieldPrependConfig α₀ x₀ hx₀ τ hτ A
+
+theorem osTimeShiftLM_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D) :
+    osTimeShiftLM D τ hτ (osFieldPrependLM D α₀ x₀ hx₀ Ψ) =
+      osFieldPrependLM D α₀ (x₀ + euclidTimeVec τ)
+        (time_pos_of_add_euclidTimeVec hx₀ hτ) Ψ := by
+  rw [← LinearMap.comp_apply, osTimeShiftLM_comp_osFieldPrependLM]
+
+theorem osSpatialTranslateLM_comp_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (a : Fin 3 → ℝ) :
+    (osSpatialTranslateLM D a).comp (osFieldPrependLM D α₀ x₀ hx₀) =
+      (osFieldPrependLM D α₀ (x₀ + euclidSpatialVec a)
+        (time_pos_of_add_euclidSpatialVec hx₀ a)).comp (osSpatialTranslateLM D a) := by
+  unfold osSpatialTranslateLM osFieldPrependLM
+  rw [← osLiftConfigMap_comp, ← osLiftConfigMap_comp]
+  congr 1
+  ext A : 1
+  exact osConfigSpatialShift_osFieldPrependConfig α₀ x₀ hx₀ a A
+
+theorem osSpatialTranslateLM_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (a : Fin 3 → ℝ) (Ψ : OSPreHilbertSpace D) :
+    osSpatialTranslateLM D a (osFieldPrependLM D α₀ x₀ hx₀ Ψ) =
+      osFieldPrependLM D α₀ (x₀ + euclidSpatialVec a)
+        (time_pos_of_add_euclidSpatialVec hx₀ a) (osSpatialTranslateLM D a Ψ) := by
+  rw [← LinearMap.comp_apply, osSpatialTranslateLM_comp_osFieldPrependLM, LinearMap.comp_apply]
+
+theorem osContractionSemigroup_toOSHilbert_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (τ : ℝ) (hτ : 0 ≤ τ) (Ψ : OSPreHilbertSpace D) :
+    osContractionSemigroup D hcontr τ hτ
+      (toOSHilbert D (osFieldPrependLM D α₀ x₀ hx₀ Ψ)) =
+      toOSHilbert D (osFieldPrependLM D α₀ (x₀ + euclidTimeVec τ)
+        (time_pos_of_add_euclidTimeVec hx₀ hτ) Ψ) := by
+  rw [osContractionSemigroup_toOSHilbert, osTimeShiftLM_osFieldPrependLM]
+
+theorem osSpatialTranslate_toOSHilbert_osFieldPrependLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0)
+    (a : Fin 3 → ℝ) (Ψ : OSPreHilbertSpace D) :
+    osSpatialTranslate D htrans a
+      (toOSHilbert D (osFieldPrependLM D α₀ x₀ hx₀ Ψ)) =
+      toOSHilbert D (osFieldPrependLM D α₀ (x₀ + euclidSpatialVec a)
+        (time_pos_of_add_euclidSpatialVec hx₀ a) (osSpatialTranslateLM D a Ψ)) := by
+  rw [osSpatialTranslate_toOSHilbert, osSpatialTranslateLM_osFieldPrependLM]
+
+def osTailPoint (n : ℕ) (x : Fin (n + 1) → Fin 4 → ℝ) : Fin n → Fin 4 → ℝ :=
+  fun i => x (Fin.succ i) - euclidTimeVec (x 0 0)
+
+@[simp]
+lemma osPrependPoint_osTailPoint (n : ℕ) (x : Fin (n + 1) → Fin 4 → ℝ) :
+    osPrependPoint n (x 0) (osTailPoint n x) = x := by
+  ext k μ
+  refine Fin.cases ?_ (fun i => ?_) k
+  · simp [osPrependPoint]
+  · simp [osPrependPoint, osTailPoint]
+
+@[simp]
+lemma osTailPoint_osPrependPoint (n : ℕ) (x₀ : Fin 4 → ℝ) (x : Fin n → Fin 4 → ℝ) :
+    osTailPoint n (osPrependPoint n x₀ x) = x := by
+  ext i μ
+  simp [osTailPoint, osPrependPoint]
+
+lemma osTailPoint_mem_posOrderedEuclidN (n : ℕ)
+    {x : Fin (n + 1) → Fin 4 → ℝ} (hx : x ∈ posOrderedEuclidN (n + 1)) :
+    osTailPoint n x ∈ posOrderedEuclidN n := by
+  refine orderedEuclidN_pos_of_zero_pos n (fun i hi => ?_) (fun hn => ?_)
+  · simp only [osTailPoint, Pi.sub_apply, euclidTimeVec, ↓reduceIte]
+    have hlt : (Fin.succ i).val + 1 < n + 1 := by
+      dsimp
+      omega
+    have h_eq : (⟨(Fin.succ i).val + 1, hlt⟩ : Fin (n + 1)) = Fin.succ ⟨i.val + 1, hi⟩ := by
+      ext
+      rfl
+    have hstep := hx.2 (Fin.succ i) hlt
+    rw [h_eq] at hstep
+    linarith
+  · simp only [osTailPoint, Pi.sub_apply, euclidTimeVec, ↓reduceIte]
+    have hlt : (0 : Fin (n + 1)).val + 1 < n + 1 := by
+      dsimp
+      omega
+    have h_eq : (⟨(0 : Fin (n + 1)).val + 1, hlt⟩ : Fin (n + 1)) = Fin.succ ⟨0, hn⟩ := by
+      ext
+      rfl
+    have hstep := hx.2 0 hlt
+    rw [h_eq] at hstep
+    linarith
+
+def osIteratedFieldPre {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    ∀ (n : ℕ) (_ : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → OSPreHilbertSpace D
+  | 0, _, _, _ => osVacuumPre D
+  | n + 1, α, x, hx =>
+      osFieldPrependLM D (α 0) (x 0) (hx.1 0)
+        (osIteratedFieldPre D n (Fin.tail α) (osTailPoint n x)
+          (osTailPoint_mem_posOrderedEuclidN n hx))
+
+@[simp]
+lemma osIteratedFieldPre_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α : Fin 0 → ι) (x : Fin 0 → Fin 4 → ℝ)
+    (hx : x ∈ posOrderedEuclidN 0) :
+    osIteratedFieldPre D 0 α x hx = osVacuumPre D := rfl
+
+@[simp]
+lemma osIteratedFieldPre_succ {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (n : ℕ) (α : Fin (n + 1) → ι)
+    (x : Fin (n + 1) → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN (n + 1)) :
+    osIteratedFieldPre D (n + 1) α x hx =
+      osFieldPrependLM D (α 0) (x 0) (hx.1 0)
+        (osIteratedFieldPre D n (Fin.tail α) (osTailPoint n x)
+          (osTailPoint_mem_posOrderedEuclidN n hx)) := rfl
+
+theorem osIteratedFieldPre_eq_osBasisPre
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) :
+    ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n),
+      osIteratedFieldPre D n α x hx = osBasisPre D ⟨n, (α, ⟨x, hx⟩)⟩
+  | 0, α, x, hx => by
+      dsimp [osIteratedFieldPre, osVacuumPre]
+      congr 1
+      unfold osVacuumConfig
+      apply osConfig_mk_eq
+      · ext i
+        exact Fin.elim0 i
+      · ext i μ
+        exact Fin.elim0 i
+  | n + 1, α, x, hx => by
+      rw [osIteratedFieldPre_succ,
+          osIteratedFieldPre_eq_osBasisPre D n (Fin.tail α) (osTailPoint n x)
+            (osTailPoint_mem_posOrderedEuclidN n hx)]
+      unfold osFieldPrependLM
+      rw [osLiftConfigMap_osBasisPre]
+      congr 1
+      unfold osFieldPrependConfig
+      dsimp only
+      exact osConfig_mk_eq (Fin.cons_self_tail α) (osPrependPoint_osTailPoint n x)
+
+def osIteratedFieldState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n) :
+    OSHilbert D :=
+  toOSHilbert D (osIteratedFieldPre D n α x hx)
+
+theorem osIteratedFieldState_eq_osBasis
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n) :
+    osIteratedFieldState D n α x hx = osBasis D ⟨n, (α, ⟨x, hx⟩)⟩ := by
+  unfold osIteratedFieldState osBasis
+  rw [osIteratedFieldPre_eq_osBasisPre]
+
+@[simp]
+theorem inner_osVacuumPre_osIteratedFieldPre
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n) :
+    ⟪osVacuumPre D, osIteratedFieldPre D n α x hx⟫_ℂ = D.𝒮 n α x := by
+  rw [osIteratedFieldPre_eq_osBasisPre, inner_osVacuumPre_osBasisPre]
+
+@[simp]
+theorem inner_osVacuum_osIteratedFieldState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n) :
+    ⟪osVacuum D, osIteratedFieldState D n α x hx⟫_ℂ = D.𝒮 n α x := by
+  rw [osIteratedFieldState_eq_osBasis, inner_osVacuum_osBasis]
+
+theorem osContractionSemigroup_osIteratedFieldState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n)
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    osContractionSemigroup D hcontr τ hτ (osIteratedFieldState D n α x hx) =
+      osIteratedFieldState D n α (fun i => x i + euclidTimeVec τ)
+        (timeShift_mem_posOrderedEuclidN n hx hτ) := by
+  rw [osIteratedFieldState_eq_osBasis, osIteratedFieldState_eq_osBasis]
+  dsimp [osBasis]
+  rw [osContractionSemigroup_toOSHilbert]
+  unfold osTimeShiftLM
+  rw [osLiftConfigMap_osBasisPre]
+  rfl
+
+theorem osSpatialTranslate_osIteratedFieldState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n)
+    (a : Fin 3 → ℝ) :
+    osSpatialTranslate D htrans a (osIteratedFieldState D n α x hx) =
+      osIteratedFieldState D n α (fun i => x i + euclidSpatialVec a)
+        (spatialShift_mem_posOrderedEuclidN n hx a) := by
+  rw [osIteratedFieldState_eq_osBasis, osIteratedFieldState_eq_osBasis]
+  dsimp [osBasis]
+  rw [osSpatialTranslate_toOSHilbert]
+  unfold osSpatialTranslateLM
+  rw [osLiftConfigMap_osBasisPre]
+  rfl
+
+def osOneParticleState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) :
+    OSHilbert D :=
+  toOSHilbert D (osFieldPrependLM D α₀ x₀ hx₀ (osVacuumPre D))
+
+theorem osOneParticleState_eq_osBasis
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) :
+    osOneParticleState D α₀ x₀ hx₀ =
+      osBasis D ⟨1, (fun _ => α₀, ⟨fun _ => x₀, constOne_mem_posOrderedEuclidN hx₀⟩)⟩ := by
+  unfold osOneParticleState osBasis
+  rw [osFieldPrependLM_osVacuumPre]
+
+@[simp]
+theorem inner_osVacuum_osOneParticleState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) :
+    ⟪osVacuum D, osOneParticleState D α₀ x₀ hx₀⟫_ℂ =
+      D.𝒮 1 (fun _ => α₀) (fun _ => x₀) := by
+  rw [osOneParticleState_eq_osBasis, inner_osVacuum_osBasis]
+
+theorem osContractionSemigroup_osOneParticleState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (τ : ℝ) (hτ : 0 ≤ τ) :
+    osContractionSemigroup D hcontr τ hτ (osOneParticleState D α₀ x₀ hx₀) =
+      osOneParticleState D α₀ (x₀ + euclidTimeVec τ)
+        (time_pos_of_add_euclidTimeVec hx₀ hτ) :=
+  osContractionSemigroup_toOSHilbert_osFieldPrependLM D hcontr α₀ x₀ hx₀ τ hτ (osVacuumPre D)
+
+theorem osSpatialTranslate_osOneParticleState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (a : Fin 3 → ℝ) :
+    osSpatialTranslate D htrans a (osOneParticleState D α₀ x₀ hx₀) =
+      osOneParticleState D α₀ (x₀ + euclidSpatialVec a)
+        (time_pos_of_add_euclidSpatialVec hx₀ a) := by
+  unfold osOneParticleState
+  rw [osSpatialTranslate_toOSHilbert_osFieldPrependLM, osSpatialTranslateLM_vacuumPre]
+
+theorem osSpinorRot_osOneParticleState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (U : SU2) (α₀ : ι) (x₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) :
+    osSpinorRot D hrot U (osOneParticleState D α₀ x₀ hx₀) =
+      ∑ β₀ : ι, osSpinorRotMatrix R U⁻¹ α₀ β₀ •
+        osOneParticleState D β₀ (euclidRotApply U (su2Conj U) x₀)
+          (by rw [euclidRotApply_su2Conj_time]; exact hx₀) := by
+  unfold osOneParticleState
+  rw [osSpinorRot_toOSHilbert, osSpinorRotLM_osFieldPrependLM, osSpinorRotLM_osVacuumPre,
+      map_sum]
+  refine Finset.sum_congr rfl (fun β₀ _ => ?_)
+  exact (toOSHilbert D).map_smul _ _
+
+theorem inner_osOneParticleState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (α₀ α₁ : ι) (x₀ y₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (hy₀ : 0 < y₀ 0) :
+    ⟪osOneParticleState D α₀ x₀ hx₀, osOneParticleState D α₁ y₀ hy₀⟫_ℂ =
+      ∑ β₀ : ι, S.C α₀ β₀ *
+        D.𝒮 2 (osConcatIdx 1 1 (fun _ => β₀) (fun _ => α₁))
+          (osConcatPoint 1 1 (fun _ => x₀) (fun _ => y₀)) := by
+  rw [osOneParticleState_eq_osBasis, osOneParticleState_eq_osBasis, inner_osBasis]
+  unfold osKernel
+  dsimp only
+  rw [← (Equiv.funUnique (Fin 1) ι).sum_comp]
+  refine Finset.sum_congr rfl (fun β₀ _ => ?_)
+  rw [Fin.prod_univ_one]
+  have hβ : (fun _ : Fin 1 => (Equiv.funUnique (Fin 1) ι) β₀) = β₀ := by
+    ext i
+    fin_cases i
+    rfl
+  rw [hβ]
+  rfl
+
+namespace OSHolomorphicSemigroup
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+
+theorem complexSpacetimeStep_add (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (z₁ z₂ : ℂ) (h₁ : z₁ ∈ rightHalfPlane) (h₂ : z₂ ∈ rightHalfPlane)
+    (a₁ a₂ : Fin 3 → ℝ) :
+    ℰ.complexSpacetimeStep htrans (z₁ + z₂) (add_mem_rightHalfPlane h₁ h₂) (a₁ + a₂) =
+      (ℰ.complexSpacetimeStep htrans z₁ h₁ a₁).comp
+        (ℰ.complexSpacetimeStep htrans z₂ h₂ a₂) := by
+  unfold complexSpacetimeStep
+  rw [ℰ.map_add z₁ z₂ h₁ h₂, osSpatialTranslate_add]
+  ext x
+  simp only [ContinuousLinearMap.comp_apply]
+  have h_comm := ℰ.comm_spatial htrans a₁ z₂ h₂
+  have h_comm_x := congrArg (fun L => L (osSpatialTranslate D htrans a₂ x)) h_comm
+  dsimp at h_comm_x
+  rw [← h_comm_x]
+
+@[simp]
+theorem complexSpacetimeStep_vacuum (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (z : ℂ) (hz : z ∈ rightHalfPlane) (a : Fin 3 → ℝ) :
+    ℰ.complexSpacetimeStep htrans z hz a (osVacuum D) = osVacuum D := by
+  unfold complexSpacetimeStep
+  simp [osSpatialTranslate_vacuum, ℰ.vacuum]
+
+theorem complexSpacetimeStep_real_eq (ℰ : OSHolomorphicSemigroup D hcontr)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (τ : ℝ) (hτ : 0 ≤ τ) (a : Fin 3 → ℝ) :
+    ℰ.complexSpacetimeStep htrans (τ : ℂ) (ofReal_mem_rightHalfPlane hτ) a =
+      (osContractionSemigroup D hcontr τ hτ).comp (osSpatialTranslate D htrans a) := by
+  unfold complexSpacetimeStep
+  rw [ℰ.real_eq]
+
+end OSHolomorphicSemigroup
+
+def osComplexPropagator {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ Φ : OSHilbert D) (z : ℂ) (hz : z ∈ rightHalfPlane) (a : Fin 3 → ℝ) : ℂ :=
+  ⟪Ψ, ℰ.complexSpacetimeStep htrans z hz a Φ⟫_ℂ
+
+def osMinkowskiPropagator {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ Φ : OSHilbert D) (a : Fin 4 → ℝ) : ℂ :=
+  ⟪Ψ, ℰ.spacetimeTranslate htrans a Φ⟫_ℂ
+
+theorem osComplexPropagator_imag_eq_osMinkowskiPropagator
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ Φ : OSHilbert D) (a : Fin 4 → ℝ) :
+    osComplexPropagator ℰ htrans Ψ Φ (Complex.I * (a 0 : ℂ))
+      (mul_I_mem_rightHalfPlane (a 0)) (spatialPart a) =
+      osMinkowskiPropagator ℰ htrans Ψ Φ a := rfl
+
+theorem norm_osComplexPropagator_le
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ Φ : OSHilbert D) (z : ℂ) (hz : z ∈ rightHalfPlane) (a : Fin 3 → ℝ) :
+    ‖osComplexPropagator ℰ htrans Ψ Φ z hz a‖ ≤ ‖Ψ‖ * ‖Φ‖ := by
+  unfold osComplexPropagator
+  calc ‖⟪Ψ, ℰ.complexSpacetimeStep htrans z hz a Φ⟫_ℂ‖
+    _ ≤ ‖Ψ‖ * ‖ℰ.complexSpacetimeStep htrans z hz a Φ‖ := norm_inner_le_norm _ _
+    _ ≤ ‖Ψ‖ * ‖Φ‖ := mul_le_mul_of_nonneg_left
+        (ℰ.norm_complexSpacetimeStep_le htrans z hz a Φ) (norm_nonneg Ψ)
+
+theorem norm_osMinkowskiPropagator_le
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ Φ : OSHilbert D) (a : Fin 4 → ℝ) :
+    ‖osMinkowskiPropagator ℰ htrans Ψ Φ a‖ ≤ ‖Ψ‖ * ‖Φ‖ :=
+  norm_osComplexPropagator_le ℰ htrans Ψ Φ (Complex.I * (a 0 : ℂ))
+    (mul_I_mem_rightHalfPlane (a 0)) (spatialPart a)
+
+@[simp]
+theorem osComplexPropagator_vacuum_right
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ : OSHilbert D) (z : ℂ) (hz : z ∈ rightHalfPlane) (a : Fin 3 → ℝ) :
+    osComplexPropagator ℰ htrans Ψ (osVacuum D) z hz a = ⟪Ψ, osVacuum D⟫_ℂ := by
+  unfold osComplexPropagator
+  rw [ℰ.complexSpacetimeStep_vacuum]
+
+@[simp]
+theorem osMinkowskiPropagator_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ Φ : OSHilbert D) :
+    osMinkowskiPropagator ℰ htrans Ψ Φ 0 = ⟪Ψ, Φ⟫_ℂ := by
+  unfold osMinkowskiPropagator
+  rw [ℰ.spacetimeTranslate_zero, ContinuousLinearMap.id_apply]
+
+theorem osComplexPropagator_real_oneParticle_eq_schwinger_twoPoint
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (α₀ α₁ : ι) (x₀ y₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (hy₀ : 0 < y₀ 0)
+    (τ : ℝ) (hτ : 0 ≤ τ) (a : Fin 3 → ℝ) :
+    osComplexPropagator ℰ htrans
+      (osOneParticleState D α₀ x₀ hx₀)
+      (osOneParticleState D α₁ y₀ hy₀)
+      (τ : ℂ) (ofReal_mem_rightHalfPlane hτ) a =
+      ∑ β₀ : ι, S.C α₀ β₀ *
+        D.𝒮 2 (osConcatIdx 1 1 (fun _ => β₀) (fun _ => α₁))
+          (osConcatPoint 1 1 (fun _ => x₀)
+            (fun _ => y₀ + euclidSpatialVec a + euclidTimeVec τ)) := by
+  unfold osComplexPropagator
+  rw [ℰ.complexSpacetimeStep_real_eq htrans τ hτ a, ContinuousLinearMap.comp_apply,
+      osSpatialTranslate_osOneParticleState D htrans α₁ y₀ hy₀ a,
+      osContractionSemigroup_osOneParticleState D hcontr α₁
+        (y₀ + euclidSpatialVec a) (time_pos_of_add_euclidSpatialVec hy₀ a) τ hτ,
+      inner_osOneParticleState]
+
+theorem osComplexPropagator_real_oneParticle_diag_eq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (hdiag : DiagonalStarStructure S)
+    (c : ι) (x₀ y₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (hy₀ : 0 < y₀ 0)
+    (τ : ℝ) (hτ : 0 ≤ τ) (a : Fin 3 → ℝ) :
+    osComplexPropagator ℰ htrans
+      (osOneParticleState D c x₀ hx₀)
+      (osOneParticleState D c y₀ hy₀)
+      (τ : ℂ) (ofReal_mem_rightHalfPlane hτ) a =
+      S.C c c *
+        D.𝒮 2 (fun _ => c)
+          (osConcatPoint 1 1 (fun _ => x₀)
+            (fun _ => y₀ + euclidSpatialVec a + euclidTimeVec τ)) := by
+  rw [osComplexPropagator_real_oneParticle_eq_schwinger_twoPoint ℰ htrans c c x₀ y₀ hx₀ hy₀ τ hτ a]
+  refine (Finset.sum_eq_single c (fun b _ hbc => ?_)
+    (fun hc => False.elim (hc (Finset.mem_univ c)))).trans ?_
+  · rw [hdiag c b (Ne.symm hbc), zero_mul]
+  · rw [osConcatIdx_one_one_const]
+
+theorem osMinkowskiPropagator_conj_symm
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ Φ : OSHilbert D) (a : Fin 4 → ℝ) :
+    star (osMinkowskiPropagator ℰ htrans Ψ Φ a) =
+      osMinkowskiPropagator ℰ htrans Φ Ψ (-a) := by
+  unfold osMinkowskiPropagator
+  rw [← starRingEnd_apply, inner_conj_symm]
+  have h_unit := (ℰ.inner_spacetimeTranslate htrans (-a)
+    (ℰ.spacetimeTranslate htrans a Φ) Ψ).symm
+  rw [← ContinuousLinearMap.comp_apply, ← ℰ.spacetimeTranslate_add,
+      neg_add_cancel, ℰ.spacetimeTranslate_zero, ContinuousLinearMap.id_apply] at h_unit
+  exact h_unit
+
+theorem osMinkowskiPropagator_sesquilinear_eq_norm_sq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ : OSHilbert D) (m : ℕ) (c : Fin m → ℂ) (a : Fin m → Fin 4 → ℝ) :
+    (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k * osMinkowskiPropagator ℰ htrans Ψ Ψ (a k - a j)) =
+      (‖∑ k : Fin m, c k • ℰ.spacetimeTranslate htrans (a k) Ψ‖ ^ 2 : ℂ) := by
+  refine (?_ : _ = ⟪∑ k : Fin m, c k • ℰ.spacetimeTranslate htrans (a k) Ψ,
+      ∑ k : Fin m, c k • ℰ.spacetimeTranslate htrans (a k) Ψ⟫_ℂ).trans
+    (inner_self_eq_norm_sq_to_K (𝕜 := ℂ) _)
+  rw [sum_inner]
+  refine Finset.sum_congr rfl (fun j _ => ?_)
+  rw [inner_sum]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [inner_smul_left, inner_smul_right, mul_assoc]
+  congr 2
+  unfold osMinkowskiPropagator
+  have h_unit := (ℰ.inner_spacetimeTranslate htrans (-a j)
+    (ℰ.spacetimeTranslate htrans (a j) Ψ)
+    (ℰ.spacetimeTranslate htrans (a k) Ψ)).symm
+  rw [← ContinuousLinearMap.comp_apply, ← ℰ.spacetimeTranslate_add, neg_add_cancel,
+      ℰ.spacetimeTranslate_zero, ContinuousLinearMap.id_apply,
+      ← ContinuousLinearMap.comp_apply, ← ℰ.spacetimeTranslate_add] at h_unit
+  have h_sub : -a j + a k = a k - a j := by
+    ext μ
+    simp [sub_eq_add_neg, add_comm]
+  rw [h_sub] at h_unit
+  exact h_unit.symm
+
+theorem osMinkowskiPropagator_posDef
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+    (ℰ : OSHolomorphicSemigroup D hcontr) (htrans : OSTranslationInvariant D.𝒮)
+    (Ψ : OSHilbert D) (m : ℕ) (c : Fin m → ℂ) (a : Fin m → Fin 4 → ℝ) :
+    0 ≤ RCLike.re (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k * osMinkowskiPropagator ℰ htrans Ψ Ψ (a k - a j)) := by
+  rw [osMinkowskiPropagator_sesquilinear_eq_norm_sq]
+  have h_re : RCLike.re (‖∑ k : Fin m, c k • ℰ.spacetimeTranslate htrans (a k) Ψ‖ ^ 2 : ℂ) =
+      ‖∑ k : Fin m, c k • ℰ.spacetimeTranslate htrans (a k) Ψ‖ ^ 2 := by
+    norm_cast
+  rw [h_re]
+  exact sq_nonneg _
+
+structure OSEuclideanTubeBridge (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (η : ℂ) (𝒮 : SchwingerFamily ι) where
+  W : WightmanFamily ι
+  E : TubeExtension W
+  schwinger_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x
+  tube_covariant : TubeCovariant R E
+  tube_pct : TubePCT η R E
+  spectrum : ZeroMomentumSpectrumCondition W
+  poincare : PoincareCovariant R W
+  weakLocality : WeakLocality η W
+  positivity : Positivity S W
+
+def osReconstructedWightmanOfTimeCluster
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (bridge : OSEuclideanTubeBridge R S η 𝒮) :
+    OSReconstructedWightman R S η 𝒮 where
+  osAxioms := hOS
+  contraction := osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+    hOS.os1_translation hcluster
+  semigroup := ℰ
+  W := bridge.W
+  E := bridge.E
+  schwinger_eq := bridge.schwinger_eq
+  tube_covariant := bridge.tube_covariant
+  tube_pct := bridge.tube_pct
+  spectrum := bridge.spectrum
+  poincare := bridge.poincare
+  weakLocality := bridge.weakLocality
+  positivity := bridge.positivity
+
+def osReconstructedWightmanOfDiagonalBounded
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hdiag : OSDiagonalKernelBounded S 𝒮)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_diagonalKernelBounded hOS.toReflectionPositiveData
+        hOS.os1_translation hdiag))
+    (bridge : OSEuclideanTubeBridge R S η 𝒮) :
+    OSReconstructedWightman R S η 𝒮 where
+  osAxioms := hOS
+  contraction := osContractionCondition_of_diagonalKernelBounded hOS.toReflectionPositiveData
+    hOS.os1_translation hdiag
+  semigroup := ℰ
+  W := bridge.W
+  E := bridge.E
+  schwinger_eq := bridge.schwinger_eq
+  tube_covariant := bridge.tube_covariant
+  tube_pct := bridge.tube_pct
+  spectrum := bridge.spectrum
+  poincare := bridge.poincare
+  weakLocality := bridge.weakLocality
+  positivity := bridge.positivity
+
+theorem euclid_to_minkowski_master_of_timeCluster
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (bridge : OSEuclideanTubeBridge R S η 𝒮) :
+    ComplexCovariant R bridge.E ∧
+    WightmanPCT η R bridge.W ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n),
+      ⟪osVacuum hOS.toReflectionPositiveData,
+        osIteratedFieldState hOS.toReflectionPositiveData n α x hx⟫_ℂ =
+        schwingerFromTube bridge.E n α x) ∧
+    (∀ (Ψ : OSHilbert hOS.toReflectionPositiveData) (m : ℕ) (c : Fin m → ℂ)
+        (a : Fin m → Fin 4 → ℝ),
+      0 ≤ RCLike.re (∑ j : Fin m, ∑ k : Fin m,
+        star (c j) * c k *
+          osMinkowskiPropagator ℰ hOS.os1_translation Ψ Ψ (a k - a j))) := by
+  let P := osReconstructedWightmanOfTimeCluster R S η 𝒮 hOS hcluster ℰ bridge
+  refine ⟨P.complexCovariant, P.wightman_pct, fun n α x hx => ?_, fun Ψ m c a => ?_⟩
+  · rw [inner_osVacuum_osIteratedFieldState]
+    exact bridge.schwinger_eq n α x (posOrderedEuclidN_subset_orderedEuclidN n hx)
+  · exact osMinkowskiPropagator_posDef ℰ hOS.os1_translation Ψ m c a
+
+theorem euclid_to_minkowski_spin_statistics_of_timeCluster
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η ε : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hε : R.HasSpinParity ε)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (bridge : OSEuclideanTubeBridge R S η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), bridge.W n α f ≠ 0) :
+    η = ε :=
+  (osReconstructedWightmanOfTimeCluster R S η 𝒮 hOS hcluster ℰ bridge
+    ).spin_statistics_of_any_wightman_ne_zero hε h_nondeg
+
+theorem euclid_to_minkowski_scalar_spin_statistics_of_timeCluster
+    {η : ℂ} {𝒮 : SchwingerFamily Unit}
+    (hOS : OSAxioms trivialRep trivialStarStructure η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (bridge : OSEuclideanTubeBridge trivialRep trivialStarStructure η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Unit)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), bridge.W n α f ≠ 0) :
+    η = 1 :=
+  scalar_os_spin_statistics_any_nPoint
+    (osReconstructedWightmanOfTimeCluster trivialRep trivialStarStructure
+      η 𝒮 hOS hcluster ℰ bridge)
+    h_nondeg
+
+theorem euclid_to_minkowski_dirac_spin_statistics_of_timeCluster
+    {η : ℂ} {𝒮 : SchwingerFamily (Fin 2 ⊕ Fin 2)}
+    (hOS : OSAxioms diracRep diracStarStructure η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (bridge : OSEuclideanTubeBridge diracRep diracStarStructure η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Fin 2 ⊕ Fin 2)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), bridge.W n α f ≠ 0) :
+    η = -1 :=
+  dirac_os_spin_statistics_any_nPoint_unconditional
+    (osReconstructedWightmanOfTimeCluster diracRep diracStarStructure
+      η 𝒮 hOS hcluster ℰ bridge)
+    h_nondeg
+
+theorem euclid_to_minkowski_spinorTensorBispinor_spin_statistics_of_timeCluster
+    (m₁ m₂ : ℕ) {η : ℂ}
+    {𝒮 : SchwingerFamily (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))}
+    (hOS : OSAxioms
+      (directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂)))
+      (spinorTensorBispinorStarStructure m₁ m₂) η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (bridge : OSEuclideanTubeBridge
+      (directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂)))
+      (spinorTensorBispinorStarStructure m₁ m₂) η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n)
+      (α : Fin n → ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+        ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), bridge.W n α f ≠ 0) :
+    η = (-1 : ℂ) ^ (m₁ + m₂) :=
+  spinorTensorBispinor_os_spin_statistics_any_nPoint_unconditional m₁ m₂
+    (osReconstructedWightmanOfTimeCluster
+      (directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂)))
+      (spinorTensorBispinorStarStructure m₁ m₂)
+      η 𝒮 hOS hcluster ℰ bridge)
+    h_nondeg
+
+noncomputable def laplaceExp (E : ℝ) (z : ℂ) : ℂ :=
+  Complex.exp (-z * (E : ℂ))
+
+@[simp]
+lemma laplaceExp_zero_left (z : ℂ) :
+    laplaceExp 0 z = 1 := by
+  simp [laplaceExp]
+
+@[simp]
+lemma laplaceExp_zero_right (E : ℝ) :
+    laplaceExp E 0 = 1 := by
+  simp [laplaceExp]
+
+lemma laplaceExp_add (E : ℝ) (z₁ z₂ : ℂ) :
+    laplaceExp E (z₁ + z₂) = laplaceExp E z₁ * laplaceExp E z₂ := by
+  unfold laplaceExp
+  rw [← Complex.exp_add]
+  congr 1
+  ring
+
+lemma laplaceExp_star (E : ℝ) (z : ℂ) :
+    laplaceExp E (star z) = star (laplaceExp E z) := by
+  unfold laplaceExp
+  change Complex.exp (-(starRingEnd ℂ z) * (E : ℂ)) =
+    (starRingEnd ℂ) (Complex.exp (-z * (E : ℂ)))
+  rw [← Complex.exp_conj]
+  congr 1
+  simp
+
+lemma laplaceExp_ofReal (E τ : ℝ) :
+    laplaceExp E (τ : ℂ) = ((Real.exp (-τ * E) : ℝ) : ℂ) := by
+  unfold laplaceExp
+  rw [Complex.ofReal_exp]
+  congr 1
+  push_cast
+  ring
+
+lemma norm_laplaceExp (E : ℝ) (z : ℂ) :
+    ‖laplaceExp E z‖ = Real.exp (-z.re * E) := by
+  unfold laplaceExp
+  rw [Complex.norm_exp]
+  congr 1
+  simp [Complex.mul_re]
+
+theorem norm_laplaceExp_le_one {E : ℝ} (hE : 0 ≤ E) {z : ℂ} (hz : z ∈ rightHalfPlane) :
+    ‖laplaceExp E z‖ ≤ 1 := by
+  rw [norm_laplaceExp, Real.exp_le_one_iff]
+  have hz_re : 0 ≤ z.re := hz
+  nlinarith
+
+@[simp]
+theorem norm_laplaceExp_mul_I (E t : ℝ) :
+    ‖laplaceExp E (Complex.I * (t : ℂ))‖ = 1 := by
+  rw [norm_laplaceExp]
+  have hre : (Complex.I * (t : ℂ)).re = 0 := by simp
+  rw [hre, neg_zero, zero_mul, Real.exp_zero]
+
+theorem differentiable_laplaceExp (E : ℝ) :
+    Differentiable ℂ (laplaceExp E) := by
+  unfold laplaceExp
+  fun_prop
+
+theorem analyticAt_laplaceExp (E : ℝ) (z : ℂ) :
+    AnalyticAt ℂ (laplaceExp E) z :=
+  (differentiable_laplaceExp E).analyticAt z
+
+theorem analyticOnNhd_laplaceExp (E : ℝ) (s : Set ℂ) :
+    AnalyticOnNhd ℂ (laplaceExp E) s :=
+  fun z _ => analyticAt_laplaceExp E z
+
+theorem analyticOn_laplaceExp (E : ℝ) (s : Set ℂ) :
+    AnalyticOn ℂ (laplaceExp E) s :=
+  (analyticOnNhd_laplaceExp E s).analyticOn
+
+structure OSSpectralDecomposition {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D) (m : ℕ) where
+  E : Fin m → ℝ
+  energy_nonneg : ∀ k : Fin m, 0 ≤ E k
+  P : Fin m → (OSHilbert D →L[ℂ] OSHilbert D)
+  proj_selfAdjoint : ∀ (k : Fin m) (x y : OSHilbert D),
+    ⟪P k x, y⟫_ℂ = ⟪x, P k y⟫_ℂ
+  proj_mul : ∀ (j k : Fin m),
+    (P j).comp (P k) = if j = k then P j else 0
+  sum_proj : ∀ x : OSHilbert D, ∑ k : Fin m, P k x = x
+  semigroup_eq : ∀ (τ : ℝ) (hτ : 0 ≤ τ) (x : OSHilbert D),
+    osContractionSemigroup D hcontr τ hτ x =
+      ∑ k : Fin m, laplaceExp (E k) (τ : ℂ) • P k x
+  vacuum_eq : ∀ z : ℂ,
+    ∑ k : Fin m, laplaceExp (E k) z • P k (osVacuum D) = osVacuum D
+  comm_spatial : ∀ (htrans : OSTranslationInvariant D.𝒮) (a : Fin 3 → ℝ) (k : Fin m),
+    (osSpatialTranslate D htrans a).comp (P k) =
+      (P k).comp (osSpatialTranslate D htrans a)
+
+namespace OSSpectralDecomposition
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D} {m : ℕ}
+
+noncomputable def entireZ (spec : OSSpectralDecomposition D hcontr m) (z : ℂ) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  ∑ k : Fin m, laplaceExp (spec.E k) z • spec.P k
+
+@[simp]
+lemma entireZ_apply (spec : OSSpectralDecomposition D hcontr m) (z : ℂ) (x : OSHilbert D) :
+    spec.entireZ z x = ∑ k : Fin m, laplaceExp (spec.E k) z • spec.P k x := by
+  unfold entireZ
+  rw [_root_.sum_apply]
+  rfl
+
+@[simp]
+lemma proj_comp_self (spec : OSSpectralDecomposition D hcontr m) (k : Fin m) :
+    (spec.P k).comp (spec.P k) = spec.P k := by
+  rw [spec.proj_mul k k, if_pos rfl]
+
+@[simp]
+lemma proj_apply_self (spec : OSSpectralDecomposition D hcontr m) (k : Fin m) (x : OSHilbert D) :
+    spec.P k (spec.P k x) = spec.P k x := by
+  change ((spec.P k).comp (spec.P k)) x = spec.P k x
+  rw [spec.proj_comp_self k]
+
+lemma inner_proj_eq_of_ne (spec : OSSpectralDecomposition D hcontr m)
+    {j k : Fin m} (hjk : j ≠ k) (x y : OSHilbert D) :
+    ⟪spec.P j x, spec.P k y⟫_ℂ = 0 := by
+  rw [spec.proj_selfAdjoint j]
+  change ⟪x, ((spec.P j).comp (spec.P k)) y⟫_ℂ = 0
+  rw [spec.proj_mul j k, if_neg hjk, _root_.zero_apply, inner_zero_right]
+
+lemma inner_proj_self_eq_norm_sq (spec : OSSpectralDecomposition D hcontr m)
+    (k : Fin m) (x : OSHilbert D) :
+    ⟪spec.P k x, x⟫_ℂ = (‖spec.P k x‖ ^ 2 : ℂ) := by
+  conv_lhs => rw [← spec.proj_apply_self k x]
+  rw [spec.proj_selfAdjoint k (spec.P k x) x]
+  exact inner_self_eq_norm_sq_to_K (𝕜 := ℂ) (spec.P k x)
+
+theorem norm_sq_eq_sum_proj (spec : OSSpectralDecomposition D hcontr m) (x : OSHilbert D) :
+    ‖x‖ ^ 2 = ∑ k : Fin m, ‖spec.P k x‖ ^ 2 := by
+  have h_inner : ⟪x, x⟫_ℂ = ∑ k : Fin m, (‖spec.P k x‖ ^ 2 : ℂ) := by
+    calc ⟪x, x⟫_ℂ = ⟪x, ∑ k : Fin m, spec.P k x⟫_ℂ :=
+          congrArg (fun y => ⟪x, y⟫_ℂ) (spec.sum_proj x).symm
+      _ = ∑ k : Fin m, ⟪x, spec.P k x⟫_ℂ := inner_sum _ _ _
+      _ = ∑ k : Fin m, (‖spec.P k x‖ ^ 2 : ℂ) := by
+          refine Finset.sum_congr rfl (fun k _ => ?_)
+          rw [← spec.proj_selfAdjoint k, spec.inner_proj_self_eq_norm_sq k x]
+  have h_re := congrArg RCLike.re h_inner
+  rw [inner_self_eq_norm_sq (𝕜 := ℂ), map_sum] at h_re
+  refine h_re.trans (Finset.sum_congr rfl (fun k _ => ?_))
+  norm_cast
+
+theorem inner_sum_smul_proj (spec : OSSpectralDecomposition D hcontr m)
+    (c d : Fin m → ℂ) (x y : OSHilbert D) :
+    ⟪∑ j : Fin m, c j • spec.P j x, ∑ k : Fin m, d k • spec.P k y⟫_ℂ =
+      ∑ k : Fin m, star (c k) * d k * ⟪spec.P k x, spec.P k y⟫_ℂ := by
+  rw [sum_inner]
+  refine Finset.sum_congr rfl (fun j _ => ?_)
+  rw [inner_sum]
+  have h_term : ∀ k ∈ Finset.univ,
+      ⟪c j • spec.P j x, d k • spec.P k y⟫_ℂ =
+        if k = j then star (c j) * d j * ⟪spec.P j x, spec.P j y⟫_ℂ else 0 := by
+    intro k _
+    rw [inner_smul_left, inner_smul_right]
+    by_cases hkj : k = j
+    · subst hkj
+      rw [if_pos rfl]
+      change (starRingEnd ℂ) (c k) * (d k * ⟪spec.P k x, spec.P k y⟫_ℂ) =
+        (starRingEnd ℂ) (c k) * d k * ⟪spec.P k x, spec.P k y⟫_ℂ
+      ring
+    · rw [if_neg hkj, spec.inner_proj_eq_of_ne (Ne.symm hkj) x y, mul_zero, mul_zero]
+  rw [Finset.sum_congr rfl h_term, Finset.sum_ite_eq']
+  simp
+
+theorem norm_sq_sum_smul_proj (spec : OSSpectralDecomposition D hcontr m)
+    (c : Fin m → ℂ) (x : OSHilbert D) :
+    ‖∑ k : Fin m, c k • spec.P k x‖ ^ 2 =
+      ∑ k : Fin m, ‖c k‖ ^ 2 * ‖spec.P k x‖ ^ 2 := by
+  rw [← inner_self_eq_norm_sq (𝕜 := ℂ)]
+  have h := congrArg RCLike.re (spec.inner_sum_smul_proj c c x x)
+  rw [h, map_sum]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  have h_pk : ⟪spec.P k x, spec.P k x⟫_ℂ = (‖spec.P k x‖ ^ 2 : ℂ) :=
+    inner_self_eq_norm_sq_to_K (𝕜 := ℂ) (spec.P k x)
+  have h_ck : star (c k) * c k = (‖c k‖ ^ 2 : ℂ) := by
+    change (starRingEnd ℂ) (c k) * c k = _
+    rw [mul_comm, Complex.mul_conj, Complex.normSq_eq_norm_sq]
+    norm_cast
+  rw [h_pk, h_ck]
+  norm_cast
+
+theorem entireZ_real_eq (spec : OSSpectralDecomposition D hcontr m)
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    spec.entireZ (τ : ℂ) = osContractionSemigroup D hcontr τ hτ := by
+  ext x
+  rw [entireZ_apply, spec.semigroup_eq τ hτ x]
+
+@[simp]
+theorem entireZ_zero (spec : OSSpectralDecomposition D hcontr m) :
+    spec.entireZ 0 = ContinuousLinearMap.id ℂ (OSHilbert D) := by
+  ext x
+  rw [entireZ_apply]
+  simp [spec.sum_proj x]
+
+theorem entireZ_add (spec : OSSpectralDecomposition D hcontr m) (z₁ z₂ : ℂ) :
+    spec.entireZ (z₁ + z₂) = (spec.entireZ z₁).comp (spec.entireZ z₂) := by
+  ext x
+  simp only [ContinuousLinearMap.comp_apply, entireZ_apply]
+  have h_rhs : ∀ j : Fin m,
+      laplaceExp (spec.E j) z₁ •
+        spec.P j (∑ k : Fin m, laplaceExp (spec.E k) z₂ • spec.P k x) =
+      laplaceExp (spec.E j) (z₁ + z₂) • spec.P j x := by
+    intro j
+    rw [map_sum]
+    have h_inner : ∀ k ∈ Finset.univ,
+        spec.P j (laplaceExp (spec.E k) z₂ • spec.P k x) =
+          if k = j then laplaceExp (spec.E j) z₂ • spec.P j x else 0 := by
+      intro k _
+      rw [map_smul]
+      change laplaceExp (spec.E k) z₂ • ((spec.P j).comp (spec.P k) x) = _
+      rw [spec.proj_mul j k]
+      by_cases hkj : k = j
+      · subst hkj
+        simp
+      · rw [if_neg (Ne.symm hkj), if_neg hkj, _root_.zero_apply, smul_zero]
+    rw [Finset.sum_congr rfl h_inner, Finset.sum_ite_eq']
+    simp only [Finset.mem_univ, ↓reduceIte, smul_smul, ← laplaceExp_add]
+  exact (Finset.sum_congr rfl (fun j _ => (h_rhs j).symm))
+
+@[simp]
+theorem entireZ_vacuum (spec : OSSpectralDecomposition D hcontr m) (z : ℂ) :
+    spec.entireZ z (osVacuum D) = osVacuum D := by
+  rw [entireZ_apply]
+  exact spec.vacuum_eq z
+
+theorem entireZ_contraction (spec : OSSpectralDecomposition D hcontr m)
+    {z : ℂ} (hz : z ∈ rightHalfPlane) (x : OSHilbert D) :
+    ‖spec.entireZ z x‖ ≤ ‖x‖ := by
+  have h_sq : ‖spec.entireZ z x‖ ^ 2 ≤ ‖x‖ ^ 2 := by
+    rw [entireZ_apply, spec.norm_sq_sum_smul_proj, spec.norm_sq_eq_sum_proj x]
+    refine Finset.sum_le_sum (fun k _ => ?_)
+    have hk : ‖laplaceExp (spec.E k) z‖ ≤ 1 :=
+      norm_laplaceExp_le_one (spec.energy_nonneg k) hz
+    have hk_sq : ‖laplaceExp (spec.E k) z‖ ^ 2 ≤ 1 := by
+      nlinarith [norm_nonneg (laplaceExp (spec.E k) z)]
+    nlinarith [sq_nonneg ‖spec.P k x‖]
+  have h_sqrt := Real.sqrt_le_sqrt h_sq
+  rwa [Real.sqrt_sq (norm_nonneg _), Real.sqrt_sq (norm_nonneg _)] at h_sqrt
+
+theorem entireZ_adjoint_symm (spec : OSSpectralDecomposition D hcontr m)
+    (z : ℂ) (x y : OSHilbert D) :
+    ⟪spec.entireZ z x, y⟫_ℂ = ⟪x, spec.entireZ (star z) y⟫_ℂ := by
+  rw [entireZ_apply, entireZ_apply, sum_inner, inner_sum]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [inner_smul_left, inner_smul_right, spec.proj_selfAdjoint k, laplaceExp_star]
+  rfl
+
+theorem entireZ_comm_spatial (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (a : Fin 3 → ℝ) (z : ℂ) :
+    (osSpatialTranslate D htrans a).comp (spec.entireZ z) =
+      (spec.entireZ z).comp (osSpatialTranslate D htrans a) := by
+  ext x
+  simp only [ContinuousLinearMap.comp_apply, entireZ_apply, map_sum, map_smul]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  congr 1
+  exact congrArg (fun L => L x) (spec.comm_spatial htrans a k)
+
+noncomputable def toOSHolomorphicSemigroup (spec : OSSpectralDecomposition D hcontr m) :
+    OSHolomorphicSemigroup D hcontr where
+  Z z _ := spec.entireZ z
+  real_eq := spec.entireZ_real_eq
+  map_add z₁ z₂ _ _ := spec.entireZ_add z₁ z₂
+  vacuum z _ := spec.entireZ_vacuum z
+  contraction _ hz x := spec.entireZ_contraction hz x
+  adjoint_symm z _ x y := spec.entireZ_adjoint_symm z x y
+  comm_spatial htrans a z _ := spec.entireZ_comm_spatial htrans a z
+
+noncomputable def entirePropagator (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (z : ℂ) (a : Fin 3 → ℝ) : ℂ :=
+  ⟪Ψ, spec.entireZ z (osSpatialTranslate D htrans a Φ)⟫_ℂ
+
+lemma entirePropagator_eq_sum (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (z : ℂ) (a : Fin 3 → ℝ) :
+    spec.entirePropagator htrans Ψ Φ z a =
+      ∑ k : Fin m,
+        laplaceExp (spec.E k) z * ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ := by
+  unfold entirePropagator
+  rw [entireZ_apply, inner_sum]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [inner_smul_right]
+
+theorem entirePropagator_eq_osComplexPropagator (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (z : ℂ) (hz : z ∈ rightHalfPlane) (a : Fin 3 → ℝ) :
+    spec.entirePropagator htrans Ψ Φ z a =
+      osComplexPropagator spec.toOSHolomorphicSemigroup htrans Ψ Φ z hz a :=
+  rfl
+
+theorem differentiable_entirePropagator (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ) :
+    Differentiable ℂ (fun z : ℂ => spec.entirePropagator htrans Ψ Φ z a) := by
+  have h_eq : (fun z : ℂ => spec.entirePropagator htrans Ψ Φ z a) =
+      fun z : ℂ => ∑ k : Fin m,
+        laplaceExp (spec.E k) z * ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ := by
+    ext z
+    exact spec.entirePropagator_eq_sum htrans Ψ Φ z a
+  rw [h_eq]
+  have h_term : ∀ k : Fin m,
+      Differentiable ℂ (fun z : ℂ =>
+        laplaceExp (spec.E k) z * ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ) :=
+    fun k => (differentiable_laplaceExp (spec.E k)).mul (differentiable_const _)
+  fun_prop
+
+theorem analyticOnNhd_entirePropagator (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ) (s : Set ℂ) :
+    AnalyticOnNhd ℂ (fun z : ℂ => spec.entirePropagator htrans Ψ Φ z a) s :=
+  fun z _ => (spec.differentiable_entirePropagator htrans Ψ Φ a).analyticAt z
+
+theorem analyticOn_entirePropagator (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ) (s : Set ℂ) :
+    AnalyticOn ℂ (fun z : ℂ => spec.entirePropagator htrans Ψ Φ z a) s :=
+  (spec.analyticOnNhd_entirePropagator htrans Ψ Φ a s).analyticOn
+
+end OSSpectralDecomposition
+
+noncomputable def rankOneProjCLM {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (e : H) : H →L[ℂ] H :=
+  LinearMap.mkContinuous
+    { toFun := fun x => ⟪e, x⟫_ℂ • e
+      map_add' := fun x y => by rw [inner_add_right, add_smul]
+      map_smul' := fun c x => by rw [inner_smul_right, RingHom.id_apply, mul_smul] }
+    (‖e‖ * ‖e‖)
+    (fun x => by
+      dsimp
+      rw [norm_smul]
+      have h_cs := norm_inner_le_norm (𝕜 := ℂ) e x
+      nlinarith [norm_nonneg e, norm_nonneg x])
+
+@[simp]
+lemma rankOneProjCLM_apply {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (e x : H) :
+    rankOneProjCLM e x = ⟪e, x⟫_ℂ • e := rfl
+
+lemma rankOneProjCLM_selfAdjoint {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (e x y : H) :
+    ⟪rankOneProjCLM e x, y⟫_ℂ = ⟪x, rankOneProjCLM e y⟫_ℂ := by
+  simp only [rankOneProjCLM_apply, inner_smul_left, inner_smul_right, inner_conj_symm]
+  ring
+
+@[simp]
+lemma rankOneProjCLM_comp_self {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    {e : H} (he : ⟪e, e⟫_ℂ = 1) :
+    (rankOneProjCLM e).comp (rankOneProjCLM e) = rankOneProjCLM e := by
+  ext x
+  simp only [ContinuousLinearMap.comp_apply, rankOneProjCLM_apply, inner_smul_right, he, mul_one]
+
+lemma rankOneProjCLM_comp_eq_zero_of_orth {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] {e₁ e₂ : H} (h12 : ⟪e₁, e₂⟫_ℂ = 0) :
+    (rankOneProjCLM e₁).comp (rankOneProjCLM e₂) = 0 := by
+  ext x
+  simp only [ContinuousLinearMap.comp_apply, rankOneProjCLM_apply, inner_smul_right, h12,
+    mul_zero, zero_smul, _root_.zero_apply]
+
+lemma rankOneProjCLM_comp_orthonormal {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] {m : ℕ} {b : OrthonormalBasis (Fin m) ℂ H} (j k : Fin m) :
+    (rankOneProjCLM (b j)).comp (rankOneProjCLM (b k)) =
+      if j = k then rankOneProjCLM (b j) else 0 := by
+  by_cases hjk : j = k
+  · subst hjk
+    rw [if_pos rfl]
+    exact rankOneProjCLM_comp_self (b.inner_eq_one j)
+  · rw [if_neg hjk]
+    exact rankOneProjCLM_comp_eq_zero_of_orth (b.inner_eq_zero hjk)
+
+lemma sum_rankOneProjCLM_orthonormalBasis {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] {m : ℕ} (b : OrthonormalBasis (Fin m) ℂ H) (x : H) :
+    ∑ k : Fin m, rankOneProjCLM (b k) x = x := by
+  simp_rw [rankOneProjCLM_apply]
+  exact b.sum_repr' x
+
+lemma rankOneProjCLM_comm_of_eigenvector {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] {m : ℕ} (b : OrthonormalBasis (Fin m) ℂ H)
+    (T : H →L[ℂ] H) (μ : Fin m → ℂ)
+    (hT : ∀ k : Fin m, T (b k) = μ k • b k)
+    (hT_adj : ∀ k : Fin m, ∀ x : H, ⟪b k, T x⟫_ℂ = μ k * ⟪b k, x⟫_ℂ)
+    (k : Fin m) :
+    T.comp (rankOneProjCLM (b k)) = (rankOneProjCLM (b k)).comp T := by
+  ext x
+  simp only [ContinuousLinearMap.comp_apply, rankOneProjCLM_apply, map_smul, hT k,
+    hT_adj k x, smul_smul, mul_comm]
+
+noncomputable def osSpectralDecompositionOfOrthonormalEigenbasis
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    {m : ℕ} (b : OrthonormalBasis (Fin m) ℂ (OSHilbert D))
+    (E : Fin m → ℝ) (hE : ∀ k : Fin m, 0 ≤ E k)
+    (h_eigen : ∀ (τ : ℝ) (hτ : 0 ≤ τ) (k : Fin m),
+      osContractionSemigroup D hcontr τ hτ (b k) = laplaceExp (E k) (τ : ℂ) • b k)
+    (h_vac : ∀ z : ℂ,
+      ∑ k : Fin m, laplaceExp (E k) z • rankOneProjCLM (b k) (osVacuum D) = osVacuum D)
+    (h_comm : ∀ (htrans : OSTranslationInvariant D.𝒮) (a : Fin 3 → ℝ) (k : Fin m),
+      (osSpatialTranslate D htrans a).comp (rankOneProjCLM (b k)) =
+        (rankOneProjCLM (b k)).comp (osSpatialTranslate D htrans a)) :
+    OSSpectralDecomposition D hcontr m where
+  E := E
+  energy_nonneg := hE
+  P k := rankOneProjCLM (b k)
+  proj_selfAdjoint k x y := rankOneProjCLM_selfAdjoint (b k) x y
+  proj_mul j k := rankOneProjCLM_comp_orthonormal j k
+  sum_proj x := sum_rankOneProjCLM_orthonormalBasis b x
+  semigroup_eq τ hτ x := by
+    conv_lhs => rw [← sum_rankOneProjCLM_orthonormalBasis b x]
+    rw [map_sum]
+    refine Finset.sum_congr rfl (fun k _ => ?_)
+    simp only [rankOneProjCLM_apply, map_smul, h_eigen τ hτ k, smul_smul, mul_comm]
+  vacuum_eq := h_vac
+  comm_spatial := h_comm
+
+lemma sum_laplaceExp_rankOneProjCLM_vacuum_of_energy_mul_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    {m : ℕ} (b : OrthonormalBasis (Fin m) ℂ (OSHilbert D))
+    (E : Fin m → ℝ)
+    (h_vac_zero : ∀ k : Fin m, E k ≠ 0 → ⟪b k, osVacuum D⟫_ℂ = 0)
+    (z : ℂ) :
+    ∑ k : Fin m, laplaceExp (E k) z • rankOneProjCLM (b k) (osVacuum D) = osVacuum D := by
+  conv_rhs => rw [← sum_rankOneProjCLM_orthonormalBasis b (osVacuum D)]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  by_cases hk : E k = 0
+  · rw [hk, laplaceExp_zero_left, one_smul]
+  · simp only [rankOneProjCLM_apply, h_vac_zero k hk, zero_smul, smul_zero]
+
+lemma inner_eigenvector_osVacuum_eq_zero_of_energy_pos
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    {v : OSHilbert D} {E : ℝ} (hE : 0 < E)
+    (h_eigen : osContractionSemigroup D hcontr 1 zero_le_one v = laplaceExp E 1 • v) :
+    ⟪v, osVacuum D⟫_ℂ = 0 := by
+  have h_symm :
+      ⟪osContractionSemigroup D hcontr 1 zero_le_one v, osVacuum D⟫_ℂ =
+        ⟪v, osContractionSemigroup D hcontr 1 zero_le_one (osVacuum D)⟫_ℂ :=
+    osContractionSemigroup_isSymmetric D htrans hcontr 1 zero_le_one v (osVacuum D)
+  rw [osContractionSemigroup_vacuum, h_eigen, inner_smul_left] at h_symm
+  have h_exp : starRingEnd ℂ (laplaceExp E 1) = (Real.exp (-E) : ℂ) := by
+    change star (laplaceExp E ((1 : ℝ) : ℂ)) = _
+    rw [← laplaceExp_star, Complex.star_def, Complex.conj_ofReal, laplaceExp_ofReal, neg_one_mul]
+  rw [h_exp] at h_symm
+  have h_ne : (Real.exp (-E) : ℂ) ≠ 1 := by
+    intro h1
+    have h_re := congrArg Complex.re h1
+    simp only [Complex.ofReal_re, Complex.one_re] at h_re
+    have h_lt : Real.exp (-E) < 1 := Real.exp_lt_one_iff.mpr (by linarith)
+    linarith
+  have h_sub : ((Real.exp (-E) : ℂ) - 1) * ⟪v, osVacuum D⟫_ℂ = 0 := by
+    linear_combination h_symm
+  exact (mul_eq_zero.mp h_sub).resolve_left (sub_ne_zero.mpr h_ne)
+
+noncomputable def osSpectralDecompositionOfFiniteDimensional
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    [FiniteDimensional ℂ (OSHilbert D)]
+    {m : ℕ} (hm : Module.finrank ℂ (OSHilbert D) = m)
+    (h_pos_eig : ∀ k : Fin m,
+      0 < (osContractionSemigroup_isSymmetric D htrans hcontr 1 zero_le_one).eigenvalues hm k)
+    (h_semigroup_pow : ∀ (τ : ℝ) (hτ : 0 ≤ τ) (k : Fin m),
+      osContractionSemigroup D hcontr τ hτ
+        ((osContractionSemigroup_isSymmetric D htrans hcontr 1 zero_le_one).eigenvectorBasis hm k) =
+      laplaceExp
+        (-Real.log
+          ((osContractionSemigroup_isSymmetric D htrans hcontr 1 zero_le_one).eigenvalues hm k))
+        (τ : ℂ) •
+        (osContractionSemigroup_isSymmetric D htrans hcontr 1 zero_le_one).eigenvectorBasis hm k)
+    (h_comm : ∀ (htrans' : OSTranslationInvariant D.𝒮) (a : Fin 3 → ℝ) (k : Fin m),
+      (osSpatialTranslate D htrans' a).comp
+        (rankOneProjCLM
+          ((osContractionSemigroup_isSymmetric D htrans hcontr 1
+            zero_le_one).eigenvectorBasis hm k)) =
+      (rankOneProjCLM
+        ((osContractionSemigroup_isSymmetric D htrans hcontr 1
+          zero_le_one).eigenvectorBasis hm k)).comp
+        (osSpatialTranslate D htrans' a)) :
+    OSSpectralDecomposition D hcontr m := by
+  let hT := osContractionSemigroup_isSymmetric D htrans hcontr 1 zero_le_one
+  let b := hT.eigenvectorBasis hm
+  let μ := hT.eigenvalues hm
+  let E : Fin m → ℝ := fun k => -Real.log (μ k)
+  have hμ_le_one : ∀ k : Fin m, μ k ≤ 1 := by
+    intro k
+    have h_apply := hT.apply_eigenvectorBasis hm k
+    have h_norm := norm_osContractionSemigroup_le D hcontr 1 zero_le_one (b k)
+    change ‖(osContractionSemigroup D hcontr 1 zero_le_one : OSHilbert D →ₗ[ℂ] OSHilbert D) (b k)‖ ≤
+      ‖b k‖ at h_norm
+    rw [h_apply, norm_smul, b.norm_eq_one k, mul_one, RCLike.norm_ofReal,
+        abs_of_pos (h_pos_eig k)] at h_norm
+    exact h_norm
+  have hE_nonneg : ∀ k : Fin m, 0 ≤ E k := by
+    intro k
+    dsimp [E]
+    rw [neg_nonneg]
+    exact Real.log_nonpos (le_of_lt (h_pos_eig k)) (hμ_le_one k)
+  have h_vac_orth : ∀ k : Fin m, E k ≠ 0 → ⟪b k, osVacuum D⟫_ℂ = 0 := by
+    intro k hk
+    have hE_pos : 0 < E k := lt_of_le_of_ne (hE_nonneg k) (Ne.symm hk)
+    exact inner_eigenvector_osVacuum_eq_zero_of_energy_pos D htrans hcontr hE_pos
+      (by simpa using h_semigroup_pow 1 zero_le_one k)
+  exact osSpectralDecompositionOfOrthonormalEigenbasis D hcontr b E hE_nonneg
+    h_semigroup_pow
+    (sum_laplaceExp_rankOneProjCLM_vacuum_of_energy_mul_eq_zero D b E h_vac_orth)
+    h_comm
+
+
+def tubeWickTimeDiff (n : ℕ) (z : Fin n → Fin 4 → ℂ)
+    (i : Fin n) (hi : i.val + 1 < n) : ℂ :=
+  -Complex.I * (z ⟨i.val + 1, hi⟩ 0 - z i 0)
+
+@[simp]
+lemma re_tubeWickTimeDiff (n : ℕ) (z : Fin n → Fin 4 → ℂ)
+    (i : Fin n) (hi : i.val + 1 < n) :
+    (tubeWickTimeDiff n z i hi).re = (z ⟨i.val + 1, hi⟩ 0 - z i 0).im := by
+  unfold tubeWickTimeDiff
+  simp [Complex.mul_re]
+
+@[simp]
+lemma im_tubeWickTimeDiff (n : ℕ) (z : Fin n → Fin 4 → ℂ)
+    (i : Fin n) (hi : i.val + 1 < n) :
+    (tubeWickTimeDiff n z i hi).im = -(z ⟨i.val + 1, hi⟩ 0 - z i 0).re := by
+  unfold tubeWickTimeDiff
+  simp [Complex.mul_im]
+
+@[simp]
+theorem tubeWickTimeDiff_add_const (n : ℕ) (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ)
+    (i : Fin n) (hi : i.val + 1 < n) :
+    tubeWickTimeDiff n (fun k => z k + a) i hi = tubeWickTimeDiff n z i hi := by
+  unfold tubeWickTimeDiff
+  simp only [Pi.add_apply]
+  ring
+
+@[simp]
+theorem tubeWickTimeDiff_wickEmbedN (n : ℕ) (x : Fin n → Fin 4 → ℝ)
+    (i : Fin n) (hi : i.val + 1 < n) :
+    tubeWickTimeDiff n (wickEmbedN n x) i hi =
+      ((x ⟨i.val + 1, hi⟩ 0 - x i 0 : ℝ) : ℂ) := by
+  unfold tubeWickTimeDiff wickEmbedN wickEmbed
+  simp only [↓reduceIte, Complex.ofReal_sub]
+  calc
+    -Complex.I * ((x ⟨i.val + 1, hi⟩ 0 : ℂ) * Complex.I - (x i 0 : ℂ) * Complex.I)
+      = ((x ⟨i.val + 1, hi⟩ 0 : ℂ) - (x i 0 : ℂ)) * (-(Complex.I * Complex.I)) := by ring
+    _ = (x ⟨i.val + 1, hi⟩ 0 : ℂ) - (x i 0 : ℂ) := by rw [Complex.I_mul_I]; ring
+
+theorem tubeWickTimeDiff_mem_openRightHalfPlane {n : ℕ} {z : Fin n → Fin 4 → ℂ}
+    (hz : z ∈ forward_tube_n n) (i : Fin n) (hi : i.val + 1 < n) :
+    tubeWickTimeDiff n z i hi ∈ openRightHalfPlane := by
+  change 0 < (tubeWickTimeDiff n z i hi).re
+  rw [re_tubeWickTimeDiff]
+  have h_cone := (hz i hi).1
+  change 0 < -((z i - z ⟨i.val + 1, hi⟩) 0).im at h_cone
+  simp only [Pi.sub_apply, Complex.sub_im] at h_cone ⊢
+  linarith
+
+theorem tubeWickTimeDiff_mem_rightHalfPlane {n : ℕ} {z : Fin n → Fin 4 → ℂ}
+    (hz : z ∈ forward_tube_n n) (i : Fin n) (hi : i.val + 1 < n) :
+    tubeWickTimeDiff n z i hi ∈ rightHalfPlane := by
+  change 0 ≤ (tubeWickTimeDiff n z i hi).re
+  exact le_of_lt (tubeWickTimeDiff_mem_openRightHalfPlane hz i hi)
+
+noncomputable def tubeWickTimeDiffCLM (n : ℕ) (i : Fin n) (hi : i.val + 1 < n) :
+    (Fin n → Fin 4 → ℂ) →L[ℂ] ℂ :=
+  LinearMap.toContinuousLinearMap
+    { toFun := fun z => tubeWickTimeDiff n z i hi
+      map_add' := fun z w => by
+        unfold tubeWickTimeDiff
+        simp only [Pi.add_apply]
+        ring
+      map_smul' := fun c z => by
+        unfold tubeWickTimeDiff
+        simp only [Pi.smul_apply, smul_eq_mul, RingHom.id_apply]
+        ring }
+
+@[simp]
+lemma tubeWickTimeDiffCLM_apply (n : ℕ) (i : Fin n) (hi : i.val + 1 < n)
+    (z : Fin n → Fin 4 → ℂ) :
+    tubeWickTimeDiffCLM n i hi z = tubeWickTimeDiff n z i hi := rfl
+
+theorem differentiable_tubeWickTimeDiff (n : ℕ) (i : Fin n) (hi : i.val + 1 < n) :
+    Differentiable ℂ (fun z : Fin n → Fin 4 → ℂ => tubeWickTimeDiff n z i hi) :=
+  (tubeWickTimeDiffCLM n i hi).differentiable
+
+theorem analyticAt_tubeWickTimeDiff (n : ℕ) (i : Fin n) (hi : i.val + 1 < n)
+    (z : Fin n → Fin 4 → ℂ) :
+    AnalyticAt ℂ (fun w : Fin n → Fin 4 → ℂ => tubeWickTimeDiff n w i hi) z :=
+  (tubeWickTimeDiffCLM n i hi).analyticAt z
+
+theorem analyticOnNhd_tubeWickTimeDiff (n : ℕ) (i : Fin n) (hi : i.val + 1 < n)
+    (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ (fun z : Fin n → Fin 4 → ℂ => tubeWickTimeDiff n z i hi) s :=
+  fun z _ => analyticAt_tubeWickTimeDiff n i hi z
+
+theorem analyticOn_tubeWickTimeDiff (n : ℕ) (i : Fin n) (hi : i.val + 1 < n)
+    (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (fun z : Fin n → Fin 4 → ℂ => tubeWickTimeDiff n z i hi) s :=
+  (analyticOnNhd_tubeWickTimeDiff n i hi s).analyticOn
+
+noncomputable def spectralTwoPointTube (E : ℝ) (z : Fin 2 → Fin 4 → ℂ) : ℂ :=
+  laplaceExp E (tubeWickTimeDiff 2 z 0 (by decide))
+
+theorem differentiable_spectralTwoPointTube (E : ℝ) :
+    Differentiable ℂ (spectralTwoPointTube E) :=
+  (differentiable_laplaceExp E).comp (differentiable_tubeWickTimeDiff 2 0 (by decide))
+
+theorem analyticAt_spectralTwoPointTube (E : ℝ) (z : Fin 2 → Fin 4 → ℂ) :
+    AnalyticAt ℂ (spectralTwoPointTube E) z :=
+  AnalyticAt.comp (g := laplaceExp E)
+    (f := fun w : Fin 2 → Fin 4 → ℂ => tubeWickTimeDiff 2 w 0 (by decide))
+    (analyticAt_laplaceExp E (tubeWickTimeDiff 2 z 0 (by decide)))
+    (analyticAt_tubeWickTimeDiff 2 0 (by decide) z)
+
+theorem analyticOnNhd_spectralTwoPointTube (E : ℝ) (s : Set (Fin 2 → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ (spectralTwoPointTube E) s :=
+  fun z _ => analyticAt_spectralTwoPointTube E z
+
+theorem analyticOn_spectralTwoPointTube (E : ℝ) (s : Set (Fin 2 → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (spectralTwoPointTube E) s :=
+  (analyticOnNhd_spectralTwoPointTube E s).analyticOn
+
+@[simp]
+theorem spectralTwoPointTube_add_const (E : ℝ) (z : Fin 2 → Fin 4 → ℂ) (a : Fin 4 → ℂ) :
+    spectralTwoPointTube E (fun k => z k + a) = spectralTwoPointTube E z := by
+  unfold spectralTwoPointTube
+  rw [tubeWickTimeDiff_add_const]
+
+theorem norm_spectralTwoPointTube_le_one {E : ℝ} (hE : 0 ≤ E)
+    {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    ‖spectralTwoPointTube E z‖ ≤ 1 :=
+  norm_laplaceExp_le_one hE (tubeWickTimeDiff_mem_rightHalfPlane hz 0 (by decide))
+
+@[simp]
+theorem spectralTwoPointTube_wickEmbedN (E : ℝ) (x : Fin 2 → Fin 4 → ℝ) :
+    spectralTwoPointTube E (wickEmbedN 2 x) =
+      ((Real.exp (-(x 1 0 - x 0 0) * E) : ℝ) : ℂ) := by
+  unfold spectralTwoPointTube
+  rw [tubeWickTimeDiff_wickEmbedN, laplaceExp_ofReal]
+  rfl
+
+def osEuclideanTubeBridgeOfTubeExtension
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (h_tcov : TubeCovariant R E)
+    (h_tpct : TubePCT η R E)
+    (h_spec : ZeroMomentumSpectrumCondition W)
+    (h_poinc : PoincareCovariant R W)
+    (h_loc : WeakLocality η W)
+    (h_pos : Positivity S W) :
+    OSEuclideanTubeBridge R S η 𝒮 where
+  W := W
+  E := E
+  schwinger_eq := h_schw
+  tube_covariant := h_tcov
+  tube_pct := h_tpct
+  spectrum := h_spec
+  poincare := h_poinc
+  weakLocality := h_loc
+  positivity := h_pos
+
+def vladimirovEuclideanTubeBridge
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (W : WightmanFamily ι) {η : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (hloc : WeakLocality η W) (hpos : Positivity S W) :
+    OSEuclideanTubeBridge R S η (vladimirovSchwinger W) :=
+  osEuclideanTubeBridgeOfTubeExtension R S η (vladimirovSchwinger W)
+    W (vladimirovTubeExtension R W hspec hP)
+    (fun _ _ _ _ => rfl)
+    (vladimirov_tubeCovariant R W hspec hP)
+    (fun n α z hz => vladimirov_tube_pct_theorem R W hspec hP hloc n z hz α)
+    hspec hP hloc hpos
+
+theorem osEuclideanTubeBridge_wightman_unique
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (B₁ B₂ : OSEuclideanTubeBridge R S η 𝒮)
+    (hrigid : ForwardTubeRigidFromEuclid B₁.E B₂.E) :
+    B₁.W = B₂.W := by
+  apply wightman_eq_of_schwingerFromTube_eq B₁.E B₂.E hrigid
+  intro n α x hx
+  rw [← B₁.schwinger_eq n α x hx, ← B₂.schwinger_eq n α x hx]
+
+theorem osEuclideanTubeBridge_tube_unique
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (B₁ B₂ : OSEuclideanTubeBridge R S η 𝒮)
+    (hrigid : ForwardTubeRigidFromEuclid B₁.E B₂.E)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    B₁.E.H n α z = B₂.E.H n α z := by
+  refine hrigid (fun m β x hx => ?_) n α z hz
+  rw [← B₁.schwinger_eq m β x hx, ← B₂.schwinger_eq m β x hx]
+
+noncomputable def euclidSpectralTwoPoint (E : ℝ) (x : Fin 2 → Fin 4 → ℝ) : ℂ :=
+  laplaceExp E ((x 1 0 - x 0 0 : ℝ) : ℂ)
+
+@[simp]
+theorem spectralTwoPointTube_wickEmbedN_eq_euclidSpectralTwoPoint
+    (E : ℝ) (x : Fin 2 → Fin 4 → ℝ) :
+    spectralTwoPointTube E (wickEmbedN 2 x) = euclidSpectralTwoPoint E x := by
+  unfold spectralTwoPointTube euclidSpectralTwoPoint
+  rw [tubeWickTimeDiff_wickEmbedN]
+  rfl
+
+theorem euclidSpectralTwoPoint_eq_ofReal_exp (E : ℝ) (x : Fin 2 → Fin 4 → ℝ) :
+    euclidSpectralTwoPoint E x = ((Real.exp (-(x 1 0 - x 0 0) * E) : ℝ) : ℂ) :=
+  laplaceExp_ofReal E (x 1 0 - x 0 0)
+
+@[simp]
+theorem euclidSpectralTwoPoint_add_const (E : ℝ) (x : Fin 2 → Fin 4 → ℝ) (a : Fin 4 → ℝ) :
+    euclidSpectralTwoPoint E (fun i => x i + a) = euclidSpectralTwoPoint E x := by
+  unfold euclidSpectralTwoPoint
+  simp only [Pi.add_apply, add_sub_add_right_eq_sub]
+
+@[simp]
+lemma osConcatPoint_one_one_time_diff (x y : Fin 1 → Fin 4 → ℝ) :
+    osConcatPoint 1 1 x y 1 0 - osConcatPoint 1 1 x y 0 0 = x 0 0 + y 0 0 := by
+  have h0 : (0 : Fin (1 + 1)) = Fin.castAdd 1 (0 : Fin 1) := rfl
+  have h1 : (1 : Fin (1 + 1)) = Fin.natAdd 1 (0 : Fin 1) := rfl
+  rw [h0, h1, osConcatPoint_castAdd, osConcatPoint_natAdd]
+  have hrev : Fin.rev (0 : Fin 1) = 0 := rfl
+  rw [hrev, euclidTimeReflect_zero_coord]
+  ring
+
+theorem euclidSpectralTwoPoint_osConcatPoint_one_one
+    (E : ℝ) (x y : Fin 1 → Fin 4 → ℝ) :
+    euclidSpectralTwoPoint E (osConcatPoint 1 1 x y) =
+      laplaceExp E (x 0 0 : ℂ) * laplaceExp E (y 0 0 : ℂ) := by
+  unfold euclidSpectralTwoPoint
+  rw [osConcatPoint_one_one_time_diff, Complex.ofReal_add, laplaceExp_add]
+
+theorem euclidSpectralTwoPoint_osConcatPoint_one_one_eq_star_mul
+    (E : ℝ) (x y : Fin 1 → Fin 4 → ℝ) :
+    euclidSpectralTwoPoint E (osConcatPoint 1 1 x y) =
+      star (laplaceExp E (x 0 0 : ℂ)) * laplaceExp E (y 0 0 : ℂ) := by
+  rw [euclidSpectralTwoPoint_osConcatPoint_one_one, ← laplaceExp_star]
+  congr 2
+  exact (Complex.conj_ofReal (x 0 0)).symm
+
+theorem euclidSpectralTwoPoint_sesquilinear_eq_norm_sq
+    (E : ℝ) (m : ℕ) (c : Fin m → ℂ) (x : Fin m → Fin 1 → Fin 4 → ℝ) :
+    (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k *
+        euclidSpectralTwoPoint E (osConcatPoint 1 1 (x j) (x k))) =
+      (‖∑ k : Fin m, c k * laplaceExp E (x k 0 0 : ℂ)‖ ^ 2 : ℂ) := by
+  have h_term : ∀ j k : Fin m,
+      star (c j) * c k *
+        euclidSpectralTwoPoint E (osConcatPoint 1 1 (x j) (x k)) =
+      star (c j * laplaceExp E (x j 0 0 : ℂ)) *
+        (c k * laplaceExp E (x k 0 0 : ℂ)) := by
+    intro j k
+    rw [euclidSpectralTwoPoint_osConcatPoint_one_one_eq_star_mul, star_mul']
+    ring
+  simp_rw [h_term, ← Finset.mul_sum, ← Finset.sum_mul, ← star_sum]
+  change (starRingEnd ℂ) (∑ k : Fin m, c k * laplaceExp E (x k 0 0 : ℂ)) *
+      (∑ k : Fin m, c k * laplaceExp E (x k 0 0 : ℂ)) = _
+  rw [mul_comm, Complex.mul_conj, Complex.normSq_eq_norm_sq, Complex.ofReal_pow]
+
+theorem euclidSpectralTwoPoint_reflectionPositive
+    (E : ℝ) (m : ℕ) (c : Fin m → ℂ) (x : Fin m → Fin 1 → Fin 4 → ℝ) :
+    0 ≤ RCLike.re (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k *
+        euclidSpectralTwoPoint E (osConcatPoint 1 1 (x j) (x k))) := by
+  rw [euclidSpectralTwoPoint_sesquilinear_eq_norm_sq]
+  have h_re :
+      RCLike.re (‖∑ k : Fin m, c k * laplaceExp E (x k 0 0 : ℂ)‖ ^ 2 : ℂ) =
+        ‖∑ k : Fin m, c k * laplaceExp E (x k 0 0 : ℂ)‖ ^ 2 := by
+    norm_cast
+  rw [h_re]
+  exact sq_nonneg _
+
+theorem euclidSpectralTwoPoint_timeShift_right
+    (E τ : ℝ) (x y : Fin 1 → Fin 4 → ℝ) :
+    euclidSpectralTwoPoint E
+      (osConcatPoint 1 1 x (fun i => y i + euclidTimeVec τ)) =
+      laplaceExp E (τ : ℂ) *
+        euclidSpectralTwoPoint E (osConcatPoint 1 1 x y) := by
+  rw [euclidSpectralTwoPoint_osConcatPoint_one_one,
+      euclidSpectralTwoPoint_osConcatPoint_one_one]
+  have hy : (y 0 + euclidTimeVec τ) 0 = y 0 0 + τ := by
+    simp [euclidTimeVec]
+  rw [hy, Complex.ofReal_add, laplaceExp_add]
+  ring
+
+theorem norm_euclidSpectralTwoPoint_timeShift_right
+    (E τ : ℝ) (x y : Fin 1 → Fin 4 → ℝ) :
+    ‖euclidSpectralTwoPoint E
+      (osConcatPoint 1 1 x (fun i => y i + euclidTimeVec τ))‖ =
+      Real.exp (-(x 0 0 + y 0 0 + τ) * E) := by
+  unfold euclidSpectralTwoPoint
+  rw [osConcatPoint_one_one_time_diff]
+  have hy : (y 0 + euclidTimeVec τ) 0 = y 0 0 + τ := by
+    simp [euclidTimeVec]
+  rw [hy, norm_laplaceExp]
+  congr 1
+  simp only [Complex.ofReal_re]
+  ring
+
+theorem tendsto_euclidSpectralTwoPoint_timeShift_atTop_zero
+    {E : ℝ} (hE : 0 < E) (x y : Fin 1 → Fin 4 → ℝ) :
+    Tendsto
+      (fun τ : ℝ =>
+        euclidSpectralTwoPoint E
+          (osConcatPoint 1 1 x (fun i => y i + euclidTimeVec τ)))
+      atTop (𝓝 0) := by
+  rw [tendsto_zero_iff_norm_tendsto_zero]
+  simp_rw [norm_euclidSpectralTwoPoint_timeShift_right]
+  have h_fac : ∀ τ : ℝ,
+      Real.exp (-(x 0 0 + y 0 0 + τ) * E) =
+        Real.exp (-(x 0 0 + y 0 0) * E) * Real.exp (τ * (-E)) := by
+    intro τ
+    rw [← Real.exp_add]
+    congr 1
+    ring
+  simp_rw [h_fac]
+  have h_atBot : Tendsto (fun τ : ℝ => τ * (-E)) atTop atBot :=
+    Filter.Tendsto.atTop_mul_const_of_neg (neg_lt_zero.mpr hE) tendsto_id
+  have h_exp : Tendsto (fun τ : ℝ => Real.exp (τ * (-E))) atTop (𝓝 0) :=
+    Real.tendsto_exp_atBot.comp h_atBot
+  simpa using h_exp.const_mul (Real.exp (-(x 0 0 + y 0 0) * E))
+
+lemma analyticAt_finset_sum_normed {α E : Type*} [NormedAddCommGroup E] [NormedSpace ℂ E]
+    (s : Finset α) {f : α → E → ℂ} {z : E}
+    (hf : ∀ a ∈ s, AnalyticAt ℂ (f a) z) :
+    AnalyticAt ℂ (fun w => ∑ a ∈ s, f a w) z := by
+  classical
+  induction s using Finset.induction_on with
+  | empty =>
+    simpa using (analyticAt_const : AnalyticAt ℂ (fun _ : E => (0 : ℂ)) z)
+  | insert a s ha ih =>
+    have h_eq : (fun w : E => ∑ x ∈ insert a s, f x w) =
+        fun w : E => f a w + ∑ x ∈ s, f x w := by
+      ext w
+      exact Finset.sum_insert ha
+    rw [h_eq]
+    exact (hf a (Finset.mem_insert_self a s)).add
+      (ih (fun b hb => hf b (Finset.mem_insert_of_mem hb)))
+
+lemma analyticAt_finset_prod_normed {α E : Type*} [NormedAddCommGroup E] [NormedSpace ℂ E]
+    (s : Finset α) {f : α → E → ℂ} {z : E}
+    (hf : ∀ a ∈ s, AnalyticAt ℂ (f a) z) :
+    AnalyticAt ℂ (fun w => ∏ a ∈ s, f a w) z := by
+  classical
+  induction s using Finset.induction_on with
+  | empty =>
+    simpa using (analyticAt_const : AnalyticAt ℂ (fun _ : E => (1 : ℂ)) z)
+  | insert a s ha ih =>
+    have h_eq : (fun w : E => ∏ x ∈ insert a s, f x w) =
+        fun w : E => f a w * ∏ x ∈ s, f x w := by
+      ext w
+      exact Finset.prod_insert ha
+    rw [h_eq]
+    exact (hf a (Finset.mem_insert_self a s)).mul
+      (ih (fun b hb => hf b (Finset.mem_insert_of_mem hb)))
+
+lemma fin_sub_one_lt {n : ℕ} (i : Fin (n - 1)) : i.val < n := by
+  have := i.isLt
+  omega
+
+lemma fin_sub_one_add_one_lt {n : ℕ} (i : Fin (n - 1)) : i.val + 1 < n := by
+  have := i.isLt
+  omega
+
+lemma fin_sub_one_succ_lt {n : ℕ} (i : Fin (n - 1)) :
+    (⟨i.val, fin_sub_one_lt i⟩ : Fin n).val + 1 < n :=
+  fin_sub_one_add_one_lt i
+
+noncomputable def spectralMultiPointTube (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (z : Fin n → Fin 4 → ℂ) : ℂ :=
+  ∏ i : Fin (n - 1),
+    laplaceExp (E i)
+      (tubeWickTimeDiff n z ⟨i.val, fin_sub_one_lt i⟩ (fin_sub_one_succ_lt i))
+
+noncomputable def euclidSpectralMultiPoint (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (x : Fin n → Fin 4 → ℝ) : ℂ :=
+  ∏ i : Fin (n - 1),
+    laplaceExp (E i)
+      ((x ⟨i.val + 1, fin_sub_one_add_one_lt i⟩ 0 -
+        x ⟨i.val, fin_sub_one_lt i⟩ 0 : ℝ) : ℂ)
+
+@[simp]
+theorem spectralMultiPointTube_zero (E : Fin 0 → ℝ) (z : Fin 0 → Fin 4 → ℂ) :
+    spectralMultiPointTube 0 E z = 1 := by
+  simp [spectralMultiPointTube]
+
+@[simp]
+theorem spectralMultiPointTube_one (E : Fin 0 → ℝ) (z : Fin 1 → Fin 4 → ℂ) :
+    spectralMultiPointTube 1 E z = 1 := by
+  simp [spectralMultiPointTube]
+
+@[simp]
+theorem spectralMultiPointTube_two_eq_spectralTwoPointTube
+    (E : Fin 1 → ℝ) (z : Fin 2 → Fin 4 → ℂ) :
+    spectralMultiPointTube 2 E z = spectralTwoPointTube (E 0) z := by
+  simp [spectralMultiPointTube, spectralTwoPointTube]
+
+@[simp]
+theorem euclidSpectralMultiPoint_two_eq_euclidSpectralTwoPoint
+    (E : Fin 1 → ℝ) (x : Fin 2 → Fin 4 → ℝ) :
+    euclidSpectralMultiPoint 2 E x = euclidSpectralTwoPoint (E 0) x := by
+  simp [euclidSpectralMultiPoint, euclidSpectralTwoPoint]
+
+theorem differentiable_spectralMultiPointTube (n : ℕ) (E : Fin (n - 1) → ℝ) :
+    Differentiable ℂ (spectralMultiPointTube n E) := by
+  unfold spectralMultiPointTube
+  have h_term : ∀ i : Fin (n - 1),
+      Differentiable ℂ (fun z : Fin n → Fin 4 → ℂ =>
+        laplaceExp (E i)
+          (tubeWickTimeDiff n z ⟨i.val, fin_sub_one_lt i⟩
+            (fin_sub_one_succ_lt i))) :=
+    fun i => (differentiable_laplaceExp (E i)).comp
+      (differentiable_tubeWickTimeDiff n ⟨i.val, fin_sub_one_lt i⟩
+        (fin_sub_one_succ_lt i))
+  fun_prop
+
+theorem analyticAt_spectralMultiPointTube (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (z : Fin n → Fin 4 → ℂ) :
+    AnalyticAt ℂ (spectralMultiPointTube n E) z := by
+  unfold spectralMultiPointTube
+  refine analyticAt_finset_prod_normed Finset.univ (fun i _ => ?_)
+  exact AnalyticAt.comp (g := laplaceExp (E i))
+    (f := fun w : Fin n → Fin 4 → ℂ =>
+      tubeWickTimeDiff n w ⟨i.val, fin_sub_one_lt i⟩ (fin_sub_one_succ_lt i))
+    (analyticAt_laplaceExp (E i)
+      (tubeWickTimeDiff n z ⟨i.val, fin_sub_one_lt i⟩ (fin_sub_one_succ_lt i)))
+    (analyticAt_tubeWickTimeDiff n ⟨i.val, fin_sub_one_lt i⟩
+      (fin_sub_one_succ_lt i) z)
+
+theorem analyticOnNhd_spectralMultiPointTube (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ (spectralMultiPointTube n E) s :=
+  fun z _ => analyticAt_spectralMultiPointTube n E z
+
+theorem analyticOn_spectralMultiPointTube (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (spectralMultiPointTube n E) s :=
+  (analyticOnNhd_spectralMultiPointTube n E s).analyticOn
+
+@[simp]
+theorem spectralMultiPointTube_add_const (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ) :
+    spectralMultiPointTube n E (fun k => z k + a) = spectralMultiPointTube n E z := by
+  unfold spectralMultiPointTube
+  refine Finset.prod_congr rfl (fun i _ => ?_)
+  rw [tubeWickTimeDiff_add_const]
+
+@[simp]
+theorem euclidSpectralMultiPoint_add_const (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (x : Fin n → Fin 4 → ℝ) (a : Fin 4 → ℝ) :
+    euclidSpectralMultiPoint n E (fun k => x k + a) = euclidSpectralMultiPoint n E x := by
+  unfold euclidSpectralMultiPoint
+  refine Finset.prod_congr rfl (fun i _ => ?_)
+  congr 2
+  simp only [Pi.add_apply]
+  ring
+
+theorem norm_spectralMultiPointTube_le_one {n : ℕ} {E : Fin (n - 1) → ℝ}
+    (hE : ∀ i : Fin (n - 1), 0 ≤ E i)
+    {z : Fin n → Fin 4 → ℂ} (hz : z ∈ forward_tube_n n) :
+    ‖spectralMultiPointTube n E z‖ ≤ 1 := by
+  unfold spectralMultiPointTube
+  rw [norm_prod]
+  refine Finset.prod_le_one (fun i _ => norm_nonneg _) (fun i _ => ?_)
+  exact norm_laplaceExp_le_one (hE i)
+    (tubeWickTimeDiff_mem_rightHalfPlane hz ⟨i.val, fin_sub_one_lt i⟩
+      (fin_sub_one_succ_lt i))
+
+@[simp]
+theorem spectralMultiPointTube_wickEmbedN (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (x : Fin n → Fin 4 → ℝ) :
+    spectralMultiPointTube n E (wickEmbedN n x) = euclidSpectralMultiPoint n E x := by
+  unfold spectralMultiPointTube euclidSpectralMultiPoint
+  refine Finset.prod_congr rfl (fun i _ => ?_)
+  rw [tubeWickTimeDiff_wickEmbedN]
+
+def osIndexedBaseConfig (j : ℕ) (α : Fin j → ι) : OSConfig ι :=
+  ⟨j, (α, ⟨euclidOrderedBasePoint j, euclidOrderedBasePoint_mem_posOrderedEuclidN j⟩)⟩
+
+noncomputable def osBorchersVector {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (N : ℕ)
+    (u : ∀ j : ℕ, (Fin j → ι) → ℂ) : OSHilbert D :=
+  ∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι,
+    u j α • osBasis D (osIndexedBaseConfig j α)
+
+noncomputable def osWavepacketVector {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (N : ℕ)
+    (F : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) : OSHilbert D :=
+  osBorchersVector D N (fun j α => ∫ x : Fin j → Fin 4 → ℝ, F j α x)
+
+theorem inner_osBorchersVector_eq_vladimirovSesquilinear
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (hD : D.𝒮 = vladimirovSchwinger W) (N : ℕ)
+    (u v : ∀ j : ℕ, (Fin j → ι) → ℂ) :
+    ⟪osBorchersVector D N u, osBorchersVector D N v⟫_ℂ =
+      vladimirovSesquilinear S W N u v := by
+  unfold osBorchersVector vladimirovSesquilinear
+  rw [sum_inner]
+  refine Finset.sum_congr rfl (fun j _ => ?_)
+  rw [inner_sum]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [sum_inner]
+  refine Finset.sum_congr rfl (fun α _ => ?_)
+  rw [inner_sum]
+  refine Finset.sum_congr rfl (fun α' _ => ?_)
+  rw [inner_smul_left, inner_smul_right, inner_osBasis, hD,
+      osKernel_vladimirovSchwinger S hspec, ← Complex.star_def]
+  dsimp [osIndexedBaseConfig]
+  ring
+
+theorem norm_sq_osBorchersVector_eq_vladimirovSesquilinear
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (hD : D.𝒮 = vladimirovSchwinger W) (N : ℕ)
+    (u : ∀ j : ℕ, (Fin j → ι) → ℂ) :
+    (‖osBorchersVector D N u‖ ^ 2 : ℂ) =
+      vladimirovSesquilinear S W N u u :=
+  (inner_self_eq_norm_sq_to_K (𝕜 := ℂ) (osBorchersVector D N u)).symm.trans
+    (inner_osBorchersVector_eq_vladimirovSesquilinear D hspec hD N u u)
+
+theorem wightmanSesquilinear_eq_vladimirovSesquilinear
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (W : WightmanFamily ι) (hspec : ZeroMomentumSpectrumCondition W) (N : ℕ)
+    (F F' : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (G : ∀ j k : ℕ, (Fin j → ι) → (Fin k → ι) →
+      SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ j k α α' (x : Fin (j + k) → Fin 4 → ℝ),
+      G j k α α' x =
+        (starRingEnd ℂ) (F j α (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          F' k α' (fun i => x (Fin.natAdd j i))) :
+    (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+      ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+        (∏ i : Fin j, S.C (α i) (β i)) *
+          W (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+      vladimirovSesquilinear S W N
+        (fun j α => ∫ y : Fin j → Fin 4 → ℝ, F j α y)
+        (fun k α' => ∫ z : Fin k → Fin 4 → ℝ, F' k α' z) := by
+  unfold vladimirovSesquilinear vladimirovKernel
+  refine Finset.sum_congr rfl (fun j _ => ?_)
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  refine Finset.sum_congr rfl (fun α _ => ?_)
+  refine Finset.sum_congr rfl (fun α' _ => ?_)
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  rw [W_n_eq_vladimirov_H_zero_mul_integral hspec (j + k)
+      (Fin.append (β ∘ Fin.rev) α') (G j k α α')]
+  have h_int : (∫ x : Fin (j + k) → Fin 4 → ℝ, G j k α α' x) =
+      star (∫ y : Fin j → Fin 4 → ℝ, F j α y) *
+        (∫ z : Fin k → Fin 4 → ℝ, F' k α' z) := by
+    have h_fun : (fun x : Fin (j + k) → Fin 4 → ℝ => G j k α α' x) =
+        fun x => ((fun y => (starRingEnd ℂ) (F j α y))
+          (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          ((fun z => F' k α' z) (fun i => x (Fin.natAdd j i))) := by
+      ext x
+      exact hG j k α α' x
+    rw [h_fun, integral_split_rev_mul j k
+        (fun y => (starRingEnd ℂ) (F j α y)) (fun z => F' k α' z),
+        integral_conj, ← Complex.star_def]
+  rw [h_int]
+  ring
+
+theorem wightmanSesquilinear_eq_inner_osWavepacketVector
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (hD : D.𝒮 = vladimirovSchwinger W) (N : ℕ)
+    (F F' : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (G : ∀ j k : ℕ, (Fin j → ι) → (Fin k → ι) →
+      SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ j k α α' (x : Fin (j + k) → Fin 4 → ℝ),
+      G j k α α' x =
+        (starRingEnd ℂ) (F j α (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          F' k α' (fun i => x (Fin.natAdd j i))) :
+    (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+      ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+        (∏ i : Fin j, S.C (α i) (β i)) *
+          W (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+      ⟪osWavepacketVector D N F, osWavepacketVector D N F'⟫_ℂ := by
+  rw [wightmanSesquilinear_eq_vladimirovSesquilinear S W hspec N F F' G hG,
+      osWavepacketVector, osWavepacketVector,
+      inner_osBorchersVector_eq_vladimirovSesquilinear D hspec hD N]
+
+theorem wightmanSesquilinear_diag_eq_norm_sq_osWavepacketVector
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (hD : D.𝒮 = vladimirovSchwinger W) (N : ℕ)
+    (F : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (G : ∀ j k : ℕ, (Fin j → ι) → (Fin k → ι) →
+      SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ j k α α' (x : Fin (j + k) → Fin 4 → ℝ),
+      G j k α α' x =
+        (starRingEnd ℂ) (F j α (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          F k α' (fun i => x (Fin.natAdd j i))) :
+    (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+      ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+        (∏ i : Fin j, S.C (α i) (β i)) *
+          W (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+      (‖osWavepacketVector D N F‖ ^ 2 : ℂ) :=
+  (wightmanSesquilinear_eq_inner_osWavepacketVector D hspec hD N F F G hG).trans
+    (inner_self_eq_norm_sq_to_K (𝕜 := ℂ) (osWavepacketVector D N F))
+
+namespace OSSpectralDecomposition
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D} {m : ℕ}
+
+noncomputable def twoPointTubePropagator (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) (z : Fin 2 → Fin 4 → ℂ) : ℂ :=
+  spec.entirePropagator htrans Ψ Φ (tubeWickTimeDiff 2 z 0 (by decide)) a
+
+theorem twoPointTubePropagator_eq_sum_spectralTwoPointTube
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) (z : Fin 2 → Fin 4 → ℂ) :
+    spec.twoPointTubePropagator htrans Ψ Φ a z =
+      ∑ k : Fin m,
+        spectralTwoPointTube (spec.E k) z *
+          ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ :=
+  spec.entirePropagator_eq_sum htrans Ψ Φ (tubeWickTimeDiff 2 z 0 (by decide)) a
+
+theorem differentiable_twoPointTubePropagator
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ) :
+    Differentiable ℂ (spec.twoPointTubePropagator htrans Ψ Φ a) :=
+  (spec.differentiable_entirePropagator htrans Ψ Φ a).comp
+    (differentiable_tubeWickTimeDiff 2 0 (by decide))
+
+theorem analyticAt_twoPointTubePropagator
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) (z : Fin 2 → Fin 4 → ℂ) :
+    AnalyticAt ℂ (spec.twoPointTubePropagator htrans Ψ Φ a) z :=
+  AnalyticAt.comp
+    (g := fun w : ℂ => spec.entirePropagator htrans Ψ Φ w a)
+    (f := fun w : Fin 2 → Fin 4 → ℂ => tubeWickTimeDiff 2 w 0 (by decide))
+    ((spec.differentiable_entirePropagator htrans Ψ Φ a).analyticAt
+      (tubeWickTimeDiff 2 z 0 (by decide)))
+    (analyticAt_tubeWickTimeDiff 2 0 (by decide) z)
+
+theorem analyticOnNhd_twoPointTubePropagator
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) (s : Set (Fin 2 → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ (spec.twoPointTubePropagator htrans Ψ Φ a) s :=
+  fun z _ => spec.analyticAt_twoPointTubePropagator htrans Ψ Φ a z
+
+theorem analyticOn_twoPointTubePropagator
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) (s : Set (Fin 2 → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (spec.twoPointTubePropagator htrans Ψ Φ a) s :=
+  (spec.analyticOnNhd_twoPointTubePropagator htrans Ψ Φ a s).analyticOn
+
+@[simp]
+theorem twoPointTubePropagator_add_const
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) (z : Fin 2 → Fin 4 → ℂ) (b : Fin 4 → ℂ) :
+    spec.twoPointTubePropagator htrans Ψ Φ a (fun i => z i + b) =
+      spec.twoPointTubePropagator htrans Ψ Φ a z := by
+  unfold twoPointTubePropagator
+  rw [tubeWickTimeDiff_add_const]
+
+theorem twoPointTubePropagator_eq_osComplexPropagator
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    spec.twoPointTubePropagator htrans Ψ Φ a z =
+      osComplexPropagator spec.toOSHolomorphicSemigroup htrans Ψ Φ
+        (tubeWickTimeDiff 2 z 0 (by decide))
+        (tubeWickTimeDiff_mem_rightHalfPlane hz 0 (by decide)) a :=
+  rfl
+
+theorem norm_twoPointTubePropagator_le
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    ‖spec.twoPointTubePropagator htrans Ψ Φ a z‖ ≤ ‖Ψ‖ * ‖Φ‖ := by
+  rw [spec.twoPointTubePropagator_eq_osComplexPropagator htrans Ψ Φ a hz]
+  exact norm_osComplexPropagator_le spec.toOSHolomorphicSemigroup htrans Ψ Φ
+    (tubeWickTimeDiff 2 z 0 (by decide))
+    (tubeWickTimeDiff_mem_rightHalfPlane hz 0 (by decide)) a
+
+theorem twoPointTubePropagator_wickEmbedN_eq_osComplexPropagator
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (a : Fin 3 → ℝ) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN 2) :
+    spec.twoPointTubePropagator htrans Ψ Φ a (wickEmbedN 2 x) =
+      osComplexPropagator spec.toOSHolomorphicSemigroup htrans Ψ Φ
+        ((x 1 0 - x 0 0 : ℝ) : ℂ)
+        (ofReal_mem_rightHalfPlane (sub_nonneg.mpr (le_of_lt (hx 0 (by decide))))) a := by
+  unfold twoPointTubePropagator
+  rw [tubeWickTimeDiff_wickEmbedN]
+  rfl
+
+theorem twoPointTubePropagator_oneParticle_wickEmbedN_eq_schwinger
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (α₀ α₁ : ι) (x₀ y₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (hy₀ : 0 < y₀ 0)
+    (a : Fin 3 → ℝ) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN 2) :
+    spec.twoPointTubePropagator htrans
+      (osOneParticleState D α₀ x₀ hx₀)
+      (osOneParticleState D α₁ y₀ hy₀)
+      a (wickEmbedN 2 x) =
+      ∑ β₀ : ι, S.C α₀ β₀ *
+        D.𝒮 2 (osConcatIdx 1 1 (fun _ => β₀) (fun _ => α₁))
+          (osConcatPoint 1 1 (fun _ => x₀)
+            (fun _ => y₀ + euclidSpatialVec a + euclidTimeVec (x 1 0 - x 0 0))) := by
+  rw [spec.twoPointTubePropagator_wickEmbedN_eq_osComplexPropagator htrans _ _ a hx]
+  exact osComplexPropagator_real_oneParticle_eq_schwinger_twoPoint
+    spec.toOSHolomorphicSemigroup htrans α₀ α₁ x₀ y₀ hx₀ hy₀
+    (x 1 0 - x 0 0) (sub_nonneg.mpr (le_of_lt (hx 0 (by decide)))) a
+
+end OSSpectralDecomposition
+
+theorem osKernel_eq_vladimirovKernel_of_schwinger_eq
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    {𝒮 : SchwingerFamily ι} {W : WightmanFamily ι} (hspec : ZeroMomentumSpectrumCondition W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = vladimirovSchwinger W n α x)
+    (A B : OSConfig ι) :
+    osKernel S 𝒮 A B = vladimirovKernel S W A.1 B.1 A.2.1 B.2.1 := by
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  dsimp [osKernel]
+  have h_eq : ∀ β : Fin j → ι,
+      𝒮 (j + k) (osConcatIdx j k β α') (osConcatPoint j k x y) =
+        vladimirovSchwinger W (j + k) (osConcatIdx j k β α') (osConcatPoint j k x y) :=
+    fun β => h_schw (j + k) (osConcatIdx j k β α') (osConcatPoint j k x y)
+      (osConcatPoint_mem_orderedEuclidN j k hx hy)
+  simp_rw [h_eq]
+  exact osKernel_vladimirovSchwinger S hspec ⟨j, α, x, hx⟩ ⟨k, α', y, hy⟩
+
+theorem inner_osBorchersVector_eq_vladimirovSesquilinear_of_schwinger_eq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → D.𝒮 n α x = vladimirovSchwinger W n α x)
+    (N : ℕ) (u v : ∀ j : ℕ, (Fin j → ι) → ℂ) :
+    ⟪osBorchersVector D N u, osBorchersVector D N v⟫_ℂ =
+      vladimirovSesquilinear S W N u v := by
+  unfold osBorchersVector vladimirovSesquilinear
+  rw [sum_inner]
+  refine Finset.sum_congr rfl (fun j _ => ?_)
+  rw [inner_sum]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [sum_inner]
+  refine Finset.sum_congr rfl (fun α _ => ?_)
+  rw [inner_sum]
+  refine Finset.sum_congr rfl (fun α' _ => ?_)
+  rw [inner_smul_left, inner_smul_right, inner_osBasis,
+      osKernel_eq_vladimirovKernel_of_schwinger_eq S hspec h_schw, ← Complex.star_def]
+  dsimp [osIndexedBaseConfig]
+  ring
+
+theorem wightmanSesquilinear_diag_eq_norm_sq_osWavepacketVector_of_schwinger_eq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → D.𝒮 n α x = vladimirovSchwinger W n α x)
+    (N : ℕ)
+    (F : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (G : ∀ j k : ℕ, (Fin j → ι) → (Fin k → ι) →
+      SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ j k α α' (x : Fin (j + k) → Fin 4 → ℝ),
+      G j k α α' x =
+        (starRingEnd ℂ) (F j α (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          F k α' (fun i => x (Fin.natAdd j i))) :
+    (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+      ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+        (∏ i : Fin j, S.C (α i) (β i)) *
+          W (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+      (‖osWavepacketVector D N F‖ ^ 2 : ℂ) := by
+  rw [wightmanSesquilinear_eq_vladimirovSesquilinear S W hspec N F F G hG,
+      osWavepacketVector,
+      ← inner_osBorchersVector_eq_vladimirovSesquilinear_of_schwinger_eq D hspec h_schw N]
+  exact inner_self_eq_norm_sq_to_K (𝕜 := ℂ) (osWavepacketVector D N F)
+
+theorem positivity_of_schwinger_eq_vladimirovSchwinger
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → D.𝒮 n α x = vladimirovSchwinger W n α x) :
+    Positivity S W := by
+  intro N F G hG
+  rw [wightmanSesquilinear_diag_eq_norm_sq_osWavepacketVector_of_schwinger_eq
+      D hspec h_schw N F G hG]
+  have h_nonneg : 0 ≤ ‖osWavepacketVector D N F‖ ^ 2 := sq_nonneg _
+  exact_mod_cast h_nonneg
+
+theorem positivity_of_osReflectionPositiveData
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) {W : WightmanFamily ι}
+    (hspec : ZeroMomentumSpectrumCondition W) (hD : D.𝒮 = vladimirovSchwinger W) :
+    Positivity S W :=
+  positivity_of_schwinger_eq_vladimirovSchwinger D hspec (fun n α x _ => by rw [hD])
+
+def vladimirovEuclideanTubeBridgeOfOSData
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (D : OSReflectionPositiveData R S) (W : WightmanFamily ι) {η : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (hloc : WeakLocality η W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → D.𝒮 n α x = vladimirovSchwinger W n α x) :
+    OSEuclideanTubeBridge R S η D.𝒮 :=
+  osEuclideanTubeBridgeOfTubeExtension R S η D.𝒮
+    W (vladimirovTubeExtension R W hspec hP)
+    h_schw
+    (vladimirov_tubeCovariant R W hspec hP)
+    (fun n α z hz => vladimirov_tube_pct_theorem R W hspec hP hloc n z hz α)
+    hspec hP hloc
+    (positivity_of_schwinger_eq_vladimirovSchwinger D hspec h_schw)
+
+def vladimirovOSReconstructionOfOSReflectionPositive
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (W : WightmanFamily ι) {η : ℂ}
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W)
+    (hloc : WeakLocality η W)
+    (hherm : TubeWickHermiticity S (vladimirovTubeExtension R W hspec hP))
+    (hrp : OSReflectionPositive S (vladimirovSchwinger W))
+    (hcontr : OSContractionCondition
+      { 𝒮 := vladimirovSchwinger W
+        hermiticity := schwingerFromTube_os_hermiticity S _ hherm
+        positivity := hrp })
+    (ℰ : OSHolomorphicSemigroup
+      { 𝒮 := vladimirovSchwinger W
+        hermiticity := schwingerFromTube_os_hermiticity S _ hherm
+        positivity := hrp }
+      hcontr) :
+    OSReconstructedWightman R S η (vladimirovSchwinger W) :=
+  vladimirovOSReconstruction R S W hspec hP hloc
+    (positivity_of_osReflectionPositiveData
+      { 𝒮 := vladimirovSchwinger W
+        hermiticity := schwingerFromTube_os_hermiticity S _ hherm
+        positivity := hrp }
+      hspec rfl)
+    hherm hrp hcontr ℰ
+
+def vladimirovOSReconstructedWightmanOfTimeCluster
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (W : WightmanFamily ι)
+    (hspec : ZeroMomentumSpectrumCondition W) (hP : PoincareCovariant R W) (hloc : WeakLocality η W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = vladimirovSchwinger W n α x) :
+    OSReconstructedWightman R S η 𝒮 :=
+  osReconstructedWightmanOfTimeCluster R S η 𝒮 hOS hcluster ℰ
+    (vladimirovEuclideanTubeBridgeOfOSData R S hOS.toReflectionPositiveData
+      W hspec hP hloc h_schw)
+
+lemma integral_fintype_count {A E : Type*} [Fintype A] [MeasurableSpace A]
+    [MeasurableSingletonClass A] [NormedAddCommGroup E] [NormedSpace ℝ E] [CompleteSpace E]
+    (f : A → E) :
+    (∫ a : A, f a ∂Measure.count) = ∑ a : A, f a := by
+  rw [integral_fintype Integrable.of_finite]
+  refine Finset.sum_congr rfl (fun a _ => ?_)
+  simp [Measure.real]
+
+noncomputable def measureKallenLehmannTube
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) (w E : A → ℝ)
+    (z : Fin 2 → Fin 4 → ℂ) : ℂ :=
+  ∫ a : A, (w a : ℂ) * spectralTwoPointTube (E a) z ∂μ
+
+noncomputable def measureKallenLehmannEuclid
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) (w E : A → ℝ)
+    (x : Fin 2 → Fin 4 → ℝ) : ℂ :=
+  ∫ a : A, (w a : ℂ) * euclidSpectralTwoPoint (E a) x ∂μ
+
+@[simp]
+theorem measureKallenLehmannTube_wickEmbedN
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) (w E : A → ℝ)
+    (x : Fin 2 → Fin 4 → ℝ) :
+    measureKallenLehmannTube μ w E (wickEmbedN 2 x) =
+      measureKallenLehmannEuclid μ w E x := by
+  unfold measureKallenLehmannTube measureKallenLehmannEuclid
+  simp_rw [spectralTwoPointTube_wickEmbedN_eq_euclidSpectralTwoPoint]
+
+@[simp]
+theorem measureKallenLehmannTube_add_const
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) (w E : A → ℝ)
+    (z : Fin 2 → Fin 4 → ℂ) (b : Fin 4 → ℂ) :
+    measureKallenLehmannTube μ w E (fun i => z i + b) =
+      measureKallenLehmannTube μ w E z := by
+  unfold measureKallenLehmannTube
+  simp_rw [spectralTwoPointTube_add_const]
+
+@[simp]
+theorem measureKallenLehmannEuclid_add_const
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) (w E : A → ℝ)
+    (x : Fin 2 → Fin 4 → ℝ) (b : Fin 4 → ℝ) :
+    measureKallenLehmannEuclid μ w E (fun i => x i + b) =
+      measureKallenLehmannEuclid μ w E x := by
+  unfold measureKallenLehmannEuclid
+  simp_rw [euclidSpectralTwoPoint_add_const]
+
+theorem norm_measureKallenLehmannTube_le_integral_norm
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) (w E : A → ℝ)
+    (z : Fin 2 → Fin 4 → ℂ) :
+    ‖measureKallenLehmannTube μ w E z‖ ≤
+      ∫ a : A, ‖(w a : ℂ) * spectralTwoPointTube (E a) z‖ ∂μ :=
+  norm_integral_le_integral_norm _
+
+theorem norm_measureKallenLehmannTube_integrand_le
+    {A : Type*} {w E : A → ℝ} {a : A} (hw : 0 ≤ w a) (hE : 0 ≤ E a)
+    {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    ‖(w a : ℂ) * spectralTwoPointTube (E a) z‖ ≤ w a := by
+  rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg hw]
+  have h_le := norm_spectralTwoPointTube_le_one hE hz
+  nlinarith
+
+theorem norm_measureKallenLehmannTube_le_integral
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) {w E : A → ℝ}
+    (hw_int : Integrable w μ)
+    (hw : ∀ a : A, 0 ≤ w a) (hE : ∀ a : A, 0 ≤ E a)
+    {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    ‖measureKallenLehmannTube μ w E z‖ ≤ ∫ a : A, w a ∂μ := by
+  by_cases h_int :
+      Integrable (fun a : A => (w a : ℂ) * spectralTwoPointTube (E a) z) μ
+  · refine (norm_measureKallenLehmannTube_le_integral_norm μ w E z).trans ?_
+    exact integral_mono h_int.norm hw_int
+      (fun a => norm_measureKallenLehmannTube_integrand_le (hw a) (hE a) hz)
+  · unfold measureKallenLehmannTube
+    rw [integral_undef h_int, norm_zero]
+    exact integral_nonneg hw
+
+theorem measureKallenLehmannEuclid_sesquilinear_integrand_eq
+    {A : Type*} (w E : A → ℝ) (a : A)
+    (m : ℕ) (c : Fin m → ℂ) (x : Fin m → Fin 1 → Fin 4 → ℝ) :
+    (∑ j : Fin m, ∑ k : Fin m,
+      (w a : ℂ) * (star (c j) * c k *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k)))) =
+      (w a : ℂ) *
+        (‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ ^ 2 : ℂ) := by
+  simp_rw [← Finset.mul_sum]
+  rw [euclidSpectralTwoPoint_sesquilinear_eq_norm_sq]
+
+theorem measureKallenLehmannEuclid_sesquilinear_eq_integral
+    {A : Type*} [MeasurableSpace A] (μ : Measure A)
+    (w E : A → ℝ) (m : ℕ) (c : Fin m → ℂ) (x : Fin m → Fin 1 → Fin 4 → ℝ)
+    (hint : ∀ j k : Fin m,
+      Integrable (fun a : A =>
+        (w a : ℂ) * euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k))) μ) :
+    (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k *
+        measureKallenLehmannEuclid μ w E (osConcatPoint 1 1 (x j) (x k))) =
+      ∫ a : A, (w a : ℂ) *
+        (‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ ^ 2 : ℂ) ∂μ := by
+  unfold measureKallenLehmannEuclid
+  have h_pull : ∀ j k : Fin m,
+      star (c j) * c k *
+        (∫ a : A, (w a : ℂ) *
+          euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k)) ∂μ) =
+      ∫ a : A, (w a : ℂ) * (star (c j) * c k *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k))) ∂μ := by
+    intro j k
+    rw [← integral_const_mul]
+    refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+    dsimp
+    ring
+  simp_rw [h_pull]
+  have h_sum_k : ∀ j : Fin m,
+      (∑ k : Fin m, ∫ a : A, (w a : ℂ) * (star (c j) * c k *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k))) ∂μ) =
+      ∫ a : A, ∑ k : Fin m, (w a : ℂ) * (star (c j) * c k *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k))) ∂μ := by
+    intro j
+    rw [← integral_finsetSum]
+    intro k _
+    have h_eq : (fun a : A => (w a : ℂ) * (star (c j) * c k *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k)))) =
+      (fun a : A => (star (c j) * c k) * ((w a : ℂ) *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k)))) := by
+      ext a
+      ring
+    rw [h_eq]
+    exact (hint j k).const_mul (star (c j) * c k)
+  simp_rw [h_sum_k]
+  rw [← integral_finsetSum]
+  · refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+    exact measureKallenLehmannEuclid_sesquilinear_integrand_eq w E a m c x
+  · intro j _
+    refine integrable_finsetSum _ (fun k _ => ?_)
+    have h_eq : (fun a : A => (w a : ℂ) * (star (c j) * c k *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k)))) =
+      (fun a : A => (star (c j) * c k) * ((w a : ℂ) *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k)))) := by
+      ext a
+      ring
+    rw [h_eq]
+    exact (hint j k).const_mul (star (c j) * c k)
+
+theorem measureKallenLehmannEuclid_reflectionPositive
+    {A : Type*} [MeasurableSpace A] (μ : Measure A)
+    {w : A → ℝ} (hw : ∀ a : A, 0 ≤ w a) (E : A → ℝ)
+    (m : ℕ) (c : Fin m → ℂ) (x : Fin m → Fin 1 → Fin 4 → ℝ)
+    (hint : ∀ j k : Fin m,
+      Integrable (fun a : A =>
+        (w a : ℂ) * euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k))) μ) :
+    0 ≤ RCLike.re (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k *
+        measureKallenLehmannEuclid μ w E (osConcatPoint 1 1 (x j) (x k))) := by
+  rw [measureKallenLehmannEuclid_sesquilinear_eq_integral μ w E m c x hint,
+      ← integral_re]
+  · refine integral_nonneg (fun a => ?_)
+    have h_re :
+        RCLike.re ((w a : ℂ) *
+          (‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ ^ 2 : ℂ)) =
+          w a * ‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ ^ 2 := by
+      change ((w a : ℂ) *
+        ((‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ : ℂ) ^ 2)).re = _
+      rw [← Complex.ofReal_pow, ← Complex.ofReal_mul, Complex.ofReal_re]
+    rw [h_re]
+    exact mul_nonneg (hw a) (sq_nonneg _)
+  · have h_eq : (fun a : A => (w a : ℂ) *
+        (‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ ^ 2 : ℂ)) =
+      (fun a : A => ∑ j : Fin m, ∑ k : Fin m,
+        (star (c j) * c k) * ((w a : ℂ) *
+          euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k)))) := by
+      ext a
+      rw [← measureKallenLehmannEuclid_sesquilinear_integrand_eq]
+      refine Finset.sum_congr rfl (fun j _ => Finset.sum_congr rfl (fun k _ => ?_))
+      ring
+    rw [h_eq]
+    exact integrable_finsetSum _ (fun j _ =>
+      integrable_finsetSum _ (fun k _ => (hint j k).const_mul (star (c j) * c k)))
+
+theorem measureKallenLehmannEuclid_sesquilinear_eq_of_fintype
+    {A : Type*} [Fintype A] [MeasurableSpace A] [MeasurableSingletonClass A]
+    (w E : A → ℝ) (m : ℕ) (c : Fin m → ℂ) (x : Fin m → Fin 1 → Fin 4 → ℝ) :
+    (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k *
+        measureKallenLehmannEuclid Measure.count w E (osConcatPoint 1 1 (x j) (x k))) =
+      ∑ a : A, (w a : ℂ) *
+        (‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ ^ 2 : ℂ) := by
+  unfold measureKallenLehmannEuclid
+  simp_rw [integral_fintype_count, Finset.mul_sum]
+  rw [Finset.sum_comm]
+  conv_lhs =>
+    arg 2
+    ext j
+    rw [Finset.sum_comm]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl (fun a _ => ?_)
+  rw [Finset.sum_comm]
+  have h_pull : ∀ j k : Fin m,
+      star (c j) * c k * ((w a : ℂ) *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k))) =
+      (w a : ℂ) * (star (c j) * c k *
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 (x j) (x k))) := by
+    intro j k
+    ring
+  simp_rw [h_pull]
+  exact measureKallenLehmannEuclid_sesquilinear_integrand_eq w E a m c x
+
+theorem measureKallenLehmannEuclid_reflectionPositive_of_finite
+    {A : Type*} [Finite A] [MeasurableSpace A] [MeasurableSingletonClass A]
+    {w : A → ℝ} (hw : ∀ a : A, 0 ≤ w a) (E : A → ℝ)
+    (m : ℕ) (c : Fin m → ℂ) (x : Fin m → Fin 1 → Fin 4 → ℝ) :
+    0 ≤ RCLike.re (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k *
+        measureKallenLehmannEuclid Measure.count w E (osConcatPoint 1 1 (x j) (x k))) := by
+  cases nonempty_fintype A
+  rw [measureKallenLehmannEuclid_sesquilinear_eq_of_fintype, map_sum]
+  refine Finset.sum_nonneg (fun a _ => ?_)
+  have h_re :
+      RCLike.re ((w a : ℂ) *
+        (‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ ^ 2 : ℂ)) =
+        w a * ‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ ^ 2 := by
+    change ((w a : ℂ) *
+      ((‖∑ k : Fin m, c k * laplaceExp (E a) (x k 0 0 : ℂ)‖ : ℂ) ^ 2)).re = _
+    rw [← Complex.ofReal_pow, ← Complex.ofReal_mul, Complex.ofReal_re]
+  rw [h_re]
+  exact mul_nonneg (hw a) (sq_nonneg _)
+
+structure OSSpectralMeasure {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (A : Type*) [MeasurableSpace A] where
+  μ : Measure A
+  E : A → ℝ
+  energy_nonneg : ∀ a : A, 0 ≤ E a
+  P : A → (OSHilbert D →L[ℂ] OSHilbert D)
+  proj_selfAdjoint : ∀ (a : A) (x y : OSHilbert D),
+    ⟪P a x, y⟫_ℂ = ⟪x, P a y⟫_ℂ
+  proj_idem : ∀ (a : A) (x : OSHilbert D),
+    P a (P a x) = P a x
+  integrable_norm_sq : ∀ x : OSHilbert D,
+    Integrable (fun a : A => ‖P a x‖ ^ 2) μ
+  norm_sq_eq_integral : ∀ x : OSHilbert D,
+    ‖x‖ ^ 2 = ∫ a : A, ‖P a x‖ ^ 2 ∂μ
+  semigroup_inner_eq : ∀ (τ : ℝ) (hτ : 0 ≤ τ) (x y : OSHilbert D),
+    ⟪x, osContractionSemigroup D hcontr τ hτ y⟫_ℂ =
+      ∫ a : A, laplaceExp (E a) (τ : ℂ) * ⟪x, P a y⟫_ℂ ∂μ
+  comm_spatial : ∀ (htrans : OSTranslationInvariant D.𝒮) (b : Fin 3 → ℝ) (a : A),
+    (osSpatialTranslate D htrans b).comp (P a) =
+      (P a).comp (osSpatialTranslate D htrans b)
+
+namespace OSSpectralMeasure
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+  {A : Type*} [MeasurableSpace A]
+
+theorem inner_proj_self_eq_norm_sq (M : OSSpectralMeasure D hcontr A)
+    (a : A) (x : OSHilbert D) :
+    ⟪x, M.P a x⟫_ℂ = (‖M.P a x‖ ^ 2 : ℂ) := by
+  conv_lhs => rw [← M.proj_idem a x]
+  rw [← M.proj_selfAdjoint a x (M.P a x)]
+  exact inner_self_eq_norm_sq_to_K (𝕜 := ℂ) (M.P a x)
+
+noncomputable def propagator (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (z : ℂ) (b : Fin 3 → ℝ) : ℂ :=
+  ∫ a : A, laplaceExp (M.E a) z * ⟪Ψ, M.P a (osSpatialTranslate D htrans b Φ)⟫_ℂ ∂M.μ
+
+noncomputable def twoPointTubePropagator (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (b : Fin 3 → ℝ) (z : Fin 2 → Fin 4 → ℂ) : ℂ :=
+  M.propagator htrans Ψ Φ (tubeWickTimeDiff 2 z 0 (by decide)) b
+
+theorem twoPointTubePropagator_eq_integral_spectralTwoPointTube
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (b : Fin 3 → ℝ) (z : Fin 2 → Fin 4 → ℂ) :
+    M.twoPointTubePropagator htrans Ψ Φ b z =
+      ∫ a : A,
+        spectralTwoPointTube (M.E a) z *
+          ⟪Ψ, M.P a (osSpatialTranslate D htrans b Φ)⟫_ℂ ∂M.μ :=
+  rfl
+
+@[simp]
+theorem twoPointTubePropagator_add_const
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (b : Fin 3 → ℝ) (z : Fin 2 → Fin 4 → ℂ) (c : Fin 4 → ℂ) :
+    M.twoPointTubePropagator htrans Ψ Φ b (fun i => z i + c) =
+      M.twoPointTubePropagator htrans Ψ Φ b z := by
+  unfold twoPointTubePropagator
+  rw [tubeWickTimeDiff_add_const]
+
+theorem twoPointTubePropagator_diag_zero_eq_measureKallenLehmannTube
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ : OSHilbert D)
+    (z : Fin 2 → Fin 4 → ℂ) :
+    M.twoPointTubePropagator htrans Ψ Ψ 0 z =
+      measureKallenLehmannTube M.μ (fun a => ‖M.P a Ψ‖ ^ 2) M.E z := by
+  unfold twoPointTubePropagator propagator measureKallenLehmannTube
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp
+  rw [osSpatialTranslate_zero, ContinuousLinearMap.id_apply,
+      M.inner_proj_self_eq_norm_sq a Ψ, ← Complex.ofReal_pow, mul_comm]
+  rfl
+
+theorem norm_twoPointTubePropagator_diag_zero_le_norm_sq
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ : OSHilbert D)
+    {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    ‖M.twoPointTubePropagator htrans Ψ Ψ 0 z‖ ≤ ‖Ψ‖ ^ 2 := by
+  rw [M.twoPointTubePropagator_diag_zero_eq_measureKallenLehmannTube htrans Ψ z,
+      M.norm_sq_eq_integral Ψ]
+  exact norm_measureKallenLehmannTube_le_integral M.μ
+    (M.integrable_norm_sq Ψ) (fun a => sq_nonneg _) M.energy_nonneg hz
+
+theorem twoPointTubePropagator_wickEmbedN_eq_osContractionSemigroup
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (b : Fin 3 → ℝ) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN 2) :
+    M.twoPointTubePropagator htrans Ψ Φ b (wickEmbedN 2 x) =
+      ⟪Ψ, osContractionSemigroup D hcontr (x 1 0 - x 0 0)
+        (sub_nonneg.mpr (le_of_lt (hx 0 (by decide))))
+        (osSpatialTranslate D htrans b Φ)⟫_ℂ := by
+  unfold twoPointTubePropagator
+  have h_time : tubeWickTimeDiff 2 (wickEmbedN 2 x) 0 (by decide) =
+      ((x 1 0 - x 0 0 : ℝ) : ℂ) :=
+    tubeWickTimeDiff_wickEmbedN 2 x 0 (by decide)
+  rw [h_time]
+  exact (M.semigroup_inner_eq (x 1 0 - x 0 0)
+    (sub_nonneg.mpr (le_of_lt (hx 0 (by decide))))
+    Ψ (osSpatialTranslate D htrans b Φ)).symm
+
+theorem twoPointTubePropagator_oneParticle_wickEmbedN_eq_schwinger
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (α₀ α₁ : ι) (x₀ y₀ : Fin 4 → ℝ) (hx₀ : 0 < x₀ 0) (hy₀ : 0 < y₀ 0)
+    (b : Fin 3 → ℝ) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN 2) :
+    M.twoPointTubePropagator htrans
+      (osOneParticleState D α₀ x₀ hx₀)
+      (osOneParticleState D α₁ y₀ hy₀)
+      b (wickEmbedN 2 x) =
+      ∑ β₀ : ι, S.C α₀ β₀ *
+        D.𝒮 2 (osConcatIdx 1 1 (fun _ => β₀) (fun _ => α₁))
+          (osConcatPoint 1 1 (fun _ => x₀)
+            (fun _ => y₀ + euclidSpatialVec b + euclidTimeVec (x 1 0 - x 0 0))) := by
+  rw [M.twoPointTubePropagator_wickEmbedN_eq_osContractionSemigroup htrans _ _ b hx,
+      osSpatialTranslate_osOneParticleState D htrans α₁ y₀ hy₀ b,
+      osContractionSemigroup_osOneParticleState D hcontr α₁
+        (y₀ + euclidSpatialVec b) (time_pos_of_add_euclidSpatialVec hy₀ b)
+        (x 1 0 - x 0 0) (sub_nonneg.mpr (le_of_lt (hx 0 (by decide)))),
+      inner_osOneParticleState]
+
+end OSSpectralMeasure
+
+noncomputable def OSSpectralDecomposition.toOSSpectralMeasure
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D} {m : ℕ}
+    (spec : OSSpectralDecomposition D hcontr m) :
+    OSSpectralMeasure D hcontr (Fin m) where
+  μ := Measure.count
+  E := spec.E
+  energy_nonneg := spec.energy_nonneg
+  P := spec.P
+  proj_selfAdjoint := spec.proj_selfAdjoint
+  proj_idem := spec.proj_apply_self
+  integrable_norm_sq _ := Integrable.of_finite
+  norm_sq_eq_integral x := by
+    rw [integral_fintype_count]
+    exact spec.norm_sq_eq_sum_proj x
+  semigroup_inner_eq τ hτ x y := by
+    rw [integral_fintype_count, spec.semigroup_eq τ hτ y, inner_sum]
+    refine Finset.sum_congr rfl (fun k _ => ?_)
+    rw [inner_smul_right]
+  comm_spatial := spec.comm_spatial
+
+@[simp]
+theorem OSSpectralDecomposition.toOSSpectralMeasure_twoPointTubePropagator
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D} {m : ℕ}
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (b : Fin 3 → ℝ) (z : Fin 2 → Fin 4 → ℂ) :
+    spec.toOSSpectralMeasure.twoPointTubePropagator htrans Ψ Φ b z =
+      spec.twoPointTubePropagator htrans Ψ Φ b z := by
+  unfold OSSpectralMeasure.twoPointTubePropagator OSSpectralMeasure.propagator
+  change (∫ a : Fin m,
+      laplaceExp (spec.E a) (tubeWickTimeDiff 2 z 0 (by decide)) *
+        ⟪Ψ, spec.P a (osSpatialTranslate D htrans b Φ)⟫_ℂ ∂Measure.count) =
+    spec.twoPointTubePropagator htrans Ψ Φ b z
+  rw [integral_fintype_count]
+  exact (spec.twoPointTubePropagator_eq_sum_spectralTwoPointTube htrans Ψ Φ b z).symm
+
+namespace OSSpectralMeasure
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+  {A : Type*} [MeasurableSpace A]
+
+theorem norm_inner_proj_le_mul_norm_proj (M : OSSpectralMeasure D hcontr A)
+    (a : A) (x y : OSHilbert D) :
+    ‖⟪x, M.P a y⟫_ℂ‖ ≤ ‖M.P a x‖ * ‖M.P a y‖ := by
+  conv_lhs => rw [← M.proj_idem a y, ← M.proj_selfAdjoint a x (M.P a y)]
+  exact norm_inner_le_norm (M.P a x) (M.P a y)
+
+theorem norm_inner_proj_le_half_add_norm_sq (M : OSSpectralMeasure D hcontr A)
+    (a : A) (x y : OSHilbert D) :
+    ‖⟪x, M.P a y⟫_ℂ‖ ≤ (‖M.P a x‖ ^ 2 + ‖M.P a y‖ ^ 2) / 2 := by
+  have h_cs := M.norm_inner_proj_le_mul_norm_proj a x y
+  have h_sq : 0 ≤ (‖M.P a x‖ - ‖M.P a y‖) ^ 2 := sq_nonneg _
+  linarith
+
+theorem norm_proj_le_norm (M : OSSpectralMeasure D hcontr A)
+    (a : A) (x : OSHilbert D) :
+    ‖M.P a x‖ ≤ ‖x‖ := by
+  by_cases h0 : ‖M.P a x‖ = 0
+  · rw [h0]
+    exact norm_nonneg x
+  · have hpos : 0 < ‖M.P a x‖ := lt_of_le_of_ne (norm_nonneg _) (Ne.symm h0)
+    have h_sq : ‖M.P a x‖ ^ 2 ≤ ‖M.P a x‖ * ‖x‖ := by
+      have h_id := M.inner_proj_self_eq_norm_sq a x
+      have h_norm := congrArg Norm.norm h_id
+      rw [← Complex.ofReal_pow, Complex.norm_real, Real.norm_of_nonneg (sq_nonneg _),
+          ← M.proj_selfAdjoint a x x] at h_norm
+      exact h_norm.symm.le.trans (norm_inner_le_norm (M.P a x) x)
+    nlinarith
+
+theorem integrable_half_add_norm_sq (M : OSSpectralMeasure D hcontr A)
+    (x y : OSHilbert D) :
+    Integrable (fun a : A => (‖M.P a x‖ ^ 2 + ‖M.P a y‖ ^ 2) / 2) M.μ :=
+  ((M.integrable_norm_sq x).add (M.integrable_norm_sq y)).div_const 2
+
+theorem integral_half_add_norm_sq (M : OSSpectralMeasure D hcontr A)
+    (x y : OSHilbert D) :
+    (∫ a : A, (‖M.P a x‖ ^ 2 + ‖M.P a y‖ ^ 2) / 2 ∂M.μ) =
+      (‖x‖ ^ 2 + ‖y‖ ^ 2) / 2 := by
+  have h_eq : (fun a : A => (‖M.P a x‖ ^ 2 + ‖M.P a y‖ ^ 2) / 2) =
+      fun a : A => (1 / 2 : ℝ) * (‖M.P a x‖ ^ 2 + ‖M.P a y‖ ^ 2) := by
+    ext a
+    ring
+  rw [h_eq, integral_const_mul,
+      integral_add (M.integrable_norm_sq x) (M.integrable_norm_sq y),
+      ← M.norm_sq_eq_integral x, ← M.norm_sq_eq_integral y]
+  ring
+
+theorem norm_laplaceExp_mul_inner_proj_le_half_add_norm_sq
+    (M : OSSpectralMeasure D hcontr A)
+    {z : ℂ} (hz : z ∈ rightHalfPlane) (a : A) (x y : OSHilbert D) :
+    ‖laplaceExp (M.E a) z * ⟪x, M.P a y⟫_ℂ‖ ≤
+      (‖M.P a x‖ ^ 2 + ‖M.P a y‖ ^ 2) / 2 := by
+  rw [norm_mul]
+  have h_exp : ‖laplaceExp (M.E a) z‖ ≤ 1 :=
+    norm_laplaceExp_le_one (M.energy_nonneg a) hz
+  have h_in := M.norm_inner_proj_le_half_add_norm_sq a x y
+  have h_le : ‖laplaceExp (M.E a) z‖ * ‖⟪x, M.P a y⟫_ℂ‖ ≤ 1 * ‖⟪x, M.P a y⟫_ℂ‖ :=
+    mul_le_mul_of_nonneg_right h_exp (norm_nonneg _)
+  linarith
+
+theorem integrable_inner_proj_of_aestronglyMeasurable
+    (M : OSSpectralMeasure D hcontr A)
+    (x y : OSHilbert D)
+    (h_meas : AEStronglyMeasurable (fun a : A => ⟪x, M.P a y⟫_ℂ) M.μ) :
+    Integrable (fun a : A => ⟪x, M.P a y⟫_ℂ) M.μ :=
+  (M.integrable_half_add_norm_sq x y).mono' h_meas
+    (Filter.Eventually.of_forall (fun a => M.norm_inner_proj_le_half_add_norm_sq a x y))
+
+theorem norm_propagator_le_half_add_norm_sq
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    {z : ℂ} (hz : z ∈ rightHalfPlane) (b : Fin 3 → ℝ) :
+    ‖M.propagator htrans Ψ Φ z b‖ ≤ (‖Ψ‖ ^ 2 + ‖Φ‖ ^ 2) / 2 := by
+  let Φb := osSpatialTranslate D htrans b Φ
+  by_cases h_int :
+      Integrable (fun a : A => laplaceExp (M.E a) z * ⟪Ψ, M.P a Φb⟫_ℂ) M.μ
+  · have h_bound :
+        ‖M.propagator htrans Ψ Φ z b‖ ≤
+          ∫ a : A, (‖M.P a Ψ‖ ^ 2 + ‖M.P a Φb‖ ^ 2) / 2 ∂M.μ := by
+      refine (norm_integral_le_integral_norm _).trans ?_
+      exact integral_mono h_int.norm (M.integrable_half_add_norm_sq Ψ Φb)
+        (fun a => M.norm_laplaceExp_mul_inner_proj_le_half_add_norm_sq hz a Ψ Φb)
+    have h_norm_b : ‖Φb‖ = ‖Φ‖ := norm_osSpatialTranslate D htrans b Φ
+    rw [M.integral_half_add_norm_sq Ψ Φb, h_norm_b] at h_bound
+    exact h_bound
+  · unfold propagator
+    rw [integral_undef h_int, norm_zero]
+    positivity
+
+theorem norm_twoPointTubePropagator_le_half_add_norm_sq
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (b : Fin 3 → ℝ) {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    ‖M.twoPointTubePropagator htrans Ψ Φ b z‖ ≤ (‖Ψ‖ ^ 2 + ‖Φ‖ ^ 2) / 2 :=
+  M.norm_propagator_le_half_add_norm_sq htrans Ψ Φ
+    (tubeWickTimeDiff_mem_rightHalfPlane hz 0 (by decide)) b
+
+theorem propagator_real_eq_osContractionSemigroup
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (τ : ℝ) (hτ : 0 ≤ τ) (b : Fin 3 → ℝ) :
+    M.propagator htrans Ψ Φ (τ : ℂ) b =
+      ⟪Ψ, osContractionSemigroup D hcontr τ hτ (osSpatialTranslate D htrans b Φ)⟫_ℂ :=
+  (M.semigroup_inner_eq τ hτ Ψ (osSpatialTranslate D htrans b Φ)).symm
+
+@[simp]
+theorem propagator_zero
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (b : Fin 3 → ℝ) :
+    M.propagator htrans Ψ Φ 0 b = ⟪Ψ, osSpatialTranslate D htrans b Φ⟫_ℂ := by
+  have h0 := M.propagator_real_eq_osContractionSemigroup htrans Ψ Φ 0 le_rfl b
+  simpa [osContractionSemigroup_zero] using h0
+
+noncomputable def bochnerZ (M : OSSpectralMeasure D hcontr A)
+    (z : ℂ) (x : OSHilbert D) : OSHilbert D :=
+  ∫ a : A, laplaceExp (M.E a) z • M.P a x ∂M.μ
+
+@[simp]
+theorem bochnerZ_zero_right (M : OSSpectralMeasure D hcontr A) (z : ℂ) :
+    M.bochnerZ z 0 = 0 := by
+  unfold bochnerZ
+  simp
+
+theorem bochnerZ_eq_sum_of_fintype
+    [Fintype A] [MeasurableSingletonClass A]
+    (M : OSSpectralMeasure D hcontr A)
+    (h_count : M.μ = Measure.count) (z : ℂ) (x : OSHilbert D) :
+    M.bochnerZ z x = ∑ a : A, laplaceExp (M.E a) z • M.P a x := by
+  unfold bochnerZ
+  rw [h_count, integral_fintype_count]
+
+noncomputable def toOSSpectralDecompositionOfFintype
+    [Fintype A] [DecidableEq A] [MeasurableSingletonClass A]
+    (M : OSSpectralMeasure D hcontr A)
+    (h_count : M.μ = Measure.count)
+    (h_orth : ∀ a b : A, (M.P a).comp (M.P b) = if a = b then M.P a else 0)
+    (h_sum : ∀ x : OSHilbert D, ∑ a : A, M.P a x = x)
+    (h_vac : ∀ z : ℂ, ∑ a : A, laplaceExp (M.E a) z • M.P a (osVacuum D) = osVacuum D) :
+    OSSpectralDecomposition D hcontr (Fintype.card A) := by
+  let e : Fin (Fintype.card A) ≃ A := (Fintype.equivFin A).symm
+  exact
+    { E := fun k => M.E (e k)
+      energy_nonneg := fun k => M.energy_nonneg (e k)
+      P := fun k => M.P (e k)
+      proj_selfAdjoint := fun k x y => M.proj_selfAdjoint (e k) x y
+      proj_mul := fun j k => by
+        rw [h_orth (e j) (e k)]
+        by_cases hjk : j = k
+        · subst hjk
+          rw [if_pos rfl, if_pos rfl]
+        · have he : e j ≠ e k := e.injective.ne hjk
+          rw [if_neg he, if_neg hjk]
+      sum_proj := fun x => by
+        refine (e.sum_comp (fun a => M.P a x)).trans (h_sum x)
+      semigroup_eq := fun τ hτ x => by
+        apply ext_inner_left ℂ
+        intro y
+        have h_inner := M.semigroup_inner_eq τ hτ y x
+        rw [h_count, integral_fintype_count] at h_inner
+        rw [h_inner, inner_sum, ← e.sum_comp (fun a => laplaceExp (M.E a) (τ : ℂ) * ⟪y, M.P a x⟫_ℂ)]
+        refine Finset.sum_congr rfl (fun k _ => ?_)
+        rw [inner_smul_right]
+      vacuum_eq := fun z => by
+        refine (e.sum_comp (fun a => laplaceExp (M.E a) z • M.P a (osVacuum D))).trans (h_vac z)
+      comm_spatial := fun htrans b k => M.comm_spatial htrans b (e k) }
+
+noncomputable def toOSHolomorphicSemigroupOfFintype
+    [Fintype A] [DecidableEq A] [MeasurableSingletonClass A]
+    (M : OSSpectralMeasure D hcontr A)
+    (h_count : M.μ = Measure.count)
+    (h_orth : ∀ a b : A, (M.P a).comp (M.P b) = if a = b then M.P a else 0)
+    (h_sum : ∀ x : OSHilbert D, ∑ a : A, M.P a x = x)
+    (h_vac : ∀ z : ℂ, ∑ a : A, laplaceExp (M.E a) z • M.P a (osVacuum D) = osVacuum D) :
+    OSHolomorphicSemigroup D hcontr :=
+  (M.toOSSpectralDecompositionOfFintype h_count h_orth h_sum h_vac).toOSHolomorphicSemigroup
+
+noncomputable def innerRightCLM (y : OSHilbert D) : OSHilbert D →L[ℂ] ℂ :=
+  LinearMap.mkContinuous
+    { toFun := fun w => ⟪y, w⟫_ℂ
+      map_add' := fun u v => inner_add_right y u v
+      map_smul' := fun c w => by simp }
+    ‖y‖
+    (fun w => norm_inner_le_norm (𝕜 := ℂ) y w)
+
+@[simp]
+lemma innerRightCLM_apply (y w : OSHilbert D) :
+    innerRightCLM (D := D) y w = ⟪y, w⟫_ℂ := rfl
+
+theorem inner_bochnerZ_right
+    (M : OSSpectralMeasure D hcontr A)
+    (z : ℂ) (x y : OSHilbert D)
+    (h_int : Integrable (fun a : A => laplaceExp (M.E a) z • M.P a x) M.μ) :
+    ⟪y, M.bochnerZ z x⟫_ℂ =
+      ∫ a : A, laplaceExp (M.E a) z * ⟪y, M.P a x⟫_ℂ ∂M.μ := by
+  change innerRightCLM (D := D) y (∫ a : A, laplaceExp (M.E a) z • M.P a x ∂M.μ) = _
+  rw [← (innerRightCLM (D := D) y).integral_comp_comm h_int]
+  refine integral_congr_ae (ae_of_all M.μ (fun a => ?_))
+  simp
+
+theorem inner_bochnerZ_left
+    (M : OSSpectralMeasure D hcontr A)
+    (z : ℂ) (x y : OSHilbert D)
+    (h_int : Integrable (fun a : A => laplaceExp (M.E a) z • M.P a x) M.μ) :
+    ⟪M.bochnerZ z x, y⟫_ℂ =
+      ∫ a : A, laplaceExp (M.E a) (star z) * ⟪M.P a x, y⟫_ℂ ∂M.μ := by
+  rw [← inner_conj_symm, M.inner_bochnerZ_right z x y h_int, ← integral_conj]
+  refine integral_congr_ae (ae_of_all M.μ (fun a => ?_))
+  dsimp
+  rw [map_mul, inner_conj_symm, ← Complex.star_def, ← laplaceExp_star]
+
+theorem bochnerZ_real_eq_osContractionSemigroup
+    (M : OSSpectralMeasure D hcontr A)
+    (τ : ℝ) (hτ : 0 ≤ τ) (x : OSHilbert D)
+    (h_int : Integrable (fun a : A => laplaceExp (M.E a) (τ : ℂ) • M.P a x) M.μ) :
+    M.bochnerZ (τ : ℂ) x = osContractionSemigroup D hcontr τ hτ x := by
+  apply ext_inner_left ℂ
+  intro y
+  rw [M.inner_bochnerZ_right (τ : ℂ) x y h_int, ← M.semigroup_inner_eq τ hτ y x]
+
+theorem bochnerZ_zero_eq_self
+    (M : OSSpectralMeasure D hcontr A)
+    (x : OSHilbert D)
+    (h_int : Integrable (fun a : A => M.P a x) M.μ) :
+    M.bochnerZ 0 x = x := by
+  have h_int0 : Integrable (fun a : A => laplaceExp (M.E a) ((0 : ℝ) : ℂ) • M.P a x) M.μ := by
+    simpa [laplaceExp_zero_right] using h_int
+  have h0 := M.bochnerZ_real_eq_osContractionSemigroup 0 le_rfl x h_int0
+  simpa [osContractionSemigroup_zero] using h0
+
+theorem bochnerZ_adjoint_symm
+    (M : OSSpectralMeasure D hcontr A)
+    (z : ℂ) (x y : OSHilbert D)
+    (h_int_x : Integrable (fun a : A => laplaceExp (M.E a) z • M.P a x) M.μ)
+    (h_int_y : Integrable (fun a : A => laplaceExp (M.E a) (star z) • M.P a y) M.μ) :
+    ⟪M.bochnerZ z x, y⟫_ℂ = ⟪x, M.bochnerZ (star z) y⟫_ℂ := by
+  rw [M.inner_bochnerZ_left z x y h_int_x, M.inner_bochnerZ_right (star z) y x h_int_y]
+  refine integral_congr_ae (ae_of_all M.μ (fun a => ?_))
+  dsimp
+  rw [M.proj_selfAdjoint a x y]
+
+theorem bochnerZ_comm_spatial
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (b : Fin 3 → ℝ) (z : ℂ) (x : OSHilbert D)
+    (h_int : Integrable (fun a : A => laplaceExp (M.E a) z • M.P a x) M.μ) :
+    osSpatialTranslate D htrans b (M.bochnerZ z x) =
+      M.bochnerZ z (osSpatialTranslate D htrans b x) := by
+  unfold bochnerZ
+  rw [← (osSpatialTranslate D htrans b).integral_comp_comm h_int]
+  refine integral_congr_ae (ae_of_all M.μ (fun a => ?_))
+  dsimp
+  rw [map_smul]
+  congr 1
+  exact congrArg (fun L => L x) (M.comm_spatial htrans b a)
+
+theorem inner_bochnerZ_osSpatialTranslate_eq_propagator
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (z : ℂ) (b : Fin 3 → ℝ)
+    (h_int : Integrable
+      (fun a : A => laplaceExp (M.E a) z • M.P a (osSpatialTranslate D htrans b Φ)) M.μ) :
+    ⟪Ψ, M.bochnerZ z (osSpatialTranslate D htrans b Φ)⟫_ℂ =
+      M.propagator htrans Ψ Φ z b :=
+  M.inner_bochnerZ_right z (osSpatialTranslate D htrans b Φ) Ψ h_int
+
+noncomputable def toOSHolomorphicSemigroupOfBochner
+    (M : OSSpectralMeasure D hcontr A)
+    (Z : ℂ → (OSHilbert D →L[ℂ] OSHilbert D))
+    (h_eq : ∀ (z : ℂ), z ∈ rightHalfPlane → ∀ x : OSHilbert D, Z z x = M.bochnerZ z x)
+    (h_int : ∀ (z : ℂ), z ∈ rightHalfPlane → ∀ x : OSHilbert D,
+      Integrable (fun a : A => laplaceExp (M.E a) z • M.P a x) M.μ)
+    (h_add : ∀ (z₁ z₂ : ℂ), z₁ ∈ rightHalfPlane → z₂ ∈ rightHalfPlane →
+      Z (z₁ + z₂) = (Z z₁).comp (Z z₂))
+    (h_vac : ∀ (z : ℂ), z ∈ rightHalfPlane → M.bochnerZ z (osVacuum D) = osVacuum D)
+    (h_contr : ∀ (z : ℂ), z ∈ rightHalfPlane → ∀ x : OSHilbert D,
+      ‖M.bochnerZ z x‖ ≤ ‖x‖) :
+    OSHolomorphicSemigroup D hcontr where
+  Z z _ := Z z
+  real_eq τ hτ := by
+    ext x
+    have hτ_rhp : (τ : ℂ) ∈ rightHalfPlane := ofReal_mem_rightHalfPlane hτ
+    rw [h_eq (τ : ℂ) hτ_rhp x]
+    exact M.bochnerZ_real_eq_osContractionSemigroup τ hτ x (h_int (τ : ℂ) hτ_rhp x)
+  map_add z₁ z₂ hz₁ hz₂ := h_add z₁ z₂ hz₁ hz₂
+  vacuum z hz := by
+    rw [h_eq z hz (osVacuum D)]
+    exact h_vac z hz
+  contraction z hz x := by
+    rw [h_eq z hz x]
+    exact h_contr z hz x
+  adjoint_symm z hz x y := by
+    have hz_star : star z ∈ rightHalfPlane := star_mem_rightHalfPlane hz
+    rw [h_eq z hz x, h_eq (star z) hz_star y]
+    exact M.bochnerZ_adjoint_symm z x y (h_int z hz x) (h_int (star z) hz_star y)
+  comm_spatial htrans b z hz := by
+    ext x
+    simp only [ContinuousLinearMap.comp_apply]
+    rw [h_eq z hz x, h_eq z hz (osSpatialTranslate D htrans b x)]
+    exact M.bochnerZ_comm_spatial htrans b z x (h_int z hz x)
+
+@[simp]
+theorem toOSHolomorphicSemigroupOfBochner_osComplexPropagator
+    (M : OSSpectralMeasure D hcontr A)
+    (Z : ℂ → (OSHilbert D →L[ℂ] OSHilbert D))
+    (h_eq : ∀ (z : ℂ), z ∈ rightHalfPlane → ∀ x : OSHilbert D, Z z x = M.bochnerZ z x)
+    (h_int : ∀ (z : ℂ), z ∈ rightHalfPlane → ∀ x : OSHilbert D,
+      Integrable (fun a : A => laplaceExp (M.E a) z • M.P a x) M.μ)
+    (h_add : ∀ (z₁ z₂ : ℂ), z₁ ∈ rightHalfPlane → z₂ ∈ rightHalfPlane →
+      Z (z₁ + z₂) = (Z z₁).comp (Z z₂))
+    (h_vac : ∀ (z : ℂ), z ∈ rightHalfPlane → M.bochnerZ z (osVacuum D) = osVacuum D)
+    (h_contr : ∀ (z : ℂ), z ∈ rightHalfPlane → ∀ x : OSHilbert D,
+      ‖M.bochnerZ z x‖ ≤ ‖x‖)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D)
+    (z : ℂ) (hz : z ∈ rightHalfPlane) (b : Fin 3 → ℝ) :
+    osComplexPropagator
+        (M.toOSHolomorphicSemigroupOfBochner Z h_eq h_int h_add h_vac h_contr)
+        htrans Ψ Φ z hz b =
+      M.propagator htrans Ψ Φ z b := by
+  dsimp [osComplexPropagator, OSHolomorphicSemigroup.complexSpacetimeStep,
+    toOSHolomorphicSemigroupOfBochner]
+  rw [h_eq z hz (osSpatialTranslate D htrans b Φ)]
+  exact M.inner_bochnerZ_osSpatialTranslate_eq_propagator htrans Ψ Φ z b
+    (h_int z hz (osSpatialTranslate D htrans b Φ))
+
+end OSSpectralMeasure
+
+abbrev forwardConeSpectralRegion (n : ℕ) : Set (Fin n → Fin 4 → ℝ) :=
+  spectralRegion n
+
+abbrev ForwardConeSpectrumCondition (W : WightmanFamily ι) : Prop :=
+  SpectrumCondition W
+
+theorem forwardConeSpectralRegion_one (p : Fin 1 → Fin 4 → ℝ)
+    (hp : p ∈ forwardConeSpectralRegion 1) :
+    p 0 = 0 := by
+  have h_sum := hp.1
+  simp only [Fin.sum_univ_one] at h_sum
+  exact h_sum
+
+theorem forwardConeSpectralRegion_one_eq_zero (p : Fin 1 → Fin 4 → ℝ)
+    (hp : p ∈ forwardConeSpectralRegion 1) :
+    p = 0 := by
+  ext i μ
+  have hi : i = 0 := Subsingleton.elim i 0
+  subst hi
+  have h0 := forwardConeSpectralRegion_one p hp
+  exact congr_fun h0 μ
+
+theorem partial_sum_p_mem_closure_of_forwardConeSpectralRegion
+    (n : ℕ) (p : Fin n → Fin 4 → ℝ) (hp : p ∈ forwardConeSpectralRegion n) (k : Fin n) :
+    partial_sum_p n p k ∈ closure forward_light_cone :=
+  hp.2 k
+
+theorem partial_cone_inner_nonneg_of_forwardConeSpectralRegion
+    (n : ℕ) (p : Fin n → Fin 4 → ℝ) (hp : p ∈ forwardConeSpectralRegion n)
+    (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n)
+    (i : Fin n) (hi : i.val + 1 < n) :
+    0 ≤ minkowskiInner (partial_sum_p n p i) (diff_im n z i hi) := by
+  have hq := partial_sum_p_mem_closure_of_forwardConeSpectralRegion n p hp i
+  have hv := diff_im_mem_forward_cone n z hz i hi
+  have h_bound := minkowskiInner_ge_coneGap_closure
+    (diff_im n z i hi) (partial_sum_p n p i) hq
+  have h_gap := coneGap_pos _ hv
+  have hq_closed := closure_forward_light_cone_subset hq
+  have hq0 : 0 ≤ (partial_sum_p n p i) 0 := hq_closed.1
+  have h_prod : 0 ≤ coneGap (diff_im n z i hi) * (partial_sum_p n p i) 0 :=
+    mul_nonneg (le_of_lt h_gap) hq0
+  exact h_prod.trans h_bound
+
+theorem totalConePairing_nonneg_of_forwardConeSpectralRegion
+    (n : ℕ) (p : Fin n → Fin 4 → ℝ) (hp : p ∈ forwardConeSpectralRegion n)
+    (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    0 ≤ totalConePairing n p z := by
+  dsimp [totalConePairing]
+  apply Finset.sum_nonneg
+  intro i _
+  split_ifs with hi
+  · exact partial_cone_inner_nonneg_of_forwardConeSpectralRegion n p hp z hz i hi
+  · rfl
+
+theorem norm_exp_sum_neg_I_minkowskiInnerC_of_forwardConeSpectralRegion
+    (n : ℕ) (p : Fin n → Fin 4 → ℝ) (hp : p ∈ forwardConeSpectralRegion n)
+    (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    ‖Complex.exp (- Complex.I *
+      (∑ k : Fin n, minkowskiInnerC (fun μ => (p k μ : ℂ)) (z k)))‖ ≤ 1 := by
+  rw [norm_exp_sum_neg_I_minkowskiInnerC,
+      sum_minkowskiInner_im_eq_neg_totalConePairing n p z hp.1]
+  have h_pair := totalConePairing_nonneg_of_forwardConeSpectralRegion n p hp z hz
+  have h_le_zero : -totalConePairing n p z ≤ 0 := by linarith
+  have h_exp := Real.exp_le_exp_of_le h_le_zero
+  rw [Real.exp_zero] at h_exp
+  exact h_exp
+
+theorem vladimirov_kernel_norm_le_one_of_forwardConeSpectralRegion
+    (n : ℕ) (p : Fin n → Fin 4 → ℝ) (hp : p ∈ forwardConeSpectralRegion n)
+    (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    ‖vladimirov_kernel n z p‖ ≤ 1 := by
+  rw [vladimirov_kernel_norm,
+      sum_minkowskiInner_im_eq_neg_totalConePairing n p z hp.1]
+  have h_pair := totalConePairing_nonneg_of_forwardConeSpectralRegion n p hp z hz
+  have h_neg : - totalConePairing n p z ≤ 0 := by linarith
+  exact Real.exp_le_one_iff.mpr h_neg
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem ZeroMomentumSpectrumCondition.toForwardConeSpectrumCondition
+    {W : WightmanFamily ι} (hspec : ZeroMomentumSpectrumCondition W) :
+    ForwardConeSpectrumCondition W :=
+  ZeroMomentumSpectrumCondition.toSpectrumCondition hspec
+
+noncomputable def tubeBoundaryLine (n : ℕ) (x : Fin n → Fin 4 → ℝ) (v : Fin 4 → ℝ) (t : ℝ) :
+    Fin n → Fin 4 → ℂ :=
+  fun i k => (x i k : ℂ) + Complex.I * ((t * (i : ℕ) * v k : ℝ) : ℂ)
+
+lemma tubeBoundaryLine_mem_forward_tube (n : ℕ) (x : Fin n → Fin 4 → ℝ)
+    (v : Fin 4 → ℝ) (hv : v ∈ forward_light_cone) {t : ℝ} (ht : 0 < t) :
+    tubeBoundaryLine n x v t ∈ forward_tube_n n :=
+  line_mem_forward_tube n x v hv t ht
+
+lemma neg_tubeBoundaryLine_comp_rev_add_shift
+    (n : ℕ) (x : Fin n → Fin 4 → ℝ) (v : Fin 4 → ℝ) (t : ℝ) :
+    (fun i : Fin n => -(tubeBoundaryLine n x v t (Fin.rev i)) +
+      (fun k : Fin 4 => Complex.I * ((t * ((n - 1 : ℕ) : ℝ) * v k : ℝ) : ℂ))) =
+      tubeBoundaryLine n (pctCLE n x) v t := by
+  ext i k
+  have h_rev : ((Fin.rev i : ℕ) : ℝ) = ((n - 1 : ℕ) : ℝ) - (i : ℕ) := by
+    have h_eq : (Fin.rev i : ℕ) = n - 1 - (i : ℕ) := by
+      rw [Fin.val_rev]
+      omega
+    have hi : (i : ℕ) ≤ n - 1 := Nat.le_sub_one_of_lt i.isLt
+    rw [h_eq, Nat.cast_sub hi]
+  dsimp only [tubeBoundaryLine, pctCLE_apply, Pi.add_apply, Pi.neg_apply]
+  rw [h_rev]
+  push_cast
+  ring
+
+lemma neg_tubeBoundaryLine_comp_rev_mem_forward_tube
+    (n : ℕ) (x : Fin n → Fin 4 → ℝ)
+    (v : Fin 4 → ℝ) (hv : v ∈ forward_light_cone) {t : ℝ} (ht : 0 < t) :
+    -(tubeBoundaryLine n x v t ∘ Fin.rev) ∈ forward_tube_n n :=
+  neg_rev_mem_forward_tube_n n (tubeBoundaryLine n x v t)
+    (tubeBoundaryLine_mem_forward_tube n x v hv ht)
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma tube_boundary_line_pct_shift_eq {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ)
+    (v : Fin 4 → ℝ) (hv : v ∈ forward_light_cone) {t : ℝ} (ht : 0 < t) :
+    E.H n α (tubeBoundaryLine n (pctCLE n x) v t) =
+      E.H n α (-(tubeBoundaryLine n x v t ∘ Fin.rev)) := by
+  rw [← neg_tubeBoundaryLine_comp_rev_add_shift]
+  exact htrans n α (-(tubeBoundaryLine n x v t ∘ Fin.rev))
+    (fun k : Fin 4 => Complex.I * ((t * ((n - 1 : ℕ) : ℝ) * v k : ℝ) : ℂ))
+    (neg_tubeBoundaryLine_comp_rev_mem_forward_tube n x v hv ht)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tube_boundary_line_weakLocality_eq {W : WightmanFamily ι} {η : ℂ}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality η E)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ)
+    (v : Fin 4 → ℝ) (hv : v ∈ forward_light_cone) {t : ℝ} (ht : 0 < t) :
+    E.H n α (tubeBoundaryLine n (pctCLE n x) v t) =
+      η ^ (n * (n - 1) / 2) *
+        E.H n (α ∘ Fin.rev) (tubeBoundaryLine n x v t) := by
+  rw [tube_boundary_line_pct_shift_eq E htrans n α x v hv ht]
+  exact hloc n α (tubeBoundaryLine n x v t)
+    (tubeBoundaryLine_mem_forward_tube n x v hv ht)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_pct_scalar_of_tubeWeakLocality {W : WightmanFamily ι} {η : ℂ}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality η E)
+    (n : ℕ) (α : Fin n → ι) (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => -x (Fin.rev i)) = f x) :
+    W n α f = η ^ (n * (n - 1) / 2) * W n (α ∘ Fin.rev) f' := by
+  have hv : euclidTimeVec 1 ∈ forward_light_cone := timeUnitVec_mem_forward_light_cone
+  have hb_lhs := E.boundary n α f (euclidTimeVec 1) hv
+  have hb_rhs :=
+    (E.boundary n (α ∘ Fin.rev) f' (euclidTimeVec 1) hv).const_mul
+      (η ^ (n * (n - 1) / 2))
+  have hf_pct : ∀ x : Fin n → Fin 4 → ℝ, f (pctCLE n x) = f' x := by
+    intro x
+    have h_inv : pctCLE n (pctCLE n x) = x := by
+      ext i k
+      simp [pctCLE_apply, Fin.rev_rev]
+    have h1 := (hf' (pctCLE n x)).symm
+    have h_pct_def : (fun i => -(pctCLE n x) (Fin.rev i)) = pctCLE n (pctCLE n x) := rfl
+    rwa [h_pct_def, h_inv] at h1
+  have h_ev :
+      (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        E.H n α (tubeBoundaryLine n x (euclidTimeVec 1) t) * f x) =ᶠ[𝓝[>] (0 : ℝ)]
+      (fun t : ℝ => η ^ (n * (n - 1) / 2) *
+        ∫ x : Fin n → Fin 4 → ℝ,
+          E.H n (α ∘ Fin.rev) (tubeBoundaryLine n x (euclidTimeVec 1) t) * f' x) := by
+    filter_upwards [self_mem_nhdsWithin] with t (ht : 0 < t)
+    have h_comp := (integral_comp_pct n
+      (fun x : Fin n → Fin 4 → ℝ =>
+        E.H n α (tubeBoundaryLine n x (euclidTimeVec 1) t) * f x)).symm
+    change (∫ x : Fin n → Fin 4 → ℝ,
+        E.H n α (tubeBoundaryLine n x (euclidTimeVec 1) t) * f x) =
+      ∫ x : Fin n → Fin 4 → ℝ,
+        E.H n α (tubeBoundaryLine n (pctCLE n x) (euclidTimeVec 1) t) *
+          f (pctCLE n x) at h_comp
+    rw [h_comp, ← MeasureTheory.integral_const_mul]
+    refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+    dsimp only
+    rw [tube_boundary_line_weakLocality_eq E htrans hloc n α x (euclidTimeVec 1) hv ht,
+        hf_pct x, mul_assoc]
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique (hb_lhs.congr' h_ev) hb_rhs
+
+lemma sum_prod_sigma_pt_eq_of_smul_one {R : HolomorphicLorentzRep ι} {δ : ℂ}
+    (hσ : R.σ (-1, 1) = δ • (1 : Matrix ι ι ℂ))
+    (n : ℕ) (α : Fin n → ι) (F : (Fin n → ι) → ℂ) :
+    (∑ β : Fin n → ι, (∏ i : Fin n, R.σ (-1, 1) (α i) (β i)) * F β) =
+      δ ^ n * F α := by
+  have h_prod : ∀ β : Fin n → ι,
+      (∏ i : Fin n, R.σ (-1, 1) (α i) (β i)) =
+        if α = β then δ ^ n else 0 := by
+    intro β
+    rw [hσ]
+    by_cases h : α = β
+    · subst h
+      simp
+    · rw [if_neg h]
+      obtain ⟨i, hi⟩ : ∃ i, α i ≠ β i := by
+        by_contra hc
+        push Not at hc
+        exact h (funext hc)
+      exact Finset.prod_eq_zero (Finset.mem_univ i) (by simp [Matrix.one_apply_ne hi])
+  simp_rw [h_prod, ite_mul, zero_mul]
+  simp
+
+theorem wightman_pct_of_sigma_pt_eq_one (R : HolomorphicLorentzRep ι)
+    {W : WightmanFamily ι} {η : ℂ} (hσ : R.σ (-1, 1) = 1)
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality η E) :
+    WightmanPCT η R W := by
+  intro n α f f' hf'
+  have hσ1 : R.σ (-1, 1) = (1 : ℂ) • (1 : Matrix ι ι ℂ) := by
+    rw [one_smul, hσ]
+  rw [sum_prod_sigma_pt_eq_of_smul_one hσ1 n α (fun β => W n (β ∘ Fin.rev) f'),
+      one_pow, one_mul]
+  exact wightman_pct_scalar_of_tubeWeakLocality E htrans hloc n α f f' hf'
+
+theorem wightman_pct_of_sigma_pt_eq_neg_one_fermion (R : HolomorphicLorentzRep ι)
+    {W : WightmanFamily ι} {η : ℂ}
+    (hσ : R.σ (-1, 1) = (-1 : ℂ) • (1 : Matrix ι ι ℂ))
+    (hε : R.HasSpinParity (-1))
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hcov : TubeCovariant R E) (hloc : TubeWeakLocality η E) :
+    WightmanPCT η R W := by
+  intro n α f f' hf'
+  rw [sum_prod_sigma_pt_eq_of_smul_one hσ n α (fun β => W n (β ∘ Fin.rev) f')]
+  rcases Nat.even_or_odd n with hn | hn
+  · rw [Even.neg_one_pow hn, one_mul]
+    exact wightman_pct_scalar_of_tubeWeakLocality E htrans hloc n α f f' hf'
+  · rw [wightman_eq_zero_of_odd_fermion R W E hcov hε n hn α f,
+        wightman_eq_zero_of_odd_fermion R W E hcov hε n hn (α ∘ Fin.rev) f',
+        mul_zero, mul_zero]
+
+theorem wightman_pct_trivialRep_of_tube {W : WightmanFamily Unit} {η : ℂ}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality η E) :
+    WightmanPCT η trivialRep W :=
+  wightman_pct_of_sigma_pt_eq_one trivialRep rfl E htrans hloc
+
+theorem wightman_pct_rightWeylRep_of_tube {W : WightmanFamily (Fin 2)} {η : ℂ}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hloc : TubeWeakLocality η E) :
+    WightmanPCT η rightWeylRep W :=
+  wightman_pct_of_sigma_pt_eq_one rightWeylRep
+    (by simp [rightWeylRep]) E htrans hloc
+
+lemma tubePTScalar_rightWeylRep {W : WightmanFamily (Fin 2)} (E : TubeExtension W) :
+    TubePTScalar rightWeylRep E :=
+  tubePTScalar_of_sigma_pt_eq_one rightWeylRep (by simp [rightWeylRep]) E
+
+theorem wightman_pct_leftWeylRep_of_tube {W : WightmanFamily (Fin 2)} {η : ℂ}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (hcov : TubeCovariant leftWeylRep E) (hloc : TubeWeakLocality η E) :
+    WightmanPCT η leftWeylRep W :=
+  wightman_pct_of_sigma_pt_eq_neg_one_fermion leftWeylRep
+    (by
+      change ((-1 : SL2C) : Matrix (Fin 2) (Fin 2) ℂ) =
+        (-1 : ℂ) • (1 : Matrix (Fin 2) (Fin 2) ℂ)
+      simp [Matrix.SpecialLinearGroup.coe_neg])
+    leftWeylRep_spinParity E htrans hcov hloc
+
+lemma tubeBoundaryLine_shift (n : ℕ) (x : Fin n → Fin 4 → ℝ) (a : Fin 4 → ℝ)
+    (v : Fin 4 → ℝ) (t : ℝ) :
+    tubeBoundaryLine n (fun i => x i + a) v t =
+      fun i => tubeBoundaryLine n x v t i + (fun k => (a k : ℂ)) := by
+  ext i k
+  dsimp [tubeBoundaryLine]
+  push_cast
+  ring
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem wightman_translationInvariant_of_tubeTranslationInvariant {W : WightmanFamily ι}
+    (E : TubeExtension W) (htrans : TubeTranslationInvariant E)
+    (n : ℕ) (α : Fin n → ι) (a : Fin 4 → ℝ)
+    (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => x i + a) = f x) :
+    W n α f' = W n α f := by
+  have hv : euclidTimeVec 1 ∈ forward_light_cone := timeUnitVec_mem_forward_light_cone
+  have hb_lhs := E.boundary n α f' (euclidTimeVec 1) hv
+  have hb_rhs := E.boundary n α f (euclidTimeVec 1) hv
+  have h_ev :
+      (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        E.H n α (tubeBoundaryLine n x (euclidTimeVec 1) t) * f' x) =ᶠ[𝓝[>] (0 : ℝ)]
+      (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        E.H n α (tubeBoundaryLine n x (euclidTimeVec 1) t) * f x) := by
+    filter_upwards [self_mem_nhdsWithin] with t (ht : 0 < t)
+    have h_trans := (MeasureTheory.integral_add_right_eq_self (μ := volume)
+      (fun x : Fin n → Fin 4 → ℝ =>
+        E.H n α (tubeBoundaryLine n x (euclidTimeVec 1) t) * f' x)
+      (fun _ : Fin n => a)).symm
+    rw [h_trans]
+    refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+    dsimp only
+    have h_x_add : (x + fun _ : Fin n => a) = (fun i : Fin n => x i + a) := rfl
+    rw [h_x_add, tubeBoundaryLine_shift,
+        htrans n α (tubeBoundaryLine n x (euclidTimeVec 1) t)
+          (fun k => (a k : ℂ))
+          (tubeBoundaryLine_mem_forward_tube n x (euclidTimeVec 1) hv ht),
+        hf' x]
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique (hb_lhs.congr' h_ev) hb_rhs
+
+structure ForwardConeOSEuclideanTubeBridge (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (η : ℂ) (𝒮 : SchwingerFamily ι) where
+  W : WightmanFamily ι
+  E : TubeExtension W
+  schwinger_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x
+  tube_covariant : TubeCovariant R E
+  tube_pct : TubePCT η R E
+  spectrum : ForwardConeSpectrumCondition W
+  poincare : PoincareCovariant R W
+  weakLocality : WeakLocality η W
+  positivity : Positivity S W
+
+def OSEuclideanTubeBridge.toForwardConeOSEuclideanTubeBridge
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (B : OSEuclideanTubeBridge R S η 𝒮) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 where
+  W := B.W
+  E := B.E
+  schwinger_eq := B.schwinger_eq
+  tube_covariant := B.tube_covariant
+  tube_pct := B.tube_pct
+  spectrum := B.spectrum.toForwardConeSpectrumCondition
+  poincare := B.poincare
+  weakLocality := B.weakLocality
+  positivity := B.positivity
+
+theorem forwardConeOSEuclideanTubeBridge_wightman_unique
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (B₁ B₂ : ForwardConeOSEuclideanTubeBridge R S η 𝒮) :
+    B₁.W = B₂.W := by
+  apply wightman_eq_of_schwingerFromTube_eq_unconditional B₁.E B₂.E
+  intro n α x hx
+  rw [← B₁.schwinger_eq n α x hx, ← B₂.schwinger_eq n α x hx]
+
+theorem forwardConeOSEuclideanTubeBridge_tube_unique
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (B₁ B₂ : ForwardConeOSEuclideanTubeBridge R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    B₁.E.H n α z = B₂.E.H n α z := by
+  apply tubeExtension_eq_of_schwingerFromTube_eq B₁.E B₂.E _ n α z hz
+  intro m β x hx
+  rw [← B₁.schwinger_eq m β x hx, ← B₂.schwinger_eq m β x hx]
+
+structure ForwardConeOSReconstructedWightman (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (η : ℂ) (𝒮 : SchwingerFamily ι) where
+  osAxioms : OSAxioms R S η 𝒮
+  contraction : OSContractionCondition osAxioms.toReflectionPositiveData
+  semigroup : OSHolomorphicSemigroup osAxioms.toReflectionPositiveData contraction
+  W : WightmanFamily ι
+  E : TubeExtension W
+  schwinger_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x
+  tube_covariant : TubeCovariant R E
+  tube_pct : TubePCT η R E
+  spectrum : ForwardConeSpectrumCondition W
+  poincare : PoincareCovariant R W
+  weakLocality : WeakLocality η W
+  positivity : Positivity S W
+
+def OSReconstructedWightman.toForwardConeOSReconstructedWightman
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (P : OSReconstructedWightman R S η 𝒮) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 where
+  osAxioms := P.osAxioms
+  contraction := P.contraction
+  semigroup := P.semigroup
+  W := P.W
+  E := P.E
+  schwinger_eq := P.schwinger_eq
+  tube_covariant := P.tube_covariant
+  tube_pct := P.tube_pct
+  spectrum := P.spectrum.toForwardConeSpectrumCondition
+  poincare := P.poincare
+  weakLocality := P.weakLocality
+  positivity := P.positivity
+
+def forwardConeOSReconstructedWightmanOfTimeCluster
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (bridge : ForwardConeOSEuclideanTubeBridge R S η 𝒮) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 where
+  osAxioms := hOS
+  contraction := osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+    hOS.os1_translation hcluster
+  semigroup := ℰ
+  W := bridge.W
+  E := bridge.E
+  schwinger_eq := bridge.schwinger_eq
+  tube_covariant := bridge.tube_covariant
+  tube_pct := bridge.tube_pct
+  spectrum := bridge.spectrum
+  poincare := bridge.poincare
+  weakLocality := bridge.weakLocality
+  positivity := bridge.positivity
+
+def forwardConeOSReconstructedWightmanOfDiagonalBounded
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hdiag : OSDiagonalKernelBounded S 𝒮)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_diagonalKernelBounded hOS.toReflectionPositiveData
+        hOS.os1_translation hdiag))
+    (bridge : ForwardConeOSEuclideanTubeBridge R S η 𝒮) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 where
+  osAxioms := hOS
+  contraction := osContractionCondition_of_diagonalKernelBounded hOS.toReflectionPositiveData
+    hOS.os1_translation hdiag
+  semigroup := ℰ
+  W := bridge.W
+  E := bridge.E
+  schwinger_eq := bridge.schwinger_eq
+  tube_covariant := bridge.tube_covariant
+  tube_pct := bridge.tube_pct
+  spectrum := bridge.spectrum
+  poincare := bridge.poincare
+  weakLocality := bridge.weakLocality
+  positivity := bridge.positivity
+
+def OSAxioms.canonicalHolomorphicSemigroup_of_timeCluster
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData) :
+    OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster) :=
+  hOS.canonicalHolomorphicSemigroup_of_contraction
+    (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+      hOS.os1_translation hcluster)
+
+def OSAxioms.canonicalHolomorphicSemigroup_of_diagonalBounded
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hdiag : OSDiagonalKernelBounded S 𝒮) :
+    OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_diagonalKernelBounded hOS.toReflectionPositiveData
+        hOS.os1_translation hdiag) :=
+  hOS.canonicalHolomorphicSemigroup_of_contraction
+    (osContractionCondition_of_diagonalKernelBounded hOS.toReflectionPositiveData
+      hOS.os1_translation hdiag)
+
+def forwardConeOSReconstructedWightmanOfBridge
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (bridge : ForwardConeOSEuclideanTubeBridge R S η 𝒮) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 :=
+  forwardConeOSReconstructedWightmanOfTimeCluster R S η 𝒮 hOS hcluster
+    (hOS.canonicalHolomorphicSemigroup_of_timeCluster hcluster) bridge
+
+def forwardConeOSReconstructedWightmanOfDiagonalBoundedBridge
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hdiag : OSDiagonalKernelBounded S 𝒮)
+    (bridge : ForwardConeOSEuclideanTubeBridge R S η 𝒮) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 :=
+  forwardConeOSReconstructedWightmanOfDiagonalBounded R S η 𝒮 hOS hdiag
+    (hOS.canonicalHolomorphicSemigroup_of_diagonalBounded hdiag) bridge
+
+namespace ForwardConeOSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+def osData (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    OSReflectionPositiveData R S :=
+  P.osAxioms.toReflectionPositiveData
+
+abbrev Hilbert (P : ForwardConeOSReconstructedWightman R S η 𝒮) : Type _ :=
+  OSHilbert P.osData
+
+def vacuum (P : ForwardConeOSReconstructedWightman R S η 𝒮) : P.Hilbert :=
+  osVacuum P.osData
+
+def spatialTranslate (P : ForwardConeOSReconstructedWightman R S η 𝒮) (a : Fin 3 → ℝ) :
+    P.Hilbert →L[ℂ] P.Hilbert :=
+  osSpatialTranslate P.osData P.osAxioms.os1_translation a
+
+def timeContraction (P : ForwardConeOSReconstructedWightman R S η 𝒮) (τ : ℝ) (hτ : 0 ≤ τ) :
+    P.Hilbert →L[ℂ] P.Hilbert :=
+  osContractionSemigroup P.osData P.contraction τ hτ
+
+theorem norm_vacuum_of_normalized (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (hnorm : OSVacuumNormalized 𝒮) :
+    ‖P.vacuum‖ = 1 :=
+  norm_osVacuum_of_normalized P.osData hnorm
+
+theorem vacuum_unique_of_timeCluster (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition P.osData)
+    {Ψ : P.Hilbert}
+    (hfixed : ∀ (τ : ℝ) (hτ : 0 ≤ τ), P.timeContraction τ hτ Ψ = Ψ) :
+    Ψ = ⟪P.vacuum, Ψ⟫_ℂ • P.vacuum :=
+  eq_smul_osVacuum_of_osContractionSemigroup_fixed P.osData P.contraction hcluster hfixed
+
+theorem vacuum_unique_of_spatialCluster (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    {a : Fin 3 → ℝ} (hcluster : OSSpatialClusterAlong P.osData a)
+    {Ψ : P.Hilbert}
+    (hfixed : ∀ t : ℝ, P.spatialTranslate (t • a) Ψ = Ψ) :
+    Ψ = ⟪P.vacuum, Ψ⟫_ℂ • P.vacuum :=
+  eq_smul_osVacuum_of_osSpatialTranslate_fixed P.osData P.osAxioms.os1_translation hcluster hfixed
+
+theorem osTranslationInvariant_schwingerFromTube
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    OSTranslationInvariant (schwingerFromTube P.E) := by
+  intro n α x hx a
+  have hxa : (fun i => x i + a) ∈ orderedEuclidN n :=
+    shift_mem_orderedEuclidN n hx a
+  rw [← P.schwinger_eq n α (fun i => x i + a) hxa,
+      ← P.schwinger_eq n α x hx]
+  exact P.osAxioms.os1_translation n α x hx a
+
+theorem tube_translationInvariant (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    TubeTranslationInvariant P.E :=
+  tubeTranslationInvariant_of_osTranslationInvariant P.E
+    P.osTranslationInvariant_schwingerFromTube
+
+theorem tube_H_shift (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ)
+    (hz : z ∈ forward_tube_n n) :
+    P.E.H n α (fun i => z i + a) = P.E.H n α z :=
+  P.tube_translationInvariant n α z a hz
+
+theorem tube_H_sub_point (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n)
+    (k : Fin n) :
+    P.E.H n α z = P.E.H n α (fun i => z i - z k) :=
+  tube_eq_sub_point_of_tubeTranslationInvariant P.E P.tube_translationInvariant n α z hz k
+
+theorem tube_onePoint_eq_zero_eval (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (α : Fin 1 → ι) (z : Fin 1 → Fin 4 → ℂ) :
+    P.E.H 1 α z = P.E.H 1 α 0 :=
+  tube_onePoint_eq_zero_eval_of_tubeTranslationInvariant P.E P.tube_translationInvariant α z
+
+theorem tube_neg_rev_two (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (α : Fin 2 → ι) (z : Fin 2 → Fin 4 → ℂ) (hz : z ∈ forward_tube_n 2) :
+    P.E.H 2 α (-(z ∘ Fin.rev)) = P.E.H 2 α z :=
+  tubeTranslationInvariant_neg_rev_two P.E P.tube_translationInvariant α z hz
+
+theorem complexCovariant (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    ComplexCovariant R P.E :=
+  complex_covariance_of_real R P.W P.E P.tube_covariant
+
+theorem wightman_pct (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    WightmanPCT η R P.W :=
+  wightman_pct_of_weakLocality_general R P.W P.E P.tube_covariant
+    P.tube_translationInvariant P.weakLocality
+
+theorem wightman_pct_scalar (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (hpt : R.HasPTScalar 1)
+    (n : ℕ) (α : Fin n → ι) (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => -x (Fin.rev i)) = f x) :
+    P.W n α f = η ^ (n * (n - 1) / 2) * P.W n (α ∘ Fin.rev) f' := by
+  have h := P.wightman_pct n α f f' hf'
+  rwa [sum_prod_sigma_pt_eq_of_smul_one hpt n α (fun β => P.W n (β ∘ Fin.rev) f'),
+    one_pow, one_mul] at h
+
+theorem wightman_translationInvariant (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) (a : Fin 4 → ℝ)
+    (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => x i + a) = f x) :
+    P.W n α f' = P.W n α f :=
+  wightman_translationInvariant_of_tubeTranslationInvariant P.E P.tube_translationInvariant
+    n α a f f' hf'
+
+theorem tube_H_unique (P₁ P₂ : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    P₁.E.H n α z = P₂.E.H n α z := by
+  apply tubeExtension_eq_of_schwingerFromTube_eq P₁.E P₂.E _ n α z hz
+  intro m β x hx
+  rw [← P₁.schwinger_eq m β x hx, ← P₂.schwinger_eq m β x hx]
+
+theorem wightman_unique_unconditional
+    (P₁ P₂ : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    P₁.W = P₂.W := by
+  apply wightman_eq_of_schwingerFromTube_eq_unconditional P₁.E P₂.E
+  intro n α x hx
+  rw [← P₁.schwinger_eq n α x hx, ← P₂.schwinger_eq n α x hx]
+
+theorem schwinger_spin_parity_selection (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (n : ℕ) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n) (α : Fin n → ι) :
+    𝒮 n α x = ε ^ n * 𝒮 n α x := by
+  rw [P.schwinger_eq n α x hx]
+  exact schwingerFromTube_spin_parity_selection R P.W P.E P.tube_covariant hε n x hx α
+
+theorem schwinger_eq_zero_of_odd_fermion (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (hε : R.HasSpinParity (-1))
+    (n : ℕ) (hn : Odd n) (x : Fin n → Fin 4 → ℝ) (hx : x ∈ orderedEuclidN n)
+    (α : Fin n → ι) :
+    𝒮 n α x = 0 := by
+  rw [P.schwinger_eq n α x hx]
+  exact schwingerFromTube_eq_zero_of_odd_fermion R P.W P.E P.tube_covariant hε n hn x hx α
+
+theorem wightman_eq_zero_of_odd_fermion (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (hε : R.HasSpinParity (-1))
+    (n : ℕ) (hn : Odd n) (α : Fin n → ι)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    P.W n α f = 0 :=
+  _root_.QFT.wightman_eq_zero_of_odd_fermion R P.W P.E P.tube_covariant hε n hn α f
+
+theorem spin_statistics_from_schwinger (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (α : Fin 2 → ι) (x : Fin 2 → Fin 4 → ℝ),
+      x ∈ orderedEuclidN 2 ∧ 𝒮 2 α x ≠ 0) :
+    η = ε := by
+  rcases h_nondeg with ⟨α, x, hx, hne⟩
+  exact osAxioms_spin_statistics P.osAxioms hε ⟨2, by omega, α, x, hx, hne⟩
+
+theorem schwinger_eq_zero_of_twoPoint_eq_zero
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) :
+    𝒮 n α x = 0 :=
+  _root_.QFT.schwinger_eq_zero_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+    h2 n hn α hx
+
+theorem tube_eq_zero_of_twoPoint_eq_zero
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) :
+    ∀ w ∈ forward_tube_n n, P.E.H n α w = 0 := by
+  intro w hw
+  refine analyticOn_forward_tube_eq_zero_of_posOrderedEuclidN_eq_zero n
+    (P.E.analytic n α) (fun x hx => ?_) w hw
+  have hx' := posOrderedEuclidN_subset_orderedEuclidN n hx
+  change schwingerFromTube P.E n α x = 0
+  rw [← P.schwinger_eq n α x hx']
+  exact P.schwinger_eq_zero_of_twoPoint_eq_zero h2 n hn α hx'
+
+theorem wightman_eq_zero_of_twoPoint_eq_zero
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    P.W n α f = 0 :=
+  wightman_eq_zero_of_tube_eq_zero P.E n α
+    (fun w hw => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α w hw) f
+
+theorem wrong_statistics_all_nPoint_eq_zero
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_wrong : η ≠ ε) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → P.E.H n α z = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ∧
+    (OSVacuumNormalized 𝒮 → ∀ Φ : P.Hilbert, Φ = ⟪P.vacuum, Φ⟫_ℂ • P.vacuum) := by
+  have h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0 :=
+    fun β _y hy => osAxioms_wrong_statistics_schwinger_eq_zero P.osAxioms hε h_wrong 2 (by omega)
+      β hy
+  refine ⟨fun n hn α x hx => P.schwinger_eq_zero_of_twoPoint_eq_zero h2 n hn α hx,
+    fun n hn α z hz => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α z hz,
+    fun n hn α f => P.wightman_eq_zero_of_twoPoint_eq_zero h2 n hn α f,
+    fun hnorm Φ => eq_smul_osVacuum_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+      hnorm h2 Φ⟩
+
+theorem spin_statistics_of_any_schwinger_ne_zero
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) :
+    η = ε :=
+  osAxioms_spin_statistics P.osAxioms hε h_nondeg
+
+theorem spin_statistics_of_any_wightman_ne_zero
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = ε := by
+  by_contra h_wrong
+  rcases h_nondeg with ⟨n, hn, α, f, hf⟩
+  exact hf ((P.wrong_statistics_all_nPoint_eq_zero hε h_wrong).2.2.1 n hn α f)
+
+theorem spin_statistics_of_twoPoint_ne_zero
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (α : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ), P.W 2 α f ≠ 0) :
+    η = ε := by
+  rcases h_nondeg with ⟨α, f, hf⟩
+  exact P.spin_statistics_of_any_wightman_ne_zero hε ⟨2, by omega, α, f, hf⟩
+
+theorem schwinger_twoPoint_diag_eq_zero_of_eta_ne_one
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (hpt : R.HasDiagInvolutivePT) (hη : η ≠ 1)
+    (c : ι) {y : Fin 2 → Fin 4 → ℝ} (hy : y ∈ orderedEuclidN 2) :
+    𝒮 2 (fun _ => c) y = 0 := by
+  rw [P.schwinger_eq 2 (fun _ => c) y hy]
+  have hz : wickEmbedN 2 y ∈ forward_tube_n 2 := wickEmbedN_mem_forward_tube_n 2 hy
+  have h1 := P.tube_neg_rev_two (fun _ => c) (wickEmbedN 2 y) hz
+  have h2 := tubePCT_two_diag_of_hasDiagInvolutivePT R hpt P.E P.tube_pct c (wickEmbedN 2 y) hz
+  have h : (1 - η) * P.E.H 2 (fun _ => c) (wickEmbedN 2 y) = 0 := by
+    linear_combination h1.symm.trans h2
+  exact (mul_eq_zero.mp h).resolve_left (sub_ne_zero.mpr hη.symm)
+
+theorem all_nPoint_eq_zero_of_diagonalStarStructure_of_eta_ne_one
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (hpt : R.HasDiagInvolutivePT) (hdiag : DiagonalStarStructure S) (hη : η ≠ 1) :
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      z ∈ forward_tube_n n → P.E.H n α z = 0) ∧
+    (∀ (n : ℕ), 1 ≤ n → ∀ (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ),
+      P.W n α f = 0) ∧
+    (OSVacuumNormalized 𝒮 → ∀ Φ : P.Hilbert, Φ = ⟪P.vacuum, Φ⟫_ℂ • P.vacuum) := by
+  have h2 : ∀ (β : Fin 2 → ι) (y : Fin 2 → Fin 4 → ℝ),
+      y ∈ orderedEuclidN 2 → 𝒮 2 β y = 0 :=
+    fun β _y hy => schwinger_eq_zero_of_diag_twoPoint_eq_zero P.osData
+      P.osAxioms.os1_translation hdiag
+      (fun c _z hz => P.schwinger_twoPoint_diag_eq_zero_of_eta_ne_one hpt hη c hz)
+      2 (by omega) β hy
+  refine ⟨fun n hn α x hx => P.schwinger_eq_zero_of_twoPoint_eq_zero h2 n hn α hx,
+    fun n hn α z hz => P.tube_eq_zero_of_twoPoint_eq_zero h2 n hn α z hz,
+    fun n hn α f => P.wightman_eq_zero_of_twoPoint_eq_zero h2 n hn α f,
+    fun hnorm Φ => eq_smul_osVacuum_of_twoPoint_eq_zero P.osData P.osAxioms.os1_translation
+      hnorm h2 Φ⟩
+
+theorem spin_statistics_of_diagonalStarStructure_any_wightman_ne_zero
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (hpt : R.HasDiagInvolutivePT) (hdiag : DiagonalStarStructure S)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = 1 := by
+  by_contra hη
+  rcases h_nondeg with ⟨n, hn, α, f, hf⟩
+  exact hf
+    ((P.all_nPoint_eq_zero_of_diagonalStarStructure_of_eta_ne_one hpt hdiag hη).2.2.1 n hn α f)
+
+end ForwardConeOSReconstructedWightman
+
+theorem scalar_forwardCone_os_spin_statistics_any_nPoint
+    {η : ℂ} {𝒮 : SchwingerFamily Unit}
+    (P : ForwardConeOSReconstructedWightman trivialRep trivialStarStructure η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Unit)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = 1 :=
+  P.spin_statistics_of_diagonalStarStructure_any_wightman_ne_zero
+    trivialRep_hasDiagInvolutivePT diagonalStarStructure_trivialStarStructure h_nondeg
+
+theorem vector_forwardCone_os_spin_statistics_any_nPoint
+    {η : ℂ} {𝒮 : SchwingerFamily (Fin 4)}
+    (P : ForwardConeOSReconstructedWightman stdRep stdStarStructure η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Fin 4)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = 1 :=
+  P.spin_statistics_of_any_wightman_ne_zero stdRep_spinParity h_nondeg
+
+theorem dirac_forwardCone_os_spin_statistics_any_nPoint
+    {η : ℂ} {𝒮 : SchwingerFamily (Fin 2 ⊕ Fin 2)}
+    (P : ForwardConeOSReconstructedWightman diracRep diracStarStructure η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → Fin 2 ⊕ Fin 2)
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = -1 :=
+  P.spin_statistics_of_any_wightman_ne_zero diracRep_spinParity h_nondeg
+
+theorem spinorTensorBispinor_forwardCone_os_spin_statistics_any_nPoint
+    (m₁ m₂ : ℕ) {η : ℂ}
+    {𝒮 : SchwingerFamily (((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+      ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))}
+    (P : ForwardConeOSReconstructedWightman
+      (directSumRep (spinorTensorRep m₁ m₂) (chiralSwapRep (spinorTensorRep m₁ m₂)))
+      (spinorTensorBispinorStarStructure m₁ m₂) η 𝒮)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n)
+      (α : Fin n → ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)) ⊕
+        ((Fin m₁ → Fin 2) × (Fin m₂ → Fin 2)))
+      (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ), P.W n α f ≠ 0) :
+    η = (-1 : ℂ) ^ (m₁ + m₂) :=
+  P.spin_statistics_of_any_wightman_ne_zero
+    (directSumRep_spinParity (spinorTensorRep_spinParity m₁ m₂)
+      (chiralSwapRep_spinParity (spinorTensorRep_spinParity m₁ m₂)))
+    h_nondeg
+
+theorem forwardCone_osterwalder_schrader_complete_master_theorem
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    (∀ a b : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (a + b) =
+        (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a).comp
+          (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation b)) ∧
+    (∀ a : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a P.vacuum = P.vacuum) ∧
+    TubeTranslationInvariant P.E ∧
+    ComplexCovariant R P.E ∧
+    WightmanPCT η R P.W ∧
+    (∀ P' : ForwardConeOSReconstructedWightman R S η 𝒮,
+      P'.W = P.W ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+        z ∈ forward_tube_n n → P'.E.H n α z = P.E.H n α z) :=
+  ⟨P.semigroup.spacetimeTranslate_add P.osAxioms.os1_translation,
+   P.semigroup.spacetimeTranslate_vacuum P.osAxioms.os1_translation,
+   P.tube_translationInvariant,
+   P.complexCovariant,
+   P.wightman_pct,
+   fun P' => ⟨P'.wightman_unique_unconditional P, P'.tube_H_unique P⟩⟩
+
+theorem norm_euclidSpectralTwoPoint_osConcatPoint_one_one
+    (E : ℝ) (x y : Fin 1 → Fin 4 → ℝ) :
+    ‖euclidSpectralTwoPoint E (osConcatPoint 1 1 x y)‖ =
+      Real.exp (-(x 0 0 + y 0 0) * E) := by
+  have h := norm_euclidSpectralTwoPoint_timeShift_right E 0 x y
+  have hy0 : (fun i : Fin 1 => y i + euclidTimeVec 0) = y := by
+    ext i μ
+    simp [euclidTimeVec_zero]
+  rw [hy0, add_zero] at h
+  exact h
+
+theorem norm_euclidSpectralTwoPoint_osConcatPoint_one_one_le_one
+    {E : ℝ} (hE : 0 ≤ E) {x y : Fin 1 → Fin 4 → ℝ}
+    (hx : x ∈ posOrderedEuclidN 1) (hy : y ∈ posOrderedEuclidN 1) :
+    ‖euclidSpectralTwoPoint E (osConcatPoint 1 1 x y)‖ ≤ 1 := by
+  rw [norm_euclidSpectralTwoPoint_osConcatPoint_one_one, Real.exp_le_one_iff]
+  have hx0 : 0 < x 0 0 := hx.1 0
+  have hy0 : 0 < y 0 0 := hy.1 0
+  nlinarith
+
+theorem norm_measureKallenLehmannEuclid_osConcatPoint_integrand_le
+    {A : Type*} {w E : A → ℝ} {a : A} (hw : 0 ≤ w a) (hE : 0 ≤ E a)
+    {x y : Fin 1 → Fin 4 → ℝ}
+    (hx : x ∈ posOrderedEuclidN 1) (hy : y ∈ posOrderedEuclidN 1) :
+    ‖(w a : ℂ) * euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 x y)‖ ≤ w a := by
+  rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg hw]
+  have h_le := norm_euclidSpectralTwoPoint_osConcatPoint_one_one_le_one hE hx hy
+  nlinarith
+
+theorem norm_measureKallenLehmannEuclid_osConcatPoint_le_integral
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) {w E : A → ℝ}
+    (hw_int : Integrable w μ)
+    (hw : ∀ a : A, 0 ≤ w a) (hE : ∀ a : A, 0 ≤ E a)
+    {x y : Fin 1 → Fin 4 → ℝ}
+    (hx : x ∈ posOrderedEuclidN 1) (hy : y ∈ posOrderedEuclidN 1) :
+    ‖measureKallenLehmannEuclid μ w E (osConcatPoint 1 1 x y)‖ ≤
+      ∫ a : A, w a ∂μ := by
+  by_cases h_int :
+      Integrable (fun a : A =>
+        (w a : ℂ) * euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 x y)) μ
+  · refine (norm_integral_le_integral_norm _).trans ?_
+    exact integral_mono h_int.norm hw_int (fun a =>
+      norm_measureKallenLehmannEuclid_osConcatPoint_integrand_le (hw a) (hE a) hx hy)
+  · unfold measureKallenLehmannEuclid
+    rw [integral_undef h_int, norm_zero]
+    exact integral_nonneg hw
+
+theorem continuous_euclidSpectralTwoPoint_param (x : Fin 2 → Fin 4 → ℝ) :
+    Continuous (fun E : ℝ => euclidSpectralTwoPoint E x) := by
+  have h_eq : (fun E : ℝ => euclidSpectralTwoPoint E x) =
+      fun E : ℝ => ((Real.exp (-(x 1 0 - x 0 0) * E) : ℝ) : ℂ) := by
+    ext E
+    exact euclidSpectralTwoPoint_eq_ofReal_exp E x
+  rw [h_eq]
+  fun_prop
+
+theorem integrable_measureKallenLehmannEuclid_osConcatPoint_of_integrable
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) {w E : A → ℝ}
+    (hw_int : Integrable w μ)
+    (hw : ∀ a : A, 0 ≤ w a) (hE : ∀ a : A, 0 ≤ E a)
+    (hE_meas : Measurable E)
+    {x y : Fin 1 → Fin 4 → ℝ}
+    (hx : x ∈ posOrderedEuclidN 1) (hy : y ∈ posOrderedEuclidN 1) :
+    Integrable (fun a : A =>
+      (w a : ℂ) * euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 x y)) μ := by
+  have h_w_meas : AEStronglyMeasurable (fun a : A => (w a : ℂ)) μ :=
+    Complex.continuous_ofReal.comp_aestronglyMeasurable hw_int.aestronglyMeasurable
+  have h_exp_meas :
+      AEStronglyMeasurable (fun a : A =>
+        euclidSpectralTwoPoint (E a) (osConcatPoint 1 1 x y)) μ :=
+    ((continuous_euclidSpectralTwoPoint_param (osConcatPoint 1 1 x y)).measurable.comp
+      hE_meas).aestronglyMeasurable
+  refine hw_int.mono' (h_w_meas.mul h_exp_meas)
+    (Filter.Eventually.of_forall (fun a =>
+      norm_measureKallenLehmannEuclid_osConcatPoint_integrand_le (hw a) (hE a) hx hy))
+
+theorem measureKallenLehmannEuclid_sesquilinear_eq_integral_of_integrable
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) {w E : A → ℝ}
+    (hw_int : Integrable w μ)
+    (hw : ∀ a : A, 0 ≤ w a) (hE : ∀ a : A, 0 ≤ E a)
+    (hE_meas : Measurable E)
+    (m : ℕ) (c : Fin m → ℂ) (x : Fin m → posOrderedEuclidN 1) :
+    (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k *
+        measureKallenLehmannEuclid μ w E
+          (osConcatPoint 1 1 (x j).val (x k).val)) =
+      ∫ a : A, (w a : ℂ) *
+        (‖∑ k : Fin m, c k * laplaceExp (E a) ((x k).val 0 0 : ℂ)‖ ^ 2 : ℂ) ∂μ :=
+  measureKallenLehmannEuclid_sesquilinear_eq_integral μ w E m c (fun k => (x k).val)
+    (fun j k => integrable_measureKallenLehmannEuclid_osConcatPoint_of_integrable
+      μ hw_int hw hE hE_meas (x j).property (x k).property)
+
+theorem measureKallenLehmannEuclid_reflectionPositive_of_integrable
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) {w E : A → ℝ}
+    (hw_int : Integrable w μ)
+    (hw : ∀ a : A, 0 ≤ w a) (hE : ∀ a : A, 0 ≤ E a)
+    (hE_meas : Measurable E)
+    (m : ℕ) (c : Fin m → ℂ) (x : Fin m → posOrderedEuclidN 1) :
+    0 ≤ RCLike.re (∑ j : Fin m, ∑ k : Fin m,
+      star (c j) * c k *
+        measureKallenLehmannEuclid μ w E
+          (osConcatPoint 1 1 (x j).val (x k).val)) :=
+  measureKallenLehmannEuclid_reflectionPositive μ hw E m c (fun k => (x k).val)
+    (fun j k => integrable_measureKallenLehmannEuclid_osConcatPoint_of_integrable
+      μ hw_int hw hE hE_meas (x j).property (x k).property)
+
+omit [Fintype ι] [DecidableEq ι] in
+noncomputable def minkowskiFourierSchwartzCLM (n : ℕ) :
+    SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ]
+      SchwartzMap (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ :=
+  (SchwartzMap.fourierTransformCLM ℂ).comp
+    ((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (piSpaceEquiv n).symm).comp
+      (SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (minkowskiFlipEquiv n)))
+
+omit [Fintype ι] [DecidableEq ι] in
+noncomputable def posScaledMomentumCLMN (n : ℕ) :
+    (Fin n → Fin 4 → ℝ) →L[ℝ] (Fin n → Fin 4 → ℝ) :=
+  (2 * Real.pi)⁻¹ • ContinuousLinearMap.id ℝ (Fin n → Fin 4 → ℝ)
+
+omit [Fintype ι] [DecidableEq ι] in
+noncomputable def momentumToEuclidCLMN (n : ℕ) :
+    (Fin n → Fin 4 → ℝ) →L[ℝ] EuclideanSpace ℝ (Fin n × Fin 4) :=
+  (piSpaceEquiv n).toContinuousLinearMap.comp (posScaledMomentumCLMN n)
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+lemma momentumToEuclidCLMN_apply (n : ℕ) (p : Fin n → Fin 4 → ℝ) :
+    momentumToEuclidCLMN n p = piSpaceEquiv n (posScaledMomentumN n p) := rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem minkowskiFourier_eq_minkowskiFourierSchwartzCLM (n : ℕ)
+    (g : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) (p : Fin n → Fin 4 → ℝ) :
+    minkowskiFourier g p = (minkowskiFourierSchwartzCLM n g) (momentumToEuclidCLMN n p) := by
+  have h_meas := measurePreserving_minkowskiFlip_piSpace_n n
+  have h_emb := measurableEmbedding_minkowskiFlip_piSpace_n n
+  have h_fourier_coe :
+      ((minkowskiFourierSchwartzCLM n g) : EuclideanSpace ℝ (Fin n × Fin 4) → ℂ) =
+      𝓕 (((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (piSpaceEquiv n).symm)
+        ((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (minkowskiFlipEquiv n)) g)) :
+          EuclideanSpace ℝ (Fin n × Fin 4) → ℂ) :=
+    SchwartzMap.fourier_coe _
+  have h_rhs : (minkowskiFourierSchwartzCLM n g) (momentumToEuclidCLMN n p) =
+      𝓕 (((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (piSpaceEquiv n).symm)
+        ((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (minkowskiFlipEquiv n)) g)) :
+          EuclideanSpace ℝ (Fin n × Fin 4) → ℂ) (momentumToEuclidCLMN n p) := by
+    rw [← h_fourier_coe]
+  rw [h_rhs, Real.fourier_eq]
+  dsimp [minkowskiFourier]
+  have h_comp := (MeasurePreserving.integral_comp h_meas h_emb
+    (fun u : EuclideanSpace ℝ (Fin n × Fin 4) =>
+      ((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (piSpaceEquiv n).symm)
+        ((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (minkowskiFlipEquiv n)) g)) u *
+        Real.fourierChar (- inner ℝ u (piSpaceEquiv n (posScaledMomentumN n p))))).symm
+  have h_integrand : (fun x : Fin n → Fin 4 → ℝ =>
+      g x * Complex.exp (-(Complex.I * ((∑ k : Fin n, minkowskiInner (p k) (x k) : ℝ) : ℂ)))) =
+      (fun x =>
+        ((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (piSpaceEquiv n).symm)
+          ((SchwartzMap.compCLMOfContinuousLinearEquiv ℂ (minkowskiFlipEquiv n)) g))
+            (piSpaceEquiv n (minkowskiFlipFun n x)) *
+          Real.fourierChar (- inner ℝ (piSpaceEquiv n (minkowskiFlipFun n x))
+            (piSpaceEquiv n (posScaledMomentumN n p)))) := by
+    ext x
+    congr 1
+    · dsimp [SchwartzMap.compCLMOfContinuousLinearEquiv]
+      have h1 : (piSpaceEquiv n).symm (piSpaceEquiv n (minkowskiFlipFun n x)) =
+          minkowskiFlipFun n x := (piSpaceEquiv n).symm_apply_apply _
+      rw [h1]
+      have h2 : (minkowskiFlipEquiv n) (minkowskiFlipFun n x) = x :=
+        minkowskiFlipFun_involutive n x
+      rw [h2]
+    · have h_phase := fourier_phase_eq_n n p x
+      simp only [Real.fourierChar_apply]
+      have h_eq : -(Complex.I * ((∑ k, minkowskiInner (p k) (x k) : ℝ) : ℂ)) =
+          (((-2 * Real.pi * inner ℝ (piSpaceEquiv n (minkowskiFlipFun n x))
+            (piSpaceEquiv n (posScaledMomentumN n p)) : ℝ) : ℂ) * Complex.I) := by
+        rw [h_phase]
+        push_cast
+        ring
+      rw [h_eq]
+      congr 1
+      push_cast
+      ring
+  rw [h_integrand, ← h_comp]
+  dsimp [momentumToEuclidCLMN, posScaledMomentumCLMN, SchwartzMap.compCLMOfContinuousLinearEquiv]
+  congr 1
+  ext v
+  rw [mul_comm]
+  rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+noncomputable def minkowskiFourierEvalTD (n : ℕ) (p : Fin n → Fin 4 → ℝ) :
+    TemperedDistribution (Fin n → Fin 4 → ℝ) ℂ :=
+  PointwiseConvergenceCLM.precomp ℂ (minkowskiFourierSchwartzCLM n)
+    (TemperedDistribution.delta (momentumToEuclidCLMN n p))
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+theorem minkowskiFourierEvalTD_apply (n : ℕ) (p : Fin n → Fin 4 → ℝ)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    minkowskiFourierEvalTD n p f = minkowskiFourier f p :=
+  (minkowskiFourier_eq_minkowskiFourierSchwartzCLM n f p).symm
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_kernel_analyticOnNhd (n : ℕ) (p : Fin n → Fin 4 → ℝ)
+    (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ (fun z : Fin n → Fin 4 → ℂ => vladimirov_kernel n z p) s :=
+  fun z _ => vladimirov_kernel_analyticAt n p z
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_kernel_analyticOn (n : ℕ) (p : Fin n → Fin 4 → ℝ)
+    (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (fun z : Fin n → Fin 4 → ℂ => vladimirov_kernel n z p) s :=
+  (vladimirov_kernel_analyticOnNhd n p s).analyticOn
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_kernel_add_const_of_sum_eq_zero (n : ℕ)
+    {p : Fin n → Fin 4 → ℝ} (hp : ∑ i : Fin n, p i = 0)
+    (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ) :
+    vladimirov_kernel n (fun i => z i + a) p = vladimirov_kernel n z p := by
+  dsimp [vladimirov_kernel]
+  have h_add : (∑ k : Fin n, minkowskiInnerC (fun μ => (p k μ : ℂ)) (z k + a)) =
+      (∑ k : Fin n, minkowskiInnerC (fun μ => (p k μ : ℂ)) (z k)) +
+      (∑ k : Fin n, minkowskiInnerC (fun μ => (p k μ : ℂ)) a) := by
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl (fun k _ => ?_)
+    dsimp [minkowskiInnerC]
+    ring
+  have h_zero : (∑ k : Fin n, minkowskiInnerC (fun μ => (p k μ : ℂ)) a) = 0 := by
+    have h0 := congr_fun hp 0
+    have h1 := congr_fun hp 1
+    have h2 := congr_fun hp 2
+    have h3 := congr_fun hp 3
+    simp only [Finset.sum_apply, Pi.zero_apply] at h0 h1 h2 h3
+    have h0c : (∑ k : Fin n, (p k 0 : ℂ)) = 0 := by exact_mod_cast h0
+    have h1c : (∑ k : Fin n, (p k 1 : ℂ)) = 0 := by exact_mod_cast h1
+    have h2c : (∑ k : Fin n, (p k 2 : ℂ)) = 0 := by exact_mod_cast h2
+    have h3c : (∑ k : Fin n, (p k 3 : ℂ)) = 0 := by exact_mod_cast h3
+    have h_expand : (∑ k : Fin n, minkowskiInnerC (fun μ => (p k μ : ℂ)) a) =
+        (∑ k : Fin n, (p k 0 : ℂ)) * a 0 - (∑ k : Fin n, (p k 1 : ℂ)) * a 1 -
+        (∑ k : Fin n, (p k 2 : ℂ)) * a 2 - (∑ k : Fin n, (p k 3 : ℂ)) * a 3 := by
+      simp only [minkowskiInnerC, Finset.sum_sub_distrib, ← Finset.sum_mul]
+    rw [h_expand, h0c, h1c, h2c, h3c]
+    ring
+  rw [h_add, h_zero, add_zero]
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_kernel_add_const_of_forwardConeSpectralRegion (n : ℕ)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ) :
+    vladimirov_kernel n (fun i => z i + a) p = vladimirov_kernel n z p :=
+  vladimirov_kernel_add_const_of_sum_eq_zero n hp.1 z a
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem integral_vladimirov_kernel_line_mul_f (n : ℕ)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) (p : Fin n → Fin 4 → ℝ)
+    (v : Fin 4 → ℝ) (t : ℝ) :
+    (∫ x : Fin n → Fin 4 → ℝ,
+      vladimirov_kernel n (tubeBoundaryLine n x v t) p * f x) =
+      Complex.exp (t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (p k) v : ℂ) *
+        minkowskiFourier f p := by
+  have h_comm :
+      (fun x : Fin n → Fin 4 → ℝ =>
+        vladimirov_kernel n (tubeBoundaryLine n x v t) p * f x) =
+      (fun x : Fin n → Fin 4 → ℝ =>
+        f x * vladimirov_kernel n (tubeBoundaryLine n x v t) p) := by
+    ext x
+    exact mul_comm _ _
+  rw [h_comm]
+  exact integral_f_mul_vladimirov_kernel_line n f p v t
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem integrable_vladimirov_kernel_line_mul_f (n : ℕ)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) (p : Fin n → Fin 4 → ℝ)
+    (v : Fin 4 → ℝ) (t : ℝ) :
+    Integrable (fun x : Fin n → Fin 4 → ℝ =>
+      vladimirov_kernel n (tubeBoundaryLine n x v t) p * f x) volume := by
+  have h_eq : (fun x : Fin n → Fin 4 → ℝ =>
+      vladimirov_kernel n (tubeBoundaryLine n x v t) p * f x) =
+      (fun x : Fin n → Fin 4 → ℝ =>
+        Complex.exp (t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (p k) v : ℂ) *
+          (f x * Complex.exp
+            (-(Complex.I * ((∑ k : Fin n, minkowskiInner (p k) (x k) : ℝ) : ℂ))))) := by
+    ext x
+    have h_sum_cast : (∑ k : Fin n, (minkowskiInner (p k) (x k) : ℂ)) =
+        ((∑ k : Fin n, minkowskiInner (p k) (x k) : ℝ) : ℂ) := by
+      push_cast
+      rfl
+    change vladimirov_kernel n
+        (fun i k => (x i k : ℂ) + Complex.I * ((t * ((i : ℕ) : ℝ) * v k : ℝ) : ℂ)) p * f x = _
+    rw [vladimirov_kernel_line_factor, h_sum_cast]
+    ring
+  rw [h_eq]
+  refine (integrable_f_mul_exp_phase n f p).const_mul _
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tendsto_integral_vladimirov_kernel_line_mul_f (n : ℕ)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) (p : Fin n → Fin 4 → ℝ)
+    (v : Fin 4 → ℝ) :
+    Tendsto (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        vladimirov_kernel n (tubeBoundaryLine n x v t) p * f x)
+      (𝓝[>] 0)
+      (𝓝 (minkowskiFourier f p)) := by
+  have h_comm : (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        vladimirov_kernel n (tubeBoundaryLine n x v t) p * f x) =
+      (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        f x * vladimirov_kernel n (tubeBoundaryLine n x v t) p) := by
+    ext t
+    refine integral_congr_ae (Filter.Eventually.of_forall (fun x => mul_comm _ _))
+  rw [h_comm]
+  exact tendsto_integral_f_mul_vladimirov_kernel_line n f p v
+
+structure ForwardConeSpectralFamily (ι : Type*) where
+  m : ℕ → ℕ
+  c : ∀ n : ℕ, (Fin n → ι) → Fin (m n) → ℂ
+  p : ∀ n : ℕ, (Fin n → ι) → Fin (m n) → Fin n → Fin 4 → ℝ
+  mem_forwardCone : ∀ (n : ℕ) (α : Fin n → ι) (k : Fin (m n)),
+    p n α k ∈ forwardConeSpectralRegion n
+
+namespace ForwardConeSpectralFamily
+
+variable {ι : Type*}
+
+noncomputable def toWightmanFamily (F : ForwardConeSpectralFamily ι) :
+    WightmanFamily ι :=
+  fun n α => ∑ k : Fin (F.m n), F.c n α k • minkowskiFourierEvalTD n (F.p n α k)
+
+@[simp]
+theorem toWightmanFamily_apply (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    F.toWightmanFamily n α f =
+      ∑ k : Fin (F.m n), F.c n α k * minkowskiFourier f (F.p n α k) := by
+  dsimp [toWightmanFamily]
+  rw [_root_.sum_apply]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [_root_.smul_apply, minkowskiFourierEvalTD_apply, smul_eq_mul]
+
+noncomputable def H (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) : ℂ :=
+  ∑ k : Fin (F.m n), F.c n α k * vladimirov_kernel n z (F.p n α k)
+
+theorem analyticAt_H (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    AnalyticAt ℂ (F.H n α) z := by
+  unfold H
+  refine analyticAt_finset_sum_normed Finset.univ (fun k _ => ?_)
+  exact analyticAt_const.mul (vladimirov_kernel_analyticAt n (F.p n α k) z)
+
+theorem analyticOnNhd_H (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ (F.H n α) s :=
+  fun z _ => F.analyticAt_H n α z
+
+theorem analyticOn_H (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (F.H n α) s :=
+  (F.analyticOnNhd_H n α s).analyticOn
+
+theorem integral_H_line_mul_f (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (v : Fin 4 → ℝ) (t : ℝ) :
+    (∫ x : Fin n → Fin 4 → ℝ,
+      F.H n α (tubeBoundaryLine n x v t) * f x) =
+      ∑ k : Fin (F.m n), F.c n α k *
+        (∫ x : Fin n → Fin 4 → ℝ,
+          vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α k) * f x) := by
+  have h_expand : (fun x : Fin n → Fin 4 → ℝ => F.H n α (tubeBoundaryLine n x v t) * f x) =
+      (fun x : Fin n → Fin 4 → ℝ =>
+        ∑ k : Fin (F.m n), F.c n α k *
+          (vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α k) * f x)) := by
+    ext x
+    dsimp [H]
+    rw [Finset.sum_mul]
+    refine Finset.sum_congr rfl (fun k _ => mul_assoc _ _ _)
+  rw [h_expand, integral_finsetSum]
+  · refine Finset.sum_congr rfl (fun k _ => integral_const_mul (F.c n α k) _)
+  · intro k _
+    exact (integrable_vladimirov_kernel_line_mul_f n f (F.p n α k) v t).const_mul (F.c n α k)
+
+theorem tendsto_integral_H_line_mul_f (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (v : Fin 4 → ℝ) :
+    Tendsto (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        F.H n α (tubeBoundaryLine n x v t) * f x)
+      (𝓝[>] 0)
+      (𝓝 (F.toWightmanFamily n α f)) := by
+  have h_eq : (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        F.H n α (tubeBoundaryLine n x v t) * f x) =
+      (fun t : ℝ => ∑ k : Fin (F.m n), F.c n α k *
+        (∫ x : Fin n → Fin 4 → ℝ,
+          vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α k) * f x)) := by
+    ext t
+    exact F.integral_H_line_mul_f n α f v t
+  rw [h_eq, F.toWightmanFamily_apply n α f]
+  refine tendsto_finsetSum Finset.univ (fun k _ => ?_)
+  exact (tendsto_integral_vladimirov_kernel_line_mul_f n f (F.p n α k) v).const_mul (F.c n α k)
+
+noncomputable def toTubeExtension (F : ForwardConeSpectralFamily ι) :
+    TubeExtension F.toWightmanFamily where
+  H := F.H
+  analytic n α := F.analyticOn_H n α (forward_tube_n n)
+  boundary n α f v _hv := F.tendsto_integral_H_line_mul_f n α f v
+
+@[simp]
+theorem toTubeExtension_H (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    F.toTubeExtension.H n α z = F.H n α z := rfl
+
+theorem forwardConeSpectrumCondition (F : ForwardConeSpectralFamily ι) :
+    ForwardConeSpectrumCondition F.toWightmanFamily := by
+  intro n α f ⟨U, _hU_open, hU_sub, hU_zero⟩
+  rw [F.toWightmanFamily_apply]
+  refine Finset.sum_eq_zero (fun k _ => ?_)
+  rw [hU_zero (F.p n α k) (hU_sub (F.mem_forwardCone n α k)), mul_zero]
+
+theorem H_add_const (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ) :
+    F.H n α (fun i => z i + a) = F.H n α z := by
+  unfold H
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [vladimirov_kernel_add_const_of_forwardConeSpectralRegion n (F.mem_forwardCone n α k) z a]
+
+theorem tubeTranslationInvariant (F : ForwardConeSpectralFamily ι) :
+    TubeTranslationInvariant F.toTubeExtension := by
+  intro n α z a _hz
+  exact F.H_add_const n α z a
+
+theorem wightman_translationInvariant (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (a : Fin 4 → ℝ)
+    (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => x i + a) = f x) :
+    F.toWightmanFamily n α f' = F.toWightmanFamily n α f :=
+  wightman_translationInvariant_of_tubeTranslationInvariant F.toTubeExtension
+    F.tubeTranslationInvariant n α a f f' hf'
+
+theorem norm_H_le (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) {z : Fin n → Fin 4 → ℂ} (hz : z ∈ forward_tube_n n) :
+    ‖F.H n α z‖ ≤ ∑ k : Fin (F.m n), ‖F.c n α k‖ := by
+  unfold H
+  refine (norm_sum_le Finset.univ _).trans ?_
+  refine Finset.sum_le_sum (fun k _ => ?_)
+  rw [norm_mul]
+  have h_ker := vladimirov_kernel_norm_le_one_of_forwardConeSpectralRegion n
+    (F.p n α k) (F.mem_forwardCone n α k) z hz
+  exact mul_le_of_le_one_right (norm_nonneg (F.c n α k)) h_ker
+
+end ForwardConeSpectralFamily
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_slice_differentiable_all (n : ℕ) (R : ℝ) (hR : 0 < R)
+    (z y : Fin n → Fin 4 → ℂ) (T : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ] ℂ) :
+    Differentiable ℂ (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y))) := by
+  intro t
+  have h_eq : (fun s : ℂ => T (vladimirov_psi_schwartz n R hR (z + s • y))) =
+      fun s : ℂ => T (vladimirov_iter_psi_schwartz n R hR (z + s • y) y 0) := by
+    ext s
+    rw [vladimirov_iter_psi_schwartz_zero]
+  rw [h_eq]
+  exact (vladimirov_iter_psi_slice_hasDerivAt n R hR z y T 0 t).differentiableAt
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_slice_hasFPowerSeriesOnBall_all (n : ℕ) (R : ℝ) (hR : 0 < R)
+    (z y : Fin n → Fin 4 → ℂ) (T : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ] ℂ) :
+    HasFPowerSeriesOnBall (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y)))
+      (cauchyPowerSeries (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y)))
+        (0 : ℂ) (1 : ℝ))
+      0 ⊤ :=
+  (vladimirov_slice_differentiable_all n R hR z y T).hasFPowerSeriesOnBall
+    (0 : ℂ) (R := (1 : NNReal)) zero_lt_one
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_slice_eval_eq_sum_all (n : ℕ) (R : ℝ) (hR : 0 < R)
+    (z y : Fin n → Fin 4 → ℂ) (T : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ] ℂ) :
+    T (vladimirov_psi_schwartz n R hR (z + y)) =
+      (cauchyPowerSeries (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y)))
+        (0 : ℂ) (1 : ℝ)).sum 1 := by
+  have hP := vladimirov_slice_hasFPowerSeriesOnBall_all n R hR z y T
+  have h1 : (1 : ℂ) ∈ Metric.eball (0 : ℂ) ⊤ := by
+    rw [Metric.eball_top]
+    trivial
+  have h_sum := hP.sum h1
+  change (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y))) (0 + 1) = _ at h_sum
+  rw [zero_add] at h_sum
+  dsimp only at h_sum
+  rw [one_smul] at h_sum
+  exact h_sum
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_slice_iteratedDeriv_zero_all (n : ℕ) (R : ℝ) (hR : 0 < R)
+    (z y : Fin n → Fin 4 → ℂ) (T : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ] ℂ) (k : ℕ) :
+    iteratedDeriv k (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y))) 0 =
+      T (vladimirov_iter_psi_schwartz n R hR z y k) := by
+  have h_zero : (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y))) =
+      fun t : ℂ => T (vladimirov_iter_psi_schwartz n R hR (z + t • y) y 0) := by
+    ext t
+    rw [vladimirov_iter_psi_schwartz_zero]
+  rw [h_zero]
+  have h_iter := vladimirov_iter_psi_slice_iteratedDeriv n R hR z y T k 0
+  rw [zero_add] at h_iter
+  exact h_iter
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_cauchy_coeff_eq_taylor_coeff_all (n : ℕ) (R : ℝ) (hR : 0 < R)
+    (z y : Fin n → Fin 4 → ℂ) (T : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ] ℂ) (k : ℕ) :
+    (cauchyPowerSeries (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y))) 0 1)
+        k (fun _ => 1) =
+      (vladimirov_formal_series n R hR z T) k (fun _ => y) := by
+  let g := fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y))
+  have hg : Differentiable ℂ g := vladimirov_slice_differentiable_all n R hR z y T
+  rw [cauchyPowerSeries_one_eq_iteratedDeriv g hg k, vladimirov_formal_series_apply]
+  dsimp [vladimirov_taylor_coeff]
+  congr 1
+  exact vladimirov_slice_iteratedDeriv_zero_all n R hR z y T k
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_formal_series_hasSum_all (n : ℕ) (R : ℝ) (hR : 0 < R)
+    (z : Fin n → Fin 4 → ℂ) (T : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ] ℂ)
+    (r : ENNReal) (hr_le : r ≤ (vladimirov_formal_series n R hR z T).radius)
+    {y : Fin n → Fin 4 → ℂ} (hy : y ∈ Metric.eball (0 : Fin n → Fin 4 → ℂ) r) :
+    HasSum (fun k => (vladimirov_formal_series n R hR z T) k (fun _ => y))
+      (T (vladimirov_psi_schwartz n R hR (z + y))) := by
+  let p := vladimirov_formal_series n R hR z T
+  have hy_p : y ∈ Metric.eball (0 : Fin n → Fin 4 → ℂ) p.radius :=
+    Metric.eball_subset_eball hr_le hy
+  have h_sum := p.hasSum hy_p
+  have h_eq : p.sum y = T (vladimirov_psi_schwartz n R hR (z + y)) := by
+    rw [vladimirov_slice_eval_eq_sum_all n R hR z y T]
+    have h_coeff : ∀ k,
+        (cauchyPowerSeries (fun t : ℂ => T (vladimirov_psi_schwartz n R hR (z + t • y))) 0 1)
+          k (fun _ => 1) = p k (fun _ => y) :=
+      fun k => vladimirov_cauchy_coeff_eq_taylor_coeff_all n R hR z y T k
+    dsimp [FormalMultilinearSeries.sum]
+    refine tsum_congr (fun k => (h_coeff k).symm)
+  rw [← h_eq]
+  exact h_sum
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_psi_schwartz_analyticAt_all (n : ℕ) (R : ℝ) (hR : 0 < R)
+    (z : Fin n → Fin 4 → ℂ) (T : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ] ℂ) :
+    AnalyticAt ℂ (fun w => T (vladimirov_psi_schwartz n R hR w)) z := by
+  let p := vladimirov_formal_series n R hR z T
+  have h_pos := vladimirov_formal_series_radius_pos n R hR z T
+  use p
+  use p.radius
+  refine ⟨le_rfl, h_pos, ?_⟩
+  intro y hy
+  exact vladimirov_formal_series_hasSum_all n R hR z T p.radius le_rfl hy
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_psi_schwartz_family_analyticAt_all (n : ℕ) (R : ℝ) (hR : 0 < R)
+    (z : Fin n → Fin 4 → ℂ) :
+    SchwartzFamilyAnalyticAt n R hR z :=
+  fun T => vladimirov_psi_schwartz_analyticAt_all n R hR z T
+
+omit [Fintype ι] [DecidableEq ι] in
+@[simp]
+theorem vladimirov_H_cutoff_one_eq_vladimirov_H (W : WightmanFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    vladimirov_H_cutoff W n 1 Real.zero_lt_one α z = vladimirov_H W n α z := rfl
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_H_cutoff_analyticAt_all (W : WightmanFamily ι)
+    (n : ℕ) (R : ℝ) (hR : 0 < R) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    AnalyticAt ℂ (vladimirov_H_cutoff W n R hR α) z := by
+  let T : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ →L[ℂ] ℂ :=
+    (W n α).comp (invMinkowskiFourierCLM n)
+  exact vladimirov_psi_schwartz_analyticAt_all n R hR z T
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_H_cutoff_analyticOnNhd_all (W : WightmanFamily ι)
+    (n : ℕ) (R : ℝ) (hR : 0 < R) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ (vladimirov_H_cutoff W n R hR α) s :=
+  fun z _ => vladimirov_H_cutoff_analyticAt_all W n R hR α z
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_H_cutoff_analyticOn_all (W : WightmanFamily ι)
+    (n : ℕ) (R : ℝ) (hR : 0 < R) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (vladimirov_H_cutoff W n R hR α) s :=
+  (vladimirov_H_cutoff_analyticOnNhd_all W n R hR α s).analyticOn
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_H_analyticAt_all_unconditional (W : WightmanFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    AnalyticAt ℂ (vladimirov_H W n α) z :=
+  vladimirov_H_cutoff_analyticAt_all W n 1 Real.zero_lt_one α z
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem vladimirov_H_analyticOn_all_unconditional (W : WightmanFamily ι)
+    (n : ℕ) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (vladimirov_H W n α) s :=
+  vladimirov_H_cutoff_analyticOn_all W n 1 Real.zero_lt_one α s
+
+namespace ForwardConeSpectralFamily
+
+variable {ι : Type*}
+
+noncomputable def toSchwingerFamily (F : ForwardConeSpectralFamily ι) :
+    SchwingerFamily ι :=
+  schwingerFromTube F.toTubeExtension
+
+@[simp]
+theorem toSchwingerFamily_apply (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) :
+    F.toSchwingerFamily n α x = F.H n α (wickEmbedN n x) := rfl
+
+theorem H_eq_of_schwinger_eq (F₁ F₂ : ForwardConeSpectralFamily ι)
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → F₁.toSchwingerFamily n α x = F₂.toSchwingerFamily n α x)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    F₁.H n α z = F₂.H n α z :=
+  tubeExtension_eq_of_posOrdered_schwingerFromTube_eq F₁.toTubeExtension F₂.toTubeExtension
+    h_eq n α z hz
+
+theorem wightman_eq_of_schwinger_eq (F₁ F₂ : ForwardConeSpectralFamily ι)
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → F₁.toSchwingerFamily n α x = F₂.toSchwingerFamily n α x) :
+    F₁.toWightmanFamily = F₂.toWightmanFamily :=
+  wightman_eq_of_posOrdered_schwingerFromTube_eq F₁.toTubeExtension F₂.toTubeExtension h_eq
+
+def toForwardConeOSEuclideanTubeBridge [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_tpct : TubePCT η R F.toTubeExtension)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 where
+  W := F.toWightmanFamily
+  E := F.toTubeExtension
+  schwinger_eq := h_schw
+  tube_covariant := h_tcov
+  tube_pct := h_tpct
+  spectrum := F.forwardConeSpectrumCondition
+  poincare := h_poinc
+  weakLocality := h_loc
+  positivity := h_pos
+
+def toForwardConeOSReconstructedWightmanOfTimeCluster [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_tpct : TubePCT η R F.toTubeExtension)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 :=
+  forwardConeOSReconstructedWightmanOfTimeCluster R S η 𝒮 hOS hcluster ℰ
+    (F.toForwardConeOSEuclideanTubeBridge R S η 𝒮 h_schw h_tcov h_tpct h_poinc h_loc h_pos)
+
+theorem toSchwingerFamily_contDiffOn (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) :
+    ContDiffOn ℝ (⊤ : ℕ∞) (F.toSchwingerFamily n α) (orderedEuclidN n) :=
+  schwingerFromTube_contDiffOn F.toTubeExtension n α
+
+theorem toSchwingerFamily_translation_invariant (F : ForwardConeSpectralFamily ι) :
+    OSTranslationInvariant F.toSchwingerFamily :=
+  schwingerFromTube_translation_invariant F.toTubeExtension F.tubeTranslationInvariant
+
+theorem wightman_pct_scalar_of_tubeWeakLocality_self (F : ForwardConeSpectralFamily ι) {η : ℂ}
+    (hloc : TubeWeakLocality η F.toTubeExtension)
+    (n : ℕ) (α : Fin n → ι) (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => -x (Fin.rev i)) = f x) :
+    F.toWightmanFamily n α f =
+      η ^ (n * (n - 1) / 2) * F.toWightmanFamily n (α ∘ Fin.rev) f' :=
+  wightman_pct_scalar_of_tubeWeakLocality F.toTubeExtension
+    F.tubeTranslationInvariant hloc n α f f' hf'
+
+theorem toSchwingerFamily_osAxioms [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ)
+    (hcov : TubeCovariant R F.toTubeExtension)
+    (hherm : TubeWickHermiticity S F.toTubeExtension)
+    (hpct : TubePCT η R F.toTubeExtension)
+    (hpos : OSReflectionPositive S F.toSchwingerFamily) :
+    OSAxioms R S η F.toSchwingerFamily :=
+  schwingerFromTube_osAxioms R S F.toWightmanFamily F.toTubeExtension
+    F.tubeTranslationInvariant hcov hherm hpct hpos
+
+noncomputable def toForwardConeOSEuclideanTubeBridgeSelf [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_tpct : TubePCT η R F.toTubeExtension)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    ForwardConeOSEuclideanTubeBridge R S η F.toSchwingerFamily :=
+  F.toForwardConeOSEuclideanTubeBridge R S η F.toSchwingerFamily
+    (fun _ _ _ _ => rfl) h_tcov h_tpct h_poinc h_loc h_pos
+
+noncomputable def toForwardConeOSReconstructedWightmanSelfOfTimeCluster
+    [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_herm : TubeWickHermiticity S F.toTubeExtension)
+    (h_tpct : TubePCT η R F.toTubeExtension)
+    (h_os_pos : OSReflectionPositive S F.toSchwingerFamily)
+    (hcluster : OSTimeClusterDecomposition
+      (F.toSchwingerFamily_osAxioms R S η h_tcov h_herm h_tpct h_os_pos).toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup
+      (F.toSchwingerFamily_osAxioms R S η h_tcov h_herm h_tpct h_os_pos).toReflectionPositiveData
+      (osContractionCondition_of_timeCluster
+        (F.toSchwingerFamily_osAxioms R S η h_tcov h_herm h_tpct h_os_pos).toReflectionPositiveData
+        F.toSchwingerFamily_translation_invariant hcluster))
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    ForwardConeOSReconstructedWightman R S η F.toSchwingerFamily :=
+  F.toForwardConeOSReconstructedWightmanOfTimeCluster R S η F.toSchwingerFamily
+    (F.toSchwingerFamily_osAxioms R S η h_tcov h_herm h_tpct h_os_pos)
+    hcluster ℰ (fun _ _ _ _ => rfl) h_tcov h_tpct h_poinc h_loc h_pos
+
+end ForwardConeSpectralFamily
+
+def twoPointMomentum (q : Fin 4 → ℝ) : Fin 2 → Fin 4 → ℝ :=
+  fun i => if i = 0 then q else -q
+
+@[simp]
+lemma twoPointMomentum_zero (q : Fin 4 → ℝ) :
+    twoPointMomentum q 0 = q := rfl
+
+@[simp]
+lemma twoPointMomentum_one (q : Fin 4 → ℝ) :
+    twoPointMomentum q 1 = -q := by
+  simp [twoPointMomentum]
+
+lemma sum_twoPointMomentum (q : Fin 4 → ℝ) :
+    ∑ i : Fin 2, twoPointMomentum q i = 0 := by
+  rw [Fin.sum_univ_two, twoPointMomentum_zero, twoPointMomentum_one, add_neg_cancel]
+
+lemma euclidTimeVec_eq_smul_one (E : ℝ) :
+    euclidTimeVec E = E • euclidTimeVec 1 := by
+  ext μ
+  dsimp [euclidTimeVec]
+  split_ifs <;> ring
+
+lemma euclidTimeVec_mem_forward_light_cone {E : ℝ} (hE : 0 < E) :
+    euclidTimeVec E ∈ forward_light_cone := by
+  rw [euclidTimeVec_eq_smul_one]
+  exact forward_light_cone_smul E hE (euclidTimeVec 1) timeUnitVec_mem_forward_light_cone
+
+lemma euclidTimeVec_mem_closure_forward_light_cone {E : ℝ} (hE : 0 ≤ E) :
+    euclidTimeVec E ∈ closure forward_light_cone := by
+  rcases lt_or_eq_of_le hE with hlt | rfl
+  · exact subset_closure (euclidTimeVec_mem_forward_light_cone hlt)
+  · rw [euclidTimeVec_zero]
+    exact zero_mem_closure_forward_light_cone
+
+lemma partial_sum_twoPointMomentum (q : Fin 4 → ℝ) (k : Fin 2) :
+    (∑ i ∈ Finset.univ.filter (· ≤ k), twoPointMomentum q i) =
+      if k = 0 then q else 0 := by
+  have h_eq := partial_sum_p_eq 2 (twoPointMomentum q) k
+    (fun j => if j = 0 then q else -q)
+    (fun j => by fin_cases j <;> rfl)
+  dsimp [partial_sum_p] at h_eq
+  rw [h_eq]
+  fin_cases k
+  · simp
+  · rw [Finset.sum_range_succ, Finset.sum_range_one]
+    simp
+
+lemma twoPointMomentum_mem_forwardConeSpectralRegion
+    {q : Fin 4 → ℝ} (hq : q ∈ closure forward_light_cone) :
+    twoPointMomentum q ∈ forwardConeSpectralRegion 2 := by
+  refine ⟨sum_twoPointMomentum q, fun k => ?_⟩
+  rw [partial_sum_twoPointMomentum]
+  split_ifs
+  · exact hq
+  · exact zero_mem_closure_forward_light_cone
+
+lemma twoPointTimeMomentum_mem_forwardConeSpectralRegion {E : ℝ} (hE : 0 ≤ E) :
+    twoPointMomentum (euclidTimeVec E) ∈ forwardConeSpectralRegion 2 :=
+  twoPointMomentum_mem_forwardConeSpectralRegion (euclidTimeVec_mem_closure_forward_light_cone hE)
+
+lemma minkowskiInnerC_euclidTimeVec_left (E : ℝ) (w : Fin 4 → ℂ) :
+    minkowskiInnerC (fun μ => (euclidTimeVec E μ : ℂ)) w = (E : ℂ) * w 0 := by
+  dsimp [minkowskiInnerC, euclidTimeVec]
+  simp only [Fin.isValue, zero_mul, sub_zero]
+
+lemma minkowskiInnerC_neg_euclidTimeVec_left (E : ℝ) (w : Fin 4 → ℂ) :
+    minkowskiInnerC (fun μ => ((-euclidTimeVec E) μ : ℂ)) w = -(E : ℂ) * w 0 := by
+  dsimp [minkowskiInnerC, euclidTimeVec]
+  simp only [Fin.isValue, neg_zero, Complex.ofReal_neg, Complex.ofReal_zero,
+    zero_mul, sub_zero, neg_mul]
+
+theorem vladimirov_kernel_twoPointMomentum_euclidTimeVec_eq_spectralTwoPointTube
+    (E : ℝ) (z : Fin 2 → Fin 4 → ℂ) :
+    vladimirov_kernel 2 z (twoPointMomentum (euclidTimeVec E)) =
+      spectralTwoPointTube E z := by
+  unfold vladimirov_kernel spectralTwoPointTube laplaceExp tubeWickTimeDiff
+  rw [Fin.sum_univ_two, twoPointMomentum_zero, twoPointMomentum_one,
+      minkowskiInnerC_euclidTimeVec_left, minkowskiInnerC_neg_euclidTimeVec_left]
+  congr 1
+  change -Complex.I * ((E : ℂ) * z 0 0 + -(E : ℂ) * z 1 0) =
+    -(-Complex.I * (z 1 0 - z 0 0)) * (E : ℂ)
+  ring
+
+theorem tendsto_integral_spectralTwoPointTube_line_mul_f (E : ℝ)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) (v : Fin 4 → ℝ) :
+    Tendsto (fun t : ℝ => ∫ x : Fin 2 → Fin 4 → ℝ,
+        spectralTwoPointTube E (tubeBoundaryLine 2 x v t) * f x)
+      (𝓝[>] 0)
+      (𝓝 (minkowskiFourierEvalTD 2 (twoPointMomentum (euclidTimeVec E)) f)) := by
+  have h_eq : (fun t : ℝ => ∫ x : Fin 2 → Fin 4 → ℝ,
+        spectralTwoPointTube E (tubeBoundaryLine 2 x v t) * f x) =
+      (fun t : ℝ => ∫ x : Fin 2 → Fin 4 → ℝ,
+        vladimirov_kernel 2 (tubeBoundaryLine 2 x v t)
+          (twoPointMomentum (euclidTimeVec E)) * f x) := by
+    ext t
+    refine integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+    dsimp only
+    rw [vladimirov_kernel_twoPointMomentum_euclidTimeVec_eq_spectralTwoPointTube]
+  rw [h_eq, minkowskiFourierEvalTD_apply]
+  exact tendsto_integral_vladimirov_kernel_line_mul_f 2 f
+    (twoPointMomentum (euclidTimeVec E)) v
+
+theorem integrable_spectralTwoPointTube_line_mul_f (E : ℝ)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) (v : Fin 4 → ℝ) (t : ℝ) :
+    Integrable (fun x : Fin 2 → Fin 4 → ℝ =>
+      spectralTwoPointTube E (tubeBoundaryLine 2 x v t) * f x) volume := by
+  have h_eq : (fun x : Fin 2 → Fin 4 → ℝ =>
+      spectralTwoPointTube E (tubeBoundaryLine 2 x v t) * f x) =
+      (fun x : Fin 2 → Fin 4 → ℝ =>
+        vladimirov_kernel 2 (tubeBoundaryLine 2 x v t)
+          (twoPointMomentum (euclidTimeVec E)) * f x) := by
+    ext x
+    rw [vladimirov_kernel_twoPointMomentum_euclidTimeVec_eq_spectralTwoPointTube]
+  rw [h_eq]
+  exact integrable_vladimirov_kernel_line_mul_f 2 f (twoPointMomentum (euclidTimeVec E)) v t
+
+noncomputable def measureKallenLehmannWightmanFun {A : Type*} [MeasurableSpace A]
+    (μ : Measure A) (w E : A → ℝ) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) : ℂ :=
+  ∫ a : A, (w a : ℂ) * minkowskiFourier f (twoPointMomentum (euclidTimeVec (E a))) ∂μ
+
+theorem measureKallenLehmannWightmanFun_forwardConeSpectrumCondition
+    {A : Type*} [MeasurableSpace A] (μ : Measure A) (w : A → ℝ) {E : A → ℝ}
+    (hE : ∀ a : A, 0 ≤ E a) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ)
+    (hU : ∃ U : Set (Fin 2 → Fin 4 → ℝ), IsOpen U ∧ forwardConeSpectralRegion 2 ⊆ U ∧
+      ∀ p ∈ U, minkowskiFourier f p = 0) :
+    measureKallenLehmannWightmanFun μ w E f = 0 := by
+  rcases hU with ⟨U, _hU_open, hU_sub, hU_zero⟩
+  unfold measureKallenLehmannWightmanFun
+  have h_zero : (fun a : A =>
+      (w a : ℂ) * minkowskiFourier f (twoPointMomentum (euclidTimeVec (E a)))) =
+      fun _ : A => (0 : ℂ) := by
+    ext a
+    have hp : twoPointMomentum (euclidTimeVec (E a)) ∈ forwardConeSpectralRegion 2 :=
+      twoPointTimeMomentum_mem_forwardConeSpectralRegion (hE a)
+    simp [hU_zero _ (hU_sub hp)]
+  rw [h_zero, integral_zero]
+
+namespace OSSpectralMeasure
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+  {A : Type*} [MeasurableSpace A]
+
+noncomputable def twoPointWightmanFun (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (b : Fin 3 → ℝ)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) : ℂ :=
+  ∫ a : A,
+    ⟪Ψ, M.P a (osSpatialTranslate D htrans b Φ)⟫_ℂ *
+      minkowskiFourier f (twoPointMomentum (euclidTimeVec (M.E a))) ∂M.μ
+
+theorem twoPointWightmanFun_diag_zero_eq_measureKallenLehmannWightmanFun
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ : OSHilbert D)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    M.twoPointWightmanFun htrans Ψ Ψ 0 f =
+      measureKallenLehmannWightmanFun M.μ (fun a => ‖M.P a Ψ‖ ^ 2) M.E f := by
+  unfold twoPointWightmanFun measureKallenLehmannWightmanFun
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp
+  rw [osSpatialTranslate_zero, ContinuousLinearMap.id_apply,
+      M.inner_proj_self_eq_norm_sq a Ψ, ← Complex.ofReal_pow]
+
+theorem twoPointWightmanFun_forwardConeSpectrumCondition
+    (M : OSSpectralMeasure D hcontr A)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (b : Fin 3 → ℝ)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ)
+    (hU : ∃ U : Set (Fin 2 → Fin 4 → ℝ), IsOpen U ∧ forwardConeSpectralRegion 2 ⊆ U ∧
+      ∀ p ∈ U, minkowskiFourier f p = 0) :
+    M.twoPointWightmanFun htrans Ψ Φ b f = 0 := by
+  rcases hU with ⟨U, _hU_open, hU_sub, hU_zero⟩
+  unfold twoPointWightmanFun
+  have h_zero : (fun a : A =>
+      ⟪Ψ, M.P a (osSpatialTranslate D htrans b Φ)⟫_ℂ *
+        minkowskiFourier f (twoPointMomentum (euclidTimeVec (M.E a)))) =
+      fun _ : A => (0 : ℂ) := by
+    ext a
+    have hp : twoPointMomentum (euclidTimeVec (M.E a)) ∈ forwardConeSpectralRegion 2 :=
+      twoPointTimeMomentum_mem_forwardConeSpectralRegion (M.energy_nonneg a)
+    simp [hU_zero _ (hU_sub hp)]
+  rw [h_zero, integral_zero]
+
+end OSSpectralMeasure
+
+namespace OSSpectralDecomposition
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D} {m : ℕ}
+
+noncomputable def twoPointWightmanTD (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ) :
+    TemperedDistribution (Fin 2 → Fin 4 → ℝ) ℂ :=
+  ∑ k : Fin m,
+    ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ •
+      minkowskiFourierEvalTD 2 (twoPointMomentum (euclidTimeVec (spec.E k)))
+
+@[simp]
+theorem twoPointWightmanTD_apply (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    spec.twoPointWightmanTD htrans Ψ Φ a f =
+      ∑ k : Fin m,
+        ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ *
+          minkowskiFourier f (twoPointMomentum (euclidTimeVec (spec.E k))) := by
+  dsimp [twoPointWightmanTD]
+  rw [_root_.sum_apply]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [_root_.smul_apply, minkowskiFourierEvalTD_apply, smul_eq_mul]
+
+@[simp]
+theorem toOSSpectralMeasure_twoPointWightmanFun (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    spec.toOSSpectralMeasure.twoPointWightmanFun htrans Ψ Φ a f =
+      spec.twoPointWightmanTD htrans Ψ Φ a f := by
+  unfold OSSpectralMeasure.twoPointWightmanFun
+  change (∫ k : Fin m,
+      ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ *
+        minkowskiFourier f (twoPointMomentum (euclidTimeVec (spec.E k))) ∂Measure.count) =
+    spec.twoPointWightmanTD htrans Ψ Φ a f
+  rw [integral_fintype_count, spec.twoPointWightmanTD_apply]
+
+@[simp]
+theorem toOSSpectralMeasure_bochnerZ (spec : OSSpectralDecomposition D hcontr m)
+    (z : ℂ) (x : OSHilbert D) :
+    spec.toOSSpectralMeasure.bochnerZ z x = spec.entireZ z x := by
+  rw [spec.toOSSpectralMeasure.bochnerZ_eq_sum_of_fintype rfl z x]
+  exact (spec.entireZ_apply z x).symm
+
+theorem twoPointWightmanTD_forwardConeSpectrumCondition
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ)
+    (hU : ∃ U : Set (Fin 2 → Fin 4 → ℝ), IsOpen U ∧ forwardConeSpectralRegion 2 ⊆ U ∧
+      ∀ p ∈ U, minkowskiFourier f p = 0) :
+    spec.twoPointWightmanTD htrans Ψ Φ a f = 0 := by
+  rcases hU with ⟨U, _hU_open, hU_sub, hU_zero⟩
+  rw [spec.twoPointWightmanTD_apply]
+  refine Finset.sum_eq_zero (fun k _ => ?_)
+  have hp : twoPointMomentum (euclidTimeVec (spec.E k)) ∈ forwardConeSpectralRegion 2 :=
+    twoPointTimeMomentum_mem_forwardConeSpectralRegion (spec.energy_nonneg k)
+  rw [hU_zero _ (hU_sub hp), mul_zero]
+
+theorem tendsto_integral_twoPointTubePropagator_line_mul_f
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ)
+    (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) (v : Fin 4 → ℝ) :
+    Tendsto (fun t : ℝ => ∫ x : Fin 2 → Fin 4 → ℝ,
+        spec.twoPointTubePropagator htrans Ψ Φ a (tubeBoundaryLine 2 x v t) * f x)
+      (𝓝[>] 0)
+      (𝓝 (spec.twoPointWightmanTD htrans Ψ Φ a f)) := by
+  have h_eq : (fun t : ℝ => ∫ x : Fin 2 → Fin 4 → ℝ,
+        spec.twoPointTubePropagator htrans Ψ Φ a (tubeBoundaryLine 2 x v t) * f x) =
+      (fun t : ℝ => ∑ k : Fin m,
+        ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ *
+          (∫ x : Fin 2 → Fin 4 → ℝ,
+            spectralTwoPointTube (spec.E k) (tubeBoundaryLine 2 x v t) * f x)) := by
+    ext t
+    have h_integrand :
+        (fun x : Fin 2 → Fin 4 → ℝ =>
+          spec.twoPointTubePropagator htrans Ψ Φ a (tubeBoundaryLine 2 x v t) * f x) =
+        (fun x : Fin 2 → Fin 4 → ℝ =>
+          ∑ k : Fin m,
+            ⟪Ψ, spec.P k (osSpatialTranslate D htrans a Φ)⟫_ℂ *
+              (spectralTwoPointTube (spec.E k) (tubeBoundaryLine 2 x v t) * f x)) := by
+      ext x
+      rw [spec.twoPointTubePropagator_eq_sum_spectralTwoPointTube, Finset.sum_mul]
+      refine Finset.sum_congr rfl (fun k _ => ?_)
+      ring
+    rw [h_integrand, integral_finsetSum]
+    · refine Finset.sum_congr rfl (fun k _ => integral_const_mul _ _)
+    · intro k _
+      exact (integrable_spectralTwoPointTube_line_mul_f (spec.E k) f v t).const_mul _
+  rw [h_eq, spec.twoPointWightmanTD_apply]
+  refine tendsto_finsetSum Finset.univ (fun k _ => ?_)
+  have h_tend := tendsto_integral_spectralTwoPointTube_line_mul_f (spec.E k) f v
+  rw [minkowskiFourierEvalTD_apply] at h_tend
+  exact h_tend.const_mul _
+
+noncomputable def toTwoPointSpectralFamily (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ) :
+    ForwardConeSpectralFamily Unit where
+  m n := if n = 2 then m else 0
+  c n _ k :=
+    if hn : n = 2 then
+      ⟪Ψ, spec.P (Fin.cast (if_pos hn) k) (osSpatialTranslate D htrans a Φ)⟫_ℂ
+    else 0
+  p n _ k :=
+    if hn : n = 2 then
+      hn ▸ twoPointMomentum (euclidTimeVec (spec.E (Fin.cast (if_pos hn) k)))
+    else 0
+  mem_forwardCone n _ k := by
+    by_cases hn : n = 2
+    · subst hn
+      dsimp
+      exact twoPointTimeMomentum_mem_forwardConeSpectralRegion (spec.energy_nonneg k)
+    · exact False.elim (Fin.elim0 (Fin.cast (if_neg hn) k))
+
+@[simp]
+theorem toTwoPointSpectralFamily_H_two (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 2 → Unit) (z : Fin 2 → Fin 4 → ℂ) :
+    (spec.toTwoPointSpectralFamily htrans Ψ Φ a).H 2 α z =
+      spec.twoPointTubePropagator htrans Ψ Φ a z := by
+  unfold ForwardConeSpectralFamily.H toTwoPointSpectralFamily
+  dsimp
+  rw [spec.twoPointTubePropagator_eq_sum_spectralTwoPointTube]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [vladimirov_kernel_twoPointMomentum_euclidTimeVec_eq_spectralTwoPointTube, mul_comm]
+
+@[simp]
+theorem toTwoPointSpectralFamily_W_two (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 2 → Unit) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    (spec.toTwoPointSpectralFamily htrans Ψ Φ a).toWightmanFamily 2 α f =
+      spec.twoPointWightmanTD htrans Ψ Φ a f := by
+  rw [ForwardConeSpectralFamily.toWightmanFamily_apply, spec.twoPointWightmanTD_apply]
+  unfold toTwoPointSpectralFamily
+  rfl
+
+end OSSpectralDecomposition
+
+lemma zero_mem_forwardConeSpectralRegion (n : ℕ) :
+    (0 : Fin n → Fin 4 → ℝ) ∈ forwardConeSpectralRegion n := by
+  refine ⟨Finset.sum_const_zero, fun k => ?_⟩
+  change (∑ i ∈ Finset.univ.filter (· ≤ k), (0 : Fin 4 → ℝ)) ∈ closure forward_light_cone
+  rw [Finset.sum_const_zero]
+  exact zero_mem_closure_forward_light_cone
+
+theorem schwinger_onePoint_eq_inner_osVacuum_osOneParticleState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (α : Fin 1 → ι) (x : Fin 1 → Fin 4 → ℝ) :
+    D.𝒮 1 α x =
+      ⟪osVacuum D, osOneParticleState D (α 0) (euclidTimeVec 1) zero_lt_one⟫_ℂ := by
+  have hα : α = fun _ : Fin 1 => α 0 := by
+    ext i
+    fin_cases i
+    rfl
+  rw [hα, inner_osVacuum_osOneParticleState,
+      osTranslationInvariant_onePoint_eq_zero_eval htrans (fun _ : Fin 1 => α 0) x,
+      osTranslationInvariant_onePoint_eq_zero_eval htrans
+        (fun _ : Fin 1 => α 0) (fun _ : Fin 1 => euclidTimeVec 1)]
+
+namespace OSSpectralDecomposition
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D} {m : ℕ}
+
+noncomputable def toLowPointSpectralFamily (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ) :
+    ForwardConeSpectralFamily ι where
+  m n := if n = 0 then 1 else if n = 1 then 1 else if n = 2 then m else 0
+  c n α k :=
+    if hn0 : n = 0 then D.𝒮 0 (hn0 ▸ α) 0
+    else if hn1 : n = 1 then D.𝒮 1 (hn1 ▸ α) 0
+    else if hn2 : n = 2 then
+      have hm :
+          (if n = 0 then 1 else if n = 1 then 1 else if n = 2 then m else 0) = m := by
+        rw [if_neg hn0, if_neg hn1, if_pos hn2]
+      ⟪Ψ ((hn2 ▸ α) 0),
+        spec.P (Fin.cast hm k) (osSpatialTranslate D htrans a (Φ ((hn2 ▸ α) 1)))⟫_ℂ
+    else 0
+  p n _ k :=
+    if hn0 : n = 0 then 0
+    else if hn1 : n = 1 then 0
+    else if hn2 : n = 2 then
+      have hm :
+          (if n = 0 then 1 else if n = 1 then 1 else if n = 2 then m else 0) = m := by
+        rw [if_neg hn0, if_neg hn1, if_pos hn2]
+      hn2 ▸ twoPointMomentum (euclidTimeVec (spec.E (Fin.cast hm k)))
+    else 0
+  mem_forwardCone n _ k := by
+    by_cases hn0 : n = 0
+    · subst hn0
+      dsimp
+      exact zero_mem_forwardConeSpectralRegion 0
+    · by_cases hn1 : n = 1
+      · subst hn1
+        dsimp
+        exact zero_mem_forwardConeSpectralRegion 1
+      · by_cases hn2 : n = 2
+        · subst hn2
+          dsimp
+          exact twoPointTimeMomentum_mem_forwardConeSpectralRegion (spec.energy_nonneg k)
+        · have hm0 :
+              (if n = 0 then 1 else if n = 1 then 1 else if n = 2 then m else 0) = 0 := by
+            rw [if_neg hn0, if_neg hn1, if_neg hn2]
+          exact False.elim (Fin.elim0 (Fin.cast hm0 k))
+
+@[simp]
+theorem toLowPointSpectralFamily_H_zero (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 0 → ι) (z : Fin 0 → Fin 4 → ℂ) :
+    (spec.toLowPointSpectralFamily htrans Ψ Φ a).H 0 α z = D.𝒮 0 α 0 := by
+  change ∑ _k : Fin 1, D.𝒮 0 α 0 * vladimirov_kernel 0 z 0 = D.𝒮 0 α 0
+  rw [Fin.sum_univ_one, vladimirov_kernel_zero_p_n, mul_one]
+
+@[simp]
+theorem toLowPointSpectralFamily_toSchwingerFamily_zero
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 0 → ι) (x : Fin 0 → Fin 4 → ℝ) :
+    (spec.toLowPointSpectralFamily htrans Ψ Φ a).toSchwingerFamily 0 α x = D.𝒮 0 α x := by
+  rw [ForwardConeSpectralFamily.toSchwingerFamily_apply, toLowPointSpectralFamily_H_zero]
+  have hx : x = 0 := Subsingleton.elim x 0
+  rw [hx]
+
+@[simp]
+theorem toLowPointSpectralFamily_H_one (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 1 → ι) (z : Fin 1 → Fin 4 → ℂ) :
+    (spec.toLowPointSpectralFamily htrans Ψ Φ a).H 1 α z = D.𝒮 1 α 0 := by
+  change ∑ _k : Fin 1, D.𝒮 1 α 0 * vladimirov_kernel 1 z 0 = D.𝒮 1 α 0
+  rw [Fin.sum_univ_one, vladimirov_kernel_zero_p_n, mul_one]
+
+@[simp]
+theorem toLowPointSpectralFamily_toSchwingerFamily_one
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 1 → ι) (x : Fin 1 → Fin 4 → ℝ) :
+    (spec.toLowPointSpectralFamily htrans Ψ Φ a).toSchwingerFamily 1 α x = D.𝒮 1 α x := by
+  rw [ForwardConeSpectralFamily.toSchwingerFamily_apply, toLowPointSpectralFamily_H_one]
+  exact (osTranslationInvariant_onePoint_eq_zero_eval htrans α x).symm
+
+@[simp]
+theorem toLowPointSpectralFamily_H_two (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 2 → ι) (z : Fin 2 → Fin 4 → ℂ) :
+    (spec.toLowPointSpectralFamily htrans Ψ Φ a).H 2 α z =
+      spec.twoPointTubePropagator htrans (Ψ (α 0)) (Φ (α 1)) a z := by
+  unfold ForwardConeSpectralFamily.H toLowPointSpectralFamily
+  dsimp
+  rw [spec.twoPointTubePropagator_eq_sum_spectralTwoPointTube]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [vladimirov_kernel_twoPointMomentum_euclidTimeVec_eq_spectralTwoPointTube, mul_comm]
+
+@[simp]
+theorem toLowPointSpectralFamily_W_two (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 2 → ι) (f : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ) :
+    (spec.toLowPointSpectralFamily htrans Ψ Φ a).toWightmanFamily 2 α f =
+      spec.twoPointWightmanTD htrans (Ψ (α 0)) (Φ (α 1)) a f := by
+  rw [ForwardConeSpectralFamily.toWightmanFamily_apply, spec.twoPointWightmanTD_apply]
+  unfold toLowPointSpectralFamily
+  rfl
+
+theorem toLowPointSpectralFamily_forwardConeSpectrumCondition
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ) :
+    ForwardConeSpectrumCondition
+      (spec.toLowPointSpectralFamily htrans Ψ Φ a).toWightmanFamily :=
+  (spec.toLowPointSpectralFamily htrans Ψ Φ a).forwardConeSpectrumCondition
+
+theorem norm_toLowPointSpectralFamily_H_two_le
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮) (Ψ Φ : ι → OSHilbert D) (a : Fin 3 → ℝ)
+    (α : Fin 2 → ι) {z : Fin 2 → Fin 4 → ℂ} (hz : z ∈ forward_tube_n 2) :
+    ‖(spec.toLowPointSpectralFamily htrans Ψ Φ a).H 2 α z‖ ≤
+      ‖Ψ (α 0)‖ * ‖Φ (α 1)‖ := by
+  rw [spec.toLowPointSpectralFamily_H_two htrans Ψ Φ a α z]
+  exact spec.norm_twoPointTubePropagator_le htrans (Ψ (α 0)) (Φ (α 1)) a hz
+
+noncomputable def osCanonicalOneParticle
+    (D : OSReflectionPositiveData R S) (α : ι) : OSHilbert D :=
+  osOneParticleState D α (euclidTimeVec 1) zero_lt_one
+
+theorem toLowPointSpectralFamily_toSchwingerFamily_two_oneParticle
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (x₀ y₀ : ι → Fin 4 → ℝ) (hx₀ : ∀ c, 0 < x₀ c 0) (hy₀ : ∀ c, 0 < y₀ c 0)
+    (a : Fin 3 → ℝ) (α : Fin 2 → ι) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN 2) :
+    (spec.toLowPointSpectralFamily htrans
+      (fun c => osOneParticleState D c (x₀ c) (hx₀ c))
+      (fun c => osOneParticleState D c (y₀ c) (hy₀ c))
+      a).toSchwingerFamily 2 α x =
+      ∑ β₀ : ι, S.C (α 0) β₀ *
+        D.𝒮 2 (osConcatIdx 1 1 (fun _ => β₀) (fun _ => α 1))
+          (osConcatPoint 1 1 (fun _ => x₀ (α 0))
+            (fun _ => y₀ (α 1) + euclidSpatialVec a + euclidTimeVec (x 1 0 - x 0 0))) := by
+  rw [ForwardConeSpectralFamily.toSchwingerFamily_apply,
+      spec.toLowPointSpectralFamily_H_two]
+  exact spec.twoPointTubePropagator_oneParticle_wickEmbedN_eq_schwinger htrans
+    (α 0) (α 1) (x₀ (α 0)) (y₀ (α 1)) (hx₀ (α 0)) (hy₀ (α 1)) a hx
+
+theorem toLowPointSpectralFamily_toSchwingerFamily_two_oneParticle_diag
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (hdiag : DiagonalStarStructure S)
+    (x₀ y₀ : ι → Fin 4 → ℝ) (hx₀ : ∀ c, 0 < x₀ c 0) (hy₀ : ∀ c, 0 < y₀ c 0)
+    (a : Fin 3 → ℝ) (c : ι) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN 2) :
+    (spec.toLowPointSpectralFamily htrans
+      (fun d => osOneParticleState D d (x₀ d) (hx₀ d))
+      (fun d => osOneParticleState D d (y₀ d) (hy₀ d))
+      a).toSchwingerFamily 2 (fun _ => c) x =
+      S.C c c *
+        D.𝒮 2 (fun _ => c)
+          (osConcatPoint 1 1 (fun _ => x₀ c)
+            (fun _ => y₀ c + euclidSpatialVec a + euclidTimeVec (x 1 0 - x 0 0))) := by
+  rw [ForwardConeSpectralFamily.toSchwingerFamily_apply,
+      spec.toLowPointSpectralFamily_H_two,
+      spec.twoPointTubePropagator_wickEmbedN_eq_osComplexPropagator htrans _ _ a hx]
+  exact osComplexPropagator_real_oneParticle_diag_eq
+    spec.toOSHolomorphicSemigroup htrans hdiag c (x₀ c) (y₀ c) (hx₀ c) (hy₀ c)
+    (x 1 0 - x 0 0) (sub_nonneg.mpr (le_of_lt (hx 0 (by decide)))) a
+
+theorem lowPoint_reconstruction_master
+    (spec : OSSpectralDecomposition D hcontr m)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (x₀ y₀ : ι → Fin 4 → ℝ) (hx₀ : ∀ c, 0 < x₀ c 0) (hy₀ : ∀ c, 0 < y₀ c 0)
+    (a : Fin 3 → ℝ) :
+    let Ψ : ι → OSHilbert D := fun c => osOneParticleState D c (x₀ c) (hx₀ c)
+    let Φ : ι → OSHilbert D := fun c => osOneParticleState D c (y₀ c) (hy₀ c)
+    let F := spec.toLowPointSpectralFamily htrans Ψ Φ a
+    (∀ (α : Fin 0 → ι) (x : Fin 0 → Fin 4 → ℝ),
+      F.toSchwingerFamily 0 α x = D.𝒮 0 α x) ∧
+    (∀ (α : Fin 1 → ι) (x : Fin 1 → Fin 4 → ℝ),
+      F.toSchwingerFamily 1 α x = D.𝒮 1 α x) ∧
+    (∀ (α : Fin 2 → ι) (x : Fin 2 → Fin 4 → ℝ),
+      x ∈ orderedEuclidN 2 →
+      F.toSchwingerFamily 2 α x =
+        ∑ β₀ : ι, S.C (α 0) β₀ *
+          D.𝒮 2 (osConcatIdx 1 1 (fun _ => β₀) (fun _ => α 1))
+            (osConcatPoint 1 1 (fun _ => x₀ (α 0))
+              (fun _ => y₀ (α 1) + euclidSpatialVec a + euclidTimeVec (x 1 0 - x 0 0)))) ∧
+    ForwardConeSpectrumCondition F.toWightmanFamily ∧
+    TubeTranslationInvariant F.toTubeExtension ∧
+    (∀ (α : Fin 2 → ι) (z : Fin 2 → Fin 4 → ℂ),
+      z ∈ forward_tube_n 2 → ‖F.H 2 α z‖ ≤ ‖Ψ (α 0)‖ * ‖Φ (α 1)‖) := by
+  intro Ψ Φ F
+  refine ⟨spec.toLowPointSpectralFamily_toSchwingerFamily_zero htrans Ψ Φ a,
+    spec.toLowPointSpectralFamily_toSchwingerFamily_one htrans Ψ Φ a,
+    fun α x hx =>
+      spec.toLowPointSpectralFamily_toSchwingerFamily_two_oneParticle htrans x₀ y₀ hx₀ hy₀ a α hx,
+    spec.toLowPointSpectralFamily_forwardConeSpectrumCondition htrans Ψ Φ a,
+    F.tubeTranslationInvariant,
+    fun α z hz => spec.norm_toLowPointSpectralFamily_H_two_le htrans Ψ Φ a α hz⟩
+
+end OSSpectralDecomposition
+
+noncomputable def multiPointTimeMomentum (n : ℕ) (E : Fin (n - 1) → ℝ) :
+    Fin n → Fin 4 → ℝ :=
+  fun i =>
+    (if hi : i.val < n - 1 then euclidTimeVec (E ⟨i.val, hi⟩) else 0) -
+    (if hi0 : 0 < i.val then
+      euclidTimeVec (E ⟨i.val - 1, Nat.sub_lt_sub_right hi0 i.isLt⟩)
+    else 0)
+
+@[simp]
+lemma multiPointTimeMomentum_zero (E : Fin 0 → ℝ) :
+    multiPointTimeMomentum 0 E = 0 :=
+  Subsingleton.elim _ _
+
+@[simp]
+lemma multiPointTimeMomentum_one (E : Fin 0 → ℝ) :
+    multiPointTimeMomentum 1 E = 0 := by
+  ext i μ
+  fin_cases i
+  simp [multiPointTimeMomentum]
+
+lemma partial_sum_multiPointTimeMomentum_range (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (m : ℕ) (hm : m ≤ n) :
+    (∑ j ∈ Finset.range m,
+      ((if hj : j < n - 1 then euclidTimeVec (E ⟨j, hj⟩) else 0) -
+       (if hj0 : j - 1 < n - 1 ∧ 0 < j then
+         euclidTimeVec (E ⟨j - 1, hj0.1⟩)
+       else 0))) =
+      if _ : m = 0 then 0
+      else if hm_lt : m - 1 < n - 1 then euclidTimeVec (E ⟨m - 1, hm_lt⟩) else 0 := by
+  induction m with
+  | zero =>
+    simp
+  | succ r ih =>
+    have hr_le : r ≤ n := Nat.le_of_succ_le hm
+    rw [Finset.sum_range_succ, ih hr_le]
+    by_cases hr0 : r = 0
+    · subst hr0
+      simp
+    · have hr_pos : 0 < r := Nat.pos_of_ne_zero hr0
+      have hr_lt : r - 1 < n - 1 := by omega
+      have h_cond : r - 1 < n - 1 ∧ 0 < r := ⟨hr_lt, hr_pos⟩
+      rw [dif_neg hr0, dif_pos hr_lt, dif_pos h_cond, dif_neg (Nat.succ_ne_zero r)]
+      simp only [Nat.add_sub_cancel, add_sub_cancel]
+
+lemma partial_sum_multiPointTimeMomentum (n : ℕ) (E : Fin (n - 1) → ℝ) (k : Fin n) :
+    (∑ i ∈ Finset.univ.filter (· ≤ k), multiPointTimeMomentum n E i) =
+      if hk : k.val < n - 1 then euclidTimeVec (E ⟨k.val, hk⟩) else 0 := by
+  have h_eq := partial_sum_p_eq n (multiPointTimeMomentum n E) k
+    (fun j =>
+      (if hj : j < n - 1 then euclidTimeVec (E ⟨j, hj⟩) else 0) -
+      (if hj0 : j - 1 < n - 1 ∧ 0 < j then
+        euclidTimeVec (E ⟨j - 1, hj0.1⟩)
+      else 0))
+    (fun i => by
+      dsimp [multiPointTimeMomentum]
+      congr 1
+      by_cases hi0 : 0 < i.val
+      · have hi_lt : i.val - 1 < n - 1 := Nat.sub_lt_sub_right hi0 i.isLt
+        rw [dif_pos hi0, dif_pos ⟨hi_lt, hi0⟩]
+      · have h_not : ¬(i.val - 1 < n - 1 ∧ 0 < i.val) := fun h => hi0 h.2
+        rw [dif_neg hi0, dif_neg h_not])
+  dsimp [partial_sum_p] at h_eq
+  rw [h_eq, partial_sum_multiPointTimeMomentum_range n E (k.val + 1) k.isLt]
+  simp only [Nat.succ_ne_zero, ↓reduceDIte, Nat.add_sub_cancel]
+
+lemma sum_multiPointTimeMomentum (n : ℕ) (E : Fin (n - 1) → ℝ) :
+    ∑ i : Fin n, multiPointTimeMomentum n E i = 0 := by
+  cases n with
+  | zero => simp
+  | succ m =>
+    have h_univ : (Finset.univ : Finset (Fin (m + 1))) =
+        Finset.univ.filter (· ≤ ⟨m, Nat.lt_succ_self m⟩) := by
+      ext i
+      simp [Fin.le_iff_val_le_val, Nat.le_of_lt_succ i.isLt]
+    rw [h_univ, partial_sum_multiPointTimeMomentum (m + 1) E ⟨m, Nat.lt_succ_self m⟩]
+    simp
+
+theorem multiPointTimeMomentum_mem_forwardConeSpectralRegion {n : ℕ}
+    {E : Fin (n - 1) → ℝ} (hE : ∀ i : Fin (n - 1), 0 ≤ E i) :
+    multiPointTimeMomentum n E ∈ forwardConeSpectralRegion n := by
+  refine ⟨sum_multiPointTimeMomentum n E, fun k => ?_⟩
+  rw [partial_sum_multiPointTimeMomentum]
+  split_ifs with hk
+  · exact euclidTimeVec_mem_closure_forward_light_cone (hE ⟨k.val, hk⟩)
+  · exact zero_mem_closure_forward_light_cone
+
+lemma minkowskiInnerC_multiPointTimeMomentum_sum (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (z : Fin n → Fin 4 → ℂ) :
+    (∑ k : Fin n, minkowskiInnerC (fun μ => (multiPointTimeMomentum n E k μ : ℂ)) (z k)) =
+      ∑ i : Fin (n - 1),
+        (E i : ℂ) * (z ⟨i.val, fin_sub_one_lt i⟩ 0 -
+          z ⟨i.val + 1, fin_sub_one_add_one_lt i⟩ 0) := by
+  have h_term : ∀ k : Fin n,
+      minkowskiInnerC (fun μ => (multiPointTimeMomentum n E k μ : ℂ)) (z k) =
+        (if hk : k.val < n - 1 then (E ⟨k.val, hk⟩ : ℂ) * z k 0 else 0) -
+        (if hk0 : 0 < k.val then
+          (E ⟨k.val - 1, Nat.sub_lt_sub_right hk0 k.isLt⟩ : ℂ) * z k 0
+        else 0) := by
+    intro k
+    have h0 :
+        multiPointTimeMomentum n E k 0 =
+          (if hk : k.val < n - 1 then E ⟨k.val, hk⟩ else 0) -
+          (if hk0 : 0 < k.val then
+            E ⟨k.val - 1, Nat.sub_lt_sub_right hk0 k.isLt⟩
+          else 0) := by
+      dsimp [multiPointTimeMomentum, euclidTimeVec]
+      congr 1 <;> split_ifs <;> rfl
+    have h_sp : ∀ (μ : Fin 4), μ ≠ 0 → multiPointTimeMomentum n E k μ = 0 := by
+      intro μ hμ
+      dsimp [multiPointTimeMomentum]
+      have ha :
+          (if hi : k.val < n - 1 then euclidTimeVec (E ⟨k.val, hi⟩) else 0) μ = 0 := by
+        split_ifs
+        · exact if_neg hμ
+        · rfl
+      have hb :
+          (if hi0 : 0 < k.val then
+            euclidTimeVec (E ⟨k.val - 1, Nat.sub_lt_sub_right hi0 k.isLt⟩)
+          else 0) μ = 0 := by
+        split_ifs
+        · exact if_neg hμ
+        · rfl
+      rw [ha, hb, sub_self]
+    dsimp [minkowskiInnerC]
+    rw [h0, h_sp 1 (by decide), h_sp 2 (by decide), h_sp 3 (by decide)]
+    simp only [Complex.ofReal_zero, zero_mul, sub_zero, Complex.ofReal_sub, sub_mul]
+    congr 1 <;> split_ifs <;> simp
+  simp_rw [h_term, Finset.sum_sub_distrib]
+  cases n with
+  | zero => simp
+  | succ m =>
+    have h_lhs1 :
+        (∑ k : Fin (m + 1),
+          if hk : k.val < m then (E ⟨k.val, hk⟩ : ℂ) * z k 0 else 0) =
+        ∑ i : Fin m, (E i : ℂ) * z ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ 0 := by
+      rw [Fin.sum_univ_castSucc]
+      simp only [Fin.val_castSucc, Fin.isLt, ↓reduceDIte, Fin.eta, Fin.val_last,
+        lt_self_iff_false, add_zero]
+      rfl
+    have h_lhs2 :
+        (∑ k : Fin (m + 1),
+          if hk0 : 0 < k.val then
+            (E ⟨k.val - 1, Nat.sub_lt_sub_right hk0 k.isLt⟩ : ℂ) * z k 0
+          else 0) =
+        ∑ i : Fin m, (E i : ℂ) * z ⟨i.val + 1, Nat.succ_lt_succ i.isLt⟩ 0 := by
+      rw [Fin.sum_univ_succ]
+      simp only [Fin.val_zero, lt_self_iff_false, ↓reduceDIte, Fin.val_succ,
+        Nat.succ_pos, Nat.add_sub_cancel, zero_add]
+      rfl
+    change (∑ k : Fin (m + 1),
+        if hk : k.val < m then (E ⟨k.val, hk⟩ : ℂ) * z k 0 else 0) -
+      (∑ k : Fin (m + 1),
+        if hk0 : 0 < k.val then
+          (E ⟨k.val - 1, Nat.sub_lt_sub_right hk0 k.isLt⟩ : ℂ) * z k 0
+        else 0) =
+      ∑ i : Fin m,
+        (E i : ℂ) * (z ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ 0 -
+          z ⟨i.val + 1, Nat.succ_lt_succ i.isLt⟩ 0)
+    rw [h_lhs1, h_lhs2, ← Finset.sum_sub_distrib]
+    refine Finset.sum_congr rfl (fun i _ => ?_)
+    ring
+
+theorem vladimirov_kernel_multiPointTimeMomentum_eq_spectralMultiPointTube
+    (n : ℕ) (E : Fin (n - 1) → ℝ) (z : Fin n → Fin 4 → ℂ) :
+    vladimirov_kernel n z (multiPointTimeMomentum n E) =
+      spectralMultiPointTube n E z := by
+  unfold vladimirov_kernel spectralMultiPointTube laplaceExp tubeWickTimeDiff
+  rw [minkowskiInnerC_multiPointTimeMomentum_sum, ← Complex.exp_sum]
+  congr 1
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl (fun i _ => ?_)
+  change -Complex.I *
+      ((E i : ℂ) * (z ⟨i.val, fin_sub_one_lt i⟩ 0 -
+        z ⟨i.val + 1, fin_sub_one_add_one_lt i⟩ 0)) =
+    -(-Complex.I * (z ⟨i.val + 1, fin_sub_one_succ_lt i⟩ 0 -
+      z ⟨i.val, fin_sub_one_lt i⟩ 0)) * (E i : ℂ)
+  ring
+
+theorem tendsto_integral_spectralMultiPointTube_line_mul_f (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) (v : Fin 4 → ℝ) :
+    Tendsto (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        spectralMultiPointTube n E (tubeBoundaryLine n x v t) * f x)
+      (𝓝[>] 0)
+      (𝓝 (minkowskiFourierEvalTD n (multiPointTimeMomentum n E) f)) := by
+  have h_eq : (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        spectralMultiPointTube n E (tubeBoundaryLine n x v t) * f x) =
+      (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        vladimirov_kernel n (tubeBoundaryLine n x v t)
+          (multiPointTimeMomentum n E) * f x) := by
+    ext t
+    refine integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+    dsimp only
+    rw [vladimirov_kernel_multiPointTimeMomentum_eq_spectralMultiPointTube]
+  rw [h_eq, minkowskiFourierEvalTD_apply]
+  exact tendsto_integral_vladimirov_kernel_line_mul_f n f
+    (multiPointTimeMomentum n E) v
+
+theorem integrable_spectralMultiPointTube_line_mul_f (n : ℕ) (E : Fin (n - 1) → ℝ)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) (v : Fin 4 → ℝ) (t : ℝ) :
+    Integrable (fun x : Fin n → Fin 4 → ℝ =>
+      spectralMultiPointTube n E (tubeBoundaryLine n x v t) * f x) volume := by
+  have h_eq : (fun x : Fin n → Fin 4 → ℝ =>
+      spectralMultiPointTube n E (tubeBoundaryLine n x v t) * f x) =
+      (fun x : Fin n → Fin 4 → ℝ =>
+        vladimirov_kernel n (tubeBoundaryLine n x v t)
+          (multiPointTimeMomentum n E) * f x) := by
+    ext x
+    rw [vladimirov_kernel_multiPointTimeMomentum_eq_spectralMultiPointTube]
+  rw [h_eq]
+  exact integrable_vladimirov_kernel_line_mul_f n f (multiPointTimeMomentum n E) v t
+
+structure OSReconstructionData {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData) where
+  m_spec : ℕ
+  spec : OSSpectralDecomposition hOS.toReflectionPositiveData
+    (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+      hOS.os1_translation hcluster)
+    m_spec
+  F : ForwardConeSpectralFamily ι
+  schwinger_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x
+  tube_covariant : TubeCovariant R F.toTubeExtension
+  tube_pct : TubePCT η R F.toTubeExtension
+  poincare : PoincareCovariant R F.toWightmanFamily
+  weakLocality : WeakLocality η F.toWightmanFamily
+  positivity : Positivity S F.toWightmanFamily
+
+namespace ForwardConeSpectralFamily
+
+variable {ι : Type*}
+
+noncomputable def negCompRevCLM (n : ℕ) :
+    (Fin n → Fin 4 → ℂ) →L[ℂ] (Fin n → Fin 4 → ℂ) :=
+  LinearMap.toContinuousLinearMap
+    { toFun := fun z => -(z ∘ Fin.rev)
+      map_add' := fun x y => by ext i μ; simp [add_comm]
+      map_smul' := fun c x => by ext i μ; simp }
+
+@[simp]
+lemma negCompRevCLM_apply (n : ℕ) (z : Fin n → Fin 4 → ℂ) :
+    negCompRevCLM n z = -(z ∘ Fin.rev) := rfl
+
+lemma wickEmbedN_neg_comp_rev (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n (-(x ∘ Fin.rev)) = -(wickEmbedN n x ∘ Fin.rev) := by
+  rw [wickEmbedN_neg, wickEmbedN_comp_rev]
+
+theorem analyticAt_H_neg_rev (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    AnalyticAt ℂ (fun w : Fin n → Fin 4 → ℂ => F.H n α (-(w ∘ Fin.rev))) z := by
+  have h_eq : (fun w : Fin n → Fin 4 → ℂ => F.H n α (-(w ∘ Fin.rev))) =
+      (F.H n α) ∘ (negCompRevCLM n) := rfl
+  rw [h_eq]
+  exact (F.analyticAt_H n α (negCompRevCLM n z)).comp ((negCompRevCLM n).analyticAt z)
+
+theorem analyticOnNhd_H_neg_rev (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ (fun w : Fin n → Fin 4 → ℂ => F.H n α (-(w ∘ Fin.rev))) s :=
+  fun z _ => F.analyticAt_H_neg_rev n α z
+
+theorem analyticOn_H_neg_rev (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOn ℂ (fun w : Fin n → Fin 4 → ℂ => F.H n α (-(w ∘ Fin.rev))) s :=
+  (F.analyticOnNhd_H_neg_rev n α s).analyticOn
+
+theorem tubeWeakLocality_of_posOrderedEuclidN (F : ForwardConeSpectralFamily ι) {η : ℂ}
+    (h_euclid : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (wickEmbedN n (-(x ∘ Fin.rev))) =
+        η ^ (n * (n - 1) / 2) * F.toSchwingerFamily n (α ∘ Fin.rev) x) :
+    TubeWeakLocality η F.toTubeExtension := by
+  intro n α z hz
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (F.analyticOn_H_neg_rev n α (forward_tube_n n))
+    (analyticOn_const.mul (F.analyticOn_H n (α ∘ Fin.rev) (forward_tube_n n)))
+    (fun x hx => ?_) hz
+  change F.H n α (-(wickEmbedN n x ∘ Fin.rev)) =
+    η ^ (n * (n - 1) / 2) * F.toSchwingerFamily n (α ∘ Fin.rev) x
+  rw [← wickEmbedN_neg_comp_rev n x]
+  exact h_euclid n α x hx
+
+noncomputable def spinorPhiRealCLM (n : ℕ) (A : SL2C) :
+    (Fin n → Fin 4 → ℂ) →L[ℂ] (Fin n → Fin 4 → ℂ) :=
+  LinearMap.toContinuousLinearMap
+    { toFun := fun z => spinorPhi (A, sl2c_conj A) • z
+      map_add' := fun x y => by
+        ext i μ
+        change ((spinorPhi (A, sl2c_conj A)).val.val.mulVec (x i + y i)) μ =
+          ((spinorPhi (A, sl2c_conj A)).val.val.mulVec (x i)) μ +
+          ((spinorPhi (A, sl2c_conj A)).val.val.mulVec (y i)) μ
+        rw [Matrix.mulVec_add, Pi.add_apply]
+      map_smul' := fun c x => by
+        ext i μ
+        change ((spinorPhi (A, sl2c_conj A)).val.val.mulVec (c • x i)) μ =
+          c * ((spinorPhi (A, sl2c_conj A)).val.val.mulVec (x i)) μ
+        rw [Matrix.mulVec_smul, Pi.smul_apply, smul_eq_mul] }
+
+@[simp]
+lemma spinorPhiRealCLM_apply (n : ℕ) (A : SL2C) (z : Fin n → Fin 4 → ℂ) :
+    spinorPhiRealCLM n A z = spinorPhi (A, sl2c_conj A) • z := rfl
+
+theorem analyticAt_H_spinorPhi (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (A : SL2C) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    AnalyticAt ℂ
+      (fun w : Fin n → Fin 4 → ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • w)) z := by
+  have h_eq :
+      (fun w : Fin n → Fin 4 → ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • w)) =
+      (F.H n α) ∘ (spinorPhiRealCLM n A) := rfl
+  rw [h_eq]
+  exact (F.analyticAt_H n α (spinorPhiRealCLM n A z)).comp
+    ((spinorPhiRealCLM n A).analyticAt z)
+
+theorem analyticOnNhd_H_spinorPhi (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (A : SL2C) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOnNhd ℂ
+      (fun w : Fin n → Fin 4 → ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • w)) s :=
+  fun z _ => F.analyticAt_H_spinorPhi n A α z
+
+theorem analyticOn_H_spinorPhi (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (A : SL2C) (α : Fin n → ι) (s : Set (Fin n → Fin 4 → ℂ)) :
+    AnalyticOn ℂ
+      (fun w : Fin n → Fin 4 → ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • w)) s :=
+  (F.analyticOnNhd_H_spinorPhi n A α s).analyticOn
+
+theorem tubeCovariant_of_posOrderedEuclidN [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    (R : HolomorphicLorentzRep ι)
+    (h_euclid : ∀ (n : ℕ) (A : SL2C) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (spinorPhi (A, sl2c_conj A) • wickEmbedN n x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.toSchwingerFamily n β x) :
+    TubeCovariant R F.toTubeExtension := by
+  intro n A z hz _hAz α
+  have h_rhs_analytic :
+      AnalyticOn ℂ
+        (fun w : Fin n → Fin 4 → ℂ =>
+          ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β w)
+        (forward_tube_n n) := by
+    refine AnalyticOnNhd.analyticOn (fun w _ => ?_)
+    refine analyticAt_finset_sum_normed Finset.univ (fun β _ => ?_)
+    exact analyticAt_const.mul (F.analyticAt_H n β w)
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (F.analyticOn_H_spinorPhi n A α (forward_tube_n n))
+    h_rhs_analytic
+    (fun x hx => h_euclid n A α x hx) hz
+
+theorem integrable_H_real_mul_f (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    Integrable (fun x : Fin n → Fin 4 → ℝ => F.H n α (coeReal n x) * f x) volume := by
+  have h_eq : (fun x : Fin n → Fin 4 → ℝ => F.H n α (coeReal n x) * f x) =
+      fun x : Fin n → Fin 4 → ℝ =>
+        ∑ k : Fin (F.m n), F.c n α k *
+          (vladimirov_kernel n (tubeBoundaryLine n x 0 0) (F.p n α k) * f x) := by
+    ext x
+    have h0 : tubeBoundaryLine n x 0 0 = coeReal n x := by
+      ext i μ
+      simp [tubeBoundaryLine, coeReal]
+    rw [← h0]
+    dsimp [H]
+    rw [Finset.sum_mul]
+    refine Finset.sum_congr rfl (fun k _ => mul_assoc _ _ _)
+  rw [h_eq]
+  exact integrable_finsetSum Finset.univ (fun k _ =>
+    (integrable_vladimirov_kernel_line_mul_f n f (F.p n α k) 0 0).const_mul (F.c n α k))
+
+theorem toWightmanFamily_eq_integral_H_real (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    F.toWightmanFamily n α f =
+      ∫ x : Fin n → Fin 4 → ℝ, F.H n α (coeReal n x) * f x := by
+  have h_line0 : ∀ x : Fin n → Fin 4 → ℝ, tubeBoundaryLine n x 0 0 = coeReal n x := by
+    intro x
+    ext i k
+    simp [tubeBoundaryLine, coeReal]
+  have h_lhs :
+      (∫ x : Fin n → Fin 4 → ℝ, F.H n α (coeReal n x) * f x) =
+        ∫ x : Fin n → Fin 4 → ℝ, F.H n α (tubeBoundaryLine n x 0 0) * f x := by
+    refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+    dsimp only
+    rw [h_line0 x]
+  rw [F.toWightmanFamily_apply, h_lhs, F.integral_H_line_mul_f n α f 0 0]
+  refine Finset.sum_congr rfl (fun k _ => ?_)
+  rw [integral_vladimirov_kernel_line_mul_f n f (F.p n α k) 0 0]
+  simp
+
+theorem H_rev_of_weakLocality (F : ForwardConeSpectralFamily ι) {η : ℂ}
+    (hloc : WeakLocality η F.toWightmanFamily)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    F.H n α z = η ^ (n * (n - 1) / 2) * F.H n (α ∘ Fin.rev) (z ∘ Fin.rev) :=
+  entire_H_rev_of_weakLocality F.toTubeExtension F.analyticAt_H hloc n α z
+
+theorem global_weakLocality_of_H_rev (F : ForwardConeSpectralFamily ι) {η : ℂ}
+    (h_rev : ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      F.H n α z = η ^ (n * (n - 1) / 2) * F.H n (α ∘ Fin.rev) (z ∘ Fin.rev))
+    (n : ℕ) (α : Fin n → ι) (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => x (Fin.rev i)) = f x) :
+    F.toWightmanFamily n α f =
+      η ^ (n * (n - 1) / 2) * F.toWightmanFamily n (α ∘ Fin.rev) f' := by
+  rw [F.toWightmanFamily_eq_integral_H_real, F.toWightmanFamily_eq_integral_H_real,
+      ← MeasureTheory.integral_const_mul,
+      ← integral_comp_rev n (fun x : Fin n → Fin 4 → ℝ =>
+        η ^ (n * (n - 1) / 2) * (F.H n (α ∘ Fin.rev) (coeReal n x) * f' x))]
+  refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+  dsimp only
+  have h_coe : coeReal n (fun i => x (Fin.rev i)) = coeReal n x ∘ Fin.rev := rfl
+  rw [h_rev n α (coeReal n x), h_coe, hf' x, mul_assoc]
+
+theorem weakLocality_of_H_rev (F : ForwardConeSpectralFamily ι) {η : ℂ}
+    (h_rev : ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+      F.H n α z = η ^ (n * (n - 1) / 2) * F.H n (α ∘ Fin.rev) (z ∘ Fin.rev)) :
+    WeakLocality η F.toWightmanFamily :=
+  fun n α f f' _hf_supp hf' => F.global_weakLocality_of_H_rev h_rev n α f f' hf'
+
+theorem weakLocality_iff_H_rev (F : ForwardConeSpectralFamily ι) {η : ℂ} :
+    WeakLocality η F.toWightmanFamily ↔
+      ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+        F.H n α z = η ^ (n * (n - 1) / 2) * F.H n (α ∘ Fin.rev) (z ∘ Fin.rev) :=
+  ⟨F.H_rev_of_weakLocality, F.weakLocality_of_H_rev⟩
+
+theorem poincareCovariant_of_tubeCovariant [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι)
+    (h_tcov : TubeCovariant R F.toTubeExtension) :
+    PoincareCovariant R F.toWightmanFamily :=
+  poincareCovariant_of_tubeCovariant_general R F.toWightmanFamily F.toTubeExtension
+    h_tcov F.tubeTranslationInvariant
+
+theorem tubeCovariant_of_poincareCovariant [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily) :
+    TubeCovariant R F.toTubeExtension := by
+  intro n A z _hz _hAz α
+  have hG₁ : AnalyticOnNhd ℂ
+      (fun w : Fin n → Fin 4 → ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • w)) Set.univ :=
+    F.analyticOnNhd_H_spinorPhi n A α Set.univ
+  have hG₂ : AnalyticOnNhd ℂ
+      (fun w : Fin n → Fin 4 → ℂ =>
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β w) Set.univ :=
+    fun w _ => analyticAt_finset_sum_normed Finset.univ
+      (fun β _ => analyticAt_const.mul (F.analyticAt_H n β w))
+  refine analyticOnNhd_univ_eq_of_schwartz_integral_eq n hG₁ hG₂ (fun f => ?_) z
+  have h_lhs :
+      (∫ x : Fin n → Fin 4 → ℝ,
+        F.H n α (spinorPhi (A, sl2c_conj A) • coeReal n x) * f x) =
+      F.toWightmanFamily n α (schwartzLorentzCLM n A⁻¹ f) := by
+    rw [F.toWightmanFamily_eq_integral_H_real]
+    have h_mp := measurePreserving_lorentzEquiv_n n A
+    have h_emb := (lorentzEquiv n A).toHomeomorph.measurableEmbedding
+    rw [← h_mp.integral_comp h_emb
+      (fun y : Fin n → Fin 4 → ℝ =>
+        F.H n α (coeReal n y) * schwartzLorentzCLM n A⁻¹ f y)]
+    refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+    dsimp only
+    have h_coe : coeReal n (lorentzEquiv n A x) =
+        spinorPhi (A, sl2c_conj A) • coeReal n x := by
+      ext i μ
+      exact congrFun (lorentzOfSL2C_mulVec_coe A (x i)) μ
+    have h_rel : schwartzLorentzCLM n A⁻¹ f (lorentzEquiv n A x) = f x :=
+      schwartzLorentz_rel n A f x
+    rw [h_coe, h_rel]
+  have h_rhs :
+      (∫ x : Fin n → Fin 4 → ℝ,
+        (∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (coeReal n x)) * f x) =
+      ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.toWightmanFamily n β f := by
+    simp_rw [F.toWightmanFamily_eq_integral_H_real n _ f, ← MeasureTheory.integral_const_mul]
+    rw [← integral_finsetSum Finset.univ (fun β _ =>
+      (F.integrable_H_real_mul_f n β f).const_mul (∏ i, R.rep A (α i) (β i)))]
+    refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+    dsimp only
+    rw [Finset.sum_mul]
+    refine Finset.sum_congr rfl (fun β _ => mul_assoc _ _ _)
+  rw [h_lhs, h_rhs]
+  exact wightman_lorentz_cov R F.toWightmanFamily h_poinc n A f α
+
+theorem tubeCovariant_iff_poincareCovariant [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) :
+    TubeCovariant R F.toTubeExtension ↔ PoincareCovariant R F.toWightmanFamily :=
+  ⟨F.poincareCovariant_of_tubeCovariant R, F.tubeCovariant_of_poincareCovariant R⟩
+
+theorem wightman_pct_of_weakLocality [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (hloc : WeakLocality η F.toWightmanFamily) :
+    WightmanPCT η R F.toWightmanFamily :=
+  wightman_pct_of_weakLocality_general R F.toWightmanFamily F.toTubeExtension
+    h_tcov F.tubeTranslationInvariant hloc
+
+theorem weakLocality_of_wightman_pct [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_pct : WightmanPCT η R F.toWightmanFamily) :
+    WeakLocality η F.toWightmanFamily :=
+  entire_weakLocality_of_tubePCT R F.toWightmanFamily F.toTubeExtension
+    F.analyticAt_H h_tcov
+    (tubePCT_of_wightmanPCT R F.toWightmanFamily F.toTubeExtension h_tcov h_pct)
+
+theorem wightman_pct_iff_weakLocality [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension) :
+    WightmanPCT η R F.toWightmanFamily ↔ WeakLocality η F.toWightmanFamily :=
+  ⟨F.weakLocality_of_wightman_pct R h_tcov, F.wightman_pct_of_weakLocality R h_tcov⟩
+
+theorem wightman_pct_iff_weakLocality_of_poincare [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_poinc : PoincareCovariant R F.toWightmanFamily) :
+    WightmanPCT η R F.toWightmanFamily ↔ WeakLocality η F.toWightmanFamily :=
+  F.wightman_pct_iff_weakLocality R (F.tubeCovariant_of_poincareCovariant R h_poinc)
+
+theorem tubeWeakLocality_of_weakLocality [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_pt : TubePTScalar R F.toTubeExtension)
+    (hloc : WeakLocality η F.toWightmanFamily) :
+    TubeWeakLocality η F.toTubeExtension :=
+  tubeWeakLocality_of_weakLocality_general R F.toWightmanFamily F.toTubeExtension
+    h_tcov h_pt hloc
+
+theorem weakLocality_of_tubeWeakLocality [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_pt : TubePTScalar R F.toTubeExtension)
+    (h_tloc : TubeWeakLocality η F.toTubeExtension) :
+    WeakLocality η F.toWightmanFamily :=
+  entire_weakLocality_of_tubePCT R F.toWightmanFamily F.toTubeExtension
+    F.analyticAt_H h_tcov
+    (tubePCT_of_tubeWeakLocality_general R F.toTubeExtension h_pt h_tloc)
+
+theorem weakLocality_iff_tubeWeakLocality [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_pt : TubePTScalar R F.toTubeExtension) :
+    WeakLocality η F.toWightmanFamily ↔ TubeWeakLocality η F.toTubeExtension :=
+  ⟨F.tubeWeakLocality_of_weakLocality R h_tcov h_pt,
+   F.weakLocality_of_tubeWeakLocality R h_tcov h_pt⟩
+
+theorem weakLocality_iff_tubeWeakLocality_trivialRep
+    (F : ForwardConeSpectralFamily Unit) {η : ℂ}
+    (h_tcov : TubeCovariant trivialRep F.toTubeExtension) :
+    WeakLocality η F.toWightmanFamily ↔ TubeWeakLocality η F.toTubeExtension :=
+  F.weakLocality_iff_tubeWeakLocality trivialRep h_tcov
+    (tubePTScalar_trivialRep F.toTubeExtension)
+
+theorem weakLocality_iff_tubeWeakLocality_leftWeylRep
+    (F : ForwardConeSpectralFamily (Fin 2)) {η : ℂ}
+    (h_tcov : TubeCovariant leftWeylRep F.toTubeExtension) :
+    WeakLocality η F.toWightmanFamily ↔ TubeWeakLocality η F.toTubeExtension :=
+  F.weakLocality_iff_tubeWeakLocality leftWeylRep h_tcov
+    (tubePTScalar_leftWeylRep F.toTubeExtension h_tcov)
+
+theorem weakLocality_iff_tubeWeakLocality_rightWeylRep
+    (F : ForwardConeSpectralFamily (Fin 2)) {η : ℂ}
+    (h_tcov : TubeCovariant rightWeylRep F.toTubeExtension) :
+    WeakLocality η F.toWightmanFamily ↔ TubeWeakLocality η F.toTubeExtension :=
+  F.weakLocality_iff_tubeWeakLocality rightWeylRep h_tcov
+    (tubePTScalar_rightWeylRep F.toTubeExtension)
+
+theorem tubePCT_of_posOrderedEuclidN [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_euclid : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (wickEmbedN n (-(x ∘ Fin.rev))) =
+        η ^ (n * (n - 1) / 2) *
+          ∑ β : Fin n → ι,
+            (∏ i, R.σ (-1, 1) (α i) (β i)) * F.toSchwingerFamily n (β ∘ Fin.rev) x) :
+    TubePCT η R F.toTubeExtension := by
+  intro n α z hz
+  have h_rhs_an : AnalyticOn ℂ
+      (fun w : Fin n → Fin 4 → ℂ =>
+        η ^ (n * (n - 1) / 2) *
+          ∑ β : Fin n → ι, (∏ i, R.σ (-1, 1) (α i) (β i)) * F.H n (β ∘ Fin.rev) w)
+      (forward_tube_n n) := by
+    refine AnalyticOnNhd.analyticOn (fun w _ => analyticAt_const.mul ?_)
+    refine analyticAt_finset_sum_normed Finset.univ (fun β _ => analyticAt_const.mul ?_)
+    exact F.analyticAt_H n (β ∘ Fin.rev) w
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (F.analyticOn_H_neg_rev n α (forward_tube_n n)) h_rhs_an (fun x hx => ?_) hz
+  change F.H n α (-(wickEmbedN n x ∘ Fin.rev)) =
+    η ^ (n * (n - 1) / 2) *
+      ∑ β : Fin n → ι, (∏ i, R.σ (-1, 1) (α i) (β i)) * F.toSchwingerFamily n (β ∘ Fin.rev) x
+  rw [← wickEmbedN_neg_comp_rev n x]
+  exact h_euclid n α x hx
+
+theorem weakLocality_of_tubePCT [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (hpct : TubePCT η R F.toTubeExtension) :
+    WeakLocality η F.toWightmanFamily :=
+  entire_weakLocality_of_tubePCT R F.toWightmanFamily F.toTubeExtension
+    F.analyticAt_H h_tcov hpct
+
+theorem tubePCT_of_weakLocality_self [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (hloc : WeakLocality η F.toWightmanFamily) :
+    TubePCT η R F.toTubeExtension :=
+  tubePCT_of_weakLocality R F.toWightmanFamily F.toTubeExtension h_tcov hloc
+
+theorem tubePCT_iff_weakLocality [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension) :
+    TubePCT η R F.toTubeExtension ↔ WeakLocality η F.toWightmanFamily :=
+  entire_tubePCT_iff_weakLocality R F.toWightmanFamily F.toTubeExtension
+    F.analyticAt_H h_tcov
+
+def toForwardConeOSEuclideanTubeBridgeOfTube [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_tpct : TubePCT η R F.toTubeExtension)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 :=
+  F.toForwardConeOSEuclideanTubeBridge R S η 𝒮 h_schw h_tcov h_tpct
+    (F.poincareCovariant_of_tubeCovariant R h_tcov)
+    (F.weakLocality_of_tubePCT R h_tcov h_tpct)
+    h_pos
+
+def toForwardConeOSEuclideanTubeBridgeOfWightman [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 :=
+  let h_tcov := F.tubeCovariant_of_poincareCovariant R h_poinc
+  F.toForwardConeOSEuclideanTubeBridge R S η 𝒮 h_schw h_tcov
+    (F.tubePCT_of_weakLocality_self R h_tcov h_loc)
+    h_poinc h_loc h_pos
+
+theorem toWightmanFamily_borchersProduct_apply (F : ForwardConeSpectralFamily ι)
+    (j k : ℕ) (γ : Fin (j + k) → ι)
+    (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ)
+    (G : SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ x : Fin (j + k) → Fin 4 → ℝ,
+      G x = (starRingEnd ℂ) (f (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+        g (fun i => x (Fin.natAdd j i))) :
+    F.toWightmanFamily (j + k) γ G =
+      ∑ r : Fin (F.m (j + k)),
+        F.c (j + k) γ r *
+          (star (minkowskiFourier f (fun i => -F.p (j + k) γ r (Fin.castAdd k (Fin.rev i)))) *
+            minkowskiFourier g (fun i => F.p (j + k) γ r (Fin.natAdd j i))) := by
+  rw [F.toWightmanFamily_apply]
+  refine Finset.sum_congr rfl (fun r _ => ?_)
+  rw [minkowskiFourier_borchersProduct_eq j k f g G hG (F.p (j + k) γ r)]
+
+theorem wightmanSesquilinear_eq_norm_sq_of_hilbertWavepacket [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ → H)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∑ r : Fin (F.m (j + k)),
+          F.c (j + k) (Fin.append (β ∘ Fin.rev) α') r *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r (Fin.natAdd j i))))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ)
+    (N : ℕ)
+    (F_test : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (G : ∀ j k : ℕ, (Fin j → ι) → (Fin k → ι) →
+      SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ j k α α' (x : Fin (j + k) → Fin 4 → ℝ),
+      G j k α α' x =
+        (starRingEnd ℂ) (F_test j α (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+          F_test k α' (fun i => x (Fin.natAdd j i))) :
+    (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+      ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+        (∏ i : Fin j, S.C (α i) (β i)) *
+          F.toWightmanFamily (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+      (‖∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)‖ ^ 2 : ℂ) := by
+  have h_sum_eq :
+      (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+        ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+          (∏ i : Fin j, S.C (α i) (β i)) *
+            F.toWightmanFamily (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+        ⟪∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α),
+          ∑ k ∈ Finset.range (N + 1), ∑ α' : Fin k → ι, Φ k α' (F_test k α')⟫_ℂ := by
+    rw [sum_inner]
+    refine Finset.sum_congr rfl (fun j _ => ?_)
+    rw [inner_sum]
+    refine Finset.sum_congr rfl (fun k _ => ?_)
+    rw [sum_inner]
+    refine Finset.sum_congr rfl (fun α _ => ?_)
+    rw [inner_sum]
+    refine Finset.sum_congr rfl (fun α' _ => ?_)
+    rw [← h_inner j k α α' (F_test j α) (F_test k α')]
+    refine Finset.sum_congr rfl (fun β _ => ?_)
+    rw [F.toWightmanFamily_borchersProduct_apply j k (Fin.append (β ∘ Fin.rev) α')
+        (F_test j α) (F_test k α') (G j k α α') (hG j k α α')]
+  exact h_sum_eq.trans
+    (inner_self_eq_norm_sq_to_K (𝕜 := ℂ)
+      (∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)))
+
+theorem positivity_of_hilbertWavepacket [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ → H)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∑ r : Fin (F.m (j + k)),
+          F.c (j + k) (Fin.append (β ∘ Fin.rev) α') r *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r (Fin.natAdd j i))))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ) :
+    Positivity S F.toWightmanFamily := by
+  intro N F_test G hG
+  rw [F.wightmanSesquilinear_eq_norm_sq_of_hilbertWavepacket S Φ h_inner N F_test G hG]
+  have h_nonneg :
+      0 ≤ ‖∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)‖ ^ 2 :=
+    sq_nonneg _
+  exact_mod_cast h_nonneg
+
+theorem positivity_of_osHilbertWavepacket [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralFamily ι)
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ → OSHilbert D)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∑ r : Fin (F.m (j + k)),
+          F.c (j + k) (Fin.append (β ∘ Fin.rev) α') r *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r (Fin.natAdd j i))))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ) :
+    Positivity S F.toWightmanFamily :=
+  F.positivity_of_hilbertWavepacket S Φ h_inner
+
+end ForwardConeSpectralFamily
+
+namespace OSReconstructionData
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+  {hOS : OSAxioms R S η 𝒮}
+  {hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData}
+
+noncomputable def toOSHolomorphicSemigroup
+    (G : OSReconstructionData hOS hcluster) :
+    OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster) :=
+  G.spec.toOSHolomorphicSemigroup
+
+noncomputable def toForwardConeOSEuclideanTubeBridge
+    (G : OSReconstructionData hOS hcluster) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 :=
+  G.F.toForwardConeOSEuclideanTubeBridge R S η 𝒮
+    G.schwinger_eq G.tube_covariant G.tube_pct
+    G.poincare G.weakLocality G.positivity
+
+noncomputable def toForwardConeOSReconstructedWightman
+    (G : OSReconstructionData hOS hcluster) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 :=
+  forwardConeOSReconstructedWightmanOfTimeCluster R S η 𝒮
+    hOS hcluster G.toOSHolomorphicSemigroup G.toForwardConeOSEuclideanTubeBridge
+
+@[simp]
+theorem toForwardConeOSReconstructedWightman_W
+    (G : OSReconstructionData hOS hcluster) :
+    G.toForwardConeOSReconstructedWightman.W = G.F.toWightmanFamily := rfl
+
+@[simp]
+theorem toForwardConeOSReconstructedWightman_E
+    (G : OSReconstructionData hOS hcluster) :
+    G.toForwardConeOSReconstructedWightman.E = G.F.toTubeExtension := rfl
+
+@[simp]
+theorem toForwardConeOSReconstructedWightman_semigroup
+    (G : OSReconstructionData hOS hcluster) :
+    G.toForwardConeOSReconstructedWightman.semigroup = G.toOSHolomorphicSemigroup := rfl
+
+def ofPosOrderedEuclid
+    (m_spec : ℕ)
+    (spec : OSSpectralDecomposition hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster)
+      m_spec)
+    (F : ForwardConeSpectralFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_euclid_cov : ∀ (n : ℕ) (A : SL2C) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (spinorPhi (A, sl2c_conj A) • wickEmbedN n x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * 𝒮 n β x)
+    (h_euclid_loc : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (wickEmbedN n (-(x ∘ Fin.rev))) =
+        η ^ (n * (n - 1) / 2) *
+          ∑ β : Fin n → ι, (∏ i, R.σ (-1, 1) (α i) (β i)) * 𝒮 n (β ∘ Fin.rev) x)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    OSReconstructionData hOS hcluster where
+  m_spec := m_spec
+  spec := spec
+  F := F
+  schwinger_eq := h_schw
+  tube_covariant := F.tubeCovariant_of_posOrderedEuclidN R (fun n A α x hx => by
+    have hx' := posOrderedEuclidN_subset_orderedEuclidN n hx
+    rw [h_euclid_cov n A α x hx]
+    refine Finset.sum_congr rfl (fun β _ => ?_)
+    rw [h_schw n β x hx'])
+  tube_pct := F.tubePCT_of_posOrderedEuclidN R (fun n α x hx => by
+    have hx' := posOrderedEuclidN_subset_orderedEuclidN n hx
+    rw [h_euclid_loc n α x hx]
+    congr 1
+    refine Finset.sum_congr rfl (fun β _ => ?_)
+    rw [h_schw n (β ∘ Fin.rev) x hx'])
+  poincare := h_poinc
+  weakLocality := h_loc
+  positivity := h_pos
+
+def ofOSHilbertWavepacket
+    (m_spec : ℕ)
+    (spec : OSSpectralDecomposition hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster)
+      m_spec)
+    (F : ForwardConeSpectralFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_euclid_cov : ∀ (n : ℕ) (A : SL2C) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (spinorPhi (A, sl2c_conj A) • wickEmbedN n x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * 𝒮 n β x)
+    (h_euclid_loc : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (wickEmbedN n (-(x ∘ Fin.rev))) =
+        η ^ (n * (n - 1) / 2) *
+          ∑ β : Fin n → ι, (∏ i, R.σ (-1, 1) (α i) (β i)) * 𝒮 n (β ∘ Fin.rev) x)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ →
+      OSHilbert hOS.toReflectionPositiveData)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∑ r : Fin (F.m (j + k)),
+          F.c (j + k) (Fin.append (β ∘ Fin.rev) α') r *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r (Fin.natAdd j i))))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ) :
+    OSReconstructionData hOS hcluster :=
+  ofPosOrderedEuclid m_spec spec F h_schw h_euclid_cov h_euclid_loc h_poinc h_loc
+    (F.positivity_of_osHilbertWavepacket hOS.toReflectionPositiveData Φ h_inner)
+
+def ofEuclideanPosOrdered
+    (m_spec : ℕ)
+    (spec : OSSpectralDecomposition hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster)
+      m_spec)
+    (F : ForwardConeSpectralFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_euclid_cov : ∀ (n : ℕ) (A : SL2C) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (spinorPhi (A, sl2c_conj A) • wickEmbedN n x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * 𝒮 n β x)
+    (h_euclid_loc : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (wickEmbedN n (-(x ∘ Fin.rev))) =
+        η ^ (n * (n - 1) / 2) *
+          ∑ β : Fin n → ι, (∏ i, R.σ (-1, 1) (α i) (β i)) * 𝒮 n (β ∘ Fin.rev) x)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    OSReconstructionData hOS hcluster :=
+  let h_tcov : TubeCovariant R F.toTubeExtension :=
+    F.tubeCovariant_of_posOrderedEuclidN R (fun n A α x hx => by
+      have hx' := posOrderedEuclidN_subset_orderedEuclidN n hx
+      rw [h_euclid_cov n A α x hx]
+      refine Finset.sum_congr rfl (fun β _ => ?_)
+      rw [h_schw n β x hx'])
+  let h_tpct : TubePCT η R F.toTubeExtension :=
+    F.tubePCT_of_posOrderedEuclidN R (fun n α x hx => by
+      have hx' := posOrderedEuclidN_subset_orderedEuclidN n hx
+      rw [h_euclid_loc n α x hx]
+      congr 1
+      refine Finset.sum_congr rfl (fun β _ => ?_)
+      rw [h_schw n (β ∘ Fin.rev) x hx'])
+  { m_spec := m_spec
+    spec := spec
+    F := F
+    schwinger_eq := h_schw
+    tube_covariant := h_tcov
+    tube_pct := h_tpct
+    poincare := F.poincareCovariant_of_tubeCovariant R h_tcov
+    weakLocality := F.weakLocality_of_tubePCT R h_tcov h_tpct
+    positivity := h_pos }
+
+def ofEuclideanOSHilbertWavepacket
+    (m_spec : ℕ)
+    (spec : OSSpectralDecomposition hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster)
+      m_spec)
+    (F : ForwardConeSpectralFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_euclid_cov : ∀ (n : ℕ) (A : SL2C) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (spinorPhi (A, sl2c_conj A) • wickEmbedN n x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * 𝒮 n β x)
+    (h_euclid_loc : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (wickEmbedN n (-(x ∘ Fin.rev))) =
+        η ^ (n * (n - 1) / 2) *
+          ∑ β : Fin n → ι, (∏ i, R.σ (-1, 1) (α i) (β i)) * 𝒮 n (β ∘ Fin.rev) x)
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ →
+      OSHilbert hOS.toReflectionPositiveData)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∑ r : Fin (F.m (j + k)),
+          F.c (j + k) (Fin.append (β ∘ Fin.rev) α') r *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') r (Fin.natAdd j i))))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ) :
+    OSReconstructionData hOS hcluster :=
+  ofEuclideanPosOrdered m_spec spec F h_schw h_euclid_cov h_euclid_loc
+    (F.positivity_of_osHilbertWavepacket hOS.toReflectionPositiveData Φ h_inner)
+
+end OSReconstructionData
+
+theorem osterwalder_schrader_reconstruction_of_data
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdata : OSReconstructionData hOS hcluster) :
+    let P := hdata.toForwardConeOSReconstructedWightman
+    (∀ a b : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (a + b) =
+        (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a).comp
+          (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation b)) ∧
+    (∀ a : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a P.vacuum = P.vacuum) ∧
+    (∀ Ψ : P.Hilbert,
+      (∀ (τ : ℝ) (hτ : 0 ≤ τ), P.timeContraction τ hτ Ψ = Ψ) →
+      Ψ = ⟪P.vacuum, Ψ⟫_ℂ • P.vacuum) ∧
+    TubeTranslationInvariant P.E ∧
+    ComplexCovariant R P.E ∧
+    WightmanPCT η R P.W ∧
+    (∀ P' : ForwardConeOSReconstructedWightman R S η 𝒮,
+      P'.W = P.W ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+        z ∈ forward_tube_n n → P'.E.H n α z = P.E.H n α z) := by
+  intro P
+  exact ⟨P.semigroup.spacetimeTranslate_add P.osAxioms.os1_translation,
+    P.semigroup.spacetimeTranslate_vacuum P.osAxioms.os1_translation,
+    fun _ hfixed => P.vacuum_unique_of_timeCluster hcluster hfixed,
+    P.tube_translationInvariant,
+    P.complexCovariant,
+    P.wightman_pct,
+    fun P' => ⟨P'.wightman_unique_unconditional P, P'.tube_H_unique P⟩⟩
+
+theorem poincareCovariant_of_tubeCovariant_and_translation
+    (R : HolomorphicLorentzRep ι) {W : WightmanFamily ι} (E : TubeExtension W)
+    (hcov : TubeCovariant R E) (htrans : TubeTranslationInvariant E) :
+    PoincareCovariant R W :=
+  poincareCovariant_of_tubeCovariant_general R W E hcov htrans
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tubeTranslationInvariant_of_schwinger_eq_and_osTranslation
+    {W : WightmanFamily ι} (E : TubeExtension W) (𝒮 : SchwingerFamily ι)
+    (htrans : OSTranslationInvariant 𝒮)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x) :
+    TubeTranslationInvariant E := by
+  apply tubeTranslationInvariant_of_osTranslationInvariant E
+  intro n α x hx a
+  have hxa : (fun i => x i + a) ∈ orderedEuclidN n := shift_mem_orderedEuclidN n hx a
+  rw [← h_schw n α (fun i => x i + a) hxa, ← h_schw n α x hx]
+  exact htrans n α x hx a
+
+theorem poincareCovariant_of_tube_and_osTranslation
+    (R : HolomorphicLorentzRep ι) {W : WightmanFamily ι} (E : TubeExtension W)
+    (𝒮 : SchwingerFamily ι) (htrans : OSTranslationInvariant 𝒮)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (hcov : TubeCovariant R E) :
+    PoincareCovariant R W :=
+  poincareCovariant_of_tubeCovariant_and_translation R E hcov
+    (tubeTranslationInvariant_of_schwinger_eq_and_osTranslation E 𝒮 htrans h_schw)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem analyticOn_tube_neg_rev {W : WightmanFamily ι} (E : TubeExtension W)
+    (n : ℕ) (α : Fin n → ι) :
+    AnalyticOn ℂ (fun w : Fin n → Fin 4 → ℂ => E.H n α (-(w ∘ Fin.rev)))
+      (forward_tube_n n) := by
+  refine AnalyticOnNhd.analyticOn (fun z hz => ?_)
+  have h_nr : -(z ∘ Fin.rev) ∈ forward_tube_n n := neg_rev_mem_forward_tube_n n z hz
+  have hH_an : AnalyticAt ℂ (E.H n α) (ForwardConeSpectralFamily.negCompRevCLM n z) :=
+    (E.analytic n α).analyticAt ((forward_tube_n_isOpen n).mem_nhds h_nr)
+  exact hH_an.comp ((ForwardConeSpectralFamily.negCompRevCLM n).analyticAt z)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem tubeWeakLocality_of_schwinger_eq_and_osSymmetry
+    {W : WightmanFamily ι} {η : ℂ} (E : TubeExtension W) (𝒮 : SchwingerFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (h_sym : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n →
+      𝒮 n α (-(x ∘ Fin.rev)) = η ^ (n * (n - 1) / 2) * 𝒮 n (α ∘ Fin.rev) x) :
+    TubeWeakLocality η E := by
+  intro n α z hz
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (analyticOn_tube_neg_rev E n α)
+    (analyticOn_const.mul (E.analytic n (α ∘ Fin.rev)))
+    (fun x hx => ?_) hz
+  have hx_ord := posOrderedEuclidN_subset_orderedEuclidN n hx
+  have hx_nr_ord := neg_rev_mem_orderedEuclidN n hx_ord
+  change E.H n α (-(wickEmbedN n x ∘ Fin.rev)) =
+    η ^ (n * (n - 1) / 2) * E.H n (α ∘ Fin.rev) (wickEmbedN n x)
+  rw [← ForwardConeSpectralFamily.wickEmbedN_neg_comp_rev n x]
+  change schwingerFromTube E n α (-(x ∘ Fin.rev)) =
+    η ^ (n * (n - 1) / 2) * schwingerFromTube E n (α ∘ Fin.rev) x
+  rw [← h_schw n α (-(x ∘ Fin.rev)) hx_nr_ord, ← h_schw n (α ∘ Fin.rev) x hx_ord]
+  exact h_sym n α x hx_ord
+
+theorem tubePCT_of_schwinger_eq_and_osPCTSymmetry
+    (R : HolomorphicLorentzRep ι) {W : WightmanFamily ι} {η : ℂ}
+    (E : TubeExtension W) (𝒮 : SchwingerFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (h_sym : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n →
+      𝒮 n α (-(x ∘ Fin.rev)) =
+        η ^ (n * (n - 1) / 2) *
+          ∑ β : Fin n → ι, (∏ i, R.σ (-1, 1) (α i) (β i)) * 𝒮 n (β ∘ Fin.rev) x) :
+    TubePCT η R E := by
+  intro n α z hz
+  have h_rhs_an : AnalyticOn ℂ
+      (fun w : Fin n → Fin 4 → ℂ =>
+        η ^ (n * (n - 1) / 2) *
+          ∑ β : Fin n → ι, (∏ i, R.σ (-1, 1) (α i) (β i)) * E.H n (β ∘ Fin.rev) w)
+      (forward_tube_n n) := by
+    refine AnalyticOnNhd.analyticOn (fun w hw => analyticAt_const.mul ?_)
+    refine analyticAt_finset_sum_normed Finset.univ (fun β _ => analyticAt_const.mul ?_)
+    exact (E.analytic n (β ∘ Fin.rev)).analyticAt ((forward_tube_n_isOpen n).mem_nhds hw)
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (analyticOn_tube_neg_rev E n α) h_rhs_an (fun x hx => ?_) hz
+  have hx_ord := posOrderedEuclidN_subset_orderedEuclidN n hx
+  have hx_nr_ord := neg_rev_mem_orderedEuclidN n hx_ord
+  change E.H n α (-(wickEmbedN n x ∘ Fin.rev)) =
+    η ^ (n * (n - 1) / 2) *
+      ∑ β : Fin n → ι,
+        (∏ i, R.σ (-1, 1) (α i) (β i)) * E.H n (β ∘ Fin.rev) (wickEmbedN n x)
+  rw [← ForwardConeSpectralFamily.wickEmbedN_neg_comp_rev n x]
+  change schwingerFromTube E n α (-(x ∘ Fin.rev)) =
+    η ^ (n * (n - 1) / 2) *
+      ∑ β : Fin n → ι,
+        (∏ i, R.σ (-1, 1) (α i) (β i)) * schwingerFromTube E n (β ∘ Fin.rev) x
+  rw [← h_schw n α (-(x ∘ Fin.rev)) hx_nr_ord]
+  simp_rw [← h_schw n _ x hx_ord]
+  exact h_sym n α x hx_ord
+
+namespace ForwardConeOSEuclideanTubeBridge
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+def ofTube
+    (htrans : OSTranslationInvariant 𝒮)
+    (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (h_tcov : TubeCovariant R E)
+    (h_tpct : TubePCT η R E)
+    (h_spec : ForwardConeSpectrumCondition W)
+    (h_loc : WeakLocality η W)
+    (h_pos : Positivity S W) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 where
+  W := W
+  E := E
+  schwinger_eq := h_schw
+  tube_covariant := h_tcov
+  tube_pct := h_tpct
+  spectrum := h_spec
+  poincare := poincareCovariant_of_tube_and_osTranslation R E 𝒮 htrans h_schw h_tcov
+  weakLocality := h_loc
+  positivity := h_pos
+
+def ofOSAxiomsTube
+    (hOS : OSAxioms R S η 𝒮)
+    (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (h_tcov : TubeCovariant R E)
+    (h_spec : ForwardConeSpectrumCondition W)
+    (h_loc : WeakLocality η W)
+    (h_pos : Positivity S W) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 :=
+  ofTube hOS.os1_translation W E h_schw h_tcov
+    (tubePCT_of_schwinger_eq_and_osPCTSymmetry R E 𝒮 h_schw hOS.os3_symmetry)
+    h_spec h_loc h_pos
+
+noncomputable def H_ext (B : ForwardConeOSEuclideanTubeBridge R S η 𝒮) :
+    ∀ n : ℕ, (Fin n → ι) → (Fin n → Fin 4 → ℂ) → ℂ :=
+  spinor_H_ext R B.W B.E
+
+theorem H_ext_analytic (B : ForwardConeOSEuclideanTubeBridge R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) :
+    AnalyticOn ℂ (B.H_ext n α) (extended_tube_n n) :=
+  spinor_H_ext_analytic R B.W B.E B.tube_covariant n α
+
+theorem H_ext_complexCovariant (B : ForwardConeOSEuclideanTubeBridge R S η 𝒮)
+    (n : ℕ) (g : SL2C × SL2C) (z : Fin n → Fin 4 → ℂ) (α : Fin n → ι) :
+    B.H_ext n α (spinorPhi g • z) =
+      ∑ β : Fin n → ι, (∏ i, R.σ g (α i) (β i)) * B.H_ext n β z :=
+  spinor_H_ext_complexCovariant R B.W B.E B.tube_covariant n g z α
+
+theorem H_ext_eq_on_forward_tube (B : ForwardConeOSEuclideanTubeBridge R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) {z : Fin n → Fin 4 → ℂ} (hz : z ∈ forward_tube_n n) :
+    B.H_ext n α z = B.E.H n α z :=
+  spinor_H_ext_eq_on_forward_tube R B.W B.E B.tube_covariant n α hz
+
+theorem extendedTubeWeakLocality (B : ForwardConeOSEuclideanTubeBridge R S η 𝒮) :
+    ExtendedTubeWeakLocality η B.H_ext :=
+  extendedTubeWeakLocality_of_weakLocality R B.W B.E B.tube_covariant B.weakLocality
+
+theorem tubePCT (B : ForwardConeOSEuclideanTubeBridge R S η 𝒮) :
+    TubePCT η R B.E :=
+  tubePCT_of_weakLocality R B.W B.E B.tube_covariant B.weakLocality
+
+theorem spin_statistics (B : ForwardConeOSEuclideanTubeBridge R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ β : Fin 2 → ι, B.W 2 β ≠ 0) :
+    η = ε :=
+  spin_statistics_of_spectrumCondition S B.W B.spectrum B.poincare
+    B.positivity hε B.weakLocality h_nondeg
+
+end ForwardConeOSEuclideanTubeBridge
+
+namespace ForwardConeOSReconstructedWightman
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+def ofTubeTimeCluster
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster))
+    (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (h_tcov : TubeCovariant R E)
+    (h_spec : ForwardConeSpectrumCondition W)
+    (h_loc : WeakLocality η W)
+    (h_pos : Positivity S W) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 :=
+  forwardConeOSReconstructedWightmanOfTimeCluster R S η 𝒮 hOS hcluster ℰ
+    (ForwardConeOSEuclideanTubeBridge.ofOSAxiomsTube hOS W E
+      h_schw h_tcov h_spec h_loc h_pos)
+
+def ofTubeDiagonalBounded
+    (hOS : OSAxioms R S η 𝒮)
+    (hdiag : OSDiagonalKernelBounded S 𝒮)
+    (ℰ : OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_diagonalKernelBounded hOS.toReflectionPositiveData
+        hOS.os1_translation hdiag))
+    (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (h_tcov : TubeCovariant R E)
+    (h_spec : ForwardConeSpectrumCondition W)
+    (h_loc : WeakLocality η W)
+    (h_pos : Positivity S W) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 :=
+  forwardConeOSReconstructedWightmanOfDiagonalBounded R S η 𝒮 hOS hdiag ℰ
+    (ForwardConeOSEuclideanTubeBridge.ofOSAxiomsTube hOS W E
+      h_schw h_tcov h_spec h_loc h_pos)
+
+noncomputable def H_ext (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    ∀ n : ℕ, (Fin n → ι) → (Fin n → Fin 4 → ℂ) → ℂ :=
+  spinor_H_ext R P.W P.E
+
+theorem H_ext_analytic (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) :
+    AnalyticOn ℂ (P.H_ext n α) (extended_tube_n n) :=
+  spinor_H_ext_analytic R P.W P.E P.tube_covariant n α
+
+theorem H_ext_complexCovariant (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (g : SL2C × SL2C) (z : Fin n → Fin 4 → ℂ) (α : Fin n → ι) :
+    P.H_ext n α (spinorPhi g • z) =
+      ∑ β : Fin n → ι, (∏ i, R.σ g (α i) (β i)) * P.H_ext n β z :=
+  spinor_H_ext_complexCovariant R P.W P.E P.tube_covariant n g z α
+
+theorem H_ext_eq_on_forward_tube (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    (n : ℕ) (α : Fin n → ι) {z : Fin n → Fin 4 → ℂ} (hz : z ∈ forward_tube_n n) :
+    P.H_ext n α z = P.E.H n α z :=
+  spinor_H_ext_eq_on_forward_tube R P.W P.E P.tube_covariant n α hz
+
+theorem extendedTubeWeakLocality (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    ExtendedTubeWeakLocality η P.H_ext :=
+  extendedTubeWeakLocality_of_weakLocality R P.W P.E P.tube_covariant P.weakLocality
+
+theorem tubePCT (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
+    TubePCT η R P.E :=
+  tubePCT_of_weakLocality R P.W P.E P.tube_covariant P.weakLocality
+
+theorem spin_statistics (P : ForwardConeOSReconstructedWightman R S η 𝒮)
+    {ε : ℂ} (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ β : Fin 2 → ι, P.W 2 β ≠ 0) :
+    η = ε :=
+  spin_statistics_of_spectrumCondition S P.W P.spectrum P.poincare
+    P.positivity hε P.weakLocality h_nondeg
+
+end ForwardConeOSReconstructedWightman
+
+def nonCoincidentEuclidN (n : ℕ) : Set (Fin n → Fin 4 → ℝ) :=
+  {x | ∀ i j : Fin n, i ≠ j → x i ≠ x j}
+
+theorem isOpen_nonCoincidentEuclidN (n : ℕ) : IsOpen (nonCoincidentEuclidN n) := by
+  have h_eq : nonCoincidentEuclidN n =
+      ⋂ i : Fin n, ⋂ j : Fin n, {x : Fin n → Fin 4 → ℝ | i ≠ j → x i ≠ x j} := by
+    ext x
+    simp [nonCoincidentEuclidN]
+  rw [h_eq]
+  refine isOpen_iInter_of_finite (fun i => isOpen_iInter_of_finite (fun j => ?_))
+  by_cases hij : i = j
+  · subst hij
+    simp
+  · have h_set : {x : Fin n → Fin 4 → ℝ | i ≠ j → x i ≠ x j} = {x | x i ≠ x j} := by
+      ext x
+      simp [hij]
+    rw [h_set]
+    exact isOpen_ne_fun (continuous_apply i) (continuous_apply j)
+
+lemma nonCoincidentEuclidN_comp_perm {n : ℕ} {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ nonCoincidentEuclidN n) (π : Equiv.Perm (Fin n)) :
+    (x ∘ π) ∈ nonCoincidentEuclidN n :=
+  fun i j hij heq => hx (π i) (π j) (π.injective.ne hij) heq
+
+lemma nonCoincidentEuclidN_add_const {n : ℕ} {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ nonCoincidentEuclidN n) (a : Fin 4 → ℝ) :
+    (fun i => x i + a) ∈ nonCoincidentEuclidN n :=
+  fun i j hij heq => hx i j hij (add_right_cancel heq)
+
+lemma nonCoincidentEuclidN_euclidRotN {n : ℕ} {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ nonCoincidentEuclidN n) (U V : SU2) :
+    euclidRotN n U V x ∈ nonCoincidentEuclidN n := by
+  intro i j hij heq
+  apply hx i j hij
+  have h1 : euclidRotApply U V (x i) = euclidRotApply U V (x j) := by
+    rw [← euclidRotOfSU2_mulVec, ← euclidRotOfSU2_mulVec]
+    exact heq
+  have h2 := congrArg (euclidRotApply U⁻¹ V⁻¹) h1
+  rwa [euclidRotApply_inv_self, euclidRotApply_inv_self] at h2
+
+private lemma alignPosTimeMatrix_mem_su2 {v : Fin 4 → ℝ} (hv : v ≠ 0) :
+    (-(Complex.I / (Real.sqrt (euclidInner v v) : ℂ))) • vec_to_spinor (wickEmbed v) ∈
+      Matrix.specialUnitaryGroup (Fin 2) ℂ := by
+  let r : ℝ := Real.sqrt (euclidInner v v)
+  have hv_pos : 0 < euclidInner v v :=
+    lt_of_le_of_ne (euclidInner_self_nonneg v)
+      (Ne.symm ((euclidInner_self_eq_zero_iff v).not.mpr hv))
+  have hr_ne : (r : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (Real.sqrt_pos.mpr hv_pos).ne'
+  have hr_sq : ((r : ℂ) ^ 2) = (euclidInner v v : ℂ) := by
+    norm_cast
+    exact Real.sq_sqrt (euclidInner_self_nonneg v)
+  let c : ℂ := -(Complex.I / (r : ℂ))
+  have hc_sq : c ^ 2 = -((r : ℂ) ^ 2)⁻¹ := by
+    dsimp [c]
+    rw [neg_sq, div_pow, Complex.I_sq, neg_div, one_div]
+  have hc_star : star c = -c := by
+    change (starRingEnd ℂ) (-(Complex.I / (r : ℂ))) = -(-(Complex.I / (r : ℂ)))
+    rw [map_neg, map_div₀, Complex.conj_I, Complex.conj_ofReal]
+    ring
+  rw [Matrix.mem_specialUnitaryGroup_iff, Matrix.mem_unitaryGroup_iff']
+  refine ⟨?_, ?_⟩
+  · rw [Matrix.star_eq_conjTranspose, Matrix.conjTranspose_smul, hc_star,
+        vec_to_spinor_wickEmbed_conjTranspose, smul_neg, neg_smul, neg_neg,
+        Matrix.smul_mul, Matrix.mul_smul, smul_smul,
+        Matrix.adjugate_mul, det_vec_to_spinor_wickEmbed, smul_smul]
+    have h_one : c * c * -(euclidInner v v : ℂ) = 1 := by
+      rw [← sq, hc_sq, ← hr_sq, neg_mul_neg, inv_mul_cancel₀ (pow_ne_zero 2 hr_ne)]
+    rw [h_one, one_smul]
+  · rw [Matrix.det_smul, Fintype.card_fin, hc_sq, det_vec_to_spinor_wickEmbed,
+        ← hr_sq, neg_mul_neg, inv_mul_cancel₀ (pow_ne_zero 2 hr_ne)]
+
+noncomputable def alignPosTimeSU2 (v : Fin 4 → ℝ) : SU2 :=
+  if hv : v = 0 then 1
+  else (⟨(-(Complex.I / (Real.sqrt (euclidInner v v) : ℂ))) • vec_to_spinor (wickEmbed v),
+    alignPosTimeMatrix_mem_su2 hv⟩ : SU2)⁻¹
+
+theorem euclidRotApply_alignPosTimeSU2 (v : Fin 4 → ℝ) :
+    euclidRotApply (alignPosTimeSU2 v) 1 v = ![Real.sqrt (euclidInner v v), 0, 0, 0] := by
+  by_cases hv : v = 0
+  · subst hv
+    have h0 : (![(0 : ℝ), 0, 0, 0] : Fin 4 → ℝ) = 0 := by
+      ext μ
+      fin_cases μ <;> rfl
+    simp [alignPosTimeSU2, h0]
+  · let r : ℝ := Real.sqrt (euclidInner v v)
+    have hv_pos : 0 < euclidInner v v :=
+      lt_of_le_of_ne (euclidInner_self_nonneg v)
+        (Ne.symm ((euclidInner_self_eq_zero_iff v).not.mpr hv))
+    have hr_ne : (r : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (Real.sqrt_pos.mpr hv_pos).ne'
+    let W : SU2 := ⟨(-(Complex.I / (r : ℂ))) • vec_to_spinor (wickEmbed v),
+      alignPosTimeMatrix_mem_su2 hv⟩
+    have hU : alignPosTimeSU2 v = W⁻¹ := dif_neg hv
+    apply wickEmbed_injective
+    rw [wickEmbed_euclidRotApply, hU]
+    have h_act :
+        vec_to_spinor (spinorPhi (su2ToSL2C W⁻¹, su2ToSL2C 1) • wickEmbed v) =
+          (W⁻¹).val * vec_to_spinor (wickEmbed v) * (1 : SU2).valᵀ := by
+      change vec_to_spinor (spinorPhi_matrix (su2ToSL2C W⁻¹) (su2ToSL2C 1) *ᵥ wickEmbed v) = _
+      rw [spinorPhi_matrix_mulVec]
+      simp [spinor_action, vec_to_spinor_right_inv, su2ToSL2C]
+    have h_v : vec_to_spinor (wickEmbed v) = ((r : ℂ) * Complex.I) • W.val := by
+      change vec_to_spinor (wickEmbed v) =
+        ((r : ℂ) * Complex.I) • ((-(Complex.I / (r : ℂ))) • vec_to_spinor (wickEmbed v))
+      rw [smul_smul]
+      have hc1 : ((r : ℂ) * Complex.I) * -(Complex.I / (r : ℂ)) = 1 := by
+        calc ((r : ℂ) * Complex.I) * -(Complex.I / (r : ℂ))
+            = -(Complex.I * Complex.I) * ((r : ℂ) / (r : ℂ)) := by ring
+          _ = 1 := by rw [Complex.I_mul_I, div_self hr_ne]; ring
+      rw [hc1, one_smul]
+    have h_inv_mul : (W⁻¹).val * W.val = 1 := congrArg Subtype.val (inv_mul_cancel W)
+    have h_one_t : (1 : SU2).valᵀ = 1 := Matrix.transpose_one
+    have h_rhs : vec_to_spinor (wickEmbed ![r, 0, 0, 0]) = ((r : ℂ) * Complex.I) • 1 := by
+      ext i j
+      fin_cases i <;> fin_cases j <;>
+        simp [vec_to_spinor, wickEmbed, sigma_0, sigma_1, sigma_2, sigma_3]
+    have h_eq :
+        vec_to_spinor (spinorPhi (su2ToSL2C W⁻¹, su2ToSL2C 1) • wickEmbed v) =
+          vec_to_spinor (wickEmbed ![r, 0, 0, 0]) := by
+      rw [h_act, h_v, h_one_t, Matrix.mul_one, Matrix.mul_smul, h_inv_mul, h_rhs]
+    simpa only [spinor_to_vec_left_inv] using congrArg spinor_to_vec h_eq
+
+theorem wickEmbedN_mem_extended_tube_two_of_ne {x : Fin 2 → Fin 4 → ℝ}
+    (hx : x ∈ nonCoincidentEuclidN 2) :
+    wickEmbedN 2 x ∈ extended_tube_n 2 := by
+  have h01 : x 1 - x 0 ≠ 0 := sub_ne_zero.mpr (hx 1 0 (by decide))
+  have hv_pos : 0 < euclidInner (x 1 - x 0) (x 1 - x 0) :=
+    lt_of_le_of_ne (euclidInner_self_nonneg _)
+      (Ne.symm ((euclidInner_self_eq_zero_iff _).not.mpr h01))
+  let U : SU2 := alignPosTimeSU2 (x 1 - x 0)
+  let y : Fin 2 → Fin 4 → ℝ := euclidRotN 2 U 1 x
+  have hy_ord : y ∈ orderedEuclidN 2 := by
+    intro i hi
+    have hi0 : i = 0 := by omega
+    subst hi0
+    change y 0 0 < y 1 0
+    have h_diff : y 1 0 - y 0 0 = Real.sqrt (euclidInner (x 1 - x 0) (x 1 - x 0)) := by
+      have h1 : y 1 - y 0 = euclidRotApply U 1 (x 1 - x 0) := by
+        change (euclidRotOfSU2 U 1).mulVec (x 1) - (euclidRotOfSU2 U 1).mulVec (x 0) = _
+        rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+        exact (map_sub (euclidRotLM U 1) (x 1) (x 0)).symm
+      have h2 := congrFun (h1.trans (euclidRotApply_alignPosTimeSU2 (x 1 - x 0))) 0
+      simpa using h2
+    linarith [Real.sqrt_pos.mpr hv_pos]
+  have hx_eq : x = euclidRotN 2 U⁻¹ 1 y := by
+    ext i μ
+    change x i μ = ((euclidRotOfSU2 U⁻¹ 1).mulVec ((euclidRotOfSU2 U 1).mulVec (x i))) μ
+    rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+    have h_inv : euclidRotApply U⁻¹ 1 (euclidRotApply U 1 (x i)) = x i := by
+      simpa using euclidRotApply_inv_self U 1 (x i)
+    rw [h_inv]
+  rw [hx_eq, wickEmbedN_euclidRotN]
+  dsimp [extended_tube_n]
+  rw [Set.mem_iUnion]
+  exact ⟨spinorPhi (su2ToSL2C U⁻¹, su2ToSL2C 1), wickEmbedN 2 y,
+    wickEmbedN_mem_forward_tube_n 2 hy_ord, rfl⟩
+
+private lemma exists_euclidInner_ne_zero_finset (S : Finset (Fin 4 → ℝ))
+    (hS : ∀ d ∈ S, d ≠ 0) :
+    ∃ u : Fin 4 → ℝ, u ≠ 0 ∧ ∀ d ∈ S, euclidInner u d ≠ 0 := by
+  induction S using Finset.induction_on with
+  | empty =>
+    refine ⟨![1, 0, 0, 0], ?_, fun _ hd => False.elim (Finset.notMem_empty _ hd)⟩
+    intro h0
+    have h1 := congrFun h0 0
+    norm_num at h1
+  | insert d₀ S _ ih =>
+    have hS' : ∀ d ∈ S, d ≠ 0 := fun d hd => hS d (Finset.mem_insert_of_mem hd)
+    have hd₀_ne : d₀ ≠ 0 := hS d₀ (Finset.mem_insert_self d₀ S)
+    rcases ih hS' with ⟨u, hu_ne, hu⟩
+    by_cases hud₀ : euclidInner u d₀ = 0
+    · let B : Finset ℝ := S.image (fun d => -euclidInner u d / euclidInner d₀ d)
+      let t : ℝ := 1 + ∑ b ∈ B, |b|
+      have ht_pos : 0 < t := by
+        have hnn : 0 ≤ ∑ b ∈ B, |b| := Finset.sum_nonneg (fun b _ => abs_nonneg b)
+        linarith
+      have ht_notMem : t ∉ B := by
+        intro ht
+        have hle := Finset.single_le_sum (fun b _ => abs_nonneg b) ht
+        linarith [le_abs_self t]
+      have hd₀_pos : 0 < euclidInner d₀ d₀ :=
+        lt_of_le_of_ne (euclidInner_self_nonneg d₀)
+          (Ne.symm ((euclidInner_self_eq_zero_iff d₀).not.mpr hd₀_ne))
+      have h_d₀ : euclidInner (u + t • d₀) d₀ ≠ 0 := by
+        rw [euclidInner_add_left, hud₀, zero_add, euclidInner_smul_left]
+        exact mul_ne_zero ht_pos.ne' hd₀_pos.ne'
+      refine ⟨u + t • d₀, fun h0 => h_d₀ (by rw [h0, euclidInner_zero_left]), fun d hd => ?_⟩
+      rcases Finset.mem_insert.mp hd with rfl | hdS
+      · exact h_d₀
+      · rw [euclidInner_add_left, euclidInner_smul_left]
+        intro h_zero
+        have hud_ne : euclidInner u d ≠ 0 := hu d hdS
+        have hd₀d_ne : euclidInner d₀ d ≠ 0 := by
+          intro hz
+          rw [hz, mul_zero, add_zero] at h_zero
+          exact hud_ne h_zero
+        have ht_eq : t = -euclidInner u d / euclidInner d₀ d := by
+          apply eq_div_of_mul_eq hd₀d_ne
+          linarith
+        exact ht_notMem (Finset.mem_image.mpr ⟨d, hdS, ht_eq.symm⟩)
+    · refine ⟨u, hu_ne, fun d hd => ?_⟩
+      rcases Finset.mem_insert.mp hd with rfl | hdS
+      · exact hud₀
+      · exact hu d hdS
+
+theorem exists_euclidRot_perm_mem_orderedEuclidN {n : ℕ} {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ nonCoincidentEuclidN n) :
+    ∃ (U : SU2) (π : Equiv.Perm (Fin n)), euclidRotN n U 1 (x ∘ π) ∈ orderedEuclidN n := by
+  let S : Finset (Fin 4 → ℝ) :=
+    ((Finset.univ : Finset (Fin n × Fin n)).filter (fun ij => ij.1 ≠ ij.2)).image
+      (fun ij => x ij.1 - x ij.2)
+  have hS : ∀ d ∈ S, d ≠ 0 := by
+    intro d hd
+    rcases Finset.mem_image.mp hd with ⟨⟨i, j⟩, hij_mem, rfl⟩
+    have hij : i ≠ j := (Finset.mem_filter.mp hij_mem).2
+    exact sub_ne_zero.mpr (hx i j hij)
+  rcases exists_euclidInner_ne_zero_finset S hS with ⟨u, -, hu_sep⟩
+  let r : ℝ := Real.sqrt (euclidInner u u)
+  let U : SU2 := alignPosTimeSU2 u
+  let τ : Fin n → ℝ := fun i => (euclidRotN n U 1 x) i 0
+  have hτ_inj : Function.Injective τ := by
+    intro i j hij_eq
+    by_contra hij_ne
+    have hd_mem : x i - x j ∈ S :=
+      Finset.mem_image.mpr ⟨(i, j), Finset.mem_filter.mpr ⟨Finset.mem_univ _, hij_ne⟩, rfl⟩
+    have h_in : euclidInner u (x i - x j) = r * (τ i - τ j) := by
+      have h1 := (euclidInner_euclidRotApply U 1 u (x i - x j)).symm
+      rw [euclidRotApply_alignPosTimeSU2 u] at h1
+      have h2 : euclidRotApply U 1 (x i - x j) =
+          euclidRotN n U 1 x i - euclidRotN n U 1 x j := by
+        change euclidRotLM U 1 (x i - x j) =
+          (euclidRotOfSU2 U 1).mulVec (x i) - (euclidRotOfSU2 U 1).mulVec (x j)
+        rw [map_sub, euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+        rfl
+      have h_zero :
+          euclidInner ![r, 0, 0, 0] (euclidRotN n U 1 x i - euclidRotN n U 1 x j) =
+            r * (τ i - τ j) := by
+        simp [euclidInner_explicit, τ]
+      rw [h2, h_zero] at h1
+      exact h1
+    rw [hij_eq, sub_self, mul_zero] at h_in
+    exact hu_sep (x i - x j) hd_mem h_in
+  let π : Equiv.Perm (Fin n) := Tuple.sort τ
+  have h_strict : StrictMono (τ ∘ π) :=
+    (Tuple.monotone_sort τ).strictMono_of_injective (hτ_inj.comp π.injective)
+  refine ⟨U, π, fun i hi => ?_⟩
+  have hlt : i < ⟨i.val + 1, hi⟩ := Fin.lt_def.mpr (by dsimp; omega)
+  exact h_strict hlt
+
+def permuted_extended_tube_n (n : ℕ) : Set (Fin n → Fin 4 → ℂ) :=
+  { z | ∃ π : Equiv.Perm (Fin n), (z ∘ π) ∈ extended_tube_n n }
+
+theorem wickEmbedN_mem_permuted_extended_tube_n {n : ℕ} {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ nonCoincidentEuclidN n) :
+    wickEmbedN n x ∈ permuted_extended_tube_n n := by
+  rcases exists_euclidRot_perm_mem_orderedEuclidN hx with ⟨U, π, hy_ord⟩
+  refine ⟨π, ?_⟩
+  have h_comp : (wickEmbedN n x) ∘ π = wickEmbedN n (x ∘ π) := rfl
+  have hx_eq : x ∘ π = euclidRotN n U⁻¹ 1 (euclidRotN n U 1 (x ∘ π)) := by
+    ext i μ
+    change x (π i) μ =
+      ((euclidRotOfSU2 U⁻¹ 1).mulVec ((euclidRotOfSU2 U 1).mulVec (x (π i)))) μ
+    rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+    have h_inv : euclidRotApply U⁻¹ 1 (euclidRotApply U 1 (x (π i))) = x (π i) := by
+      simpa using euclidRotApply_inv_self U 1 (x (π i))
+    rw [h_inv]
+  rw [h_comp, hx_eq, wickEmbedN_euclidRotN]
+  dsimp [extended_tube_n]
+  rw [Set.mem_iUnion]
+  exact ⟨spinorPhi (su2ToSL2C U⁻¹, su2ToSL2C 1), wickEmbedN n (euclidRotN n U 1 (x ∘ π)),
+    wickEmbedN_mem_forward_tube_n n hy_ord, rfl⟩
+
+lemma orderedEuclidN_lt_time {n : ℕ} {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    ∀ ⦃i j : Fin n⦄, i.val < j.val → x i 0 < x j 0 := by
+  intro i j hij
+  rcases i with ⟨iv, hiv⟩
+  rcases j with ⟨jv, hjv⟩
+  dsimp at hij
+  have hstep : ∀ k : ℕ, iv < k → ∀ hk : k < n, x ⟨iv, hiv⟩ 0 < x ⟨k, hk⟩ 0 := by
+    intro k hk
+    induction k with
+    | zero => omega
+    | succ k ih =>
+      intro hkn
+      have h_last := hx ⟨k, by omega⟩ hkn
+      by_cases heq : iv = k
+      · subst heq
+        exact h_last
+      · have hlt : iv < k := by omega
+        exact (ih hlt (by omega)).trans h_last
+  exact hstep jv hij hjv
+
+lemma orderedEuclidN_subset_nonCoincidentEuclidN (n : ℕ) :
+    orderedEuclidN n ⊆ nonCoincidentEuclidN n := by
+  intro x hx i j hij heq
+  rcases lt_trichotomy i.val j.val with hlt | heqv | hgt
+  · have h1 := orderedEuclidN_lt_time hx hlt
+    rw [heq] at h1
+    exact lt_irrefl _ h1
+  · exact hij (Fin.ext heqv)
+  · have h1 := orderedEuclidN_lt_time hx hgt
+    rw [heq] at h1
+    exact lt_irrefl _ h1
+
+def OSPermutationSymmetry (η : ℂ) (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ (n : ℕ) (π : Equiv.Perm (Fin n)) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ nonCoincidentEuclidN n →
+    𝒮 n (α ∘ π) (x ∘ π) = η ^ permInversions π * 𝒮 n α x
+
+def FullEuclidTranslationInvariant (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ nonCoincidentEuclidN n → ∀ a : Fin 4 → ℝ, 𝒮 n α (fun i => x i + a) = 𝒮 n α x
+
+def FullEuclidRotCovariant (R : HolomorphicLorentzRep ι) (𝒮 : SchwingerFamily ι) : Prop :=
+  ∀ (n : ℕ) (A B : SU2) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ nonCoincidentEuclidN n →
+    𝒮 n α (euclidRotN n A B x) =
+      ∑ β : Fin n → ι, (∏ i, R.σ (su2ToSL2C A, su2ToSL2C B) (α i) (β i)) * 𝒮 n β x
+
+structure FullEuclidOSAxioms (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (η : ℂ) (𝒮 : SchwingerFamily ι) : Prop where
+  os0_smooth : ∀ (n : ℕ) (α : Fin n → ι),
+    ContDiffOn ℝ (⊤ : ℕ∞) (𝒮 n α) (nonCoincidentEuclidN n)
+  os1_translation : FullEuclidTranslationInvariant 𝒮
+  os1_rotation : FullEuclidRotCovariant R 𝒮
+  os2_hermiticity : OSHermiticity S 𝒮
+  os2_positivity : OSReflectionPositive S 𝒮
+  os3_permutation : OSPermutationSymmetry η 𝒮
+
+theorem FullEuclidOSAxioms.toOSAxioms
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι} (hOS : FullEuclidOSAxioms R S η 𝒮) :
+    OSAxioms R S η 𝒮 where
+  os0_smooth := fun n α =>
+    (hOS.os0_smooth n α).mono (orderedEuclidN_subset_nonCoincidentEuclidN n)
+  os1_translation := fun n α x hx a =>
+    hOS.os1_translation n α x (orderedEuclidN_subset_nonCoincidentEuclidN n hx) a
+  os1_rotation := fun n U V x hx _ α =>
+    hOS.os1_rotation n U V α x (orderedEuclidN_subset_nonCoincidentEuclidN n hx)
+  os2_hermiticity := hOS.os2_hermiticity
+  os2_positivity := hOS.os2_positivity
+  os3_symmetry := by
+    intro n α x hx
+    have hx_nc : x ∈ nonCoincidentEuclidN n :=
+      orderedEuclidN_subset_nonCoincidentEuclidN n hx
+    have hx_rev_nc : (x ∘ finRevPerm n) ∈ nonCoincidentEuclidN n :=
+      nonCoincidentEuclidN_comp_perm hx_nc (finRevPerm n)
+    have h_neg_eq : (-(x ∘ Fin.rev)) = euclidRotN n negOneSU2 1 (x ∘ finRevPerm n) := by
+      ext i μ
+      change -(x (Fin.rev i) μ) =
+        ((euclidRotOfSU2 negOneSU2 1).mulVec (x (finRevPerm n i))) μ
+      rw [euclidRotOfSU2_mulVec, euclidRotApply_negOne_one]
+      rfl
+    rw [h_neg_eq, hOS.os1_rotation n negOneSU2 1 α (x ∘ finRevPerm n) hx_rev_nc]
+    rw [su2ToSL2C_negOneSU2, su2ToSL2C_one, Finset.mul_sum]
+    refine Finset.sum_congr rfl (fun β _ => ?_)
+    have h_comp : (β ∘ finRevPerm n) ∘ finRevPerm n = β := by
+      ext i
+      change β (Fin.rev (Fin.rev i)) = β i
+      rw [Fin.rev_rev]
+    have h_perm := hOS.os3_permutation n (finRevPerm n) (β ∘ finRevPerm n) x hx_nc
+    rw [h_comp, permInversions_finRevPerm n] at h_perm
+    rw [h_perm]
+    have hrev : (β ∘ finRevPerm n) = (β ∘ Fin.rev) := rfl
+    rw [hrev]
+    ring
+
+theorem fullEuclid_eval_eq_of_orderedEuclidN {R : HolomorphicLorentzRep ι}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hrot : FullEuclidRotCovariant R 𝒮) (hperm : OSPermutationSymmetry η 𝒮)
+    {n : ℕ} (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ} (hx : x ∈ nonCoincidentEuclidN n)
+    (U : SU2) (π : Equiv.Perm (Fin n)) :
+    𝒮 n α x =
+      η ^ permInversions π.symm *
+        ∑ β : Fin n → ι,
+          (∏ i : Fin n, R.σ (su2ToSL2C U⁻¹, su2ToSL2C 1) (α (π i)) (β i)) *
+            𝒮 n β (euclidRotN n U 1 (x ∘ π)) := by
+  let y : Fin n → Fin 4 → ℝ := euclidRotN n U 1 (x ∘ π)
+  have hx_pi : (x ∘ π) ∈ nonCoincidentEuclidN n := nonCoincidentEuclidN_comp_perm hx π
+  have hy_nc : y ∈ nonCoincidentEuclidN n := nonCoincidentEuclidN_euclidRotN hx_pi U 1
+  have h_alpha : (α ∘ π) ∘ π.symm = α := by
+    ext i
+    simp
+  have h_x : (x ∘ π) ∘ π.symm = x := by
+    ext i
+    simp
+  have h_rot_y : euclidRotN n U⁻¹ 1 y = x ∘ π := by
+    ext i μ
+    change ((euclidRotOfSU2 U⁻¹ 1).mulVec ((euclidRotOfSU2 U 1).mulVec (x (π i)))) μ = x (π i) μ
+    rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+    have h_inv : euclidRotApply U⁻¹ 1 (euclidRotApply U 1 (x (π i))) = x (π i) := by
+      simpa using euclidRotApply_inv_self U 1 (x (π i))
+    rw [h_inv]
+  have hp := hperm n π.symm (α ∘ π) (x ∘ π) hx_pi
+  rw [h_alpha, h_x] at hp
+  have h_rot := hrot n U⁻¹ 1 (α ∘ π) y hy_nc
+  rw [h_rot_y] at h_rot
+  rw [hp, h_rot]
+  rfl
+
+theorem fullEuclid_eq_of_eq_on_orderedEuclidN {R : HolomorphicLorentzRep ι}
+    {η : ℂ} {𝒮₁ 𝒮₂ : SchwingerFamily ι}
+    (hrot₁ : FullEuclidRotCovariant R 𝒮₁) (hperm₁ : OSPermutationSymmetry η 𝒮₁)
+    (hrot₂ : FullEuclidRotCovariant R 𝒮₂) (hperm₂ : OSPermutationSymmetry η 𝒮₂)
+    {n : ℕ}
+    (h_ord : ∀ (β : Fin n → ι) (y : Fin n → Fin 4 → ℝ),
+      y ∈ orderedEuclidN n → 𝒮₁ n β y = 𝒮₂ n β y)
+    (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ} (hx : x ∈ nonCoincidentEuclidN n) :
+    𝒮₁ n α x = 𝒮₂ n α x := by
+  rcases exists_euclidRot_perm_mem_orderedEuclidN hx with ⟨U, π, hy_ord⟩
+  rw [fullEuclid_eval_eq_of_orderedEuclidN hrot₁ hperm₁ α hx U π,
+      fullEuclid_eval_eq_of_orderedEuclidN hrot₂ hperm₂ α hx U π]
+  congr 1
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  rw [h_ord β _ hy_ord]
+
+theorem fullEuclid_eq_zero_of_eq_zero_on_orderedEuclidN {R : HolomorphicLorentzRep ι}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hrot : FullEuclidRotCovariant R 𝒮) (hperm : OSPermutationSymmetry η 𝒮)
+    {n : ℕ}
+    (h_zero : ∀ (β : Fin n → ι) (y : Fin n → Fin 4 → ℝ),
+      y ∈ orderedEuclidN n → 𝒮 n β y = 0)
+    (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ} (hx : x ∈ nonCoincidentEuclidN n) :
+    𝒮 n α x = 0 := by
+  rcases exists_euclidRot_perm_mem_orderedEuclidN hx with ⟨U, π, hy_ord⟩
+  rw [fullEuclid_eval_eq_of_orderedEuclidN hrot hperm α hx U π]
+  simp_rw [h_zero _ _ hy_ord, mul_zero, Finset.sum_const_zero, mul_zero]
+
+theorem fullEuclidOSAxioms_wrong_statistics_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η ε : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : FullEuclidOSAxioms R S η 𝒮) (hε : R.HasSpinParity ε) (h_wrong : η ≠ ε)
+    (n : ℕ) (hn : 1 ≤ n) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ nonCoincidentEuclidN n) :
+    𝒮 n α x = 0 :=
+  fullEuclid_eq_zero_of_eq_zero_on_orderedEuclidN hOS.os1_rotation hOS.os3_permutation
+    (fun β _y hy => osAxioms_wrong_statistics_schwinger_eq_zero hOS.toOSAxioms hε h_wrong n hn β hy)
+    α hx
+
+theorem fullEuclidOSAxioms_spin_statistics
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η ε : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : FullEuclidOSAxioms R S η 𝒮) (hε : R.HasSpinParity ε)
+    (h_nondeg : ∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ nonCoincidentEuclidN n ∧ 𝒮 n α x ≠ 0) :
+    η = ε := by
+  by_contra h_wrong
+  rcases h_nondeg with ⟨n, hn, α, x, hx, hne⟩
+  exact hne (fullEuclidOSAxioms_wrong_statistics_eq_zero hOS hε h_wrong n hn α hx)
+
+theorem osKernel_congr_of_eq_on_orderedEuclidN {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) {𝒮₁ 𝒮₂ : SchwingerFamily ι}
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮₁ n α x = 𝒮₂ n α x)
+    (A B : OSConfig ι) :
+    osKernel S 𝒮₁ A B = osKernel S 𝒮₂ A B := by
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  unfold osKernel
+  dsimp only
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  rw [h_eq (j + k) (osConcatIdx j k β α') (osConcatPoint j k x y)
+    (osConcatPoint_mem_orderedEuclidN j k hx hy)]
+
+theorem osPreInner_congr_of_eq_on_orderedEuclidN {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) {𝒮₁ 𝒮₂ : SchwingerFamily ι}
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮₁ n α x = 𝒮₂ n α x)
+    (Ψ Φ : OSConfig ι →₀ ℂ) :
+    osPreInner S 𝒮₁ Ψ Φ = osPreInner S 𝒮₂ Ψ Φ := by
+  unfold osPreInner
+  refine Finsupp.sum_congr (fun A _ => Finsupp.sum_congr (fun B _ => ?_))
+  rw [osKernel_congr_of_eq_on_orderedEuclidN S h_eq A B]
+
+theorem osReflectionPositive_congr_of_eq_on_orderedEuclidN {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) {𝒮₁ 𝒮₂ : SchwingerFamily ι}
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮₁ n α x = 𝒮₂ n α x) :
+    OSReflectionPositive S 𝒮₁ ↔ OSReflectionPositive S 𝒮₂ := by
+  constructor <;> intro hpos Ψ
+  · rw [← osPreInner_congr_of_eq_on_orderedEuclidN S h_eq Ψ Ψ]
+    exact hpos Ψ
+  · rw [osPreInner_congr_of_eq_on_orderedEuclidN S h_eq Ψ Ψ]
+    exact hpos Ψ
+
+theorem osHermiticity_congr_of_eq_on_orderedEuclidN {R : HolomorphicLorentzRep ι}
+    (S : StarStructure R) {𝒮₁ 𝒮₂ : SchwingerFamily ι}
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮₁ n α x = 𝒮₂ n α x) :
+    OSHermiticity S 𝒮₁ ↔ OSHermiticity S 𝒮₂ := by
+  constructor <;> intro hherm n α x hx
+  · rw [← h_eq n α x hx, hherm n α x hx]
+    refine Finset.sum_congr rfl (fun β _ => ?_)
+    rw [h_eq n (β ∘ Fin.rev) (euclidTimeReflectRev n x)
+      (euclidTimeReflectRev_mem_orderedEuclidN n hx)]
+  · rw [h_eq n α x hx, hherm n α x hx]
+    refine Finset.sum_congr rfl (fun β _ => ?_)
+    rw [← h_eq n (β ∘ Fin.rev) (euclidTimeReflectRev n x)
+      (euclidTimeReflectRev_mem_orderedEuclidN n hx)]
+
+theorem osTimeClusterDecomposition_congr_of_eq_on_orderedEuclidN
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {D₁ D₂ : OSReflectionPositiveData R S}
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → D₁.𝒮 n α x = D₂.𝒮 n α x) :
+    OSTimeClusterDecomposition D₁ ↔ OSTimeClusterDecomposition D₂ := by
+  constructor <;> intro hcl A B
+  · simp_rw [← osKernel_congr_of_eq_on_orderedEuclidN S h_eq]
+    exact hcl A B
+  · simp_rw [osKernel_congr_of_eq_on_orderedEuclidN S h_eq]
+    exact hcl A B
+
+theorem spinor_H_ext_translation_invariant (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (htrans : TubeTranslationInvariant E)
+    (n : ℕ) (α : Fin n → ι) {z : Fin n → Fin 4 → ℂ}
+    (hz : z ∈ extended_tube_n n) (a : Fin 4 → ℂ) :
+    spinor_H_ext R W E n α (fun i => z i + a) = spinor_H_ext R W E n α z := by
+  dsimp [extended_tube_n] at hz
+  rw [Set.mem_iUnion] at hz
+  rcases hz with ⟨Λ₀, w, hw, hw_eq⟩
+  dsimp at hw_eq
+  obtain ⟨g₀, rfl⟩ := spinorPhi_surjective Λ₀
+  have hz_eq : z = spinorPhi g₀ • w := hw_eq.symm
+  let b : Fin 4 → ℂ := ((spinorPhi g₀)⁻¹.val.val).mulVec a
+  have hw_shift : (fun i => w i + b) ∈ forward_tube_n n := by
+    intro i hi
+    have hdiff : (w i + b) - (w ⟨i.val + 1, hi⟩ + b) = w i - w ⟨i.val + 1, hi⟩ := by
+      ext μ
+      simp
+    change (fun k => -(((w i + b) - (w ⟨i.val + 1, hi⟩ + b)) k).im) ∈ forward_light_cone
+    rw [hdiff]
+    exact hw i hi
+  have hz_shift_eq : (fun i => z i + a) = spinorPhi g₀ • (fun i => w i + b) := by
+    ext i μ
+    change z i μ + a μ = ((spinorPhi g₀).val.val.mulVec (w i + b)) μ
+    have hzi : z i = (spinorPhi g₀).val.val.mulVec (w i) := congrFun hz_eq i
+    have hmul : (spinorPhi g₀).val.val.mulVec b = a := by
+      change (spinorPhi g₀).val.val.mulVec (((spinorPhi g₀)⁻¹.val.val).mulVec a) = a
+      rw [Matrix.mulVec_mulVec]
+      have h1 : (spinorPhi g₀).val.val * (spinorPhi g₀)⁻¹.val.val = 1 :=
+        congrArg (fun M : SpecialSpecialComplexLorentzGroup => M.val.val)
+          (mul_inv_cancel (spinorPhi g₀))
+      rw [h1, Matrix.one_mulVec]
+    rw [hzi, Matrix.mulVec_add, hmul, Pi.add_apply]
+  rw [hz_shift_eq, hz_eq,
+      spinor_H_ext_complexCovariant R W E h_cov n g₀ (fun i => w i + b) α,
+      spinor_H_ext_complexCovariant R W E h_cov n g₀ w α]
+  refine Finset.sum_congr rfl (fun γ _ => ?_)
+  rw [spinor_H_ext_eq_on_forward_tube R W E h_cov n γ hw_shift,
+      spinor_H_ext_eq_on_forward_tube R W E h_cov n γ hw,
+      htrans n γ w b hw]
+
+noncomputable def twoPointFullEuclidS (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (E : TubeExtension W)
+    (α : Fin 2 → ι) (x : Fin 2 → Fin 4 → ℝ) : ℂ :=
+  spinor_H_ext R W E 2 α (wickEmbedN 2 x)
+
+theorem twoPointFullEuclidS_eq_schwingerFromTube_on_orderedEuclidN
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (α : Fin 2 → ι) {x : Fin 2 → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN 2) :
+    twoPointFullEuclidS R W E α x = schwingerFromTube E 2 α x :=
+  spinor_H_ext_eq_on_forward_tube R W E h_cov 2 α (wickEmbedN_mem_forward_tube_n 2 hx)
+
+theorem twoPointFullEuclidS_contDiffOn (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (α : Fin 2 → ι) :
+    ContDiffOn ℝ (⊤ : ℕ∞) (twoPointFullEuclidS R W E α) (nonCoincidentEuclidN 2) := by
+  have h_holo : ContDiffOn ℂ (⊤ : ℕ∞) (spinor_H_ext R W E 2 α) (extended_tube_n 2) :=
+    (spinor_H_ext_analytic R W E h_cov 2 α).contDiffOn (extended_tube_is_open 2).uniqueDiffOn
+  exact (h_holo.restrict_scalars ℝ).comp (wickEmbedNCLM 2).contDiff.contDiffOn
+    (fun _ hx => wickEmbedN_mem_extended_tube_two_of_ne hx)
+
+theorem twoPointFullEuclidS_translation_invariant (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (htrans : TubeTranslationInvariant E)
+    (α : Fin 2 → ι) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ nonCoincidentEuclidN 2)
+    (a : Fin 4 → ℝ) :
+    twoPointFullEuclidS R W E α (fun i => x i + a) = twoPointFullEuclidS R W E α x := by
+  dsimp [twoPointFullEuclidS]
+  have h_add : wickEmbedN 2 (fun i => x i + a) = fun i => wickEmbedN 2 x i + wickEmbed a := by
+    ext i μ
+    exact congrFun (wickEmbed_add (x i) a) μ
+  rw [h_add]
+  exact spinor_H_ext_translation_invariant R W E h_cov htrans 2 α
+    (wickEmbedN_mem_extended_tube_two_of_ne hx) (wickEmbed a)
+
+theorem twoPointFullEuclidS_euclidRotN (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (U V : SU2) (α : Fin 2 → ι) (x : Fin 2 → Fin 4 → ℝ) :
+    twoPointFullEuclidS R W E α (euclidRotN 2 U V x) =
+      ∑ β : Fin 2 → ι,
+        (∏ i : Fin 2, R.σ (su2ToSL2C U, su2ToSL2C V) (α i) (β i)) *
+          twoPointFullEuclidS R W E β x := by
+  dsimp [twoPointFullEuclidS]
+  rw [wickEmbedN_euclidRotN]
+  exact spinor_H_ext_complexCovariant R W E h_cov 2 (su2ToSL2C U, su2ToSL2C V) (wickEmbedN 2 x) α
+
+theorem twoPointFullEuclidS_swap (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) {η : ℂ} (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (hpct : TubePCT η R E)
+    (α : Fin 2 → ι) {x : Fin 2 → Fin 4 → ℝ} (hx : x ∈ nonCoincidentEuclidN 2) :
+    twoPointFullEuclidS R W E (α ∘ Equiv.swap 0 1) (x ∘ Equiv.swap 0 1) =
+      η * twoPointFullEuclidS R W E α x := by
+  have h_ext := (tubePCT_iff_extendedTubeWeakLocality R W E h_cov).mp hpct
+  let s : Equiv.Perm (Fin 2) := Equiv.swap 0 1
+  have hz_s : wickEmbedN 2 (x ∘ s) ∈ extended_tube_n 2 :=
+    wickEmbedN_mem_extended_tube_two_of_ne (nonCoincidentEuclidN_comp_perm hx s)
+  have h_eval := h_ext 2 (α ∘ s) (wickEmbedN 2 (x ∘ s)) hz_s
+  have h_alpha : (α ∘ s) ∘ Fin.rev = α := by
+    ext i
+    fin_cases i <;> rfl
+  have h_z : (wickEmbedN 2 (x ∘ s)) ∘ Fin.rev = wickEmbedN 2 x := by
+    ext i μ
+    fin_cases i <;> rfl
+  have h_pow : η ^ (2 * (2 - 1) / 2) = η := by norm_num
+  rw [h_alpha, h_z, h_pow] at h_eval
+  exact h_eval
+
+theorem twoPointFullEuclidS_pair_swap (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) {η : ℂ} (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (hpct : TubePCT η R E)
+    (a₁ a₂ : ι) {y₁ y₂ : Fin 4 → ℝ} (hne : y₁ ≠ y₂) :
+    twoPointFullEuclidS R W E ![a₁, a₂] ![y₁, y₂] =
+      η * twoPointFullEuclidS R W E ![a₂, a₁] ![y₂, y₁] := by
+  have hx : (![y₂, y₁] : Fin 2 → Fin 4 → ℝ) ∈ nonCoincidentEuclidN 2 := by
+    intro i j hij
+    fin_cases i <;> fin_cases j
+    · exact False.elim (hij rfl)
+    · exact hne.symm
+    · exact hne
+    · exact False.elim (hij rfl)
+  have ha : (![a₂, a₁] : Fin 2 → ι) ∘ Equiv.swap 0 1 = ![a₁, a₂] := by
+    ext i
+    fin_cases i <;> rfl
+  have hy : (![y₂, y₁] : Fin 2 → Fin 4 → ℝ) ∘ Equiv.swap 0 1 = ![y₁, y₂] := by
+    ext i μ
+    fin_cases i <;> rfl
+  rw [← ha, ← hy]
+  exact twoPointFullEuclidS_swap R W E h_cov hpct ![a₂, a₁] hx
+
+private lemma os_zpow_neg_one_permInversions {n : ℕ} (σ : Equiv.Perm (Fin n)) :
+    ((-1 : ℤ) ^ permInversions σ) = (Equiv.Perm.sign σ : ℤ) := by
+  have h_ind : ∀ (m : ℕ) (τ : Equiv.Perm (Fin n)),
+      permInversions τ = m → ((-1 : ℤ) ^ m) = (Equiv.Perm.sign τ : ℤ) := by
+    intro m
+    induction m with
+    | zero =>
+      intro τ h0
+      have hτ : τ = 1 := perm_eq_one_of_permInversions_zero h0
+      subst hτ
+      simp
+    | succ k ih =>
+      intro τ hk
+      have hpos : 0 < permInversions τ := by omega
+      rcases exists_adjacent_inversion_of_pos hpos with ⟨i, hi, hinv⟩
+      let i' : Fin n := ⟨i.val + 1, hi⟩
+      let s : Equiv.Perm (Fin n) := Equiv.swap i i'
+      have hs_eq := permInversions_mul_adjacent_swap τ i hi hinv
+      have hk' : permInversions (τ * s) = k := by
+        dsimp [s, i'] at hs_eq ⊢
+        omega
+      have ih_val := ih (τ * s) hk'
+      have hne : i ≠ i' := fun h_eq => by
+        have hv := congrArg Fin.val h_eq
+        dsimp [i'] at hv
+        omega
+      have hsign_s : Equiv.Perm.sign s = -1 := Equiv.Perm.sign_swap hne
+      have h_tau : τ = (τ * s) * s := by
+        ext x
+        simp [s]
+      rw [h_tau, map_mul, hsign_s]
+      push_cast
+      rw [← ih_val, pow_succ]
+  exact h_ind (permInversions σ) σ rfl
+
+private lemma os_eta_pow_permInversions_mul {η : ℂ} (hη : η = 1 ∨ η = -1)
+    {n : ℕ} (σ τ : Equiv.Perm (Fin n)) :
+    η ^ permInversions (σ * τ) = η ^ permInversions σ * η ^ permInversions τ := by
+  rcases hη with rfl | rfl
+  · simp
+  · have hc : ∀ π : Equiv.Perm (Fin n),
+        ((-1 : ℂ) ^ permInversions π) = ((Equiv.Perm.sign π : ℤ) : ℂ) := by
+      intro π
+      simpa using congrArg (Int.cast (R := ℂ)) (os_zpow_neg_one_permInversions π)
+    rw [hc, hc, hc, map_mul]
+    push_cast
+    rfl
+
+private lemma os_eta_pow_self_mul {η : ℂ} (hη : η = 1 ∨ η = -1) (m : ℕ) :
+    η ^ m * η ^ m = 1 := by
+  rw [← pow_add, ← two_mul, pow_mul]
+  rcases hη with rfl | rfl <;> norm_num
+
+private lemma os_eta_pow_permInversions_inv {η : ℂ} (hη : η = 1 ∨ η = -1)
+    {n : ℕ} (σ : Equiv.Perm (Fin n)) :
+    η ^ permInversions σ⁻¹ = η ^ permInversions σ := by
+  have h1 := os_eta_pow_permInversions_mul hη σ σ⁻¹
+  rw [mul_inv_cancel, permInversions_one, pow_zero] at h1
+  have h2 := os_eta_pow_self_mul hη (permInversions σ)
+  have hnz : η ^ permInversions σ ≠ 0 := by
+    apply pow_ne_zero
+    rcases hη with rfl | rfl <;> norm_num
+  exact mul_left_cancel₀ hnz (h1.symm.trans h2.symm)
+
+lemma permInversions_inv {n : ℕ} (σ : Equiv.Perm (Fin n)) :
+    permInversions σ⁻¹ = permInversions σ := by
+  dsimp [permInversions]
+  refine Finset.card_bij (fun (ab : Fin n × Fin n) _ => (σ⁻¹ ab.2, σ⁻¹ ab.1))
+    (fun ab hab => ?_) (fun ab₁ _ ab₂ _ h => ?_) (fun ij hij => ?_)
+  · rw [Finset.mem_filter] at hab ⊢
+    refine ⟨Finset.mem_univ _, hab.2.2, ?_⟩
+    simpa using hab.2.1
+  · have h1 : σ⁻¹ ab₁.2 = σ⁻¹ ab₂.2 := congrArg Prod.fst h
+    have h2 : σ⁻¹ ab₁.1 = σ⁻¹ ab₂.1 := congrArg Prod.snd h
+    exact Prod.ext (σ⁻¹.injective h2) (σ⁻¹.injective h1)
+  · rw [Finset.mem_filter] at hij
+    refine ⟨(σ ij.2, σ ij.1), Finset.mem_filter.mpr ⟨Finset.mem_univ _, hij.2.2, ?_⟩, ?_⟩
+    · simpa using hij.2.1
+    · ext <;> simp
+
+theorem wickEmbedN_mem_extended_tube_iff_exists_euclidSep
+    (n : ℕ) (y : Fin n → Fin 4 → ℝ) :
+    wickEmbedN n y ∈ extended_tube_n n ↔
+      ∃ u : Fin 4 → ℝ, u ≠ 0 ∧
+        ∀ (i : Fin n) (hi : i.val + 1 < n), 0 < euclidInner u (y ⟨i.val + 1, hi⟩ - y i) := by
+  constructor
+  · intro hy_ext
+    by_cases hn : n ≤ 1
+    · refine ⟨![1, 0, 0, 0], ?_, fun i hi => by omega⟩
+      intro h0
+      have h1 := congrFun h0 0
+      norm_num at h1
+    · have hn1 : (0 : ℕ) + 1 < n := by omega
+      dsimp [extended_tube_n] at hy_ext
+      rw [Set.mem_iUnion] at hy_ext
+      rcases hy_ext with ⟨Λ, w, hw, hw_eq⟩
+      dsimp at hw_eq
+      have hw_inv : ∀ k : Fin n, w k = (Λ⁻¹.val.val).mulVec (wickEmbed (y k)) := by
+        intro k
+        have hk : (Λ.val.val).mulVec (w k) = wickEmbed (y k) := congrFun hw_eq k
+        rw [← hk, Matrix.mulVec_mulVec]
+        have h1 : Λ⁻¹.val.val * Λ.val.val = 1 :=
+          congrArg (fun M : SpecialSpecialComplexLorentzGroup => M.val.val) (inv_mul_cancel Λ)
+        rw [h1, Matrix.one_mulVec]
+      let Φ : (Fin 4 → ℝ) →ₗ[ℝ] (Fin 4 → ℝ) :=
+        { toFun := fun d μ => -(((Λ⁻¹.val.val).mulVec (wickEmbed d)) μ).im
+          map_add' := fun d₁ d₂ => by
+            ext μ
+            rw [wickEmbed_add, Matrix.mulVec_add, Pi.add_apply, Complex.add_im]
+            simp only [Pi.add_apply]
+            ring
+          map_smul' := fun c d => by
+            ext μ
+            simp only [RingHom.id_apply, Pi.smul_apply, smul_eq_mul]
+            rw [wickEmbed_smul, Matrix.mulVec_smul]
+            change -(((c : ℂ) * ((Λ⁻¹.val.val).mulVec (wickEmbed d) μ)).im) = _
+            simp only [Complex.mul_im, Complex.ofReal_re, Complex.ofReal_im, zero_mul, add_zero]
+            ring }
+      have h_diff_cone : jost_differences_n n y ⊆ Φ ⁻¹' forward_light_cone := by
+        rintro d ⟨i, hi, rfl⟩
+        change Φ (y i - y ⟨i.val + 1, hi⟩) ∈ forward_light_cone
+        have h_eq : Φ (y i - y ⟨i.val + 1, hi⟩) =
+            fun μ => -((w i - w ⟨i.val + 1, hi⟩) μ).im := by
+          have hsub : y i - y ⟨i.val + 1, hi⟩ = y i + (-1 : ℝ) • y ⟨i.val + 1, hi⟩ := by
+            ext μ; simp [sub_eq_add_neg]
+          rw [hsub, map_add, map_smul]
+          ext μ
+          simp only [Φ, LinearMap.coe_mk, AddHom.coe_mk, Pi.add_apply, Pi.smul_apply,
+            smul_eq_mul, Pi.sub_apply, Complex.sub_im]
+          rw [hw_inv i, hw_inv ⟨i.val + 1, hi⟩]
+          ring
+        rw [h_eq]
+        exact hw i hi
+      have h_hull_cone : jost_convex_hull n y ⊆ Φ ⁻¹' forward_light_cone :=
+        convexHull_min h_diff_cone (forward_light_cone_convex.linear_preimage Φ)
+      have h0_notMem : (0 : Fin 4 → ℝ) ∉ jost_convex_hull n y := by
+        intro h0
+        have h_cone : Φ 0 ∈ forward_light_cone := h_hull_cone h0
+        rw [map_zero] at h_cone
+        exact lt_irrefl 0 h_cone.1
+      have hK_ne : (jost_convex_hull n y).Nonempty :=
+        ⟨y ⟨0, by omega⟩ - y ⟨1, hn1⟩, subset_convexHull ℝ _ ⟨⟨0, by omega⟩, hn1, rfl⟩⟩
+      let q : (Fin 4 → ℝ) → ℝ := fun v => euclidInner v v
+      have hq_cont : Continuous q := by
+        have hq_eq : q = fun v => v 0 * v 0 + v 1 * v 1 + v 2 * v 2 + v 3 * v 3 := by
+          ext v; exact euclidInner_explicit v v
+        rw [hq_eq]
+        fun_prop
+      obtain ⟨u₀, hu₀_mem, hu₀_min⟩ :=
+        (jost_convex_hull_compact n y).exists_isMinOn hK_ne hq_cont.continuousOn
+      have hu₀_ne : u₀ ≠ 0 := fun h0 => h0_notMem (h0 ▸ hu₀_mem)
+      have hu₀_pos : 0 < euclidInner u₀ u₀ :=
+        lt_of_le_of_ne (euclidInner_self_nonneg u₀)
+          (Ne.symm ((euclidInner_self_eq_zero_iff u₀).not.mpr hu₀_ne))
+      have hu₀_le_all : ∀ d ∈ jost_convex_hull n y, euclidInner u₀ u₀ ≤ euclidInner u₀ d := by
+        intro d hd
+        by_contra h_lt
+        push Not at h_lt
+        let δ : ℝ := euclidInner u₀ u₀ - euclidInner u₀ d
+        have hδ_pos : 0 < δ := sub_pos.mpr h_lt
+        let M : ℝ := euclidInner (d - u₀) (d - u₀) + 1
+        have hM_pos : 0 < M := add_pos_of_nonneg_of_pos (euclidInner_self_nonneg _) zero_lt_one
+        let t : ℝ := min (1 / 2) (δ / M)
+        have ht_pos : 0 < t := lt_min (by norm_num) (div_pos hδ_pos hM_pos)
+        have ht_half : t ≤ 1 / 2 := min_le_left _ _
+        have ht_div : t ≤ δ / M := min_le_right _ _
+        let v_t : Fin 4 → ℝ := (1 - t) • u₀ + t • d
+        have hvt_mem : v_t ∈ jost_convex_hull n y :=
+          (jost_convex_hull_convex n y) hu₀_mem hd (by linarith) ht_pos.le (by ring)
+        have h_min_vt : q u₀ ≤ q v_t := hu₀_min hvt_mem
+        have h_ident : q v_t - q u₀ =
+            t * (t * euclidInner (d - u₀) (d - u₀) - 2 * δ) := by
+          dsimp [q, v_t, δ]
+          simp only [euclidInner_explicit, Pi.add_apply, Pi.smul_apply, Pi.sub_apply, smul_eq_mul]
+          ring
+        have htM : t * M ≤ δ := by
+          calc t * M ≤ (δ / M) * M := mul_le_mul_of_nonneg_right ht_div hM_pos.le
+            _ = δ := div_mul_cancel₀ δ hM_pos.ne'
+        have h_strict : t * euclidInner (d - u₀) (d - u₀) < 2 * δ := by
+          have h_le : t * euclidInner (d - u₀) (d - u₀) ≤ t * M := by
+            dsimp [M]
+            linarith [ht_pos]
+          linarith
+        have h_neg : q v_t - q u₀ < 0 := by
+          rw [h_ident]
+          exact mul_neg_of_pos_of_neg ht_pos (sub_neg.mpr h_strict)
+        linarith
+      refine ⟨-u₀, neg_ne_zero.mpr hu₀_ne, fun i hi => ?_⟩
+      have hd_mem : y i - y ⟨i.val + 1, hi⟩ ∈ jost_convex_hull n y :=
+        subset_convexHull ℝ _ ⟨i, hi, rfl⟩
+      have h_eq : euclidInner (-u₀) (y ⟨i.val + 1, hi⟩ - y i) =
+          euclidInner u₀ (y i - y ⟨i.val + 1, hi⟩) := by
+        simp only [euclidInner_explicit, Pi.neg_apply, Pi.sub_apply]
+        ring
+      rw [h_eq]
+      exact lt_of_lt_of_le hu₀_pos (hu₀_le_all _ hd_mem)
+  · rintro ⟨u, hu_ne, hu_sep⟩
+    have hv_pos : 0 < euclidInner u u :=
+      lt_of_le_of_ne (euclidInner_self_nonneg u)
+        (Ne.symm ((euclidInner_self_eq_zero_iff u).not.mpr hu_ne))
+    let r : ℝ := Real.sqrt (euclidInner u u)
+    have hr_pos : 0 < r := Real.sqrt_pos.mpr hv_pos
+    let U : SU2 := alignPosTimeSU2 u
+    let y' : Fin n → Fin 4 → ℝ := euclidRotN n U 1 y
+    have hy'_ord : y' ∈ orderedEuclidN n := by
+      intro i hi
+      have h_in : euclidInner u (y ⟨i.val + 1, hi⟩ - y i) =
+          r * (y' ⟨i.val + 1, hi⟩ 0 - y' i 0) := by
+        have h1 := (euclidInner_euclidRotApply U 1 u (y ⟨i.val + 1, hi⟩ - y i)).symm
+        rw [euclidRotApply_alignPosTimeSU2 u] at h1
+        have h2 : euclidRotApply U 1 (y ⟨i.val + 1, hi⟩ - y i) =
+            y' ⟨i.val + 1, hi⟩ - y' i := by
+          change euclidRotLM U 1 (y ⟨i.val + 1, hi⟩ - y i) =
+            (euclidRotOfSU2 U 1).mulVec (y ⟨i.val + 1, hi⟩) -
+              (euclidRotOfSU2 U 1).mulVec (y i)
+          rw [map_sub, euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+          rfl
+        have h_zero : euclidInner ![r, 0, 0, 0] (y' ⟨i.val + 1, hi⟩ - y' i) =
+            r * (y' ⟨i.val + 1, hi⟩ 0 - y' i 0) := by
+          simp [euclidInner_explicit]
+        rw [h2, h_zero] at h1
+        exact h1
+      have h_pos := hu_sep i hi
+      rw [h_in] at h_pos
+      have h_sub_pos : 0 < y' ⟨i.val + 1, hi⟩ 0 - y' i 0 :=
+        pos_of_mul_pos_right h_pos hr_pos.le
+      linarith
+    have hy_eq : y = euclidRotN n U⁻¹ 1 y' := by
+      ext i μ
+      change y i μ = ((euclidRotOfSU2 U⁻¹ 1).mulVec ((euclidRotOfSU2 U 1).mulVec (y i))) μ
+      rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+      have h_inv : euclidRotApply U⁻¹ 1 (euclidRotApply U 1 (y i)) = y i := by
+        simpa using euclidRotApply_inv_self U 1 (y i)
+      rw [h_inv]
+    rw [hy_eq, wickEmbedN_euclidRotN]
+    dsimp [extended_tube_n]
+    rw [Set.mem_iUnion]
+    exact ⟨spinorPhi (su2ToSL2C U⁻¹, su2ToSL2C 1), wickEmbedN n y',
+      wickEmbedN_mem_forward_tube_n n hy'_ord, rfl⟩
+
+def ExtendedTubePermLocality (η : ℂ)
+    (H_ext : ∀ n : ℕ, (Fin n → ι) → (Fin n → Fin 4 → ℂ) → ℂ) : Prop :=
+  ∀ (n : ℕ) (π : Equiv.Perm (Fin n)) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+    z ∈ extended_tube_n n → (z ∘ π) ∈ extended_tube_n n →
+    H_ext n (α ∘ π) (z ∘ π) = η ^ permInversions π * H_ext n α z
+
+def EuclidExtendedTubePermLocality (η : ℂ)
+    (H_ext : ∀ n : ℕ, (Fin n → ι) → (Fin n → Fin 4 → ℂ) → ℂ) : Prop :=
+  ∀ (n : ℕ) (π : Equiv.Perm (Fin n)) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    wickEmbedN n x ∈ extended_tube_n n →
+    wickEmbedN n (x ∘ π) ∈ extended_tube_n n →
+    H_ext n (α ∘ π) (wickEmbedN n (x ∘ π)) =
+      η ^ permInversions π * H_ext n α (wickEmbedN n x)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem ExtendedTubePermLocality.toEuclidExtendedTubePermLocality {η : ℂ}
+    {H_ext : ∀ n : ℕ, (Fin n → ι) → (Fin n → Fin 4 → ℂ) → ℂ}
+    (h : ExtendedTubePermLocality η H_ext) :
+    EuclidExtendedTubePermLocality η H_ext :=
+  fun n π α x hx hxπ => h n π α (wickEmbedN n x) hx hxπ
+
+private lemma euclid_normalize_unit {v : Fin 4 → ℝ} (hv : v ≠ 0) :
+    let r := Real.sqrt (euclidInner v v)
+    0 < r ∧ euclidInner ((1 / r) • v) ((1 / r) • v) = 1 ∧ v = r • ((1 / r) • v) := by
+  have hv_pos : 0 < euclidInner v v :=
+    lt_of_le_of_ne (euclidInner_self_nonneg v)
+      (Ne.symm ((euclidInner_self_eq_zero_iff v).not.mpr hv))
+  let r := Real.sqrt (euclidInner v v)
+  have hr_pos : 0 < r := Real.sqrt_pos.mpr hv_pos
+  refine ⟨hr_pos, ?_, ?_⟩
+  · rw [euclidInner_smul_left, euclidInner_smul_right]
+    have hr_sq : r * r = euclidInner v v := Real.mul_self_sqrt hv_pos.le
+    calc (1 / r) * ((1 / r) * euclidInner v v)
+        = (1 / (r * r)) * euclidInner v v := by ring
+      _ = (1 / euclidInner v v) * euclidInner v v := by rw [hr_sq]
+      _ = 1 := one_div_mul_cancel hv_pos.ne'
+  · rw [smul_smul, mul_one_div_cancel hr_pos.ne', one_smul]
+
+private lemma exists_unit_orthog_single {e₁ : Fin 4 → ℝ} (he₁ : euclidInner e₁ e₁ = 1) :
+    ∃ e₂ : Fin 4 → ℝ, euclidInner e₂ e₂ = 1 ∧ euclidInner e₁ e₂ = 0 := by
+  let P : (Fin 4 → ℝ) → (Fin 4 → ℝ) := fun x => x - euclidInner e₁ x • e₁
+  have hP_orth : ∀ x, euclidInner e₁ (P x) = 0 := by
+    intro x
+    dsimp [P]
+    simp only [sub_eq_add_neg, euclidInner_add_right, euclidInner_neg_right,
+      euclidInner_smul_right, he₁, mul_one, add_neg_cancel]
+  have hP_norm : ∀ x, euclidInner (P x) (P x) = euclidInner x x - (euclidInner e₁ x) ^ 2 := by
+    intro x
+    have h1 : P x = x + (-euclidInner e₁ x) • e₁ := by ext μ; simp [P, sub_eq_add_neg]
+    rw [h1, euclidInner_add_left, euclidInner_add_right, euclidInner_add_right,
+      euclidInner_smul_left, euclidInner_smul_right, euclidInner_smul_left,
+      euclidInner_smul_right, euclidInner_comm x e₁, he₁]
+    ring
+  have h_sum : ∑ k : Fin 4, euclidInner (P (Pi.single k 1)) (P (Pi.single k 1)) = 3 := by
+    simp_rw [hP_norm]
+    rw [Fin.sum_univ_four]
+    have h_s : ∀ k : Fin 4, euclidInner (Pi.single k (1 : ℝ)) (Pi.single k 1) = 1 ∧
+        euclidInner e₁ (Pi.single k 1) = e₁ k := by
+      intro k
+      fin_cases k <;> simp [euclidInner_explicit]
+    rw [(h_s 0).1, (h_s 0).2, (h_s 1).1, (h_s 1).2, (h_s 2).1, (h_s 2).2,
+      (h_s 3).1, (h_s 3).2]
+    have he₁_exp := euclidInner_explicit e₁ e₁
+    rw [he₁] at he₁_exp
+    linear_combination he₁_exp
+  have h_ex : ∃ k : Fin 4, P (Pi.single k 1) ≠ 0 := by
+    by_contra h_all
+    push Not at h_all
+    have h0 : ∑ k : Fin 4, euclidInner (P (Pi.single k 1)) (P (Pi.single k 1)) = 0 := by
+      refine Finset.sum_eq_zero fun k _ => ?_
+      rw [h_all k, euclidInner_zero_left]
+    linarith
+  rcases h_ex with ⟨k, hk⟩
+  obtain ⟨hr_pos, he₂_unit, _⟩ := euclid_normalize_unit hk
+  refine ⟨(1 / Real.sqrt (euclidInner (P (Pi.single k 1)) (P (Pi.single k 1)))) •
+    P (Pi.single k 1), he₂_unit, ?_⟩
+  rw [euclidInner_smul_right, hP_orth, mul_zero]
+
+private lemma exists_nonzero_orthog_two_unit {e₁ e₂ : Fin 4 → ℝ}
+    (he₁ : euclidInner e₁ e₁ = 1) (he₂ : euclidInner e₂ e₂ = 1)
+    (he₁₂ : euclidInner e₁ e₂ = 0) :
+    ∃ w : Fin 4 → ℝ, w ≠ 0 ∧ euclidInner w e₁ = 0 ∧ euclidInner w e₂ = 0 := by
+  let P : (Fin 4 → ℝ) → (Fin 4 → ℝ) :=
+    fun x => x - euclidInner e₁ x • e₁ - euclidInner e₂ x • e₂
+  have hP_e₁ : ∀ x, euclidInner (P x) e₁ = 0 := by
+    intro x
+    have h1 : P x = x + (-euclidInner e₁ x) • e₁ + (-euclidInner e₂ x) • e₂ := by
+      ext μ; simp [P, sub_eq_add_neg]
+    rw [h1, euclidInner_add_left, euclidInner_add_left, euclidInner_smul_left,
+      euclidInner_smul_left, euclidInner_comm x e₁, euclidInner_comm e₂ e₁, he₁, he₁₂]
+    ring
+  have hP_e₂ : ∀ x, euclidInner (P x) e₂ = 0 := by
+    intro x
+    have h1 : P x = x + (-euclidInner e₁ x) • e₁ + (-euclidInner e₂ x) • e₂ := by
+      ext μ; simp [P, sub_eq_add_neg]
+    rw [h1, euclidInner_add_left, euclidInner_add_left, euclidInner_smul_left,
+      euclidInner_smul_left, euclidInner_comm x e₂, he₁₂, he₂]
+    ring
+  have hP_norm : ∀ x, euclidInner (P x) (P x) =
+      euclidInner x x - (euclidInner e₁ x) ^ 2 - (euclidInner e₂ x) ^ 2 := by
+    intro x
+    have h1 : x = P x + euclidInner e₁ x • e₁ + euclidInner e₂ x • e₂ := by
+      ext μ; simp [P]; ring
+    have hexp : euclidInner x x = euclidInner (P x + euclidInner e₁ x • e₁ +
+        euclidInner e₂ x • e₂) (P x + euclidInner e₁ x • e₁ + euclidInner e₂ x • e₂) := by
+      rw [← h1]
+    rw [euclidInner_add_left, euclidInner_add_left] at hexp
+    simp only [euclidInner_add_right, euclidInner_smul_left, euclidInner_smul_right,
+      hP_e₁ x, hP_e₂ x, euclidInner_comm e₁ (P x), euclidInner_comm e₂ (P x),
+      euclidInner_comm e₂ e₁, he₁, he₂, he₁₂] at hexp
+    linarith
+  have h_sum : ∑ k : Fin 4, euclidInner (P (Pi.single k 1)) (P (Pi.single k 1)) = 2 := by
+    simp_rw [hP_norm]
+    rw [Fin.sum_univ_four]
+    have h_s : ∀ k : Fin 4, euclidInner (Pi.single k (1 : ℝ)) (Pi.single k 1) = 1 ∧
+        euclidInner e₁ (Pi.single k 1) = e₁ k ∧ euclidInner e₂ (Pi.single k 1) = e₂ k := by
+      intro k
+      fin_cases k <;> simp [euclidInner_explicit]
+    rw [(h_s 0).1, (h_s 0).2.1, (h_s 0).2.2, (h_s 1).1, (h_s 1).2.1, (h_s 1).2.2,
+      (h_s 2).1, (h_s 2).2.1, (h_s 2).2.2, (h_s 3).1, (h_s 3).2.1, (h_s 3).2.2]
+    have he₁_exp := euclidInner_explicit e₁ e₁
+    have he₂_exp := euclidInner_explicit e₂ e₂
+    rw [he₁] at he₁_exp
+    rw [he₂] at he₂_exp
+    linear_combination he₁_exp + he₂_exp
+  have h_ex : ∃ k : Fin 4, P (Pi.single k 1) ≠ 0 := by
+    by_contra h_all
+    push Not at h_all
+    have h0 : ∑ k : Fin 4, euclidInner (P (Pi.single k 1)) (P (Pi.single k 1)) = 0 := by
+      refine Finset.sum_eq_zero fun k _ => ?_
+      rw [h_all k, euclidInner_zero_left]
+    linarith
+  rcases h_ex with ⟨k, hk⟩
+  exact ⟨P (Pi.single k 1), hk, hP_e₁ _, hP_e₂ _⟩
+
+lemma exists_euclidInner_eq_zero_pair (u₁ u₂ : Fin 4 → ℝ) :
+    ∃ w : Fin 4 → ℝ, w ≠ 0 ∧ euclidInner w u₁ = 0 ∧ euclidInner w u₂ = 0 := by
+  have h_span₁ : ∃ (e₁ : Fin 4 → ℝ) (c₁ : ℝ), euclidInner e₁ e₁ = 1 ∧ u₁ = c₁ • e₁ := by
+    by_cases hu₁ : u₁ = 0
+    · refine ⟨![1, 0, 0, 0], 0, ?_, by simp [hu₁]⟩
+      simp [euclidInner_explicit]
+    · obtain ⟨_, he₁_unit, hu₁_eq⟩ := euclid_normalize_unit hu₁
+      exact ⟨_, _, he₁_unit, hu₁_eq⟩
+  rcases h_span₁ with ⟨e₁, c₁, he₁, hu₁_eq⟩
+  let v₂ : Fin 4 → ℝ := u₂ - euclidInner e₁ u₂ • e₁
+  have h_span₂ : ∃ (e₂ : Fin 4 → ℝ) (a₂ b₂ : ℝ),
+      euclidInner e₂ e₂ = 1 ∧ euclidInner e₁ e₂ = 0 ∧ u₂ = a₂ • e₁ + b₂ • e₂ := by
+    by_cases hv₂ : v₂ = 0
+    · obtain ⟨e₂, he₂, he₁₂⟩ := exists_unit_orthog_single he₁
+      refine ⟨e₂, euclidInner e₁ u₂, 0, he₂, he₁₂, ?_⟩
+      rw [zero_smul, add_zero]
+      exact sub_eq_zero.mp hv₂
+    · obtain ⟨_, he₂_unit, hv₂_eq⟩ := euclid_normalize_unit hv₂
+      let r₂ := Real.sqrt (euclidInner v₂ v₂)
+      let e₂ := (1 / r₂) • v₂
+      have he₁_v₂ : euclidInner e₁ v₂ = 0 := by
+        dsimp [v₂]
+        simp only [sub_eq_add_neg, euclidInner_add_right, euclidInner_neg_right,
+          euclidInner_smul_right, he₁, mul_one, add_neg_cancel]
+      have he₁₂ : euclidInner e₁ e₂ = 0 := by
+        dsimp [e₂]
+        rw [euclidInner_smul_right, he₁_v₂, mul_zero]
+      refine ⟨e₂, euclidInner e₁ u₂, r₂, he₂_unit, he₁₂, ?_⟩
+      ext μ
+      have h_sub : v₂ μ = u₂ μ - (euclidInner e₁ u₂ • e₁) μ := rfl
+      have h_r₂ : v₂ μ = (r₂ • e₂) μ := congrFun hv₂_eq μ
+      have h_add : (euclidInner e₁ u₂ • e₁ + r₂ • e₂) μ =
+          (euclidInner e₁ u₂ • e₁) μ + (r₂ • e₂) μ := rfl
+      linarith [h_sub, h_r₂, h_add]
+  rcases h_span₂ with ⟨e₂, a₂, b₂, he₂, he₁₂, hu₂_eq⟩
+  obtain ⟨w, hw_ne, hwe₁, hwe₂⟩ := exists_nonzero_orthog_two_unit he₁ he₂ he₁₂
+  refine ⟨w, hw_ne, ?_, ?_⟩
+  · rw [hu₁_eq, euclidInner_smul_right, hwe₁, mul_zero]
+  · rw [hu₂_eq, euclidInner_add_right, euclidInner_smul_right, euclidInner_smul_right,
+      hwe₁, hwe₂, mul_zero, mul_zero, add_zero]
+
+def complexSpatialSwapMatRing {K : Type*} [CommRing K]
+    (c a b d : K) : Matrix (Fin 4) (Fin 4) K := !![
+  0, c * a, c * b, c * d;
+  c * a, 1 - a ^ 2, -a * b, -a * d;
+  c * b, -b * a, 1 - b ^ 2, -b * d;
+  c * d, -d * a, -d * b, 1 - d ^ 2
+]
+
+private lemma complexSpatialSwapMatRing_mul_inv {K : Type*} [CommRing K]
+    {c a b d : K} (hc : c ^ 2 = -1) (hu : a ^ 2 + b ^ 2 + d ^ 2 = 1) :
+    complexSpatialSwapMatRing c a b d * complexSpatialSwapMatRing (-c) a b d = 1 := by
+  ext i j
+  fin_cases i <;> fin_cases j
+  all_goals simp [Matrix.mul_apply, complexSpatialSwapMatRing, Fin.sum_univ_four]
+  · linear_combination -(a ^ 2 + b ^ 2 + d ^ 2) * hc + hu
+  · linear_combination -(c * a) * hu
+  · linear_combination -(c * b) * hu
+  · linear_combination -(c * d) * hu
+  · linear_combination (c * a) * hu
+  · linear_combination -(a ^ 2) * hc + a ^ 2 * hu
+  · linear_combination -(a * b) * hc + a * b * hu
+  · linear_combination -(a * d) * hc + a * d * hu
+  · linear_combination (c * b) * hu
+  · linear_combination -(a * b) * hc + a * b * hu
+  · linear_combination -(b ^ 2) * hc + b ^ 2 * hu
+  · linear_combination -(b * d) * hc + b * d * hu
+  · linear_combination (c * d) * hu
+  · linear_combination -(a * d) * hc + a * d * hu
+  · linear_combination -(b * d) * hc + b * d * hu
+  · linear_combination -(d ^ 2) * hc + d ^ 2 * hu
+
+private lemma complexSpatialSwapMatRing_inv_mul {K : Type*} [CommRing K]
+    {c a b d : K} (hc : c ^ 2 = -1) (hu : a ^ 2 + b ^ 2 + d ^ 2 = 1) :
+    complexSpatialSwapMatRing (-c) a b d * complexSpatialSwapMatRing c a b d = 1 := by
+  have hc' : (-c) ^ 2 = -1 := by rw [neg_sq]; exact hc
+  simpa using complexSpatialSwapMatRing_mul_inv hc' hu
+
+private lemma complexSpatialSwapMatRing_lorentz {K : Type*} [CommRing K]
+    {c a b d : K} (hc : c ^ 2 = -1) (hu : a ^ 2 + b ^ 2 + d ^ 2 = 1) :
+    let eta : Matrix (Fin 4) (Fin 4) K := !![1, 0, 0, 0; 0, -1, 0, 0; 0, 0, -1, 0; 0, 0, 0, -1]
+    (complexSpatialSwapMatRing c a b d)ᵀ * eta * complexSpatialSwapMatRing c a b d = eta := by
+  intro eta
+  ext i j
+  fin_cases i <;> fin_cases j
+  all_goals simp [Matrix.mul_apply, complexSpatialSwapMatRing, eta, Fin.sum_univ_four]
+  · linear_combination -(a ^ 2 + b ^ 2 + d ^ 2) * hc + hu
+  · linear_combination (c * a) * hu
+  · linear_combination (c * b) * hu
+  · linear_combination (c * d) * hu
+  · linear_combination (c * a) * hu
+  · linear_combination a ^ 2 * hc - a ^ 2 * hu
+  · linear_combination a * b * hc - a * b * hu
+  · linear_combination a * d * hc - a * d * hu
+  · linear_combination (c * b) * hu
+  · linear_combination a * b * hc - a * b * hu
+  · linear_combination b ^ 2 * hc - b ^ 2 * hu
+  · linear_combination b * d * hc - b * d * hu
+  · linear_combination (c * d) * hu
+  · linear_combination a * d * hc - a * d * hu
+  · linear_combination b * d * hc - b * d * hu
+  · linear_combination d ^ 2 * hc - d ^ 2 * hu
+
+private lemma complexSpatialSwapMatRing_det {K : Type*} [CommRing K]
+    (c a b d : K) :
+    (complexSpatialSwapMatRing c a b d).det = -c ^ 2 * (a ^ 2 + b ^ 2 + d ^ 2) := by
+  rw [Matrix.det_succ_row_zero]
+  simp [Fin.sum_univ_succ, Matrix.det_succ_row_zero, Matrix.submatrix_apply,
+    Fin.succ_zero_eq_one, Fin.succ_one_eq_two, Fin.succAbove, complexSpatialSwapMatRing]
+  ring
+
+private lemma complexSpatialSwapMatRing_mulVec {K : Type*} [CommRing K]
+    (c a b d x₀ x₁ x₂ x₃ : K) :
+    (complexSpatialSwapMatRing c a b d).mulVec ![x₀, x₁, x₂, x₃] =
+      ![c * (a * x₁ + b * x₂ + d * x₃),
+        c * a * x₀ + x₁ - a * (a * x₁ + b * x₂ + d * x₃),
+        c * b * x₀ + x₂ - b * (a * x₁ + b * x₂ + d * x₃),
+        c * d * x₀ + x₃ - d * (a * x₁ + b * x₂ + d * x₃)] := by
+  ext k
+  fin_cases k <;> (
+    simp [Matrix.mulVec, dotProduct, Fin.sum_univ_four, complexSpatialSwapMatRing]
+    ring
+  )
+
+def complexSpatialSwapMat (c : ℂ) (e₁ e₂ e₃ : ℝ) : Matrix (Fin 4) (Fin 4) ℂ :=
+  complexSpatialSwapMatRing c (e₁ : ℂ) (e₂ : ℂ) (e₃ : ℂ)
+
+private lemma complexSpatialSwapMat_mul_inv {e₁ e₂ e₃ : ℝ}
+    (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1) :
+    complexSpatialSwapMat Complex.I e₁ e₂ e₃ *
+      complexSpatialSwapMat (-Complex.I) e₁ e₂ e₃ = 1 :=
+  complexSpatialSwapMatRing_mul_inv Complex.I_sq (by exact_mod_cast he)
+
+private lemma complexSpatialSwapMat_inv_mul {e₁ e₂ e₃ : ℝ}
+    (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1) :
+    complexSpatialSwapMat (-Complex.I) e₁ e₂ e₃ *
+      complexSpatialSwapMat Complex.I e₁ e₂ e₃ = 1 :=
+  complexSpatialSwapMatRing_inv_mul Complex.I_sq (by exact_mod_cast he)
+
+private lemma complexSpatialSwapMat_lorentz {e₁ e₂ e₃ : ℝ}
+    (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1) :
+    (complexSpatialSwapMat Complex.I e₁ e₂ e₃)ᵀ * minkowskiMetric *
+      complexSpatialSwapMat Complex.I e₁ e₂ e₃ = minkowskiMetric := by
+  have h_eta : minkowskiMetric = !![(1 : ℂ), 0, 0, 0; 0, -1, 0, 0; 0, 0, -1, 0; 0, 0, 0, -1] := by
+    ext i j
+    fin_cases i <;> fin_cases j <;> rfl
+  rw [h_eta]
+  exact complexSpatialSwapMatRing_lorentz Complex.I_sq (by exact_mod_cast he)
+
+private lemma complexSpatialSwapMat_det {e₁ e₂ e₃ : ℝ}
+    (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1) :
+    (complexSpatialSwapMat Complex.I e₁ e₂ e₃).det = 1 := by
+  have heC : (e₁ : ℂ) ^ 2 + (e₂ : ℂ) ^ 2 + (e₃ : ℂ) ^ 2 = 1 := by exact_mod_cast he
+  dsimp [complexSpatialSwapMat]
+  rw [complexSpatialSwapMatRing_det, Complex.I_sq, heC]
+  ring
+
+noncomputable def complexSpatialSwap {e₁ e₂ e₃ : ℝ}
+    (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1) : SpecialSpecialComplexLorentzGroup :=
+  ⟨⟨complexSpatialSwapMat Complex.I e₁ e₂ e₃,
+    complexSpatialSwapMat (-Complex.I) e₁ e₂ e₃,
+    complexSpatialSwapMat_mul_inv he,
+    complexSpatialSwapMat_inv_mul he⟩,
+   ⟨complexSpatialSwapMat_lorentz he, complexSpatialSwapMat_det he⟩⟩
+
+def spatialTimeCurve (n : ℕ) (y : Fin n → Fin 4 → ℝ) (ζ : ℂ) : Fin n → Fin 4 → ℂ :=
+  fun i μ => if μ = 0 then (y i 0 : ℂ) * ζ else (y i μ : ℂ)
+
+lemma spatialTimeCurve_at_I (n : ℕ) (y : Fin n → Fin 4 → ℝ) :
+    spatialTimeCurve n y Complex.I = wickEmbedN n y := rfl
+
+lemma spatialTimeCurve_comp_perm (n : ℕ) (y : Fin n → Fin 4 → ℝ)
+    (π : Equiv.Perm (Fin n)) (ζ : ℂ) :
+    (spatialTimeCurve n y ζ) ∘ π = spatialTimeCurve n (y ∘ π) ζ := rfl
+
+lemma differentiable_spatialTimeCurve (n : ℕ) (y : Fin n → Fin 4 → ℝ) :
+    Differentiable ℂ (spatialTimeCurve n y) := by
+  rw [differentiable_pi]
+  intro i
+  rw [differentiable_pi]
+  intro μ
+  fin_cases μ <;> dsimp [spatialTimeCurve]
+  · exact differentiable_id.const_mul (y i 0 : ℂ)
+  · exact differentiable_const _
+  · exact differentiable_const _
+  · exact differentiable_const _
+
+private lemma spatialTimeCurve_mem_extended_tube_strip
+    (n : ℕ) (y : Fin n → Fin 4 → ℝ) (u : Fin 4 → ℝ)
+    (hu_ne : u ≠ 0) (hu0 : u 0 = 0)
+    (hu_sep : ∀ (i : Fin n) (hi : i.val + 1 < n), 0 < euclidInner u (y ⟨i.val + 1, hi⟩ - y i)) :
+    ∃ δ : ℝ, 0 < δ ∧ ∀ ζ : ℂ, |ζ.re| < δ → spatialTimeCurve n y ζ ∈ extended_tube_n n := by
+  by_cases hn : n ≤ 1
+  · refine ⟨1, zero_lt_one, fun ζ _ => ?_⟩
+    have h_ft : spatialTimeCurve n y ζ ∈ forward_tube_n n := fun i hi => by omega
+    dsimp [extended_tube_n]
+    rw [Set.mem_iUnion]
+    exact ⟨1, spatialTimeCurve n y ζ, h_ft, one_smul _ _⟩
+  · have hn1 : (0 : ℕ) + 1 < n := by omega
+    have hu_pos : 0 < u 1 ^ 2 + u 2 ^ 2 + u 3 ^ 2 := by
+      have h1 : 0 < euclidInner u u :=
+        lt_of_le_of_ne (euclidInner_self_nonneg u)
+          (Ne.symm ((euclidInner_self_eq_zero_iff u).not.mpr hu_ne))
+      rw [euclidInner_explicit, hu0] at h1
+      nlinarith
+    let r : ℝ := Real.sqrt (u 1 ^ 2 + u 2 ^ 2 + u 3 ^ 2)
+    have hr_pos : 0 < r := Real.sqrt_pos.mpr hu_pos
+    have hr_sq : r ^ 2 = u 1 ^ 2 + u 2 ^ 2 + u 3 ^ 2 := Real.sq_sqrt hu_pos.le
+    let e₁ : ℝ := u 1 / r
+    let e₂ : ℝ := u 2 / r
+    let e₃ : ℝ := u 3 / r
+    have he_unit : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1 := by
+      dsimp [e₁, e₂, e₃]
+      calc (u 1 / r) ^ 2 + (u 2 / r) ^ 2 + (u 3 / r) ^ 2
+          = (u 1 ^ 2 + u 2 ^ 2 + u 3 ^ 2) / r ^ 2 := by ring
+        _ = r ^ 2 / r ^ 2 := by rw [hr_sq]
+        _ = 1 := div_self (pow_ne_zero 2 hr_pos.ne')
+    let Λ₀ : SpecialSpecialComplexLorentzGroup := complexSpatialSwap he_unit
+    let Idx := { i : Fin n // i.val + 1 < n }
+    haveI : Nonempty Idx := ⟨⟨⟨0, by omega⟩, hn1⟩⟩
+    let margin_i : Idx → ℝ := fun j =>
+      (euclidInner u (y ⟨j.1.val + 1, j.2⟩ - y j.1) / r) /
+        (|y j.1 0 - y ⟨j.1.val + 1, j.2⟩ 0| + 1)
+    let δ : ℝ := Finset.univ.inf' Finset.univ_nonempty margin_i
+    have hδ_pos : 0 < δ := by
+      rw [Finset.lt_inf'_iff]
+      intro j _
+      dsimp [margin_i]
+      exact div_pos (div_pos (hu_sep j.1 j.2) hr_pos) (by positivity)
+    refine ⟨δ, hδ_pos, fun ζ hζ => ?_⟩
+    have hw_ft : Λ₀ • spatialTimeCurve n y ζ ∈ forward_tube_n n := by
+      intro i hi
+      have h_diff_eq : (Λ₀ • spatialTimeCurve n y ζ) i -
+          (Λ₀ • spatialTimeCurve n y ζ) ⟨i.val + 1, hi⟩ =
+          (complexSpatialSwapMat Complex.I e₁ e₂ e₃).mulVec
+            (spatialTimeCurve n y ζ i - spatialTimeCurve n y ζ ⟨i.val + 1, hi⟩) := by
+        change (complexSpatialSwapMat Complex.I e₁ e₂ e₃).mulVec (spatialTimeCurve n y ζ i) -
+          (complexSpatialSwapMat Complex.I e₁ e₂ e₃).mulVec
+            (spatialTimeCurve n y ζ ⟨i.val + 1, hi⟩) = _
+        exact (Matrix.mulVec_sub _ _ _).symm
+      let t_i : ℝ := y i 0 - y ⟨i.val + 1, hi⟩ 0
+      let d₁ : ℝ := y i 1 - y ⟨i.val + 1, hi⟩ 1
+      let d₂ : ℝ := y i 2 - y ⟨i.val + 1, hi⟩ 2
+      let d₃ : ℝ := y i 3 - y ⟨i.val + 1, hi⟩ 3
+      let s_i : ℝ := e₁ * d₁ + e₂ * d₂ + e₃ * d₃
+      have hs_neg : -s_i = euclidInner u (y ⟨i.val + 1, hi⟩ - y i) / r := by
+        dsimp [s_i, e₁, e₂, e₃, d₁, d₂, d₃]
+        rw [euclidInner_explicit, hu0]
+        simp only [Pi.sub_apply]
+        ring
+      have hs_pos : 0 < -s_i := by
+        rw [hs_neg]
+        exact div_pos (hu_sep i hi) hr_pos
+      let v : Fin 4 → ℝ := ![-s_i, -e₁ * t_i * ζ.re, -e₂ * t_i * ζ.re, -e₃ * t_i * ζ.re]
+      have h_z_diff : spatialTimeCurve n y ζ i - spatialTimeCurve n y ζ ⟨i.val + 1, hi⟩ =
+          ![(t_i : ℂ) * ζ, (d₁ : ℂ), (d₂ : ℂ), (d₃ : ℂ)] := by
+        ext μ
+        fin_cases μ <;> simp [spatialTimeCurve, t_i, d₁, d₂, d₃, sub_mul]
+      have h_mv : (complexSpatialSwapMat Complex.I e₁ e₂ e₃).mulVec
+          (spatialTimeCurve n y ζ i - spatialTimeCurve n y ζ ⟨i.val + 1, hi⟩) =
+          ![Complex.I * (s_i : ℂ),
+            Complex.I * (e₁ : ℂ) * ((t_i : ℂ) * ζ) + ((d₁ - e₁ * s_i : ℝ) : ℂ),
+            Complex.I * (e₂ : ℂ) * ((t_i : ℂ) * ζ) + ((d₂ - e₂ * s_i : ℝ) : ℂ),
+            Complex.I * (e₃ : ℂ) * ((t_i : ℂ) * ζ) + ((d₃ - e₃ * s_i : ℝ) : ℂ)] := by
+        rw [h_z_diff]
+        dsimp [complexSpatialSwapMat]
+        rw [complexSpatialSwapMatRing_mulVec]
+        dsimp [s_i]
+        push_cast
+        ext k
+        fin_cases k
+        all_goals simp
+        all_goals ring
+      have h_im_eq : (fun k => -(((Λ₀ • spatialTimeCurve n y ζ) i -
+          (Λ₀ • spatialTimeCurve n y ζ) ⟨i.val + 1, hi⟩) k).im) = v := by
+        rw [h_diff_eq, h_mv]
+        ext k
+        fin_cases k
+        all_goals dsimp [v]
+        all_goals simp [Complex.mul_im, Complex.mul_re]
+        all_goals ring
+      change (fun k => -(((Λ₀ • spatialTimeCurve n y ζ) i -
+        (Λ₀ • spatialTimeCurve n y ζ) ⟨i.val + 1, hi⟩) k).im) ∈ forward_light_cone
+      rw [h_im_eq]
+      have hδ_le_i : δ ≤ margin_i ⟨i, hi⟩ :=
+        Finset.inf'_le margin_i (Finset.mem_univ (⟨i, hi⟩ : Idx))
+      have h_lt_margin : |ζ.re| < (-s_i) / (|t_i| + 1) := by
+        have h1 := lt_of_lt_of_le hζ hδ_le_i
+        dsimp [margin_i, t_i] at h1
+        rwa [← hs_neg] at h1
+      have h_prod_lt : |ζ.re * t_i| < -s_i := by
+        have h_den : 0 < |t_i| + 1 := by positivity
+        have h1 : |ζ.re| * (|t_i| + 1) < -s_i := (lt_div_iff₀ h_den).mp h_lt_margin
+        rw [abs_mul]
+        nlinarith [abs_nonneg ζ.re, abs_nonneg t_i]
+      refine ⟨hs_pos, ?_⟩
+      dsimp [v]
+      rw [minkowskiInner_explicit]
+      simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.cons_val]
+      have h_sp : (-e₁ * t_i * ζ.re) ^ 2 + (-e₂ * t_i * ζ.re) ^ 2 + (-e₃ * t_i * ζ.re) ^ 2 =
+          (ζ.re * t_i) ^ 2 := by
+        calc (-e₁ * t_i * ζ.re) ^ 2 + (-e₂ * t_i * ζ.re) ^ 2 + (-e₃ * t_i * ζ.re) ^ 2
+            = (e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2) * (ζ.re * t_i) ^ 2 := by ring
+          _ = 1 * (ζ.re * t_i) ^ 2 := by rw [he_unit]
+          _ = (ζ.re * t_i) ^ 2 := one_mul _
+      have h_sq_lt : (ζ.re * t_i) ^ 2 < (-s_i) ^ 2 := by
+        have h_abs_s : |-s_i| = -s_i := abs_of_pos hs_pos
+        exact sq_lt_sq.mpr (h_abs_s.symm ▸ h_prod_lt)
+      linarith
+    dsimp [extended_tube_n]
+    rw [Set.mem_iUnion]
+    exact ⟨Λ₀⁻¹, Λ₀ • spatialTimeCurve n y ζ, hw_ft, inv_smul_smul Λ₀ _⟩
+
+private lemma spatialProjection_mem_jost_points
+    (n : ℕ) (y : Fin n → Fin 4 → ℝ) (u : Fin 4 → ℝ) (hu0 : u 0 = 0)
+    (hu_sep : ∀ (i : Fin n) (hi : i.val + 1 < n), 0 < euclidInner u (y ⟨i.val + 1, hi⟩ - y i)) :
+    (fun i μ => if μ = 0 then (0 : ℝ) else y i μ) ∈ jost_points_n n := by
+  let x_sp : Fin n → Fin 4 → ℝ := fun i μ => if μ = 0 then 0 else y i μ
+  let H : Set (Fin 4 → ℝ) := { w | w 0 = 0 ∧ euclidInner u w < 0 }
+  have hH_conv : Convex ℝ H := by
+    rintro w₁ ⟨h₁0, h₁u⟩ w₂ ⟨h₂0, h₂u⟩ a b ha hb hab
+    refine ⟨by simp [h₁0, h₂0], ?_⟩
+    rw [euclidInner_add_right, euclidInner_smul_right, euclidInner_smul_right]
+    by_cases ha0 : a = 0
+    · subst ha0
+      have hb1 : b = 1 := by linarith
+      subst hb1
+      linarith
+    · have ha_pos : 0 < a := lt_of_le_of_ne ha (Ne.symm ha0)
+      have h1 : a * euclidInner u w₁ < 0 := mul_neg_of_pos_of_neg ha_pos h₁u
+      have h2 : b * euclidInner u w₂ ≤ 0 := mul_nonpos_of_nonneg_of_nonpos hb h₂u.le
+      linarith
+  have h_sub : jost_differences_n n x_sp ⊆ H := by
+    rintro w ⟨i, hi, rfl⟩
+    refine ⟨by simp [x_sp], ?_⟩
+    have h_eq : euclidInner u (x_sp i - x_sp ⟨i.val + 1, hi⟩) =
+        -euclidInner u (y ⟨i.val + 1, hi⟩ - y i) := by
+      rw [euclidInner_explicit, euclidInner_explicit, hu0]
+      simp [x_sp]
+      ring
+    rw [h_eq]
+    exact neg_lt_zero.mpr (hu_sep i hi)
+  intro w hw
+  obtain ⟨hw0, hwu⟩ := convexHull_min h_sub hH_conv hw
+  have hw_ne : w ≠ 0 := by
+    intro h0
+    rw [h0, euclidInner_zero_right] at hwu
+    exact lt_irrefl 0 hwu
+  have hw_pos : 0 < euclidInner w w :=
+    lt_of_le_of_ne (euclidInner_self_nonneg w)
+      (Ne.symm ((euclidInner_self_eq_zero_iff w).not.mpr hw_ne))
+  rw [euclidInner_explicit, hw0] at hw_pos
+  dsimp [is_spacelike]
+  rw [minkowskiInner_explicit, hw0]
+  linarith
+
+theorem euclidExtendedTubePermLocality_of_localCommutativity
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ}
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (hloc : LocalCommutativity η W) :
+    EuclidExtendedTubePermLocality η (spinor_H_ext R W E) := by
+  intro n π α x hx hxπ
+  obtain ⟨u₁, hu₁_ne, hu₁_sep⟩ :=
+    (wickEmbedN_mem_extended_tube_iff_exists_euclidSep n x).mp hx
+  obtain ⟨u₂, hu₂_ne, hu₂_sep⟩ :=
+    (wickEmbedN_mem_extended_tube_iff_exists_euclidSep n (x ∘ π)).mp hxπ
+  obtain ⟨w₀, hw₀_ne, hw₀_u₁, hw₀_u₂⟩ := exists_euclidInner_eq_zero_pair u₁ u₂
+  let U : SU2 := alignPosTimeSU2 w₀
+  let y' : Fin n → Fin 4 → ℝ := euclidRotN n U 1 x
+  let u₁' : Fin 4 → ℝ := euclidRotApply U 1 u₁
+  let u₂' : Fin 4 → ℝ := euclidRotApply U 1 u₂
+  have hr₀_pos : 0 < Real.sqrt (euclidInner w₀ w₀) :=
+    Real.sqrt_pos.mpr (lt_of_le_of_ne (euclidInner_self_nonneg w₀)
+      (Ne.symm ((euclidInner_self_eq_zero_iff w₀).not.mpr hw₀_ne)))
+  have hu₁'_ne : u₁' ≠ 0 := by
+    intro h0
+    dsimp [u₁'] at h0
+    have h1 := euclidInner_euclidRotApply U 1 u₁ u₁
+    rw [h0, euclidInner_zero_left] at h1
+    exact hu₁_ne ((euclidInner_self_eq_zero_iff u₁).mp h1.symm)
+  have hu₂'_ne : u₂' ≠ 0 := by
+    intro h0
+    dsimp [u₂'] at h0
+    have h1 := euclidInner_euclidRotApply U 1 u₂ u₂
+    rw [h0, euclidInner_zero_left] at h1
+    exact hu₂_ne ((euclidInner_self_eq_zero_iff u₂).mp h1.symm)
+  have hu₁'0 : u₁' 0 = 0 := by
+    have h1 := euclidInner_euclidRotApply U 1 w₀ u₁
+    rw [euclidRotApply_alignPosTimeSU2 w₀, hw₀_u₁, euclidInner_explicit] at h1
+    simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.cons_val, zero_mul,
+      add_zero] at h1
+    exact (mul_eq_zero.mp h1).resolve_left hr₀_pos.ne'
+  have hu₂'0 : u₂' 0 = 0 := by
+    have h1 := euclidInner_euclidRotApply U 1 w₀ u₂
+    rw [euclidRotApply_alignPosTimeSU2 w₀, hw₀_u₂, euclidInner_explicit] at h1
+    simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.cons_val, zero_mul,
+      add_zero] at h1
+    exact (mul_eq_zero.mp h1).resolve_left hr₀_pos.ne'
+  have hu₁'_sep : ∀ (i : Fin n) (hi : i.val + 1 < n),
+      0 < euclidInner u₁' (y' ⟨i.val + 1, hi⟩ - y' i) := by
+    intro i hi
+    have hsub : y' ⟨i.val + 1, hi⟩ - y' i = euclidRotApply U 1 (x ⟨i.val + 1, hi⟩ - x i) := by
+      change (euclidRotOfSU2 U 1).mulVec (x ⟨i.val + 1, hi⟩) -
+          (euclidRotOfSU2 U 1).mulVec (x i) = euclidRotLM U 1 (x ⟨i.val + 1, hi⟩ - x i)
+      rw [map_sub, euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+      rfl
+    rw [hsub, euclidInner_euclidRotApply]
+    exact hu₁_sep i hi
+  have hu₂'_sep : ∀ (i : Fin n) (hi : i.val + 1 < n),
+      0 < euclidInner u₂' ((y' ∘ π) ⟨i.val + 1, hi⟩ - (y' ∘ π) i) := by
+    intro i hi
+    have hsub : (y' ∘ π) ⟨i.val + 1, hi⟩ - (y' ∘ π) i =
+        euclidRotApply U 1 ((x ∘ π) ⟨i.val + 1, hi⟩ - (x ∘ π) i) := by
+      change (euclidRotOfSU2 U 1).mulVec (x (π ⟨i.val + 1, hi⟩)) -
+          (euclidRotOfSU2 U 1).mulVec (x (π i)) =
+        euclidRotLM U 1 (x (π ⟨i.val + 1, hi⟩) - x (π i))
+      rw [map_sub, euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+      rfl
+    rw [hsub, euclidInner_euclidRotApply]
+    exact hu₂_sep i hi
+  obtain ⟨δ₁, hδ₁_pos, hZ₁⟩ :=
+    spatialTimeCurve_mem_extended_tube_strip n y' u₁' hu₁'_ne hu₁'0 hu₁'_sep
+  obtain ⟨δ₂, hδ₂_pos, hZ₂⟩ :=
+    spatialTimeCurve_mem_extended_tube_strip n (y' ∘ π) u₂' hu₂'_ne hu₂'0 hu₂'_sep
+  let δ : ℝ := min δ₁ δ₂
+  have hδ_pos : 0 < δ := lt_min hδ₁_pos hδ₂_pos
+  let S_strip : Set ℂ := { ζ : ℂ | |ζ.re| < δ }
+  have hS_open : IsOpen S_strip :=
+    isOpen_lt (continuous_abs.comp Complex.continuous_re) continuous_const
+  have hS_conv : Convex ℝ S_strip := by
+    intro ζ₁ hζ₁ ζ₂ hζ₂ a b ha hb hab
+    change |(a • ζ₁ + b • ζ₂).re| < δ
+    simp only [Complex.add_re, Complex.real_smul, Complex.mul_re, Complex.ofReal_re,
+      Complex.ofReal_im, zero_mul, sub_zero]
+    have h_tri := abs_add_le (a * ζ₁.re) (b * ζ₂.re)
+    rw [abs_mul, abs_mul, abs_of_nonneg ha, abs_of_nonneg hb] at h_tri
+    by_cases ha0 : a = 0
+    · subst ha0
+      have hb1 : b = 1 := by linarith
+      subst hb1
+      have h2 : |ζ₂.re| < δ := hζ₂
+      linarith
+    · have ha_pos : 0 < a := lt_of_le_of_ne ha (Ne.symm ha0)
+      have h1 : a * |ζ₁.re| < a * δ := mul_lt_mul_of_pos_left hζ₁ ha_pos
+      have h2 : b * |ζ₂.re| ≤ b * δ := mul_le_mul_of_nonneg_left (le_of_lt hζ₂) hb
+      have h_abδ : a * δ + b * δ = δ := by linear_combination δ * hab
+      linarith
+  have h0_S : (0 : ℂ) ∈ S_strip := by
+    change |(0 : ℂ).re| < δ
+    simpa using hδ_pos
+  have hI_S : Complex.I ∈ S_strip := by
+    change |Complex.I.re| < δ
+    simpa using hδ_pos
+  let x_real : ℝ → Fin n → Fin 4 → ℝ :=
+    fun t i μ => if μ = 0 then y' i 0 * t else y' i μ
+  have hx_real_cont : Continuous x_real := by
+    refine continuous_pi fun i => continuous_pi fun μ => ?_
+    fin_cases μ <;> dsimp [x_real]
+    · exact continuous_const.mul continuous_id
+    · exact continuous_const
+    · exact continuous_const
+    · exact continuous_const
+  have hx0_jost₁ : x_real 0 ∈ jost_points_n n := by
+    have h0_eq : x_real 0 = fun i μ => if μ = 0 then (0 : ℝ) else y' i μ := by
+      ext i μ; dsimp [x_real]; split_ifs <;> ring
+    rw [h0_eq]
+    exact spatialProjection_mem_jost_points n y' u₁' hu₁'0 hu₁'_sep
+  have hx0_jost₂ : (x_real 0) ∘ π ∈ jost_points_n n := by
+    have h0_eq : (x_real 0) ∘ π = fun i μ => if μ = 0 then (0 : ℝ) else (y' ∘ π) i μ := by
+      ext i μ; dsimp [x_real]; split_ifs <;> ring
+    rw [h0_eq]
+    exact spatialProjection_mem_jost_points n (y' ∘ π) u₂' hu₂'0 hu₂'_sep
+  have h_real_open : IsOpen { t : ℝ | x_real t ∈ jost_points_n n ∧
+      (x_real t) ∘ π ∈ jost_points_n n } :=
+    ((isOpen_jost_points_n n).preimage hx_real_cont).inter
+      ((isOpen_jost_points_n n).preimage ((permCoordCLE n π).continuous.comp hx_real_cont))
+  obtain ⟨δ', hδ'_pos, hδ'_jost⟩ :=
+    Metric.isOpen_iff.mp h_real_open 0 ⟨hx0_jost₁, hx0_jost₂⟩
+  have hy'_loc : ∀ β : Fin n → ι,
+      spinor_H_ext R W E n (β ∘ π) (wickEmbedN n (y' ∘ π)) =
+        η ^ permInversions π * spinor_H_ext R W E n β (wickEmbedN n y') := by
+    intro β
+    let g_diff : ℂ → ℂ := fun ζ =>
+      spinor_H_ext R W E n (β ∘ π) (spatialTimeCurve n (y' ∘ π) ζ) -
+        η ^ permInversions π * spinor_H_ext R W E n β (spatialTimeCurve n y' ζ)
+    have hg_diff : DifferentiableOn ℂ g_diff S_strip := by
+      have h1 : DifferentiableOn ℂ
+          (fun ζ => spinor_H_ext R W E n (β ∘ π) (spatialTimeCurve n (y' ∘ π) ζ)) S_strip :=
+        (spinor_H_ext_analytic R W E h_cov n (β ∘ π)).differentiableOn.comp
+          (differentiable_spatialTimeCurve n (y' ∘ π)).differentiableOn
+          (fun ζ hζ => hZ₂ ζ (lt_of_lt_of_le hζ (min_le_right _ _)))
+      have h2 : DifferentiableOn ℂ
+          (fun ζ => spinor_H_ext R W E n β (spatialTimeCurve n y' ζ)) S_strip :=
+        (spinor_H_ext_analytic R W E h_cov n β).differentiableOn.comp
+          (differentiable_spatialTimeCurve n y').differentiableOn
+          (fun ζ hζ => hZ₁ ζ (lt_of_lt_of_le hζ (min_le_left _ _)))
+      exact h1.sub (h2.const_mul _)
+    have hg_an : AnalyticOnNhd ℂ g_diff S_strip := hg_diff.analyticOnNhd hS_open
+    have hg_freq : ∃ᶠ ζ in 𝓝[≠] (0 : ℂ), g_diff ζ = 0 := by
+      rw [Filter.frequently_iff]
+      intro V hV
+      rw [mem_nhdsWithin] at hV
+      rcases hV with ⟨O, hO_open, h0O, hOV⟩
+      rcases Metric.isOpen_iff.mp hO_open (0 : ℂ) h0O with ⟨r_O, hrO_pos, hrO⟩
+      let ε : ℝ := min (δ / 2) (min (δ' / 2) (r_O / 2))
+      have hε_pos : 0 < ε :=
+        lt_min (half_pos hδ_pos) (lt_min (half_pos hδ'_pos) (half_pos hrO_pos))
+      have hε_O : (ε : ℂ) ∈ O := by
+        apply hrO
+        rw [Metric.mem_ball, dist_zero_right, Complex.norm_real, Real.norm_eq_abs,
+          abs_of_pos hε_pos]
+        exact lt_of_le_of_lt ((min_le_right _ _).trans (min_le_right _ _)) (half_lt_self hrO_pos)
+      have hε_ne : (ε : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hε_pos.ne'
+      have hε_jost : x_real ε ∈ jost_points_n n ∧ (x_real ε) ∘ π ∈ jost_points_n n := by
+        apply hδ'_jost
+        rw [Metric.mem_ball, dist_zero_right, Real.norm_eq_abs, abs_of_pos hε_pos]
+        exact lt_of_le_of_lt ((min_le_right _ _).trans (min_le_left _ _)) (half_lt_self hδ'_pos)
+      refine ⟨(ε : ℂ), hOV ⟨hε_O, hε_ne⟩, ?_⟩
+      have h_curve_real : spatialTimeCurve n y' (ε : ℂ) = coeReal n (x_real ε) := by
+        ext i μ
+        fin_cases μ <;> simp [spatialTimeCurve, coeReal, x_real]
+      have h_curve_perm : spatialTimeCurve n (y' ∘ π) (ε : ℂ) = coeReal n ((x_real ε) ∘ π) := by
+        ext i μ
+        fin_cases μ <;> simp [spatialTimeCurve, coeReal, x_real]
+      have h_x_inv : ((x_real ε) ∘ π) ∘ (π⁻¹ : Equiv.Perm (Fin n)) = x_real ε := by
+        ext i μ
+        change x_real ε (π (π⁻¹ i)) μ = x_real ε i μ
+        simp
+      have h_β_inv : (β ∘ π) ∘ (π⁻¹ : Equiv.Perm (Fin n)) = β := by
+        ext i
+        change β (π (π⁻¹ i)) = β i
+        simp
+      have h_jost_eq := spinor_H_ext_perm_eq_on_jost_inter R W E h_cov hloc n π⁻¹
+        (β ∘ π) hε_jost.2 (by rw [h_x_inv]; exact hε_jost.1)
+      rw [h_β_inv, h_x_inv, permInversions_inv] at h_jost_eq
+      dsimp [g_diff]
+      rw [h_curve_perm, h_curve_real, h_jost_eq, sub_self]
+    have hg_zero := hg_an.eqOn_zero_of_preconnected_of_frequently_eq_zero
+      hS_conv.isPreconnected h0_S hg_freq hI_S
+    exact sub_eq_zero.mp hg_zero
+  have hx_eq : x = euclidRotN n U⁻¹ 1 y' := by
+    ext i μ
+    change x i μ = ((euclidRotOfSU2 U⁻¹ 1).mulVec ((euclidRotOfSU2 U 1).mulVec (x i))) μ
+    rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+    have h_inv : euclidRotApply U⁻¹ 1 (euclidRotApply U 1 (x i)) = x i := by
+      simpa using euclidRotApply_inv_self U 1 (x i)
+    rw [h_inv]
+  have hxπ_eq : x ∘ π = euclidRotN n U⁻¹ 1 (y' ∘ π) := by
+    ext i μ
+    exact congrFun (congrFun hx_eq (π i)) μ
+  let g_rot : SL2C × SL2C := (su2ToSL2C U⁻¹, su2ToSL2C 1)
+  conv_lhs => rw [hxπ_eq, wickEmbedN_euclidRotN]
+  conv_rhs => rw [hx_eq, wickEmbedN_euclidRotN]
+  rw [spinor_H_ext_complexCovariant R W E h_cov n g_rot (wickEmbedN n (y' ∘ π)) (α ∘ π),
+      spinor_H_ext_complexCovariant R W E h_cov n g_rot (wickEmbedN n y') α,
+      ← (Equiv.arrowCongr π.symm (Equiv.refl ι)).sum_comp, Finset.mul_sum]
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  have h_app : (Equiv.arrowCongr π.symm (Equiv.refl ι)) β = β ∘ π := by
+    ext i
+    change β (π.symm.symm i) = β (π i)
+    simp
+  rw [h_app]
+  have h_prod :
+      (∏ i : Fin n, R.σ g_rot ((α ∘ π) i) ((β ∘ π) i)) =
+        ∏ j : Fin n, R.σ g_rot (α j) (β j) :=
+    Fintype.prod_equiv π
+      (fun i => R.σ g_rot ((α ∘ π) i) ((β ∘ π) i))
+      (fun j => R.σ g_rot (α j) (β j))
+      (fun _ => rfl)
+  rw [h_prod, hy'_loc β]
+  ring
+
+open Classical in
+noncomputable def schwingerFromPermutedTube (R : HolomorphicLorentzRep ι)
+    (W : WightmanFamily ι) (η : ℂ) (E : TubeExtension W) : SchwingerFamily ι :=
+  fun n α x =>
+    if hx : ∃ π : Equiv.Perm (Fin n), wickEmbedN n (x ∘ π) ∈ extended_tube_n n then
+      let π := Classical.choose hx
+      η ^ permInversions π * spinor_H_ext R W E n (α ∘ π) (wickEmbedN n (x ∘ π))
+    else 0
+
+theorem schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E))
+    {n : ℕ} (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (σ : Equiv.Perm (Fin n))
+    (hσ : wickEmbedN n (x ∘ σ) ∈ extended_tube_n n) :
+    schwingerFromPermutedTube R W η E n α x =
+      η ^ permInversions σ * spinor_H_ext R W E n (α ∘ σ) (wickEmbedN n (x ∘ σ)) := by
+  have hx : ∃ π : Equiv.Perm (Fin n), wickEmbedN n (x ∘ π) ∈ extended_tube_n n := ⟨σ, hσ⟩
+  simp only [schwingerFromPermutedTube, dif_pos hx]
+  let π := Classical.choose hx
+  have hπ : wickEmbedN n (x ∘ π) ∈ extended_tube_n n := Classical.choose_spec hx
+  change η ^ permInversions π * spinor_H_ext R W E n (α ∘ π) (wickEmbedN n (x ∘ π)) = _
+  have h_x_comp : (x ∘ π) ∘ (π⁻¹ * σ) = x ∘ σ := by
+    ext i μ
+    change x (π (π⁻¹ (σ i))) μ = x (σ i) μ
+    simp
+  have h_a_comp : (α ∘ π) ∘ (π⁻¹ * σ) = α ∘ σ := by
+    ext i
+    change α (π (π⁻¹ (σ i))) = α (σ i)
+    simp
+  have h_loc := hperm_ext n (π⁻¹ * σ) (α ∘ π) (x ∘ π) hπ (by rwa [h_x_comp])
+  rw [h_a_comp, h_x_comp] at h_loc
+  rw [h_loc, ← mul_assoc, os_eta_pow_permInversions_mul hη π⁻¹ σ,
+      os_eta_pow_permInversions_inv hη π]
+  exact (calc (η ^ permInversions σ * (η ^ permInversions π * η ^ permInversions σ)) *
+        spinor_H_ext R W E n (α ∘ π) (wickEmbedN n (x ∘ π))
+      = ((η ^ permInversions σ * η ^ permInversions σ) * η ^ permInversions π) *
+        spinor_H_ext R W E n (α ∘ π) (wickEmbedN n (x ∘ π)) := by ring
+    _ = η ^ permInversions π * spinor_H_ext R W E n (α ∘ π) (wickEmbedN n (x ∘ π)) := by
+      rw [os_eta_pow_self_mul hη, one_mul]).symm
+
+theorem schwingerFromPermutedTube_eq_of_mem_extended_tube
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (hperm_ext : ExtendedTubePermLocality η (spinor_H_ext R W E))
+    {n : ℕ} (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (σ : Equiv.Perm (Fin n))
+    (hσ : wickEmbedN n (x ∘ σ) ∈ extended_tube_n n) :
+    schwingerFromPermutedTube R W η E n α x =
+      η ^ permInversions σ * spinor_H_ext R W E n (α ∘ σ) (wickEmbedN n (x ∘ σ)) :=
+  schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E
+    hperm_ext.toEuclidExtendedTubePermLocality α x σ hσ
+
+theorem schwingerFromPermutedTube_eq_of_mem_extended_tube_of_localCommutativity
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (hloc : LocalCommutativity η W)
+    {n : ℕ} (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (σ : Equiv.Perm (Fin n))
+    (hσ : wickEmbedN n (x ∘ σ) ∈ extended_tube_n n) :
+    schwingerFromPermutedTube R W η E n α x =
+      η ^ permInversions σ * spinor_H_ext R W E n (α ∘ σ) (wickEmbedN n (x ∘ σ)) :=
+  schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E
+    (euclidExtendedTubePermLocality_of_localCommutativity R W E h_cov hloc) α x σ hσ
+
+theorem schwingerFromPermutedTube_eq_schwingerFromTube_on_orderedEuclidN_euclid
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E))
+    (n : ℕ) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    schwingerFromPermutedTube R W η E n α x = schwingerFromTube E n α x := by
+  have hx1 : wickEmbedN n (x ∘ (1 : Equiv.Perm (Fin n))) ∈ extended_tube_n n :=
+    wickEmbedN_mem_extended_tube_n n hx
+  rw [schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E hperm_ext α x 1 hx1,
+      permInversions_one, pow_zero, one_mul]
+  exact spinor_H_ext_eq_on_forward_tube R W E h_cov n α (wickEmbedN_mem_forward_tube_n n hx)
+
+theorem schwingerFromPermutedTube_eq_schwingerFromTube_on_orderedEuclidN
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (hperm_ext : ExtendedTubePermLocality η (spinor_H_ext R W E))
+    (n : ℕ) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    schwingerFromPermutedTube R W η E n α x = schwingerFromTube E n α x :=
+  schwingerFromPermutedTube_eq_schwingerFromTube_on_orderedEuclidN_euclid R W hη E h_cov
+    hperm_ext.toEuclidExtendedTubePermLocality n α hx
+
+theorem schwingerFromPermutedTube_eq_schwingerFromTube_on_orderedEuclidN_of_localCommutativity
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (hloc : LocalCommutativity η W)
+    (n : ℕ) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN n) :
+    schwingerFromPermutedTube R W η E n α x = schwingerFromTube E n α x :=
+  schwingerFromPermutedTube_eq_schwingerFromTube_on_orderedEuclidN_euclid R W hη E h_cov
+    (euclidExtendedTubePermLocality_of_localCommutativity R W E h_cov hloc) n α hx
+
+theorem schwingerFromPermutedTube_contDiffOn_euclid
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E))
+    (n : ℕ) (α : Fin n → ι) :
+    ContDiffOn ℝ (⊤ : ℕ∞) (schwingerFromPermutedTube R W η E n α) (nonCoincidentEuclidN n) := by
+  intro x₀ hx₀
+  rcases wickEmbedN_mem_permuted_extended_tube_n hx₀ with ⟨σ, hσ₀⟩
+  let L : (Fin n → Fin 4 → ℝ) →L[ℝ] (Fin n → Fin 4 → ℂ) :=
+    LinearMap.toContinuousLinearMap
+      { toFun := fun x => wickEmbedN n (x ∘ σ)
+        map_add' := fun x y => wickEmbedN_add n (x ∘ σ) (y ∘ σ)
+        map_smul' := fun c x => by
+          simp only [RingHom.id_apply]
+          exact wickEmbedN_smul n c (x ∘ σ) }
+  have hLx₀ : L x₀ ∈ extended_tube_n n := hσ₀
+  have h_holo : ContDiffOn ℂ (⊤ : ℕ∞) (spinor_H_ext R W E n (α ∘ σ)) (extended_tube_n n) :=
+    (spinor_H_ext_analytic R W E h_cov n (α ∘ σ)).contDiffOn (extended_tube_is_open n).uniqueDiffOn
+  have h_at : ContDiffAt ℝ (⊤ : ℕ∞)
+      (fun x => η ^ permInversions σ * spinor_H_ext R W E n (α ∘ σ) (L x)) x₀ :=
+    contDiffAt_const.mul (((h_holo.restrict_scalars ℝ).contDiffAt
+      ((extended_tube_is_open n).mem_nhds hLx₀)).comp x₀ L.contDiff.contDiffAt)
+  have h_nhds : L ⁻¹' (extended_tube_n n) ∈ 𝓝 x₀ :=
+    L.continuous.continuousAt.preimage_mem_nhds ((extended_tube_is_open n).mem_nhds hLx₀)
+  have h_ev : schwingerFromPermutedTube R W η E n α =ᶠ[𝓝 x₀]
+      fun x => η ^ permInversions σ * spinor_H_ext R W E n (α ∘ σ) (L x) := by
+    filter_upwards [h_nhds] with x hx
+    exact schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E hperm_ext α x σ hx
+  exact (h_at.congr_of_eventuallyEq h_ev).contDiffWithinAt
+
+theorem schwingerFromPermutedTube_contDiffOn
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (hperm_ext : ExtendedTubePermLocality η (spinor_H_ext R W E))
+    (n : ℕ) (α : Fin n → ι) :
+    ContDiffOn ℝ (⊤ : ℕ∞) (schwingerFromPermutedTube R W η E n α) (nonCoincidentEuclidN n) :=
+  schwingerFromPermutedTube_contDiffOn_euclid R W hη E h_cov
+    hperm_ext.toEuclidExtendedTubePermLocality n α
+
+theorem schwingerFromPermutedTube_contDiffOn_of_localCommutativity
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (hloc : LocalCommutativity η W)
+    (n : ℕ) (α : Fin n → ι) :
+    ContDiffOn ℝ (⊤ : ℕ∞) (schwingerFromPermutedTube R W η E n α) (nonCoincidentEuclidN n) :=
+  schwingerFromPermutedTube_contDiffOn_euclid R W hη E h_cov
+    (euclidExtendedTubePermLocality_of_localCommutativity R W E h_cov hloc) n α
+
+theorem schwingerFromPermutedTube_translation_invariant_euclid
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (htrans : TubeTranslationInvariant E)
+    (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    FullEuclidTranslationInvariant (schwingerFromPermutedTube R W η E) := by
+  intro n α x hx a
+  rcases wickEmbedN_mem_permuted_extended_tube_n hx with ⟨σ, hσ⟩
+  have h_add : wickEmbedN n ((fun i => x i + a) ∘ σ) =
+      fun i => wickEmbedN n (x ∘ σ) i + wickEmbed a := by
+    ext i μ
+    exact congrFun (wickEmbed_add (x (σ i)) a) μ
+  have hσ_shift : wickEmbedN n ((fun i => x i + a) ∘ σ) ∈ extended_tube_n n := by
+    rw [h_add]
+    dsimp [extended_tube_n] at hσ ⊢
+    rw [Set.mem_iUnion] at hσ ⊢
+    rcases hσ with ⟨Λ₀, w, hw, hw_eq⟩
+    dsimp at hw_eq
+    let b : Fin 4 → ℂ := (Λ₀⁻¹.val.val).mulVec (wickEmbed a)
+    have hw_shift : (fun i => w i + b) ∈ forward_tube_n n := by
+      intro i hi
+      have hdiff : (w i + b) - (w ⟨i.val + 1, hi⟩ + b) = w i - w ⟨i.val + 1, hi⟩ := by
+        ext μ
+        simp
+      change (fun k => -(((w i + b) - (w ⟨i.val + 1, hi⟩ + b)) k).im) ∈ forward_light_cone
+      rw [hdiff]
+      exact hw i hi
+    refine ⟨Λ₀, fun i => w i + b, hw_shift, ?_⟩
+    ext i μ
+    change ((Λ₀.val.val).mulVec (w i + b)) μ = wickEmbedN n (x ∘ σ) i μ + wickEmbed a μ
+    have hwi : (Λ₀.val.val).mulVec (w i) = wickEmbedN n (x ∘ σ) i := congrFun hw_eq i
+    have hmul : (Λ₀.val.val).mulVec b = wickEmbed a := by
+      change (Λ₀.val.val).mulVec ((Λ₀⁻¹.val.val).mulVec (wickEmbed a)) = wickEmbed a
+      rw [Matrix.mulVec_mulVec]
+      have h1 : Λ₀.val.val * Λ₀⁻¹.val.val = 1 :=
+        congrArg (fun M : SpecialSpecialComplexLorentzGroup => M.val.val) (mul_inv_cancel Λ₀)
+      rw [h1, Matrix.one_mulVec]
+    rw [Matrix.mulVec_add, hwi, hmul, Pi.add_apply]
+  have hσ' : wickEmbedN n (x ∘ σ) ∈ extended_tube_n n := hσ
+  rw [schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E hperm_ext α _ σ hσ_shift,
+      schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E hperm_ext α x σ hσ',
+      h_add, spinor_H_ext_translation_invariant R W E h_cov htrans n (α ∘ σ) hσ' (wickEmbed a)]
+
+theorem schwingerFromPermutedTube_translation_invariant
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (htrans : TubeTranslationInvariant E)
+    (hperm_ext : ExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    FullEuclidTranslationInvariant (schwingerFromPermutedTube R W η E) :=
+  schwingerFromPermutedTube_translation_invariant_euclid R W hη E h_cov htrans
+    hperm_ext.toEuclidExtendedTubePermLocality
+
+theorem schwingerFromPermutedTube_translation_invariant_of_localCommutativity
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (htrans : TubeTranslationInvariant E)
+    (hloc : LocalCommutativity η W) :
+    FullEuclidTranslationInvariant (schwingerFromPermutedTube R W η E) :=
+  schwingerFromPermutedTube_translation_invariant_euclid R W hη E h_cov htrans
+    (euclidExtendedTubePermLocality_of_localCommutativity R W E h_cov hloc)
+
+theorem schwingerFromPermutedTube_rotCovariant_euclid
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    FullEuclidRotCovariant R (schwingerFromPermutedTube R W η E) := by
+  intro n A B α x hx
+  rcases wickEmbedN_mem_permuted_extended_tube_n hx with ⟨σ, hσ⟩
+  have hσ' : wickEmbedN n (x ∘ σ) ∈ extended_tube_n n := hσ
+  have h_rot_comp : (euclidRotN n A B x) ∘ σ = euclidRotN n A B (x ∘ σ) := rfl
+  have hσ_rot : wickEmbedN n ((euclidRotN n A B x) ∘ σ) ∈ extended_tube_n n := by
+    rw [h_rot_comp, wickEmbedN_euclidRotN]
+    exact (extended_tube_n_smul_iff n (spinorPhi (su2ToSL2C A, su2ToSL2C B)) _).mpr hσ'
+  rw [schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E hperm_ext α _ σ hσ_rot,
+      h_rot_comp, wickEmbedN_euclidRotN,
+      spinor_H_ext_complexCovariant R W E h_cov n (su2ToSL2C A, su2ToSL2C B) _ (α ∘ σ),
+      ← (Equiv.arrowCongr σ.symm (Equiv.refl ι)).sum_comp, Finset.mul_sum]
+  refine Finset.sum_congr rfl (fun β _ => ?_)
+  have h_app : (Equiv.arrowCongr σ.symm (Equiv.refl ι)) β = β ∘ σ := by
+    ext i
+    change β (σ.symm.symm i) = β (σ i)
+    simp
+  rw [h_app]
+  have h_prod :
+      (∏ i : Fin n, R.σ (su2ToSL2C A, su2ToSL2C B) ((α ∘ σ) i) ((β ∘ σ) i)) =
+        ∏ j : Fin n, R.σ (su2ToSL2C A, su2ToSL2C B) (α j) (β j) :=
+    Fintype.prod_equiv σ
+      (fun i => R.σ (su2ToSL2C A, su2ToSL2C B) ((α ∘ σ) i) ((β ∘ σ) i))
+      (fun j => R.σ (su2ToSL2C A, su2ToSL2C B) (α j) (β j))
+      (fun _ => rfl)
+  rw [h_prod, ← mul_assoc,
+      mul_comm (η ^ permInversions σ)
+        (∏ j : Fin n, R.σ (su2ToSL2C A, su2ToSL2C B) (α j) (β j)),
+      mul_assoc,
+      ← schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E hperm_ext β x σ hσ']
+
+theorem schwingerFromPermutedTube_rotCovariant
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E)
+    (hperm_ext : ExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    FullEuclidRotCovariant R (schwingerFromPermutedTube R W η E) :=
+  schwingerFromPermutedTube_rotCovariant_euclid R W hη E h_cov
+    hperm_ext.toEuclidExtendedTubePermLocality
+
+theorem schwingerFromPermutedTube_rotCovariant_of_localCommutativity
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (hloc : LocalCommutativity η W) :
+    FullEuclidRotCovariant R (schwingerFromPermutedTube R W η E) :=
+  schwingerFromPermutedTube_rotCovariant_euclid R W hη E h_cov
+    (euclidExtendedTubePermLocality_of_localCommutativity R W E h_cov hloc)
+
+theorem schwingerFromPermutedTube_permutation_euclid
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    OSPermutationSymmetry η (schwingerFromPermutedTube R W η E) := by
+  intro n π α x hx
+  rcases wickEmbedN_mem_permuted_extended_tube_n (nonCoincidentEuclidN_comp_perm hx π) with
+    ⟨σ, hσ⟩
+  let τ : Equiv.Perm (Fin n) := π * σ
+  have hσ' : wickEmbedN n ((x ∘ π) ∘ σ) ∈ extended_tube_n n := hσ
+  have h_x_comp : (x ∘ π) ∘ σ = x ∘ τ := rfl
+  have h_a_comp : (α ∘ π) ∘ σ = α ∘ τ := rfl
+  have hτ : wickEmbedN n (x ∘ τ) ∈ extended_tube_n n := hσ'
+  rw [schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid
+        R W hη E hperm_ext (α ∘ π) (x ∘ π) σ hσ',
+      schwingerFromPermutedTube_eq_of_mem_extended_tube_euclid R W hη E hperm_ext α x τ hτ,
+      h_a_comp, h_x_comp, ← mul_assoc, os_eta_pow_permInversions_mul hη π σ,
+      ← mul_assoc (η ^ permInversions π), os_eta_pow_self_mul hη, one_mul]
+
+theorem schwingerFromPermutedTube_permutation
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (hperm_ext : ExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    OSPermutationSymmetry η (schwingerFromPermutedTube R W η E) :=
+  schwingerFromPermutedTube_permutation_euclid R W hη E
+    hperm_ext.toEuclidExtendedTubePermLocality
+
+theorem schwingerFromPermutedTube_permutation_of_localCommutativity
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (E : TubeExtension W) (h_cov : TubeCovariant R E) (hloc : LocalCommutativity η W) :
+    OSPermutationSymmetry η (schwingerFromPermutedTube R W η E) :=
+  schwingerFromPermutedTube_permutation_euclid R W hη E
+    (euclidExtendedTubePermLocality_of_localCommutativity R W E h_cov hloc)
+
+theorem schwingerFromPermutedTube_fullEuclidOSAxioms_euclid
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (W : WightmanFamily ι)
+    {η : ℂ} (hη : η = 1 ∨ η = -1) (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (htrans : TubeTranslationInvariant E)
+    (hherm : TubeWickHermiticity S E)
+    (hpos : OSReflectionPositive S (schwingerFromTube E))
+    (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    FullEuclidOSAxioms R S η (schwingerFromPermutedTube R W η E) :=
+  let h_ord : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n →
+      schwingerFromPermutedTube R W η E n α x = schwingerFromTube E n α x :=
+    fun n α _ hx =>
+      schwingerFromPermutedTube_eq_schwingerFromTube_on_orderedEuclidN_euclid
+        R W hη E h_cov hperm_ext n α hx
+  { os0_smooth := schwingerFromPermutedTube_contDiffOn_euclid R W hη E h_cov hperm_ext
+    os1_translation :=
+      schwingerFromPermutedTube_translation_invariant_euclid R W hη E h_cov htrans hperm_ext
+    os1_rotation := schwingerFromPermutedTube_rotCovariant_euclid R W hη E h_cov hperm_ext
+    os2_hermiticity :=
+      (osHermiticity_congr_of_eq_on_orderedEuclidN S h_ord).mpr
+        (schwingerFromTube_os_hermiticity S E hherm)
+    os2_positivity :=
+      (osReflectionPositive_congr_of_eq_on_orderedEuclidN S h_ord).mpr hpos
+    os3_permutation := schwingerFromPermutedTube_permutation_euclid R W hη E hperm_ext }
+
+theorem schwingerFromPermutedTube_fullEuclidOSAxioms
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (W : WightmanFamily ι)
+    {η : ℂ} (hη : η = 1 ∨ η = -1) (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (htrans : TubeTranslationInvariant E)
+    (hherm : TubeWickHermiticity S E)
+    (hpos : OSReflectionPositive S (schwingerFromTube E))
+    (hperm_ext : ExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    FullEuclidOSAxioms R S η (schwingerFromPermutedTube R W η E) :=
+  schwingerFromPermutedTube_fullEuclidOSAxioms_euclid R S W hη E h_cov htrans hherm hpos
+    hperm_ext.toEuclidExtendedTubePermLocality
+
+theorem schwingerFromPermutedTube_fullEuclidOSAxioms_of_localCommutativity
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (W : WightmanFamily ι)
+    {η : ℂ} (hη : η = 1 ∨ η = -1) (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (htrans : TubeTranslationInvariant E)
+    (hherm : TubeWickHermiticity S E)
+    (hpos : OSReflectionPositive S (schwingerFromTube E))
+    (hloc : LocalCommutativity η W) :
+    FullEuclidOSAxioms R S η (schwingerFromPermutedTube R W η E) :=
+  schwingerFromPermutedTube_fullEuclidOSAxioms_euclid R S W hη E h_cov htrans hherm hpos
+    (euclidExtendedTubePermLocality_of_localCommutativity R W E h_cov hloc)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem minkowskiInner_nonneg_of_mem_closure {q v : Fin 4 → ℝ}
+    (hq : q ∈ closure forward_light_cone) (hv : v ∈ closure forward_light_cone) :
+    0 ≤ minkowskiInner q v := by
+  have hq' := closure_forward_light_cone_subset hq
+  have hv' := closure_forward_light_cone_subset hv
+  have hq0 : 0 ≤ q 0 := hq'.1
+  have hv0 : 0 ≤ v 0 := hv'.1
+  have hq_m : 0 ≤ minkowskiInner q q := hq'.2
+  have hv_m : 0 ≤ minkowskiInner v v := hv'.2
+  rw [minkowskiInner_explicit] at hq_m hv_m ⊢
+  have h_cs :
+      (q 1 * v 1 + q 2 * v 2 + q 3 * v 3) ^ 2 ≤
+        ((q 1) ^ 2 + (q 2) ^ 2 + (q 3) ^ 2) * ((v 1) ^ 2 + (v 2) ^ 2 + (v 3) ^ 2) := by
+    nlinarith [sq_nonneg (q 1 * v 2 - q 2 * v 1),
+      sq_nonneg (q 1 * v 3 - q 3 * v 1), sq_nonneg (q 2 * v 3 - q 3 * v 2)]
+  have h_prod :
+      ((q 1) ^ 2 + (q 2) ^ 2 + (q 3) ^ 2) * ((v 1) ^ 2 + (v 2) ^ 2 + (v 3) ^ 2) ≤
+        (q 0 * v 0) ^ 2 := by
+    have hq_sp : (q 1) ^ 2 + (q 2) ^ 2 + (q 3) ^ 2 ≤ (q 0) ^ 2 := by nlinarith
+    have hv_sp : (v 1) ^ 2 + (v 2) ^ 2 + (v 3) ^ 2 ≤ (v 0) ^ 2 := by nlinarith
+    have h_nn : 0 ≤ (q 1) ^ 2 + (q 2) ^ 2 + (q 3) ^ 2 := by positivity
+    have h_step := mul_le_mul hq_sp hv_sp (by positivity) (sq_nonneg (q 0))
+    have h_sq_mul : (q 0) ^ 2 * (v 0) ^ 2 = (q 0 * v 0) ^ 2 := by ring
+    linarith [h_sq_mul]
+  have h_qv0 : 0 ≤ q 0 * v 0 := mul_nonneg hq0 hv0
+  nlinarith [sq_nonneg (q 0 * v 0 + (q 1 * v 1 + q 2 * v 2 + q 3 * v 3))]
+
+def closed_forward_tube_n (n : ℕ) : Set (Fin n → Fin 4 → ℂ) :=
+  { z | ∀ (i : Fin n) (hi : i.val + 1 < n), diff_im n z i hi ∈ closure forward_light_cone }
+
+theorem forward_tube_n_subset_closed_forward_tube_n (n : ℕ) :
+    forward_tube_n n ⊆ closed_forward_tube_n n :=
+  fun z hz i hi => subset_closure (diff_im_mem_forward_cone n z hz i hi)
+
+theorem coeReal_mem_closed_forward_tube_n (n : ℕ) (x : Fin n → Fin 4 → ℝ) :
+    coeReal n x ∈ closed_forward_tube_n n := by
+  intro i hi
+  have h0 : diff_im n (coeReal n x) i hi = 0 := by
+    ext k
+    simp [diff_im, diff_z, coeReal]
+  rw [h0]
+  exact zero_mem_closure_forward_light_cone
+
+theorem smul_mem_closure_forward_light_cone {v : Fin 4 → ℝ}
+    (hv : v ∈ closure forward_light_cone) {t : ℝ} (ht : 0 ≤ t) :
+    t • v ∈ closure forward_light_cone := by
+  rcases eq_or_lt_of_le ht with rfl | ht_pos
+  · rw [zero_smul]
+    exact zero_mem_closure_forward_light_cone
+  · rw [Metric.mem_closure_iff] at hv ⊢
+    intro ε hε
+    rcases hv (ε / t) (div_pos hε ht_pos) with ⟨u, hu_mem, hu_dist⟩
+    refine ⟨t • u, ?_, ?_⟩
+    · dsimp [forward_light_cone] at hu_mem ⊢
+      rw [minkowskiInner_explicit] at hu_mem ⊢
+      simp only [Pi.smul_apply, smul_eq_mul]
+      refine ⟨mul_pos ht_pos hu_mem.1, ?_⟩
+      have h_scale :
+          t * u 0 * (t * u 0) - t * u 1 * (t * u 1) -
+            t * u 2 * (t * u 2) - t * u 3 * (t * u 3) =
+          t ^ 2 * (u 0 * u 0 - u 1 * u 1 - u 2 * u 2 - u 3 * u 3) := by ring
+      rw [h_scale]
+      exact mul_pos (sq_pos_of_pos ht_pos) hu_mem.2
+    · rw [dist_eq_norm, ← smul_sub, norm_smul, Real.norm_eq_abs, abs_of_pos ht_pos]
+      rw [dist_eq_norm] at hu_dist
+      exact (mul_lt_mul_of_pos_left hu_dist ht_pos).trans_eq (mul_div_cancel₀ ε ht_pos.ne')
+
+theorem tubeBoundaryLine_mem_closed_forward_tube_n (n : ℕ) (x : Fin n → Fin 4 → ℝ)
+    {v : Fin 4 → ℝ} (hv : v ∈ forward_light_cone) {t : ℝ} (ht : 0 ≤ t) :
+    tubeBoundaryLine n x v t ∈ closed_forward_tube_n n := by
+  rcases eq_or_lt_of_le ht with rfl | ht_pos
+  · have h0 : tubeBoundaryLine n x v 0 = coeReal n x := by
+      ext i k
+      simp [tubeBoundaryLine, coeReal]
+    rw [h0]
+    exact coeReal_mem_closed_forward_tube_n n x
+  · exact forward_tube_n_subset_closed_forward_tube_n n
+      (tubeBoundaryLine_mem_forward_tube n x v hv ht_pos)
+
+theorem totalConePairing_nonneg_of_closed_forward_tube_n (n : ℕ)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    {z : Fin n → Fin 4 → ℂ} (hz : z ∈ closed_forward_tube_n n) :
+    0 ≤ totalConePairing n p z := by
+  dsimp [totalConePairing]
+  refine Finset.sum_nonneg (fun i _ => ?_)
+  split_ifs with hi
+  · exact minkowskiInner_nonneg_of_mem_closure (hp.2 i) (hz i hi)
+  · exact le_rfl
+
+theorem vladimirov_kernel_norm_le_one_of_closed_forward_tube_n (n : ℕ)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    {z : Fin n → Fin 4 → ℂ} (hz : z ∈ closed_forward_tube_n n) :
+    ‖vladimirov_kernel n z p‖ ≤ 1 := by
+  rw [vladimirov_kernel_norm, sum_minkowskiInner_im_eq_neg_totalConePairing n p z hp.1]
+  have h_pair := totalConePairing_nonneg_of_closed_forward_tube_n n hp hz
+  exact Real.exp_le_one_iff.mpr (by linarith)
+
+theorem norm_minkowskiFourier_le_seminorm (n : ℕ)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) (p : Fin n → Fin 4 → ℝ) :
+    ‖minkowskiFourier f p‖ ≤
+      SchwartzMap.seminorm ℂ 0 0 (minkowskiFourierSchwartzCLM n f) := by
+  rw [minkowskiFourier_eq_minkowskiFourierSchwartzCLM n f p]
+  exact SchwartzMap.norm_le_seminorm ℂ (minkowskiFourierSchwartzCLM n f)
+    (momentumToEuclidCLMN n p)
+
+theorem continuous_minkowskiFourier (n : ℕ) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    Continuous (fun p : Fin n → Fin 4 → ℝ => minkowskiFourier f p) := by
+  have h_eq : (fun p : Fin n → Fin 4 → ℝ => minkowskiFourier f p) =
+      fun p => (minkowskiFourierSchwartzCLM n f) (momentumToEuclidCLMN n p) := by
+    ext p
+    exact minkowskiFourier_eq_minkowskiFourierSchwartzCLM n f p
+  rw [h_eq]
+  exact (minkowskiFourierSchwartzCLM n f).continuous.comp (momentumToEuclidCLMN n).continuous
+
+theorem sum_k_minkowskiInner_le_zero_of_forwardConeSpectralRegion (n : ℕ)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    {v : Fin 4 → ℝ} (hv : v ∈ forward_light_cone) :
+    ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (p k) v ≤ 0 := by
+  have h_sum0 : (∑ k : Fin n, minkowskiInner (p k) v) = 0 := by
+    rw [← minkowskiInner_sum_left, hp.1, minkowskiInner_zero_left]
+  rw [sum_k_mul_eq_neg_sum_partial n (fun k => minkowskiInner (p k) v) h_sum0]
+  have h_nonneg : 0 ≤ ∑ j : Fin n,
+      (∑ k ∈ Finset.univ.filter (fun k => k ≤ j), minkowskiInner (p k) v) := by
+    refine Finset.sum_nonneg (fun j _ => ?_)
+    have h_q : (∑ k ∈ Finset.univ.filter (fun k => k ≤ j), minkowskiInner (p k) v) =
+        minkowskiInner (partial_sum_p n p j) v := by
+      dsimp [partial_sum_p]
+      rw [minkowskiInner_sum_left]
+    rw [h_q]
+    exact minkowskiInner_nonneg_of_mem_closure (hp.2 j) (subset_closure hv)
+  linarith
+
+noncomputable def partialSumEnergy (n : ℕ) (p : Fin n → Fin 4 → ℝ) : ℝ :=
+  ∑ i : Fin n, if i.val + 1 < n then (partial_sum_p n p i) 0 else 0
+
+theorem partialSumEnergy_nonneg (n : ℕ) {p : Fin n → Fin 4 → ℝ}
+    (hp : p ∈ forwardConeSpectralRegion n) :
+    0 ≤ partialSumEnergy n p := by
+  dsimp [partialSumEnergy]
+  refine Finset.sum_nonneg (fun i _ => ?_)
+  split_ifs with hi
+  · exact (closure_forward_light_cone_subset (hp.2 i)).1
+  · exact le_rfl
+
+theorem totalConePairing_ge_mul_partialSumEnergy (n : ℕ)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    {z : Fin n → Fin 4 → ℂ} {c : ℝ}
+    (hc : ∀ (i : Fin n) (hi : i.val + 1 < n), c ≤ coneGap (diff_im n z i hi)) :
+    c * partialSumEnergy n p ≤ totalConePairing n p z := by
+  dsimp [partialSumEnergy, totalConePairing]
+  rw [Finset.mul_sum]
+  refine Finset.sum_le_sum (fun i _ => ?_)
+  split_ifs with hi
+  · have hq0 : 0 ≤ (partial_sum_p n p i) 0 := (closure_forward_light_cone_subset (hp.2 i)).1
+    exact (mul_le_mul_of_nonneg_right (hc i hi) hq0).trans
+      (minkowskiInner_ge_coneGap_closure (diff_im n z i hi) (partial_sum_p n p i) (hp.2 i))
+  · simp
+
+theorem abs_coord_le_zero_of_mem_closure_forward_light_cone {q : Fin 4 → ℝ}
+    (hq : q ∈ closure forward_light_cone) (μ : Fin 4) :
+    |q μ| ≤ q 0 := by
+  have hq' := closure_forward_light_cone_subset hq
+  have hq0 : 0 ≤ q 0 := hq'.1
+  have hq_m : 0 ≤ minkowskiInner q q := hq'.2
+  rw [minkowskiInner_explicit] at hq_m
+  fin_cases μ
+  · dsimp
+    exact (abs_of_nonneg hq0).le
+  · dsimp
+    rw [abs_le]
+    constructor <;> nlinarith [sq_nonneg (q 2), sq_nonneg (q 3)]
+  · dsimp
+    rw [abs_le]
+    constructor <;> nlinarith [sq_nonneg (q 1), sq_nonneg (q 3)]
+  · dsimp
+    rw [abs_le]
+    constructor <;> nlinarith [sq_nonneg (q 1), sq_nonneg (q 2)]
+
+theorem partial_sum_p_term_le_partialSumEnergy (n : ℕ)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    (i : Fin n) (hi : i.val + 1 < n) :
+    (partial_sum_p n p i) 0 ≤ partialSumEnergy n p := by
+  dsimp [partialSumEnergy]
+  have h_le : (if i.val + 1 < n then (partial_sum_p n p i) 0 else 0) ≤
+      ∑ j : Fin n, if j.val + 1 < n then (partial_sum_p n p j) 0 else 0 := by
+    refine Finset.single_le_sum
+      (f := fun j : Fin n => if j.val + 1 < n then (partial_sum_p n p j) 0 else 0)
+      (fun j _ => ?_) (Finset.mem_univ i)
+    split_ifs
+    · exact (closure_forward_light_cone_subset (hp.2 j)).1
+    · exact le_rfl
+  rwa [if_pos hi] at h_le
+
+theorem abs_coord_le_two_mul_partialSumEnergy {n : ℕ} (hn : 2 ≤ n)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    (k : Fin n) (μ : Fin 4) :
+    |p k μ| ≤ 2 * partialSumEnergy n p := by
+  have hS_nn : 0 ≤ partialSumEnergy n p := partialSumEnergy_nonneg n hp
+  by_cases hk0 : k.val = 0
+  · have hk_lt : k.val + 1 < n := by omega
+    have h_eq : partial_sum_p n p k = p k := by
+      dsimp [partial_sum_p]
+      have h_filt : Finset.univ.filter (· ≤ k) = {k} := by
+        ext r
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_singleton]
+        constructor
+        · intro hr
+          exact Fin.ext (by have := Fin.le_def.mp hr; omega)
+        · rintro rfl
+          exact le_rfl
+      rw [h_filt, Finset.sum_singleton]
+    have hpk : partial_sum_p n p k ∈ closure forward_light_cone := hp.2 k
+    have h1 : |p k μ| ≤ (partial_sum_p n p k) 0 := by
+      rw [← h_eq]
+      exact abs_coord_le_zero_of_mem_closure_forward_light_cone hpk μ
+    have h2 := partial_sum_p_term_le_partialSumEnergy n hp k hk_lt
+    linarith
+  · let k' : Fin n := ⟨k.val - 1, by omega⟩
+    have hk'_val : k'.val = k.val - 1 := rfl
+    have hk'_lt : k'.val + 1 < n := by
+      rw [hk'_val]
+      exact Nat.sub_add_cancel (Nat.pos_of_ne_zero hk0) |>.trans_lt k.isLt
+    have h_diff : p k = partial_sum_p n p k - partial_sum_p n p k' := by
+      dsimp [partial_sum_p]
+      have h_ins : Finset.univ.filter (· ≤ k) =
+          Insert.insert k (Finset.univ.filter (· ≤ k')) := by
+        ext r
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_insert]
+        constructor
+        · intro hr
+          have hr' : r.val ≤ k.val := Fin.le_def.mp hr
+          rcases eq_or_lt_of_le hr' with h_eq | h_lt
+          · exact Or.inl (Fin.ext h_eq)
+          · exact Or.inr (Fin.le_def.mpr (by rw [hk'_val]; omega))
+        · rintro (rfl | hr)
+          · exact le_rfl
+          · have hr' : r.val ≤ k.val - 1 := by
+              rw [← hk'_val]
+              exact Fin.le_def.mp hr
+            exact Fin.le_def.mpr (by omega)
+      have hk_not : k ∉ Finset.univ.filter (· ≤ k') := by
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, Fin.le_def, hk'_val]
+        omega
+      rw [h_ins, Finset.sum_insert hk_not, add_sub_cancel_right]
+    by_cases hk_last : k.val + 1 < n
+    · have hpk : partial_sum_p n p k ∈ closure forward_light_cone := hp.2 k
+      have hpk' : partial_sum_p n p k' ∈ closure forward_light_cone := hp.2 k'
+      have h1 := abs_coord_le_zero_of_mem_closure_forward_light_cone hpk μ
+      have h2 := abs_coord_le_zero_of_mem_closure_forward_light_cone hpk' μ
+      have h3 := partial_sum_p_term_le_partialSumEnergy n hp k hk_last
+      have h4 := partial_sum_p_term_le_partialSumEnergy n hp k' hk'_lt
+      have h_tri : |p k μ| ≤ |partial_sum_p n p k μ| + |partial_sum_p n p k' μ| := by
+        rw [congr_fun h_diff μ, Pi.sub_apply]
+        exact abs_sub _ _
+      linarith
+    · have h_top : partial_sum_p n p k = 0 := by
+        dsimp [partial_sum_p]
+        have h_all : Finset.univ.filter (· ≤ k) = Finset.univ := by
+          ext r
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and, iff_true, Fin.le_def]
+          omega
+        rw [h_all, hp.1]
+      have h_neg : p k μ = - partial_sum_p n p k' μ := by
+        rw [congr_fun h_diff μ, h_top, Pi.sub_apply, Pi.zero_apply, zero_sub]
+      rw [h_neg, abs_neg]
+      have hpk' : partial_sum_p n p k' ∈ closure forward_light_cone := hp.2 k'
+      have h2 := abs_coord_le_zero_of_mem_closure_forward_light_cone hpk' μ
+      have h4 := partial_sum_p_term_le_partialSumEnergy n hp k' hk'_lt
+      linarith
+
+theorem norm_vladimirov_phase_z_basis_le {n : ℕ} (hn : 2 ≤ n)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    (idx : Fin n × Fin 4) :
+    ‖vladimirov_phase_z_CLM n p (vladimirov_basis n idx)‖ ≤ 2 * partialSumEnergy n p := by
+  change ‖-Complex.I * ∑ k : Fin n,
+      minkowskiInnerC (fun μ => (p k μ : ℂ)) (vladimirov_basis n idx k)‖ ≤
+    2 * partialSumEnergy n p
+  rw [norm_mul, norm_neg, Complex.norm_I, one_mul]
+  have h_sum : (∑ k : Fin n,
+      minkowskiInnerC (fun μ => (p k μ : ℂ)) (vladimirov_basis n idx k)) =
+      minkowskiInnerC (fun μ => (p idx.1 μ : ℂ)) (vladimirov_basis n idx idx.1) := by
+    refine Finset.sum_eq_single idx.1 (fun k _ hk => ?_)
+      (fun h => False.elim (h (Finset.mem_univ _)))
+    have h0 : vladimirov_basis n idx k = 0 := by
+      ext μ
+      simp [vladimirov_basis, hk]
+    rw [h0]
+    simp [minkowskiInnerC]
+  rw [h_sum]
+  rcases idx with ⟨k, μ⟩
+  have h_norm :
+      ‖minkowskiInnerC (fun ν => (p k ν : ℂ)) (vladimirov_basis n (k, μ) k)‖ = |p k μ| := by
+    fin_cases μ <;>
+      simp [minkowskiInnerC, vladimirov_basis, Complex.norm_real, Real.norm_eq_abs]
+  rw [h_norm]
+  exact abs_coord_le_two_mul_partialSumEnergy hn hp k μ
+
+theorem norm_vladimirov_phase_z_le {n : ℕ} (hn : 2 ≤ n)
+    {p : Fin n → Fin 4 → ℝ} (hp : p ∈ forwardConeSpectralRegion n)
+    (y : Fin n → Fin 4 → ℂ) :
+    ‖vladimirov_phase_z_CLM n p y‖ ≤ (8 * (n : ℝ)) * partialSumEnergy n p * ‖y‖ := by
+  rw [vladimirov_phase_basis_expansion n p y]
+  refine (norm_sum_le Finset.univ _).trans ?_
+  have h_term : ∀ idx : Fin n × Fin 4,
+      ‖y idx.1 idx.2 * vladimirov_phase_z_CLM n p (vladimirov_basis n idx)‖ ≤
+        2 * partialSumEnergy n p * ‖y‖ := by
+    intro idx
+    rw [norm_mul]
+    have hy1 : ‖y idx.1 idx.2‖ ≤ ‖y idx.1‖ := norm_le_pi_norm (y idx.1) idx.2
+    have hy2 : ‖y idx.1‖ ≤ ‖y‖ := norm_le_pi_norm y idx.1
+    have hy : ‖y idx.1 idx.2‖ ≤ ‖y‖ := hy1.trans hy2
+    have hp_b := norm_vladimirov_phase_z_basis_le hn hp idx
+    have hS_nn : 0 ≤ 2 * partialSumEnergy n p := by
+      linarith [partialSumEnergy_nonneg n hp]
+    calc ‖y idx.1 idx.2‖ * ‖vladimirov_phase_z_CLM n p (vladimirov_basis n idx)‖
+        ≤ ‖y‖ * (2 * partialSumEnergy n p) :=
+          mul_le_mul hy hp_b (norm_nonneg _) (norm_nonneg y)
+      _ = 2 * partialSumEnergy n p * ‖y‖ := mul_comm _ _
+  calc ∑ idx : Fin n × Fin 4,
+        ‖y idx.1 idx.2 * vladimirov_phase_z_CLM n p (vladimirov_basis n idx)‖
+      ≤ ∑ _idx : Fin n × Fin 4, (2 * partialSumEnergy n p * ‖y‖) :=
+        Finset.sum_le_sum (fun idx _ => h_term idx)
+    _ = ((Fintype.card (Fin n × Fin 4) : ℕ) : ℝ) * (2 * partialSumEnergy n p * ‖y‖) := by
+        rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+    _ = (8 * (n : ℝ)) * partialSumEnergy n p * ‖y‖ := by
+        rw [Fintype.card_prod, Fintype.card_fin, Fintype.card_fin]
+        push_cast
+        ring
+
+theorem eq_zero_of_continuous_of_schwartz_integral_eq_zero (n : ℕ)
+    {g : (Fin n → Fin 4 → ℝ) → ℂ} (hg : Continuous g)
+    (h_int : ∀ f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ,
+      (∫ x : Fin n → Fin 4 → ℝ, g x * f x) = 0) :
+    ∀ x : Fin n → Fin 4 → ℝ, g x = 0 := by
+  have hg_loc : LocallyIntegrableOn g Set.univ volume :=
+    hg.continuousOn.locallyIntegrableOn isOpen_univ.measurableSet
+  have h_ae : ∀ᵐ x ∂volume, x ∈ (Set.univ : Set (Fin n → Fin 4 → ℝ)) → g x = 0 := by
+    refine isOpen_univ.ae_eq_zero_of_integral_contDiff_smul_eq_zero hg_loc ?_
+    intro ψ hψ_diff hψ_comp _hψ_supp
+    let f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ :=
+      (hψ_comp.comp_left Complex.ofReal_zero).toSchwartzMap
+        (Complex.ofRealCLM.contDiff.comp hψ_diff)
+    have h_eq : (∫ x, ψ x • g x) = ∫ x, g x * f x := by
+      refine integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+      change ψ x • g x = g x * (ψ x : ℂ)
+      rw [Complex.real_smul, mul_comm]
+    rw [h_eq]
+    exact h_int f
+  have h_ae' : g =ᶠ[ae volume] 0 := by
+    filter_upwards [h_ae] with x hx
+    exact hx (Set.mem_univ x)
+  exact congr_fun ( Continuous.ae_eq_iff_eq volume hg continuous_const |>.mp h_ae' )
+
+theorem eq_zero_on_upperHalfPlane_of_real_zero
+    {g : ℂ → ℂ}
+    (hg_cont : ContinuousOn g {w : ℂ | 0 ≤ w.im})
+    (hg_ana : AnalyticOn ℂ g Analysis.upperHalfPlane)
+    (hg_real : ∀ t : ℝ, g (t : ℂ) = 0) :
+    ∀ w : ℂ, 0 ≤ w.im → g w = 0 := by
+  let f : ℂ → ℂ := fun w => if 0 ≤ w.im then g w else 0
+  have h_slit : Analysis.slitDomain (Set.univ : Set ℝ) = Set.univ := by
+    ext w
+    simp [Analysis.slitDomain]
+  have hf_cont : Continuous f := by
+    rw [continuous_iff_continuousAt]
+    intro w₀
+    by_cases hw_pos : 0 < w₀.im
+    · have h_mem : {w : ℂ | 0 < w.im} ∈ 𝓝 w₀ :=
+        (isOpen_lt continuous_const Complex.continuous_im).mem_nhds hw_pos
+      have h_sub : {w : ℂ | 0 < w.im} ⊆ {w : ℂ | 0 ≤ w.im} :=
+        fun w (hw : 0 < w.im) => (le_of_lt hw : 0 ≤ w.im)
+      have h_eq : f =ᶠ[𝓝 w₀] g := by
+        filter_upwards [h_mem] with w hw
+        exact if_pos (le_of_lt hw)
+      exact (hg_cont.continuousAt (Filter.mem_of_superset h_mem h_sub)).congr h_eq.symm
+    · by_cases hw_neg : w₀.im < 0
+      · have h_mem : {w : ℂ | w.im < 0} ∈ 𝓝 w₀ :=
+          (isOpen_lt Complex.continuous_im continuous_const).mem_nhds hw_neg
+        have h_eq : f =ᶠ[𝓝 w₀] (fun _ => (0 : ℂ)) := by
+          filter_upwards [h_mem] with w hw
+          exact if_neg (not_le_of_gt hw)
+        exact continuousAt_const.congr h_eq.symm
+      · have hw0 : w₀.im = 0 := le_antisymm (not_lt.mp hw_pos) (not_lt.mp hw_neg)
+        have hw₀_re : ((w₀.re : ℝ) : ℂ) = w₀ := by
+          apply Complex.ext <;> simp [hw0]
+        have h_zero_w₀ : g w₀ = 0 := by
+          rw [← hw₀_re]
+          exact hg_real w₀.re
+        have hf_w₀ : f w₀ = 0 := by
+          dsimp [f]
+          rw [if_pos (le_of_eq hw0.symm), h_zero_w₀]
+        rw [Metric.continuousAt_iff]
+        intro ε hε
+        have hw₀_nn : 0 ≤ w₀.im := by linarith
+        have hg_within := Metric.continuousWithinAt_iff.mp
+          (hg_cont w₀ hw₀_nn) ε hε
+        rcases hg_within with ⟨δ, hδ_pos, hδ⟩
+        refine ⟨δ, hδ_pos, fun w hw_dist => ?_⟩
+        rw [hf_w₀]
+        dsimp [f]
+        split_ifs with hw_im
+        · have h_step := hδ hw_im hw_dist
+          rwa [h_zero_w₀] at h_step
+        · simpa using hε
+  have hf_ana_pos : AnalyticOn ℂ f Analysis.upperHalfPlane :=
+    hg_ana.congr (fun _ hw => if_pos (le_of_lt hw))
+  have hf_ana_neg : AnalyticOn ℂ f Analysis.lowerHalfPlane := by
+    have h_open_lhp : IsOpen Analysis.lowerHalfPlane :=
+      isOpen_lt Complex.continuous_im continuous_const
+    refine DifferentiableOn.analyticOn ?_ h_open_lhp
+    exact (differentiableOn_const (0 : ℂ)).congr
+      (fun w hw => if_neg (not_le_of_gt hw))
+  have hf_ana_univ : AnalyticOnNhd ℂ f Set.univ := by
+    have h_on : AnalyticOn ℂ f (Analysis.slitDomain (Set.univ : Set ℝ)) :=
+      Analysis.eow_1d_continuous Set.univ isOpen_univ f
+        hf_cont.continuousOn hf_ana_pos hf_ana_neg
+    rw [h_slit] at h_on
+    exact isOpen_univ.analyticOn_iff_analyticOnNhd.mp h_on
+  have hf_ev_zero : f =ᶠ[𝓝 (-Complex.I)] 0 := by
+    have h_mem : Analysis.lowerHalfPlane ∈ 𝓝 (-Complex.I) :=
+      (isOpen_lt Complex.continuous_im continuous_const).mem_nhds (by simp)
+    filter_upwards [h_mem] with w hw
+    exact if_neg (not_le_of_gt hw)
+  have hf_all_zero : Set.EqOn f 0 Set.univ :=
+    hf_ana_univ.eqOn_zero_of_preconnected_of_eventuallyEq_zero
+      isPreconnected_univ (Set.mem_univ (-Complex.I)) hf_ev_zero
+  intro w hw
+  have h_eval : f w = 0 := hf_all_zero (Set.mem_univ w)
+  dsimp [f] at h_eval
+  rwa [if_pos hw] at h_eval
+
+structure ForwardConeSpectralMeasureFamily (ι : Type*) where
+  A : ℕ → Type
+  instMeas : ∀ n : ℕ, MeasurableSpace (A n)
+  μ : ∀ n : ℕ, @MeasureTheory.Measure (A n) (instMeas n)
+  instSFinite : ∀ n : ℕ, @MeasureTheory.SFinite (A n) (instMeas n) (μ n)
+  ρ : ∀ n : ℕ, (Fin n → ι) → A n → ℂ
+  integrable_ρ : ∀ (n : ℕ) (α : Fin n → ι),
+    @MeasureTheory.Integrable _ _ _ _ (instMeas n) (ρ n α) (μ n)
+  p : ∀ n : ℕ, (Fin n → ι) → A n → Fin n → Fin 4 → ℝ
+  measurable_p : ∀ (n : ℕ) (α : Fin n → ι),
+    @Measurable (A n) (Fin n → Fin 4 → ℝ) (instMeas n) _ (p n α)
+  mem_forwardCone : ∀ (n : ℕ) (α : Fin n → ι) (a : A n),
+    p n α a ∈ forwardConeSpectralRegion n
+
+attribute [instance] ForwardConeSpectralMeasureFamily.instMeas
+attribute [instance] ForwardConeSpectralMeasureFamily.instSFinite
+
+namespace ForwardConeSpectralMeasureFamily
+
+variable {ι : Type*}
+
+theorem integrable_ρ_mul_schwartz (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι)
+    (g : SchwartzMap (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ) :
+    Integrable (fun a : F.A n =>
+      F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a))) (F.μ n) := by
+  let C : ℝ := SchwartzMap.seminorm ℂ 0 0 g
+  have h_meas_g : Measurable
+      (fun a : F.A n => g (momentumToEuclidCLMN n (F.p n α a))) :=
+    (g.continuous.comp (momentumToEuclidCLMN n).continuous).measurable.comp
+      (F.measurable_p n α)
+  refine Integrable.mono' ((F.integrable_ρ n α).norm.mul_const C)
+    ((F.integrable_ρ n α).aestronglyMeasurable.mul h_meas_g.aestronglyMeasurable)
+    (Filter.Eventually.of_forall (fun a => ?_))
+  rw [norm_mul]
+  exact mul_le_mul_of_nonneg_left
+    (SchwartzMap.norm_le_seminorm ℂ g (momentumToEuclidCLMN n (F.p n α a)))
+    (norm_nonneg (F.ρ n α a))
+
+noncomputable def euclidSchwartzCLM (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) :
+    SchwartzMap (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ →L[ℂ] ℂ :=
+  SchwartzMap.mkCLMtoNormedSpace
+    (fun g => ∫ a : F.A n, F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a)) ∂(F.μ n))
+    (fun g₁ g₂ => by
+      have h_add :
+          (fun a : F.A n =>
+            F.ρ n α a * (g₁ + g₂) (momentumToEuclidCLMN n (F.p n α a))) =
+          fun a : F.A n =>
+            F.ρ n α a * g₁ (momentumToEuclidCLMN n (F.p n α a)) +
+              F.ρ n α a * g₂ (momentumToEuclidCLMN n (F.p n α a)) := by
+        ext a
+        simp [mul_add]
+      rw [h_add]
+      exact integral_add (F.integrable_ρ_mul_schwartz n α g₁)
+        (F.integrable_ρ_mul_schwartz n α g₂))
+    (fun c g => by
+      have h_smul :
+          (fun a : F.A n =>
+            F.ρ n α a * (c • g) (momentumToEuclidCLMN n (F.p n α a))) =
+          fun a : F.A n =>
+            c * (F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a))) := by
+        ext a
+        simp [smul_eq_mul, mul_left_comm]
+      rw [h_smul, RingHom.id_apply, smul_eq_mul, integral_const_mul])
+    (by
+      refine ⟨{(0, 0)}, ∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n),
+        integral_nonneg (fun _ => norm_nonneg _), fun g => ?_⟩
+      let S0 : ℝ := ({(0, 0)} : Finset (ℕ × ℕ)).sup
+        (schwartzSeminormFamily ℂ (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ) g
+      have hS0 : SchwartzMap.seminorm ℂ 0 0 g ≤ S0 :=
+        Seminorm.le_def.mp
+          (Finset.le_sup (f := schwartzSeminormFamily ℂ (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ)
+            (Finset.mem_singleton_self (0, 0))) g
+      calc ‖∫ a : F.A n, F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a)) ∂(F.μ n)‖
+          ≤ ∫ a : F.A n, ‖F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a))‖ ∂(F.μ n) :=
+            norm_integral_le_integral_norm _
+        _ ≤ ∫ a : F.A n, ‖F.ρ n α a‖ * S0 ∂(F.μ n) := by
+            refine integral_mono_of_nonneg (Filter.Eventually.of_forall (fun _ => norm_nonneg _))
+              ((F.integrable_ρ n α).norm.mul_const S0)
+              (Filter.Eventually.of_forall (fun a => ?_))
+            dsimp only
+            rw [norm_mul]
+            exact mul_le_mul_of_nonneg_left
+              ((SchwartzMap.norm_le_seminorm ℂ g
+                (momentumToEuclidCLMN n (F.p n α a))).trans hS0)
+              (norm_nonneg (F.ρ n α a))
+        _ = (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * S0 := integral_mul_const S0 _)
+
+noncomputable def toWightmanFamily (F : ForwardConeSpectralMeasureFamily ι) :
+    WightmanFamily ι :=
+  fun n α =>
+    PointwiseConvergenceCLM.precomp ℂ (minkowskiFourierSchwartzCLM n)
+      (ContinuousLinearMap.toPointwiseConvergenceCLM _ _ _ _ (F.euclidSchwartzCLM n α))
+
+@[simp]
+theorem toWightmanFamily_apply (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    F.toWightmanFamily n α f =
+      ∫ a : F.A n, F.ρ n α a * minkowskiFourier f (F.p n α a) ∂(F.μ n) := by
+  change ∫ a : F.A n, F.ρ n α a *
+    (minkowskiFourierSchwartzCLM n f) (momentumToEuclidCLMN n (F.p n α a)) ∂(F.μ n) = _
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp only
+  rw [← minkowskiFourier_eq_minkowskiFourierSchwartzCLM n f (F.p n α a)]
+
+theorem integrable_ρ_mul_minkowskiFourier (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    Integrable (fun a : F.A n => F.ρ n α a * minkowskiFourier f (F.p n α a)) (F.μ n) := by
+  have h_eq : (fun a : F.A n => F.ρ n α a * minkowskiFourier f (F.p n α a)) =
+      fun a : F.A n => F.ρ n α a *
+        (minkowskiFourierSchwartzCLM n f) (momentumToEuclidCLMN n (F.p n α a)) := by
+    ext a
+    rw [minkowskiFourier_eq_minkowskiFourierSchwartzCLM n f (F.p n α a)]
+  rw [h_eq]
+  exact F.integrable_ρ_mul_schwartz n α (minkowskiFourierSchwartzCLM n f)
+
+noncomputable def H (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) : ℂ :=
+  ∫ a : F.A n, F.ρ n α a * vladimirov_kernel n z (F.p n α a) ∂(F.μ n)
+
+theorem aestronglyMeasurable_ρ_mul_kernel (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    AEStronglyMeasurable
+      (fun a : F.A n => F.ρ n α a * vladimirov_kernel n z (F.p n α a)) (F.μ n) := by
+  have h_meas_k : Measurable (fun a : F.A n => vladimirov_kernel n z (F.p n α a)) :=
+    (vladimirov_kernel_contDiff n z).continuous.measurable.comp (F.measurable_p n α)
+  exact (F.integrable_ρ n α).aestronglyMeasurable.mul h_meas_k.aestronglyMeasurable
+
+theorem integrable_ρ_mul_kernel_of_closed_forward_tube (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) {z : Fin n → Fin 4 → ℂ}
+    (hz : z ∈ closed_forward_tube_n n) :
+    Integrable (fun a : F.A n => F.ρ n α a * vladimirov_kernel n z (F.p n α a)) (F.μ n) := by
+  refine Integrable.mono' (F.integrable_ρ n α).norm (F.aestronglyMeasurable_ρ_mul_kernel n α z)
+    (Filter.Eventually.of_forall (fun a => ?_))
+  rw [norm_mul]
+  exact mul_le_of_le_one_right (norm_nonneg (F.ρ n α a))
+    (vladimirov_kernel_norm_le_one_of_closed_forward_tube_n n (F.mem_forwardCone n α a) hz)
+
+theorem norm_H_le_of_closed_forward_tube (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) {z : Fin n → Fin 4 → ℂ}
+    (hz : z ∈ closed_forward_tube_n n) :
+    ‖F.H n α z‖ ≤ ∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n) := by
+  unfold H
+  refine (norm_integral_le_integral_norm _).trans ?_
+  refine integral_mono_of_nonneg (Filter.Eventually.of_forall (fun _ => norm_nonneg _))
+    (F.integrable_ρ n α).norm (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp only
+  rw [norm_mul]
+  exact mul_le_of_le_one_right (norm_nonneg (F.ρ n α a))
+    (vladimirov_kernel_norm_le_one_of_closed_forward_tube_n n (F.mem_forwardCone n α a) hz)
+
+theorem norm_H_le (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) {z : Fin n → Fin 4 → ℂ} (hz : z ∈ forward_tube_n n) :
+    ‖F.H n α z‖ ≤ ∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n) :=
+  F.norm_H_le_of_closed_forward_tube n α (forward_tube_n_subset_closed_forward_tube_n n hz)
+
+theorem continuous_vladimirov_kernel_fst (n : ℕ) (p : Fin n → Fin 4 → ℝ) :
+    Continuous (fun z : Fin n → Fin 4 → ℂ => vladimirov_kernel n z p) :=
+  continuous_iff_continuousAt.mpr (fun z => (vladimirov_kernel_analyticAt n p z).continuousAt)
+
+theorem continuousOn_H_closed_forward_tube (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) :
+    ContinuousOn (F.H n α) (closed_forward_tube_n n) := by
+  unfold H
+  refine MeasureTheory.continuousOn_of_dominated
+    (fun z _hz => F.aestronglyMeasurable_ρ_mul_kernel n α z)
+    (fun z hz => Filter.Eventually.of_forall (fun a => by
+      rw [norm_mul]
+      exact mul_le_of_le_one_right (norm_nonneg (F.ρ n α a))
+        (vladimirov_kernel_norm_le_one_of_closed_forward_tube_n n
+          (F.mem_forwardCone n α a) hz)))
+    (F.integrable_ρ n α).norm
+    (Filter.Eventually.of_forall (fun a =>
+      (continuous_const.mul (continuous_vladimirov_kernel_fst n (F.p n α a))).continuousOn))
+
+theorem continuous_H_real (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) :
+    Continuous (fun x : Fin n → Fin 4 → ℝ => F.H n α (coeReal n x)) := by
+  have h_coe : Continuous (coeReal n) :=
+    continuous_pi (fun i => continuous_pi (fun μ =>
+      Complex.continuous_ofReal.comp ((continuous_apply μ).comp (continuous_apply i))))
+  exact continuousOn_univ.mp
+    ((F.continuousOn_H_closed_forward_tube n α).comp h_coe.continuousOn
+      (fun x _ => coeReal_mem_closed_forward_tube_n n x))
+
+theorem exists_pos_coneGap_lower_bound {n : ℕ} (hn : 2 ≤ n)
+    {z₀ : Fin n → Fin 4 → ℂ} (hz₀ : z₀ ∈ forward_tube_n n) :
+    ∃ c₀ : ℝ, 0 < c₀ ∧ ∀ (i : Fin n) (hi : i.val + 1 < n),
+      c₀ ≤ coneGap (diff_im n z₀ i hi) := by
+  let S_idx : Finset { i : Fin n // i.val + 1 < n } := Finset.univ
+  have h_ne : S_idx.Nonempty := ⟨⟨⟨0, by omega⟩, by dsimp; omega⟩, Finset.mem_univ _⟩
+  let g : { i : Fin n // i.val + 1 < n } → ℝ := fun u => coneGap (diff_im n z₀ u.1 u.2)
+  refine ⟨S_idx.inf' h_ne g, ?_, ?_⟩
+  · rw [Finset.lt_inf'_iff]
+    intro u _
+    exact coneGap_pos _ (diff_im_mem_forward_cone n z₀ hz₀ u.1 u.2)
+  · intro i hi
+    exact Finset.inf'_le g (Finset.mem_univ ⟨i, hi⟩)
+
+noncomputable def powerBasisCoeff (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z₀ : Fin n → Fin 4 → ℂ)
+    (k : ℕ) (j : Fin k → Fin n × Fin 4) : ℂ :=
+  (Nat.factorial k : ℂ)⁻¹ *
+    ∫ a : F.A n, F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+      (∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))) ∂(F.μ n)
+
+noncomputable def powerSeries (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z₀ : Fin n → Fin 4 → ℂ) :
+    FormalMultilinearSeries ℂ (Fin n → Fin 4 → ℂ) ℂ :=
+  fun k => ∑ j : Fin k → Fin n × Fin 4,
+    F.powerBasisCoeff n α z₀ k j • vladimirov_monomial_multilinear n k j
+
+theorem integrable_powerBasisIntegrand (F : ForwardConeSpectralMeasureFamily ι)
+    {n : ℕ} (hn : 2 ≤ n) (α : Fin n → ι) {z₀ : Fin n → Fin 4 → ℂ}
+    {c₀ : ℝ} (hc₀ : 0 < c₀)
+    (hgap : ∀ (i : Fin n) (hi : i.val + 1 < n), c₀ ≤ coneGap (diff_im n z₀ i hi))
+    (k : ℕ) (j : Fin k → Fin n × Fin 4) :
+    Integrable (fun a : F.A n =>
+      F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+        (∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))))
+      (F.μ n) := by
+  let M : ℝ := (Nat.factorial k : ℝ) * (2 / c₀) ^ k
+  have h_meas_prod : Measurable (fun a : F.A n =>
+      ∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))) := by
+    refine Finset.measurable_prod Finset.univ (fun m _ => ?_)
+    have h_cont : Continuous (fun q : Fin n → Fin 4 → ℝ =>
+        vladimirov_phase_z_CLM n q (vladimirov_basis n (j m))) := by
+      have h_eq : (fun q : Fin n → Fin 4 → ℝ =>
+          vladimirov_phase_z_CLM n q (vladimirov_basis n (j m))) =
+          vladimirov_phase_CLM n (vladimirov_basis n (j m)) := by
+        ext q
+        exact (vladimirov_phase_clm_eq_phase_z_clm n (vladimirov_basis n (j m)) q).symm
+      rw [h_eq]
+      exact (vladimirov_phase_CLM n (vladimirov_basis n (j m))).continuous
+    exact h_cont.measurable.comp (F.measurable_p n α)
+  refine Integrable.mono' ((F.integrable_ρ n α).norm.mul_const M)
+    ((F.aestronglyMeasurable_ρ_mul_kernel n α z₀).mul h_meas_prod.aestronglyMeasurable)
+    (Filter.Eventually.of_forall (fun a => ?_))
+  have hp := F.mem_forwardCone n α a
+  let S : ℝ := partialSumEnergy n (F.p n α a)
+  have hS_nn : 0 ≤ S := partialSumEnergy_nonneg n hp
+  have h_pair : c₀ * S ≤ totalConePairing n (F.p n α a) z₀ :=
+    totalConePairing_ge_mul_partialSumEnergy n hp hgap
+  have h_ker : ‖vladimirov_kernel n z₀ (F.p n α a)‖ ≤ Real.exp (-(c₀ * S)) := by
+    rw [vladimirov_kernel_norm, sum_minkowskiInner_im_eq_neg_totalConePairing n _ z₀ hp.1]
+    exact Real.exp_le_exp.mpr (by linarith)
+  have h_prod :
+      ‖∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))‖ ≤
+        (2 * S) ^ k := by
+    rw [norm_prod]
+    calc ∏ m : Fin k, ‖vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))‖
+        ≤ ∏ _m : Fin k, (2 * S) := Finset.prod_le_prod
+          (fun _ _ => norm_nonneg _)
+          (fun m _ => norm_vladimirov_phase_z_basis_le hn hp (j m))
+      _ = (2 * S) ^ k := by rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+  have h_fac_pos : (0 : ℝ) < (Nat.factorial k : ℝ) := by exact_mod_cast Nat.factorial_pos k
+  have h_exp_le : (c₀ * S) ^ k / (Nat.factorial k : ℝ) ≤ Real.exp (c₀ * S) :=
+    Real.pow_div_factorial_le_exp (c₀ * S) (mul_nonneg hc₀.le hS_nn) k
+  have h_prod_ker :
+      ‖vladimirov_kernel n z₀ (F.p n α a)‖ *
+        ‖∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))‖ ≤ M := by
+    calc ‖vladimirov_kernel n z₀ (F.p n α a)‖ *
+          ‖∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))‖
+        ≤ Real.exp (-(c₀ * S)) * (2 * S) ^ k :=
+          mul_le_mul h_ker h_prod (norm_nonneg _) (Real.exp_pos _).le
+      _ = M * (Real.exp (-(c₀ * S)) * ((c₀ * S) ^ k / (Nat.factorial k : ℝ))) := by
+          dsimp [M]
+          have h_pow_c : (2 / c₀) ^ k * (c₀ * S) ^ k = (2 * S) ^ k := by
+            rw [← mul_pow]
+            congr 1
+            field_simp [hc₀.ne']
+          have h_fac_ne : (Nat.factorial k : ℝ) ≠ 0 := h_fac_pos.ne'
+          calc Real.exp (-(c₀ * S)) * (2 * S) ^ k
+              = Real.exp (-(c₀ * S)) * ((2 / c₀) ^ k * (c₀ * S) ^ k) := by rw [h_pow_c]
+            _ = (Nat.factorial k : ℝ) * (2 / c₀) ^ k *
+                  (Real.exp (-(c₀ * S)) * ((c₀ * S) ^ k / (Nat.factorial k : ℝ))) := by
+                field_simp [h_fac_ne]
+      _ ≤ M * (Real.exp (-(c₀ * S)) * Real.exp (c₀ * S)) := by
+          have hM_nn : 0 ≤ M := by dsimp [M]; positivity
+          exact mul_le_mul_of_nonneg_left
+            (mul_le_mul_of_nonneg_left h_exp_le (Real.exp_pos _).le) hM_nn
+      _ = M := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero, mul_one]
+  rw [norm_mul, norm_mul, mul_assoc]
+  exact mul_le_mul_of_nonneg_left h_prod_ker (norm_nonneg (F.ρ n α a))
+
+theorem norm_powerBasisCoeff_le (F : ForwardConeSpectralMeasureFamily ι)
+    {n : ℕ} (hn : 2 ≤ n) (α : Fin n → ι) {z₀ : Fin n → Fin 4 → ℂ}
+    {c₀ : ℝ} (hc₀ : 0 < c₀)
+    (hgap : ∀ (i : Fin n) (hi : i.val + 1 < n), c₀ ≤ coneGap (diff_im n z₀ i hi))
+    (k : ℕ) (j : Fin k → Fin n × Fin 4) :
+    ‖F.powerBasisCoeff n α z₀ k j‖ ≤
+      (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (2 / c₀) ^ k := by
+  dsimp [powerBasisCoeff]
+  rw [norm_mul, norm_inv, Complex.norm_natCast]
+  let M : ℝ := (Nat.factorial k : ℝ) * (2 / c₀) ^ k
+  have h_fac_pos : (0 : ℝ) < (Nat.factorial k : ℝ) := by exact_mod_cast Nat.factorial_pos k
+  have h_int_bound :
+      ‖∫ a : F.A n, F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+          (∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m)))
+          ∂(F.μ n)‖ ≤
+        (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * M := by
+    refine (norm_integral_le_integral_norm _).trans ?_
+    rw [← integral_mul_const]
+    refine integral_mono_of_nonneg (Filter.Eventually.of_forall (fun _ => norm_nonneg _))
+      ((F.integrable_ρ n α).norm.mul_const M)
+      (Filter.Eventually.of_forall (fun a => ?_))
+    dsimp only
+    have hp := F.mem_forwardCone n α a
+    let S : ℝ := partialSumEnergy n (F.p n α a)
+    have hS_nn : 0 ≤ S := partialSumEnergy_nonneg n hp
+    have h_pair := totalConePairing_ge_mul_partialSumEnergy n hp hgap
+    have h_ker : ‖vladimirov_kernel n z₀ (F.p n α a)‖ ≤ Real.exp (-(c₀ * S)) := by
+      rw [vladimirov_kernel_norm, sum_minkowskiInner_im_eq_neg_totalConePairing n _ z₀ hp.1]
+      exact Real.exp_le_exp.mpr (by linarith)
+    have h_prod :
+        ‖∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))‖ ≤
+          (2 * S) ^ k := by
+      rw [norm_prod]
+      calc ∏ m : Fin k, ‖vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))‖
+          ≤ ∏ _m : Fin k, (2 * S) := Finset.prod_le_prod
+            (fun _ _ => norm_nonneg _)
+            (fun m _ => norm_vladimirov_phase_z_basis_le hn hp (j m))
+        _ = (2 * S) ^ k := by rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+    have h_exp_le : (c₀ * S) ^ k / (Nat.factorial k : ℝ) ≤ Real.exp (c₀ * S) :=
+      Real.pow_div_factorial_le_exp (c₀ * S) (mul_nonneg hc₀.le hS_nn) k
+    rw [norm_mul, norm_mul, mul_assoc]
+    refine mul_le_mul_of_nonneg_left ?_ (norm_nonneg (F.ρ n α a))
+    calc ‖vladimirov_kernel n z₀ (F.p n α a)‖ *
+          ‖∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))‖
+        ≤ Real.exp (-(c₀ * S)) * (2 * S) ^ k :=
+          mul_le_mul h_ker h_prod (norm_nonneg _) (Real.exp_pos _).le
+      _ = M * (Real.exp (-(c₀ * S)) * ((c₀ * S) ^ k / (Nat.factorial k : ℝ))) := by
+          dsimp [M]
+          have h_pow_c : (2 / c₀) ^ k * (c₀ * S) ^ k = (2 * S) ^ k := by
+            rw [← mul_pow]
+            congr 1
+            field_simp [hc₀.ne']
+          have h_fac_ne : (Nat.factorial k : ℝ) ≠ 0 := h_fac_pos.ne'
+          calc Real.exp (-(c₀ * S)) * (2 * S) ^ k
+              = Real.exp (-(c₀ * S)) * ((2 / c₀) ^ k * (c₀ * S) ^ k) := by rw [h_pow_c]
+            _ = (Nat.factorial k : ℝ) * (2 / c₀) ^ k *
+                  (Real.exp (-(c₀ * S)) * ((c₀ * S) ^ k / (Nat.factorial k : ℝ))) := by
+                field_simp [h_fac_ne]
+      _ ≤ M * (Real.exp (-(c₀ * S)) * Real.exp (c₀ * S)) := by
+          have hM_nn : 0 ≤ M := by dsimp [M]; positivity
+          exact mul_le_mul_of_nonneg_left
+            (mul_le_mul_of_nonneg_left h_exp_le (Real.exp_pos _).le) hM_nn
+      _ = M := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero, mul_one]
+  calc (Nat.factorial k : ℝ)⁻¹ *
+        ‖∫ a : F.A n, F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+          (∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m)))
+          ∂(F.μ n)‖
+      ≤ (Nat.factorial k : ℝ)⁻¹ * ((∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * M) :=
+        mul_le_mul_of_nonneg_left h_int_bound (inv_nonneg.mpr h_fac_pos.le)
+    _ = (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (2 / c₀) ^ k := by
+        dsimp [M]
+        field_simp [h_fac_pos.ne']
+
+theorem norm_powerSeries_le (F : ForwardConeSpectralMeasureFamily ι)
+    {n : ℕ} (hn : 2 ≤ n) (α : Fin n → ι) {z₀ : Fin n → Fin 4 → ℂ}
+    {c₀ : ℝ} (hc₀ : 0 < c₀)
+    (hgap : ∀ (i : Fin n) (hi : i.val + 1 < n), c₀ ≤ coneGap (diff_im n z₀ i hi))
+    (k : ℕ) :
+    ‖F.powerSeries n α z₀ k‖ ≤
+      (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (8 * (n : ℝ) / c₀) ^ k := by
+  dsimp [powerSeries]
+  refine (norm_sum_le Finset.univ _).trans ?_
+  have h_each : ∀ j : Fin k → Fin n × Fin 4,
+      ‖F.powerBasisCoeff n α z₀ k j • vladimirov_monomial_multilinear n k j‖ ≤
+        (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (2 / c₀) ^ k := by
+    intro j
+    rw [norm_smul]
+    exact (mul_le_of_le_one_right (norm_nonneg _)
+      (vladimirov_monomial_multilinear_norm_le n k j)).trans
+      (F.norm_powerBasisCoeff_le hn α hc₀ hgap k j)
+  calc ∑ j : Fin k → Fin n × Fin 4,
+        ‖F.powerBasisCoeff n α z₀ k j • vladimirov_monomial_multilinear n k j‖
+      ≤ ∑ _j : Fin k → Fin n × Fin 4,
+          ((∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (2 / c₀) ^ k) :=
+        Finset.sum_le_sum (fun j _ => h_each j)
+    _ = ((Fintype.card (Fin k → Fin n × Fin 4) : ℕ) : ℝ) *
+          ((∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (2 / c₀) ^ k) := by
+        rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+    _ = (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (8 * (n : ℝ) / c₀) ^ k := by
+        rw [Fintype.card_fun, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin,
+          Fintype.card_fin]
+        push_cast
+        have h_pow : ((n : ℝ) * 4) ^ k * (2 / c₀) ^ k = (8 * (n : ℝ) / c₀) ^ k := by
+          rw [← mul_pow]
+          congr 1
+          ring
+        calc (((n : ℝ) * 4) ^ k) * ((∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (2 / c₀) ^ k)
+            = (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (((n : ℝ) * 4) ^ k * (2 / c₀) ^ k) := by
+              ring
+          _ = (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (8 * (n : ℝ) / c₀) ^ k := by
+              rw [h_pow]
+
+theorem powerSeries_apply_diag (F : ForwardConeSpectralMeasureFamily ι)
+    {n : ℕ} (hn : 2 ≤ n) (α : Fin n → ι) {z₀ : Fin n → Fin 4 → ℂ}
+    {c₀ : ℝ} (hc₀ : 0 < c₀)
+    (hgap : ∀ (i : Fin n) (hi : i.val + 1 < n), c₀ ≤ coneGap (diff_im n z₀ i hi))
+    (k : ℕ) (y : Fin n → Fin 4 → ℂ) :
+    (F.powerSeries n α z₀ k) (fun _ => y) =
+      ∫ a : F.A n, F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+        ((vladimirov_phase_z_CLM n (F.p n α a) y) ^ k / (Nat.factorial k : ℂ)) ∂(F.μ n) := by
+  dsimp [powerSeries, powerBasisCoeff]
+  simp only [_root_.sum_apply, _root_.smul_apply, smul_eq_mul,
+    vladimirov_monomial_multilinear_diag]
+  have h_pull :
+      (∑ j : Fin k → Fin n × Fin 4,
+        ((Nat.factorial k : ℂ)⁻¹ *
+          ∫ a : F.A n, F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+            (∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m)))
+            ∂(F.μ n)) *
+          ∏ m : Fin k, y (j m).1 (j m).2) =
+      ∑ j : Fin k → Fin n × Fin 4,
+        ∫ a : F.A n,
+          ((Nat.factorial k : ℂ)⁻¹ * (∏ m : Fin k, y (j m).1 (j m).2)) *
+            (F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+              (∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))))
+          ∂(F.μ n) := by
+    refine Finset.sum_congr rfl (fun j _ => ?_)
+    rw [integral_const_mul]
+    ring
+  rw [h_pull, ← integral_finsetSum Finset.univ (fun j _ =>
+    (F.integrable_powerBasisIntegrand hn α hc₀ hgap k j).const_mul _)]
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp only
+  have h_sum_a :
+      (∑ j : Fin k → Fin n × Fin 4,
+        ((Nat.factorial k : ℂ)⁻¹ * (∏ m : Fin k, y (j m).1 (j m).2)) *
+          (F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+            (∏ m : Fin k, vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m))))) =
+      F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+        ((Nat.factorial k : ℂ)⁻¹ *
+          ∑ j : Fin k → Fin n × Fin 4,
+            (∏ m : Fin k, y (j m).1 (j m).2) *
+              (∏ m : Fin k,
+                vladimirov_phase_z_CLM n (F.p n α a) (vladimirov_basis n (j m)))) := by
+    rw [Finset.mul_sum, Finset.mul_sum]
+    refine Finset.sum_congr rfl (fun j _ => by ring)
+  rw [h_sum_a, ← vladimirov_phase_pow_expansion n (F.p n α a) y k]
+  ring
+
+theorem analyticAt_H (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) {z₀ : Fin n → Fin 4 → ℂ} (hz₀ : z₀ ∈ forward_tube_n n) :
+    AnalyticAt ℂ (F.H n α) z₀ := by
+  by_cases hn : n ≤ 1
+  · interval_cases n
+    · have h_const : F.H 0 α = fun _ => ∫ a : F.A 0, F.ρ 0 α a ∂(F.μ 0) := by
+        ext z
+        unfold H
+        refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+        simp [vladimirov_kernel]
+      rw [h_const]
+      exact analyticAt_const
+    · have h_const : F.H 1 α = fun _ => ∫ a : F.A 1, F.ρ 1 α a ∂(F.μ 1) := by
+        ext z
+        unfold H
+        refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+        dsimp only
+        rw [forwardConeSpectralRegion_one_eq_zero (F.p 1 α a) (F.mem_forwardCone 1 α a),
+          vladimirov_kernel_zero_p z, mul_one]
+      rw [h_const]
+      exact analyticAt_const
+  · have hn2 : 2 ≤ n := by omega
+    obtain ⟨c₀, hc₀, hgap⟩ := exists_pos_coneGap_lower_bound hn2 hz₀
+    let r_real : ℝ := c₀ / (16 * (n : ℝ))
+    have hn_pos_nat : 0 < n := by omega
+    have hn_pos : (0 : ℝ) < (n : ℝ) := by exact_mod_cast hn_pos_nat
+    have hr_pos : 0 < r_real := by dsimp [r_real]; positivity
+    let r_nn : NNReal := ⟨r_real, hr_pos.le⟩
+    let P := F.powerSeries n α z₀
+    have hr_le : (r_nn : ENNReal) ≤ P.radius := by
+      refine FormalMultilinearSeries.le_radius_of_bound (p := P)
+        (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) (r := r_nn) (fun k => ?_)
+      have h_norm := F.norm_powerSeries_le hn2 α hc₀ hgap k
+      have h_r_eq : (r_nn : ℝ) = c₀ / (16 * (n : ℝ)) := rfl
+      have h_prod_r : (8 * (n : ℝ) / c₀) ^ k * (r_nn : ℝ) ^ k = (1 / 2 : ℝ) ^ k := by
+        rw [h_r_eq, ← mul_pow]
+        congr 1
+        field_simp [hc₀.ne', hn_pos.ne']
+        ring
+      have h_half_le : (1 / 2 : ℝ) ^ k ≤ 1 :=
+        pow_le_one₀ (by norm_num) (by norm_num)
+      calc ‖P k‖ * (r_nn : ℝ) ^ k
+          ≤ ((∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (8 * (n : ℝ) / c₀) ^ k) *
+              (r_nn : ℝ) ^ k :=
+            mul_le_mul_of_nonneg_right h_norm (pow_nonneg hr_pos.le k)
+        _ = (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * (1 / 2 : ℝ) ^ k := by
+            rw [mul_assoc, h_prod_r]
+        _ ≤ (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * 1 :=
+            mul_le_mul_of_nonneg_left h_half_le (integral_nonneg (fun _ => norm_nonneg _))
+        _ = ∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n) := mul_one _
+    refine ⟨P, r_nn, ?_⟩
+    refine ⟨hr_le, ENNReal.coe_pos.mpr (NNReal.coe_pos.mp hr_pos), fun {y} hy => ?_⟩
+    have hy_norm : ‖y‖ < r_real := by
+      change ‖y‖ < (r_nn : ℝ)
+      simpa [Metric.mem_eball, edist_zero_right, enorm_lt_coe] using hy
+    have h_fn_eq : (fun k : ℕ => P k (fun _ => y)) =
+        fun k : ℕ => ∫ a : F.A n,
+          F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a) *
+            ((vladimirov_phase_z_CLM n (F.p n α a) y) ^ k / (Nat.factorial k : ℂ)) ∂(F.μ n) := by
+      ext k
+      exact F.powerSeries_apply_diag hn2 α hc₀ hgap k y
+    rw [h_fn_eq]
+    unfold H
+    refine MeasureTheory.hasSum_integral_of_dominated_convergence
+      (fun k a => ‖F.ρ n α a‖ * (1 / 2 : ℝ) ^ k)
+      (fun k => ?_) (fun k => ?_) ?_ ?_ ?_
+    · have h_meas_y : Measurable (fun a : F.A n =>
+          (vladimirov_phase_z_CLM n (F.p n α a) y) ^ k / (Nat.factorial k : ℂ)) := by
+        have h_cont_base : Continuous
+            (fun q : Fin n → Fin 4 → ℝ => vladimirov_phase_z_CLM n q y) := by
+          have h_eq : (fun q : Fin n → Fin 4 → ℝ => vladimirov_phase_z_CLM n q y) =
+              vladimirov_phase_CLM n y := by
+            ext q
+            exact (vladimirov_phase_clm_eq_phase_z_clm n y q).symm
+          rw [h_eq]
+          exact (vladimirov_phase_CLM n y).continuous
+        exact ((h_cont_base.pow k).div_const _).measurable.comp (F.measurable_p n α)
+      exact (F.aestronglyMeasurable_ρ_mul_kernel n α z₀).mul h_meas_y.aestronglyMeasurable
+    · refine Filter.Eventually.of_forall (fun a => ?_)
+      have hp := F.mem_forwardCone n α a
+      let S : ℝ := partialSumEnergy n (F.p n α a)
+      have hS_nn : 0 ≤ S := partialSumEnergy_nonneg n hp
+      have h_pair := totalConePairing_ge_mul_partialSumEnergy n hp hgap
+      have h_ker : ‖vladimirov_kernel n z₀ (F.p n α a)‖ ≤ Real.exp (-(c₀ * S)) := by
+        rw [vladimirov_kernel_norm, sum_minkowskiInner_im_eq_neg_totalConePairing n _ z₀ hp.1]
+        exact Real.exp_le_exp.mpr (by linarith)
+      have h_ph : ‖vladimirov_phase_z_CLM n (F.p n α a) y‖ ≤ (c₀ / 2) * S := by
+        have h1 := norm_vladimirov_phase_z_le hn2 hp y
+        have h2 : (8 * (n : ℝ)) * S * ‖y‖ ≤ (8 * (n : ℝ)) * S * r_real :=
+          mul_le_mul_of_nonneg_left hy_norm.le (by positivity)
+        have h3 : (8 * (n : ℝ)) * S * r_real = (c₀ / 2) * S := by
+          dsimp [r_real]
+          field_simp [hn_pos.ne']
+          ring
+        linarith
+      have h_fac_pos : (0 : ℝ) < (Nat.factorial k : ℝ) := by exact_mod_cast Nat.factorial_pos k
+      have h_pow_div :
+          ‖(vladimirov_phase_z_CLM n (F.p n α a) y) ^ k / (Nat.factorial k : ℂ)‖ ≤
+            (1 / 2 : ℝ) ^ k * ((c₀ * S) ^ k / (Nat.factorial k : ℝ)) := by
+        rw [norm_div, norm_pow, Complex.norm_natCast]
+        have h_pow_le :
+            ‖vladimirov_phase_z_CLM n (F.p n α a) y‖ ^ k ≤ ((c₀ / 2) * S) ^ k :=
+          pow_le_pow_left₀ (norm_nonneg _) h_ph k
+        calc ‖vladimirov_phase_z_CLM n (F.p n α a) y‖ ^ k / (Nat.factorial k : ℝ)
+            ≤ ((c₀ / 2) * S) ^ k / (Nat.factorial k : ℝ) :=
+              div_le_div_of_nonneg_right h_pow_le h_fac_pos.le
+          _ = (1 / 2 : ℝ) ^ k * ((c₀ * S) ^ k / (Nat.factorial k : ℝ)) := by
+              have h_split : ((c₀ / 2) * S) ^ k = (1 / 2 : ℝ) ^ k * (c₀ * S) ^ k := by
+                rw [← mul_pow]
+                congr 1
+                ring
+              rw [h_split, mul_div_assoc]
+      have h_exp_le : (c₀ * S) ^ k / (Nat.factorial k : ℝ) ≤ Real.exp (c₀ * S) :=
+        Real.pow_div_factorial_le_exp (c₀ * S) (mul_nonneg hc₀.le hS_nn) k
+      rw [norm_mul, norm_mul, mul_assoc]
+      refine mul_le_mul_of_nonneg_left ?_ (norm_nonneg (F.ρ n α a))
+      calc ‖vladimirov_kernel n z₀ (F.p n α a)‖ *
+            ‖(vladimirov_phase_z_CLM n (F.p n α a) y) ^ k / (Nat.factorial k : ℂ)‖
+          ≤ Real.exp (-(c₀ * S)) * ((1 / 2 : ℝ) ^ k * ((c₀ * S) ^ k / (Nat.factorial k : ℝ))) :=
+            mul_le_mul h_ker h_pow_div (norm_nonneg _) (Real.exp_pos _).le
+        _ = (1 / 2 : ℝ) ^ k * (Real.exp (-(c₀ * S)) * ((c₀ * S) ^ k / (Nat.factorial k : ℝ))) := by
+            ring
+        _ ≤ (1 / 2 : ℝ) ^ k * (Real.exp (-(c₀ * S)) * Real.exp (c₀ * S)) :=
+            mul_le_mul_of_nonneg_left
+              (mul_le_mul_of_nonneg_left h_exp_le (Real.exp_pos _).le)
+              (pow_nonneg (by norm_num) k)
+        _ = (1 / 2 : ℝ) ^ k := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero, mul_one]
+    · exact Filter.Eventually.of_forall (fun a =>
+        (summable_geometric_of_lt_one (by norm_num) (by norm_num)).mul_left ‖F.ρ n α a‖)
+    · have h_sum_bound :
+          (fun a : F.A n => ∑' k : ℕ, ‖F.ρ n α a‖ * (1 / 2 : ℝ) ^ k) =
+          fun a : F.A n => ‖F.ρ n α a‖ * (∑' k : ℕ, (1 / 2 : ℝ) ^ k) := by
+        ext a
+        exact tsum_mul_left
+      rw [h_sum_bound]
+      exact (F.integrable_ρ n α).norm.mul_const _
+    · refine Filter.Eventually.of_forall (fun a => ?_)
+      let w : ℂ := vladimirov_phase_z_CLM n (F.p n α a) y
+      have h_exp : HasSum (fun k : ℕ => w ^ k / (Nat.factorial k : ℂ)) (Complex.exp w) := by
+        rw [Complex.exp_eq_exp_ℂ]
+        exact NormedSpace.expSeries_div_hasSum_exp w
+      have h_ker_add :
+          vladimirov_kernel n (z₀ + y) (F.p n α a) =
+            vladimirov_kernel n z₀ (F.p n α a) * Complex.exp w := by
+        change Complex.exp (vladimirov_phase_z_CLM n (F.p n α a) (z₀ + y)) =
+          Complex.exp (vladimirov_phase_z_CLM n (F.p n α a) z₀) * Complex.exp w
+        rw [vladimirov_phase_z_CLM_add, Complex.exp_add]
+      rw [h_ker_add, ← mul_assoc]
+      exact h_exp.mul_left (F.ρ n α a * vladimirov_kernel n z₀ (F.p n α a))
+
+theorem analyticOnNhd_H (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) :
+    AnalyticOnNhd ℂ (F.H n α) (forward_tube_n n) :=
+  fun _ hz => F.analyticAt_H n α hz
+
+theorem analyticOn_H (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) :
+    AnalyticOn ℂ (F.H n α) (forward_tube_n n) :=
+  (F.analyticOnNhd_H n α).analyticOn
+
+theorem integrable_prod_kernel_line_mul_f (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    {v : Fin 4 → ℝ} (hv : v ∈ forward_light_cone) {t : ℝ} (ht : 0 ≤ t) :
+    Integrable
+      (Function.uncurry (fun (a : F.A n) (x : Fin n → Fin 4 → ℝ) =>
+        F.ρ n α a * (vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α a) * f x)))
+      ((F.μ n).prod volume) := by
+  have h_uncurry :
+      Function.uncurry (fun (a : F.A n) (x : Fin n → Fin 4 → ℝ) =>
+        F.ρ n α a * (vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α a) * f x)) =
+      fun ax : F.A n × (Fin n → Fin 4 → ℝ) =>
+        F.ρ n α ax.1 *
+          (vladimirov_kernel n (tubeBoundaryLine n ax.2 v t) (F.p n α ax.1) * f ax.2) := rfl
+  rw [h_uncurry]
+  have h_dom : Integrable
+      (fun ax : F.A n × (Fin n → Fin 4 → ℝ) => ‖F.ρ n α ax.1‖ * ‖f ax.2‖)
+      ((F.μ n).prod volume) :=
+    (F.integrable_ρ n α).norm.mul_prod f.integrable.norm
+  have h_meas_ker : Measurable
+      (fun ax : F.A n × (Fin n → Fin 4 → ℝ) =>
+        vladimirov_kernel n (tubeBoundaryLine n ax.2 v t) (F.p n α ax.1)) := by
+    have h_phase : Measurable
+        (fun ax : F.A n × (Fin n → Fin 4 → ℝ) =>
+          -Complex.I * ∑ k : Fin n,
+            minkowskiInnerC (fun μ => (F.p n α ax.1 k μ : ℂ))
+              (tubeBoundaryLine n ax.2 v t k)) := by
+      refine measurable_const.mul (Finset.measurable_sum Finset.univ (fun k _ => ?_))
+      have hk1 : Measurable
+          (fun ax : F.A n × (Fin n → Fin 4 → ℝ) => F.p n α ax.1 k) :=
+        (measurable_pi_apply k).comp ((F.measurable_p n α).comp measurable_fst)
+      have hk2 : Measurable
+          (fun ax : F.A n × (Fin n → Fin 4 → ℝ) => ax.2 k) :=
+        (measurable_pi_apply k).comp measurable_snd
+      have hm1 : ∀ μ : Fin 4, Measurable
+          (fun ax : F.A n × (Fin n → Fin 4 → ℝ) => (F.p n α ax.1 k μ : ℂ)) :=
+        fun μ => Complex.continuous_ofReal.measurable.comp
+          ((measurable_pi_apply μ).comp hk1)
+      have hm2 : ∀ μ : Fin 4, Measurable
+          (fun ax : F.A n × (Fin n → Fin 4 → ℝ) => tubeBoundaryLine n ax.2 v t k μ) :=
+        fun μ => (Complex.continuous_ofReal.measurable.comp
+          ((measurable_pi_apply μ).comp hk2)).add measurable_const
+      exact (((hm1 0).mul (hm2 0)).sub ((hm1 1).mul (hm2 1))).sub
+        ((hm1 2).mul (hm2 2)) |>.sub ((hm1 3).mul (hm2 3))
+    exact Complex.continuous_exp.measurable.comp h_phase
+  have h_meas_f : AEStronglyMeasurable
+      (fun ax : F.A n × (Fin n → Fin 4 → ℝ) => f ax.2) ((F.μ n).prod volume) :=
+    f.integrable.aestronglyMeasurable.comp_snd
+  have h_meas : AEStronglyMeasurable
+      (fun ax : F.A n × (Fin n → Fin 4 → ℝ) =>
+        F.ρ n α ax.1 *
+          (vladimirov_kernel n (tubeBoundaryLine n ax.2 v t) (F.p n α ax.1) * f ax.2))
+      ((F.μ n).prod volume) :=
+    ((F.integrable_ρ n α).aestronglyMeasurable.comp_fst).mul
+      (h_meas_ker.aestronglyMeasurable.mul h_meas_f)
+  refine Integrable.mono' h_dom h_meas (Filter.Eventually.of_forall (fun ax => ?_))
+  rw [norm_mul, norm_mul]
+  have hz_cl : tubeBoundaryLine n ax.2 v t ∈ closed_forward_tube_n n :=
+    tubeBoundaryLine_mem_closed_forward_tube_n n ax.2 hv ht
+  have hk_le : ‖vladimirov_kernel n (tubeBoundaryLine n ax.2 v t) (F.p n α ax.1)‖ ≤ 1 :=
+    vladimirov_kernel_norm_le_one_of_closed_forward_tube_n n
+      (F.mem_forwardCone n α ax.1) hz_cl
+  exact mul_le_mul_of_nonneg_left
+    (mul_le_of_le_one_left (norm_nonneg (f ax.2)) hk_le)
+    (norm_nonneg (F.ρ n α ax.1))
+
+theorem integral_H_line_mul_f (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    {v : Fin 4 → ℝ} (hv : v ∈ forward_light_cone) {t : ℝ} (ht : 0 ≤ t) :
+    (∫ x : Fin n → Fin 4 → ℝ, F.H n α (tubeBoundaryLine n x v t) * f x) =
+      ∫ a : F.A n, F.ρ n α a *
+        (∫ x : Fin n → Fin 4 → ℝ,
+          vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α a) * f x) ∂(F.μ n) := by
+  have h_lhs :
+      (fun x : Fin n → Fin 4 → ℝ => F.H n α (tubeBoundaryLine n x v t) * f x) =
+      fun x : Fin n → Fin 4 → ℝ =>
+        ∫ a : F.A n, F.ρ n α a *
+          (vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α a) * f x) ∂(F.μ n) := by
+    ext x
+    unfold H
+    rw [← integral_mul_const]
+    refine integral_congr_ae (Filter.Eventually.of_forall (fun a => mul_assoc _ _ _))
+  have h_rhs :
+      (fun a : F.A n => F.ρ n α a *
+        (∫ x : Fin n → Fin 4 → ℝ,
+          vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α a) * f x)) =
+      fun a : F.A n =>
+        ∫ x : Fin n → Fin 4 → ℝ,
+          F.ρ n α a * (vladimirov_kernel n (tubeBoundaryLine n x v t) (F.p n α a) * f x) := by
+    ext a
+    exact (integral_const_mul (F.ρ n α a) _).symm
+  rw [h_lhs, h_rhs]
+  exact (MeasureTheory.integral_integral_swap
+    (F.integrable_prod_kernel_line_mul_f n α f hv ht)).symm
+
+theorem tendsto_integral_H_line_mul_f (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    {v : Fin 4 → ℝ} (hv : v ∈ forward_light_cone) :
+    Tendsto (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        F.H n α (tubeBoundaryLine n x v t) * f x)
+      (𝓝[>] 0)
+      (𝓝 (F.toWightmanFamily n α f)) := by
+  let C_f : ℝ := SchwartzMap.seminorm ℂ 0 0 (minkowskiFourierSchwartzCLM n f)
+  let G : ℝ → F.A n → ℂ := fun t a =>
+    F.ρ n α a * (Complex.exp (t * ∑ k : Fin n, ((k : ℕ) : ℝ) *
+      minkowskiInner (F.p n α a k) v : ℂ) * minkowskiFourier f (F.p n α a))
+  have h_ev :
+      (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ, F.H n α (tubeBoundaryLine n x v t) * f x) =ᶠ[𝓝[>] 0]
+      (fun t : ℝ => ∫ a : F.A n, G t a ∂(F.μ n)) := by
+    filter_upwards [self_mem_nhdsWithin] with t (ht : 0 < t)
+    rw [F.integral_H_line_mul_f n α f hv ht.le]
+    refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+    dsimp [G]
+    rw [integral_vladimirov_kernel_line_mul_f n f (F.p n α a) v t]
+  rw [tendsto_congr' h_ev, F.toWightmanFamily_apply n α f]
+  refine MeasureTheory.tendsto_integral_filter_of_dominated_convergence
+    (fun a => ‖F.ρ n α a‖ * C_f) ?_ ?_
+    ((F.integrable_ρ n α).norm.mul_const C_f) ?_
+  · refine Filter.Eventually.of_forall (fun t => ?_)
+    have h_cont_q : Continuous (fun q : Fin n → Fin 4 → ℝ =>
+        Complex.exp (t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (q k) v : ℂ) *
+          minkowskiFourier f q) := by
+      have h_lin : Continuous (fun q : Fin n → Fin 4 → ℝ =>
+          (t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (q k) v : ℂ)) := by
+        have h_real : Continuous (fun q : Fin n → Fin 4 → ℝ =>
+            t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (q k) v) := by
+          refine continuous_const.mul (continuous_finsetSum Finset.univ (fun k _ => ?_))
+          refine continuous_const.mul ?_
+          simp only [minkowskiInner_explicit]
+          have hc : ∀ μ : Fin 4, Continuous (fun q : Fin n → Fin 4 → ℝ => q k μ) :=
+            fun μ => (continuous_apply μ).comp (continuous_apply k)
+          exact (((hc 0).mul continuous_const).sub ((hc 1).mul continuous_const)).sub
+            ((hc 2).mul continuous_const) |>.sub ((hc 3).mul continuous_const)
+        have h_eq_c : (fun q : Fin n → Fin 4 → ℝ =>
+            (t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (q k) v : ℂ)) =
+            fun q => ((t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (q k) v : ℝ) : ℂ) := by
+          ext q
+          push_cast
+          rfl
+        rw [h_eq_c]
+        exact Complex.continuous_ofReal.comp h_real
+      exact (Complex.continuous_exp.comp h_lin).mul (continuous_minkowskiFourier n f)
+    exact (F.integrable_ρ n α).aestronglyMeasurable.mul
+      (h_cont_q.measurable.comp (F.measurable_p n α)).aestronglyMeasurable
+  · filter_upwards [self_mem_nhdsWithin] with t (ht : 0 < t)
+    refine Filter.Eventually.of_forall (fun a => ?_)
+    dsimp [G]
+    rw [norm_mul, norm_mul]
+    have h_exp_norm :
+        ‖Complex.exp (t * ∑ k : Fin n, ((k : ℕ) : ℝ) *
+          minkowskiInner (F.p n α a k) v : ℂ)‖ ≤ 1 := by
+      have h_cast :
+          (t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (F.p n α a k) v : ℂ) =
+          ((t * ∑ k : Fin n, ((k : ℕ) : ℝ) * minkowskiInner (F.p n α a k) v : ℝ) : ℂ) := by
+        push_cast
+        rfl
+      rw [h_cast, Complex.norm_exp_ofReal]
+      exact Real.exp_le_one_iff.mpr (mul_nonpos_of_nonneg_of_nonpos ht.le
+        (sum_k_minkowskiInner_le_zero_of_forwardConeSpectralRegion n
+          (F.mem_forwardCone n α a) hv))
+    have h_four := norm_minkowskiFourier_le_seminorm n f (F.p n α a)
+    exact mul_le_mul_of_nonneg_left
+      ((mul_le_of_le_one_left (norm_nonneg _) h_exp_norm).trans h_four)
+      (norm_nonneg (F.ρ n α a))
+  · refine Filter.Eventually.of_forall (fun a => ?_)
+    have h_cont_t : Continuous (fun t : ℝ => G t a) :=
+      continuous_const.mul
+        ((Complex.continuous_exp.comp
+          (Complex.continuous_ofReal.mul continuous_const)).mul continuous_const)
+    have h0 : G 0 a = F.ρ n α a * minkowskiFourier f (F.p n α a) := by
+      dsimp [G]
+      simp
+    rw [← h0]
+    exact (h_cont_t.tendsto 0).mono_left nhdsWithin_le_nhds
+
+noncomputable def toTubeExtension (F : ForwardConeSpectralMeasureFamily ι) :
+    TubeExtension F.toWightmanFamily where
+  H := F.H
+  analytic n α := F.analyticOn_H n α
+  boundary n α f _v hv := F.tendsto_integral_H_line_mul_f n α f hv
+
+@[simp]
+theorem toTubeExtension_H (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    F.toTubeExtension.H n α z = F.H n α z := rfl
+
+theorem integrable_H_real_mul_f (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    Integrable (fun x : Fin n → Fin 4 → ℝ => F.H n α (coeReal n x) * f x) volume := by
+  let M : ℝ := ∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)
+  refine Integrable.mono' (f.integrable.norm.const_mul M)
+    (((F.continuous_H_real n α).mul f.continuous).aestronglyMeasurable)
+    (Filter.Eventually.of_forall (fun x => ?_))
+  rw [norm_mul]
+  exact mul_le_mul_of_nonneg_right
+    (F.norm_H_le_of_closed_forward_tube n α (coeReal_mem_closed_forward_tube_n n x))
+    (norm_nonneg (f x))
+
+theorem toWightmanFamily_eq_integral_H_real (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    F.toWightmanFamily n α f =
+      ∫ x : Fin n → Fin 4 → ℝ, F.H n α (coeReal n x) * f x := by
+  have hv : euclidTimeVec 1 ∈ forward_light_cone := timeUnitVec_mem_forward_light_cone
+  have h_line0 : ∀ x : Fin n → Fin 4 → ℝ,
+      tubeBoundaryLine n x (euclidTimeVec 1) 0 = coeReal n x := by
+    intro x
+    ext i k
+    simp [tubeBoundaryLine, coeReal]
+  have h_rhs :
+      (∫ x : Fin n → Fin 4 → ℝ, F.H n α (coeReal n x) * f x) =
+      ∫ x : Fin n → Fin 4 → ℝ,
+        F.H n α (tubeBoundaryLine n x (euclidTimeVec 1) 0) * f x := by
+    refine integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+    dsimp only
+    rw [h_line0 x]
+  rw [h_rhs, F.integral_H_line_mul_f n α f hv le_rfl, F.toWightmanFamily_apply n α f]
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp only
+  rw [integral_vladimirov_kernel_line_mul_f n f (F.p n α a) (euclidTimeVec 1) 0]
+  simp
+
+theorem forwardConeSpectrumCondition (F : ForwardConeSpectralMeasureFamily ι) :
+    ForwardConeSpectrumCondition F.toWightmanFamily := by
+  intro n α f ⟨U, _hU_open, hU_sub, hU_zero⟩
+  rw [F.toWightmanFamily_apply]
+  have h0 : (fun a : F.A n => F.ρ n α a * minkowskiFourier f (F.p n α a)) = fun _ => 0 := by
+    ext a
+    rw [hU_zero (F.p n α a) (hU_sub (F.mem_forwardCone n α a)), mul_zero]
+  rw [h0, integral_zero]
+
+theorem H_add_const (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ) :
+    F.H n α (fun i => z i + a) = F.H n α z := by
+  unfold H
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun b => ?_))
+  dsimp only
+  rw [vladimirov_kernel_add_const_of_forwardConeSpectralRegion n
+    (F.mem_forwardCone n α b) z a]
+
+theorem tubeTranslationInvariant (F : ForwardConeSpectralMeasureFamily ι) :
+    TubeTranslationInvariant F.toTubeExtension := by
+  intro n α z a _hz
+  exact F.H_add_const n α z a
+
+theorem wightman_translationInvariant (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (a : Fin 4 → ℝ)
+    (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => x i + a) = f x) :
+    F.toWightmanFamily n α f' = F.toWightmanFamily n α f :=
+  wightman_translationInvariant_of_tubeTranslationInvariant F.toTubeExtension
+    F.tubeTranslationInvariant n α a f f' hf'
+
+noncomputable def toSchwingerFamily (F : ForwardConeSpectralMeasureFamily ι) :
+    SchwingerFamily ι :=
+  schwingerFromTube F.toTubeExtension
+
+@[simp]
+theorem toSchwingerFamily_apply (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) :
+    F.toSchwingerFamily n α x = F.H n α (wickEmbedN n x) := rfl
+
+theorem H_eq_of_schwinger_eq (F₁ F₂ : ForwardConeSpectralMeasureFamily ι)
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → F₁.toSchwingerFamily n α x = F₂.toSchwingerFamily n α x)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    F₁.H n α z = F₂.H n α z :=
+  tubeExtension_eq_of_posOrdered_schwingerFromTube_eq F₁.toTubeExtension F₂.toTubeExtension
+    h_eq n α z hz
+
+theorem wightman_eq_of_schwinger_eq (F₁ F₂ : ForwardConeSpectralMeasureFamily ι)
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → F₁.toSchwingerFamily n α x = F₂.toSchwingerFamily n α x) :
+    F₁.toWightmanFamily = F₂.toWightmanFamily :=
+  wightman_eq_of_posOrdered_schwingerFromTube_eq F₁.toTubeExtension F₂.toTubeExtension h_eq
+
+theorem analyticOn_H_spinorPhi (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (A : SL2C) (α : Fin n → ι) :
+    AnalyticOn ℂ
+      (fun w : Fin n → Fin 4 → ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • w))
+      (forward_tube_n n) := by
+  refine AnalyticOnNhd.analyticOn (fun w hw => ?_)
+  have hw_lor : spinorPhi (A, sl2c_conj A) • w ∈ forward_tube_n n :=
+    spinorPhi_real_preserves_forward_tube_n n A hw
+  exact (F.analyticAt_H n α hw_lor).comp
+    ((ForwardConeSpectralFamily.spinorPhiRealCLM n A).analyticAt w)
+
+theorem tubeWeakLocality_of_posOrderedEuclidN (F : ForwardConeSpectralMeasureFamily ι) {η : ℂ}
+    (h_euclid : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (wickEmbedN n (-(x ∘ Fin.rev))) =
+        η ^ (n * (n - 1) / 2) * F.toSchwingerFamily n (α ∘ Fin.rev) x) :
+    TubeWeakLocality η F.toTubeExtension := by
+  intro n α z hz
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (analyticOn_tube_neg_rev F.toTubeExtension n α)
+    (analyticOn_const.mul (F.analyticOn_H n (α ∘ Fin.rev)))
+    (fun x hx => ?_) hz
+  change F.H n α (-(wickEmbedN n x ∘ Fin.rev)) =
+    η ^ (n * (n - 1) / 2) * F.toSchwingerFamily n (α ∘ Fin.rev) x
+  rw [← ForwardConeSpectralFamily.wickEmbedN_neg_comp_rev n x]
+  exact h_euclid n α x hx
+
+theorem tubeCovariant_of_posOrderedEuclidN [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι)
+    (R : HolomorphicLorentzRep ι)
+    (h_euclid : ∀ (n : ℕ) (A : SL2C) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (spinorPhi (A, sl2c_conj A) • wickEmbedN n x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.toSchwingerFamily n β x) :
+    TubeCovariant R F.toTubeExtension := by
+  intro n A z hz _hAz α
+  have h_rhs_analytic :
+      AnalyticOn ℂ
+        (fun w : Fin n → Fin 4 → ℂ =>
+          ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β w)
+        (forward_tube_n n) := by
+    refine AnalyticOnNhd.analyticOn (fun w hw => ?_)
+    refine analyticAt_finset_sum_normed Finset.univ (fun β _ => ?_)
+    exact analyticAt_const.mul (F.analyticAt_H n β hw)
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (F.analyticOn_H_spinorPhi n A α)
+    h_rhs_analytic
+    (fun x hx => h_euclid n A α x hx) hz
+
+theorem poincareCovariant_of_tubeCovariant [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι)
+    (h_tcov : TubeCovariant R F.toTubeExtension) :
+    PoincareCovariant R F.toWightmanFamily :=
+  poincareCovariant_of_tubeCovariant_general R F.toWightmanFamily F.toTubeExtension
+    h_tcov F.tubeTranslationInvariant
+
+theorem tubeCovariant_of_poincareCovariant [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily) :
+    TubeCovariant R F.toTubeExtension := by
+  intro n A z₀ hz₀ _hAz₀ α
+  have h_int_eq : ∀ f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ,
+      (∫ x : Fin n → Fin 4 → ℝ,
+        (F.H n α (coeReal n (lorentzEquiv n A x)) -
+          ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (coeReal n x)) * f x) = 0 := by
+    intro f
+    have h_lhs :
+        (∫ x : Fin n → Fin 4 → ℝ,
+          F.H n α (coeReal n (lorentzEquiv n A x)) * f x) =
+        F.toWightmanFamily n α (schwartzLorentzCLM n A⁻¹ f) := by
+      rw [F.toWightmanFamily_eq_integral_H_real]
+      have h_mp := measurePreserving_lorentzEquiv_n n A
+      have h_emb := (lorentzEquiv n A).toHomeomorph.measurableEmbedding
+      rw [← h_mp.integral_comp h_emb
+        (fun y : Fin n → Fin 4 → ℝ =>
+          F.H n α (coeReal n y) * schwartzLorentzCLM n A⁻¹ f y)]
+      refine integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+      dsimp only
+      congr 1
+      exact (schwartzLorentz_rel n A f x).symm
+    have h_rhs :
+        (∫ x : Fin n → Fin 4 → ℝ,
+          (∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (coeReal n x)) * f x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.toWightmanFamily n β f := by
+      simp_rw [F.toWightmanFamily_eq_integral_H_real n _ f, ← integral_const_mul]
+      rw [← integral_finsetSum Finset.univ (fun β _ =>
+        (F.integrable_H_real_mul_f n β f).const_mul (∏ i, R.rep A (α i) (β i)))]
+      refine integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+      dsimp only
+      rw [Finset.sum_mul]
+      refine Finset.sum_congr rfl (fun β _ => mul_assoc _ _ _)
+    have h_int_lhs : Integrable
+        (fun x : Fin n → Fin 4 → ℝ =>
+          F.H n α (coeReal n (lorentzEquiv n A x)) * f x) volume := by
+      let M : ℝ := ∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)
+      refine Integrable.mono' (f.integrable.norm.const_mul M)
+        ((((F.continuous_H_real n α).comp (lorentzEquiv n A).continuous).mul
+          f.continuous).aestronglyMeasurable)
+        (Filter.Eventually.of_forall (fun x => ?_))
+      rw [norm_mul]
+      exact mul_le_mul_of_nonneg_right
+        (F.norm_H_le_of_closed_forward_tube n α
+          (coeReal_mem_closed_forward_tube_n n (lorentzEquiv n A x)))
+        (norm_nonneg (f x))
+    have h_int_rhs : Integrable
+        (fun x : Fin n → Fin 4 → ℝ =>
+          (∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (coeReal n x)) * f x) volume := by
+      have h_eq :
+          (fun x : Fin n → Fin 4 → ℝ =>
+            (∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (coeReal n x)) * f x) =
+          fun x : Fin n → Fin 4 → ℝ =>
+            ∑ β : Fin n → ι,
+              (∏ i, R.rep A (α i) (β i)) * (F.H n β (coeReal n x) * f x) := by
+        ext x
+        rw [Finset.sum_mul]
+        refine Finset.sum_congr rfl (fun β _ => mul_assoc _ _ _)
+      rw [h_eq]
+      exact integrable_finsetSum Finset.univ (fun β _ =>
+        (F.integrable_H_real_mul_f n β f).const_mul (∏ i, R.rep A (α i) (β i)))
+    have h_sub :
+        (fun x : Fin n → Fin 4 → ℝ =>
+          (F.H n α (coeReal n (lorentzEquiv n A x)) -
+            ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (coeReal n x)) * f x) =
+        fun x : Fin n → Fin 4 → ℝ =>
+          F.H n α (coeReal n (lorentzEquiv n A x)) * f x -
+            (∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (coeReal n x)) * f x := by
+      ext x
+      exact sub_mul _ _ _
+    rw [h_sub, integral_sub h_int_lhs h_int_rhs, h_lhs, h_rhs,
+      wightman_lorentz_cov R F.toWightmanFamily h_poinc n A f α, sub_self]
+  have h_real_zero : ∀ x : Fin n → Fin 4 → ℝ,
+      F.H n α (coeReal n (lorentzEquiv n A x)) -
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (coeReal n x) = 0 := by
+    refine eq_zero_of_continuous_of_schwartz_integral_eq_zero n ?_ h_int_eq
+    exact ((F.continuous_H_real n α).comp (lorentzEquiv n A).continuous).sub
+      (continuous_finsetSum Finset.univ (fun β _ =>
+        continuous_const.mul (F.continuous_H_real n β)))
+  let x₀ : Fin n → Fin 4 → ℝ := fun i μ => (z₀ i μ).re
+  let y₀ : Fin n → Fin 4 → ℝ := fun i μ => (z₀ i μ).im
+  let γ : ℂ → (Fin n → Fin 4 → ℂ) :=
+    fun w i μ => (x₀ i μ : ℂ) + w * (y₀ i μ : ℂ)
+  have hγ_I : γ Complex.I = z₀ := by
+    ext i μ
+    dsimp [γ, x₀, y₀]
+    rw [mul_comm Complex.I]
+    exact Complex.re_add_im (z₀ i μ)
+  have hγ_diff_im : ∀ (w : ℂ) (i : Fin n) (hi : i.val + 1 < n),
+      diff_im n (γ w) i hi = w.im • diff_im n z₀ i hi := by
+    intro w i hi
+    ext μ
+    simp [diff_im, diff_z, γ, x₀, y₀, Complex.add_im, Complex.mul_im, sub_eq_add_neg, mul_add]
+  have hγ_uhp : ∀ w ∈ Analysis.upperHalfPlane, γ w ∈ forward_tube_n n := by
+    intro w hw i hi
+    have hw_pos : 0 < w.im := hw
+    have hv := diff_im_mem_forward_cone n z₀ hz₀ i hi
+    change diff_im n (γ w) i hi ∈ forward_light_cone
+    rw [hγ_diff_im w i hi]
+    dsimp [forward_light_cone] at hv ⊢
+    rw [minkowskiInner_explicit] at hv ⊢
+    simp only [Pi.smul_apply, smul_eq_mul]
+    refine ⟨mul_pos hw_pos hv.1, ?_⟩
+    have h_sq :
+        w.im * diff_im n z₀ i hi 0 * (w.im * diff_im n z₀ i hi 0) -
+          w.im * diff_im n z₀ i hi 1 * (w.im * diff_im n z₀ i hi 1) -
+          w.im * diff_im n z₀ i hi 2 * (w.im * diff_im n z₀ i hi 2) -
+          w.im * diff_im n z₀ i hi 3 * (w.im * diff_im n z₀ i hi 3) =
+        w.im ^ 2 *
+          (diff_im n z₀ i hi 0 * diff_im n z₀ i hi 0 -
+            diff_im n z₀ i hi 1 * diff_im n z₀ i hi 1 -
+            diff_im n z₀ i hi 2 * diff_im n z₀ i hi 2 -
+            diff_im n z₀ i hi 3 * diff_im n z₀ i hi 3) := by ring
+    rw [h_sq]
+    exact mul_pos (sq_pos_of_pos hw_pos) hv.2
+  have hγ_closed : ∀ w : ℂ, 0 ≤ w.im → γ w ∈ closed_forward_tube_n n := by
+    intro w hw i hi
+    rw [hγ_diff_im w i hi]
+    exact smul_mem_closure_forward_light_cone
+      (subset_closure (diff_im_mem_forward_cone n z₀ hz₀ i hi)) hw
+  have hγ_lor_closed : ∀ w : ℂ, 0 ≤ w.im →
+      spinorPhi (A, sl2c_conj A) • γ w ∈ closed_forward_tube_n n := by
+    intro w hw
+    rcases eq_or_lt_of_le hw with hw0 | hw_pos
+    · have hw_re : γ w = coeReal n (fun i μ => x₀ i μ + w.re * y₀ i μ) := by
+        ext i μ
+        dsimp [γ, coeReal]
+        apply Complex.ext <;> simp [← hw0]
+      have h_coe_lor :
+          spinorPhi (A, sl2c_conj A) • coeReal n (fun i μ => x₀ i μ + w.re * y₀ i μ) =
+            coeReal n (lorentzEquiv n A (fun i μ => x₀ i μ + w.re * y₀ i μ)) := by
+        ext i μ
+        exact (congrFun (lorentzOfSL2C_mulVec_coe A _) μ).symm
+      rw [hw_re, h_coe_lor]
+      exact coeReal_mem_closed_forward_tube_n n _
+    · exact forward_tube_n_subset_closed_forward_tube_n n
+        (spinorPhi_real_preserves_forward_tube_n n A (hγ_uhp w hw_pos))
+  have hγ_diff : Differentiable ℂ γ := by
+    refine differentiable_pi.mpr (fun i => differentiable_pi.mpr (fun μ => ?_))
+    exact (differentiable_const (x₀ i μ : ℂ)).add
+      (differentiable_id.mul (differentiable_const (y₀ i μ : ℂ)))
+  let g : ℂ → ℂ := fun w =>
+    F.H n α (spinorPhi (A, sl2c_conj A) • γ w) -
+      ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (γ w)
+  have hg_cont : ContinuousOn g {w : ℂ | 0 ≤ w.im} := by
+    have h1 : ContinuousOn (fun w : ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • γ w))
+        {w : ℂ | 0 ≤ w.im} :=
+      (F.continuousOn_H_closed_forward_tube n α).comp
+        (((ForwardConeSpectralFamily.spinorPhiRealCLM n A).continuous.comp
+          hγ_diff.continuous).continuousOn)
+        hγ_lor_closed
+    have h2 : ContinuousOn
+        (fun w : ℂ => ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (γ w))
+        {w : ℂ | 0 ≤ w.im} :=
+      continuousOn_finsetSum Finset.univ (fun β _ =>
+        continuousOn_const.mul
+          ((F.continuousOn_H_closed_forward_tube n β).comp hγ_diff.continuous.continuousOn
+            hγ_closed))
+    exact h1.sub h2
+  have hg_ana : AnalyticOn ℂ g Analysis.upperHalfPlane := by
+    have h_open_uhp : IsOpen Analysis.upperHalfPlane :=
+      isOpen_lt continuous_const Complex.continuous_im
+    refine DifferentiableOn.analyticOn ?_ h_open_uhp
+    have h1 : DifferentiableOn ℂ
+        (fun w : ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • γ w))
+        Analysis.upperHalfPlane :=
+      (F.analyticOn_H_spinorPhi n A α).differentiableOn.comp
+        hγ_diff.differentiableOn hγ_uhp
+    have h2 : DifferentiableOn ℂ
+        (fun w : ℂ => ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β (γ w))
+        Analysis.upperHalfPlane := by
+      refine DifferentiableOn.fun_sum (fun β _ => ?_)
+      exact ((F.analyticOn_H n β).differentiableOn.comp
+        hγ_diff.differentiableOn hγ_uhp).const_mul (∏ i, R.rep A (α i) (β i))
+    exact h1.sub h2
+  have hg_real : ∀ t : ℝ, g (t : ℂ) = 0 := by
+    intro t
+    dsimp [g]
+    have hγ_t : γ (t : ℂ) = coeReal n (fun i μ => x₀ i μ + t * y₀ i μ) := by
+      ext i μ
+      dsimp [γ, coeReal]
+      push_cast
+      rfl
+    have h_coe_lor :
+        spinorPhi (A, sl2c_conj A) • coeReal n (fun i μ => x₀ i μ + t * y₀ i μ) =
+          coeReal n (lorentzEquiv n A (fun i μ => x₀ i μ + t * y₀ i μ)) := by
+      ext i μ
+      exact (congrFun (lorentzOfSL2C_mulVec_coe A _) μ).symm
+    rw [hγ_t, h_coe_lor]
+    exact h_real_zero (fun i μ => x₀ i μ + t * y₀ i μ)
+  have hg_I : g Complex.I = 0 :=
+    eq_zero_on_upperHalfPlane_of_real_zero hg_cont hg_ana hg_real Complex.I (by simp)
+  dsimp [g] at hg_I
+  rw [hγ_I] at hg_I
+  exact sub_eq_zero.mp hg_I
+
+theorem tubeCovariant_iff_poincareCovariant [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι) :
+    TubeCovariant R F.toTubeExtension ↔ PoincareCovariant R F.toWightmanFamily :=
+  ⟨F.poincareCovariant_of_tubeCovariant R, F.tubeCovariant_of_poincareCovariant R⟩
+
+theorem H_real_eq_spinor_H_ext_of_mem_extended_tube [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (n : ℕ) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ}
+    (hx : coeReal n x ∈ extended_tube_n n) :
+    F.H n α (coeReal n x) =
+      spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α (coeReal n x) := by
+  have hv : euclidTimeVec 1 ∈ forward_light_cone := timeUnitVec_mem_forward_light_cone
+  let line : ℝ → (Fin n → Fin 4 → ℂ) := fun t => tubeBoundaryLine n x (euclidTimeVec 1) t
+  have hline_cont : Continuous line := by
+    refine continuous_pi (fun i => continuous_pi (fun k => ?_))
+    dsimp [line, tubeBoundaryLine]
+    fun_prop
+  have hline0 : line 0 = coeReal n x := by
+    ext i k
+    simp [line, tubeBoundaryLine, coeReal]
+  have h_lim_H : Tendsto (fun t : ℝ => F.H n α (line t))
+      (𝓝[>] (0 : ℝ)) (𝓝 (F.H n α (coeReal n x))) := by
+    have h_within : ContinuousWithinAt (fun t : ℝ => F.H n α (line t))
+        (Set.Ici (0 : ℝ)) 0 :=
+      ((F.continuousOn_H_closed_forward_tube n α).comp hline_cont.continuousOn
+        (fun t ht => tubeBoundaryLine_mem_closed_forward_tube_n n x hv ht)) 0
+        Set.self_mem_Ici
+    rw [← hline0]
+    exact h_within.tendsto.mono_left (nhdsWithin_mono 0 Set.Ioi_subset_Ici_self)
+  have h_lim_ext : Tendsto
+      (fun t : ℝ => spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α (line t))
+      (𝓝[>] (0 : ℝ))
+      (𝓝 (spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α (coeReal n x))) := by
+    have h_ana := spinor_H_ext_analyticOnNhd R F.toWightmanFamily F.toTubeExtension h_tcov n α
+    have h_at : ContinuousAt
+        (spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α) (line 0) := by
+      rw [hline0]
+      exact h_ana.continuousOn.continuousAt ((extended_tube_is_open n).mem_nhds hx)
+    have h_comp : ContinuousAt
+        (fun t : ℝ => spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α (line t)) 0 :=
+      ContinuousAt.comp h_at hline_cont.continuousAt
+    have h_tend : Tendsto
+        (fun t : ℝ => spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α (line t))
+        (𝓝[>] (0 : ℝ))
+        (𝓝 (spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α (line 0))) :=
+      h_comp.tendsto.mono_left nhdsWithin_le_nhds
+    rwa [hline0] at h_tend
+  have h_ev :
+      (fun t : ℝ => F.H n α (line t)) =ᶠ[𝓝[>] (0 : ℝ)]
+      (fun t : ℝ => spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α (line t)) := by
+    filter_upwards [self_mem_nhdsWithin] with t (ht : 0 < t)
+    exact (spinor_H_ext_eq_on_forward_tube R F.toWightmanFamily F.toTubeExtension h_tcov n α
+      (tubeBoundaryLine_mem_forward_tube n x (euclidTimeVec 1) hv ht)).symm
+  haveI : NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+  exact tendsto_nhds_unique h_lim_H (h_lim_ext.congr' h_ev.symm)
+
+theorem H_real_eq_spinor_H_ext_of_mem_jost [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (n : ℕ) (α : Fin n → ι) {x : Fin n → Fin 4 → ℝ} (hx : x ∈ jost_points_n n) :
+    F.H n α (coeReal n x) =
+      spinor_H_ext R F.toWightmanFamily F.toTubeExtension n α (coeReal n x) :=
+  F.H_real_eq_spinor_H_ext_of_mem_extended_tube R h_tcov n α
+    (coeReal_mem_extended_tube_of_mem_jost_points n hx)
+
+theorem weakLocality_of_tubePCT [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (hpct : TubePCT η R F.toTubeExtension) :
+    WeakLocality η F.toWightmanFamily := by
+  have hexloc : ExtendedTubeWeakLocality η
+      (spinor_H_ext R F.toWightmanFamily F.toTubeExtension) :=
+    (tubePCT_iff_extendedTubeWeakLocality R F.toWightmanFamily F.toTubeExtension h_tcov).mp hpct
+  intro n α f f' hf_jost hf'
+  rw [F.toWightmanFamily_eq_integral_H_real n α f,
+    F.toWightmanFamily_eq_integral_H_real n (α ∘ Fin.rev) f',
+    ← integral_const_mul,
+    ← integral_comp_rev n (fun y : Fin n → Fin 4 → ℝ =>
+      η ^ (n * (n - 1) / 2) * (F.H n (α ∘ Fin.rev) (coeReal n y) * f' y))]
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun x => ?_))
+  dsimp only
+  by_cases hfx : f x = 0
+  · rw [hf' x, hfx, mul_zero, mul_zero, mul_zero]
+  · have hx_ext : coeReal n x ∈ extended_tube_n n :=
+      coeReal_mem_extended_tube_of_mem_jost_points n
+        (hf_jost (subset_tsupport _ (Function.mem_support.mpr hfx)))
+    have h_coe_rev : coeReal n (fun i => x (Fin.rev i)) = coeReal n x ∘ Fin.rev := rfl
+    have hx_rev_ext : coeReal n (fun i => x (Fin.rev i)) ∈ extended_tube_n n := by
+      rw [h_coe_rev]
+      exact rev_mem_extended_tube_n_of_mem n hx_ext
+    rw [F.H_real_eq_spinor_H_ext_of_mem_extended_tube R h_tcov n α hx_ext,
+      F.H_real_eq_spinor_H_ext_of_mem_extended_tube R h_tcov n (α ∘ Fin.rev) hx_rev_ext,
+      h_coe_rev, hexloc n α (coeReal n x) hx_ext, hf' x, mul_assoc]
+
+theorem tubePCT_of_weakLocality_self [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (hloc : WeakLocality η F.toWightmanFamily) :
+    TubePCT η R F.toTubeExtension :=
+  tubePCT_of_weakLocality R F.toWightmanFamily F.toTubeExtension h_tcov hloc
+
+theorem tubePCT_iff_weakLocality [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension) :
+    TubePCT η R F.toTubeExtension ↔ WeakLocality η F.toWightmanFamily :=
+  ⟨F.weakLocality_of_tubePCT R h_tcov, F.tubePCT_of_weakLocality_self R h_tcov⟩
+
+theorem wightman_pct_iff_weakLocality [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι) {η : ℂ}
+    (h_tcov : TubeCovariant R F.toTubeExtension) :
+    WightmanPCT η R F.toWightmanFamily ↔ WeakLocality η F.toWightmanFamily :=
+  (tubePCT_iff_wightmanPCT_general R F.toWightmanFamily F.toTubeExtension h_tcov
+    (fun n α z a _hz => F.H_add_const n α z a)).symm.trans
+    (F.tubePCT_iff_weakLocality R h_tcov)
+
+theorem toWightmanFamily_borchersProduct_apply (F : ForwardConeSpectralMeasureFamily ι)
+    (j k : ℕ) (γ : Fin (j + k) → ι)
+    (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ)
+    (G : SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ x : Fin (j + k) → Fin 4 → ℝ,
+      G x = (starRingEnd ℂ) (f (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+        g (fun i => x (Fin.natAdd j i))) :
+    F.toWightmanFamily (j + k) γ G =
+      ∫ a : F.A (j + k),
+        F.ρ (j + k) γ a *
+          (star (minkowskiFourier f
+            (fun i => -F.p (j + k) γ a (Fin.castAdd k (Fin.rev i)))) *
+            minkowskiFourier g
+              (fun i => F.p (j + k) γ a (Fin.natAdd j i))) ∂(F.μ (j + k)) := by
+  rw [F.toWightmanFamily_apply]
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp only
+  rw [minkowskiFourier_borchersProduct_eq j k f g G hG (F.p (j + k) γ a)]
+
+theorem positivity_of_hilbertWavepacket [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι)
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ → H)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∫ a : F.A (j + k),
+          F.ρ (j + k) (Fin.append (β ∘ Fin.rev) α') a *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') a
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') a
+                  (Fin.natAdd j i))) ∂(F.μ (j + k)))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ) :
+    Positivity S F.toWightmanFamily := by
+  intro N F_test G hG
+  have h_sum_eq :
+      (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+        ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+          (∏ i : Fin j, S.C (α i) (β i)) *
+            F.toWightmanFamily (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+        (‖∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)‖ ^ 2 : ℂ) := by
+    have h_ip :
+        (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+          ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+            (∏ i : Fin j, S.C (α i) (β i)) *
+              F.toWightmanFamily (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+          ⟪∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α),
+            ∑ k ∈ Finset.range (N + 1), ∑ α' : Fin k → ι, Φ k α' (F_test k α')⟫_ℂ := by
+      rw [sum_inner]
+      refine Finset.sum_congr rfl (fun j _ => ?_)
+      rw [inner_sum]
+      refine Finset.sum_congr rfl (fun k _ => ?_)
+      rw [sum_inner]
+      refine Finset.sum_congr rfl (fun α _ => ?_)
+      rw [inner_sum]
+      refine Finset.sum_congr rfl (fun α' _ => ?_)
+      rw [← h_inner j k α α' (F_test j α) (F_test k α')]
+      refine Finset.sum_congr rfl (fun β _ => ?_)
+      rw [F.toWightmanFamily_borchersProduct_apply j k (Fin.append (β ∘ Fin.rev) α')
+        (F_test j α) (F_test k α') (G j k α α') (hG j k α α')]
+    exact h_ip.trans
+      (inner_self_eq_norm_sq_to_K (𝕜 := ℂ)
+        (∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)))
+  rw [h_sum_eq]
+  have h_nonneg :
+      0 ≤ ‖∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)‖ ^ 2 :=
+    sq_nonneg _
+  exact_mod_cast h_nonneg
+
+theorem positivity_of_osHilbertWavepacket [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι)
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ → OSHilbert D)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∫ a : F.A (j + k),
+          F.ρ (j + k) (Fin.append (β ∘ Fin.rev) α') a *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') a
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') a
+                  (Fin.natAdd j i))) ∂(F.μ (j + k)))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ) :
+    Positivity S F.toWightmanFamily :=
+  F.positivity_of_hilbertWavepacket S Φ h_inner
+
+def toForwardConeOSEuclideanTubeBridge [Fintype ι] [DecidableEq ι]
+    (F : ForwardConeSpectralMeasureFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_tpct : TubePCT η R F.toTubeExtension)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 where
+  W := F.toWightmanFamily
+  E := F.toTubeExtension
+  schwinger_eq := h_schw
+  tube_covariant := h_tcov
+  tube_pct := h_tpct
+  spectrum := F.forwardConeSpectrumCondition
+  poincare := h_poinc
+  weakLocality := h_loc
+  positivity := h_pos
+
+end ForwardConeSpectralMeasureFamily
+
+namespace ForwardConeSpectralFamily
+
+variable {ι : Type*}
+
+noncomputable def toForwardConeSpectralMeasureFamily
+    (F : ForwardConeSpectralFamily ι) :
+    ForwardConeSpectralMeasureFamily ι where
+  A n := Fin (F.m n)
+  instMeas _ := inferInstance
+  μ _ := Measure.count
+  instSFinite _ := inferInstance
+  ρ := F.c
+  integrable_ρ _ _ := Integrable.of_finite
+  p := F.p
+  measurable_p _ _ := measurable_of_finite _
+  mem_forwardCone := F.mem_forwardCone
+
+@[simp]
+theorem toForwardConeSpectralMeasureFamily_H (F : ForwardConeSpectralFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    F.toForwardConeSpectralMeasureFamily.H n α z = F.H n α z :=
+  integral_fintype_count (fun k : Fin (F.m n) => F.c n α k * vladimirov_kernel n z (F.p n α k))
+
+@[simp]
+theorem toForwardConeSpectralMeasureFamily_toWightmanFamily
+    (F : ForwardConeSpectralFamily ι) :
+    F.toForwardConeSpectralMeasureFamily.toWightmanFamily = F.toWightmanFamily := by
+  ext n α f
+  rw [F.toForwardConeSpectralMeasureFamily.toWightmanFamily_apply, F.toWightmanFamily_apply]
+  exact integral_fintype_count
+    (fun k : Fin (F.m n) => F.c n α k * minkowskiFourier f (F.p n α k))
+
+end ForwardConeSpectralFamily
+
+structure OSContinuousSpectralData {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (Ω : Type*) [MeasurableSpace Ω] where
+  μ : Measure Ω
+  E : Ω → ℝ
+  measurable_E : Measurable E
+  energy_nonneg : ∀ a : Ω, 0 ≤ E a
+  ℰ : OSHolomorphicSemigroup D hcontr
+  wave : OSHilbert D → Ω → ℂ
+  aestronglyMeasurable_wave : ∀ x : OSHilbert D, AEStronglyMeasurable (wave x) μ
+  integrable_norm_sq : ∀ x : OSHilbert D, Integrable (fun a : Ω => ‖wave x a‖ ^ 2) μ
+  norm_sq_eq_integral : ∀ x : OSHilbert D, ‖x‖ ^ 2 = ∫ a : Ω, ‖wave x a‖ ^ 2 ∂μ
+  semigroup_inner_eq : ∀ (z : ℂ) (hz : z ∈ rightHalfPlane) (x y : OSHilbert D),
+    ⟪x, ℰ.Z z hz y⟫_ℂ =
+      ∫ a : Ω, laplaceExp (E a) z * (star (wave x a) * wave y a) ∂μ
+
+namespace OSContinuousSpectralData
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {D : OSReflectionPositiveData R S} {hcontr : OSContractionCondition D}
+  {Ω : Type*} [MeasurableSpace Ω]
+
+theorem norm_star_wave_mul_le_half_add_norm_sq
+    (M : OSContinuousSpectralData D hcontr Ω) (a : Ω) (x y : OSHilbert D) :
+    ‖star (M.wave x a) * M.wave y a‖ ≤ (‖M.wave x a‖ ^ 2 + ‖M.wave y a‖ ^ 2) / 2 := by
+  rw [norm_mul, norm_star]
+  have hsq : 0 ≤ (‖M.wave x a‖ - ‖M.wave y a‖) ^ 2 := sq_nonneg _
+  linarith
+
+theorem integrable_half_add_norm_sq
+    (M : OSContinuousSpectralData D hcontr Ω) (x y : OSHilbert D) :
+    Integrable (fun a : Ω => (‖M.wave x a‖ ^ 2 + ‖M.wave y a‖ ^ 2) / 2) M.μ :=
+  ((M.integrable_norm_sq x).add (M.integrable_norm_sq y)).div_const 2
+
+theorem aestronglyMeasurable_star_wave_mul
+    (M : OSContinuousSpectralData D hcontr Ω) (x y : OSHilbert D) :
+    AEStronglyMeasurable (fun a : Ω => star (M.wave x a) * M.wave y a) M.μ :=
+  (M.aestronglyMeasurable_wave x).star.mul (M.aestronglyMeasurable_wave y)
+
+theorem integrable_star_wave_mul
+    (M : OSContinuousSpectralData D hcontr Ω) (x y : OSHilbert D) :
+    Integrable (fun a : Ω => star (M.wave x a) * M.wave y a) M.μ :=
+  (M.integrable_half_add_norm_sq x y).mono' (M.aestronglyMeasurable_star_wave_mul x y)
+    (Filter.Eventually.of_forall (fun a => M.norm_star_wave_mul_le_half_add_norm_sq a x y))
+
+theorem norm_laplaceExp_mul_wave_le_half_add_norm_sq
+    (M : OSContinuousSpectralData D hcontr Ω)
+    {z : ℂ} (hz : z ∈ rightHalfPlane) (a : Ω) (x y : OSHilbert D) :
+    ‖laplaceExp (M.E a) z * (star (M.wave x a) * M.wave y a)‖ ≤
+      (‖M.wave x a‖ ^ 2 + ‖M.wave y a‖ ^ 2) / 2 := by
+  rw [norm_mul]
+  have h_exp : ‖laplaceExp (M.E a) z‖ ≤ 1 :=
+    norm_laplaceExp_le_one (M.energy_nonneg a) hz
+  have h_in := M.norm_star_wave_mul_le_half_add_norm_sq a x y
+  have h_le : ‖laplaceExp (M.E a) z‖ * ‖star (M.wave x a) * M.wave y a‖ ≤
+      1 * ‖star (M.wave x a) * M.wave y a‖ :=
+    mul_le_mul_of_nonneg_right h_exp (norm_nonneg _)
+  linarith
+
+end OSContinuousSpectralData
+
+structure TemperedForwardConeSpectralMeasureFamily (ι : Type*) where
+  A : ℕ → Type
+  instMeas : ∀ n : ℕ, MeasurableSpace (A n)
+  μ : ∀ n : ℕ, @MeasureTheory.Measure (A n) (instMeas n)
+  instSFinite : ∀ n : ℕ, @MeasureTheory.SFinite (A n) (instMeas n) (μ n)
+  ρ : ∀ n : ℕ, (Fin n → ι) → A n → ℂ
+  p : ∀ n : ℕ, (Fin n → ι) → A n → Fin n → Fin 4 → ℝ
+  measurable_p : ∀ (n : ℕ) (α : Fin n → ι),
+    @Measurable (A n) (Fin n → Fin 4 → ℝ) (instMeas n) _ (p n α)
+  mem_forwardCone : ∀ (n : ℕ) (α : Fin n → ι) (a : A n),
+    p n α a ∈ forwardConeSpectralRegion n
+  integrable_ρ_mul_schwartz : ∀ (n : ℕ) (α : Fin n → ι)
+    (g : SchwartzMap (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ),
+    @MeasureTheory.Integrable _ _ _ _ (instMeas n)
+      (fun a : A n => ρ n α a * g (momentumToEuclidCLMN n (p n α a))) (μ n)
+  schwartz_seminorm_bound : ∀ (n : ℕ) (α : Fin n → ι),
+    ∃ (s : Finset (ℕ × ℕ)) (C : ℝ), 0 ≤ C ∧
+      ∀ g : SchwartzMap (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ,
+        ‖∫ a : A n, ρ n α a * g (momentumToEuclidCLMN n (p n α a)) ∂(μ n)‖ ≤
+          C * (s.sup (schwartzSeminormFamily ℂ (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ) g)
+  analyticOn_H_raw : ∀ (n : ℕ) (α : Fin n → ι),
+    AnalyticOn ℂ
+      (fun z : Fin n → Fin 4 → ℂ =>
+        ∫ a : A n, ρ n α a * vladimirov_kernel n z (p n α a) ∂(μ n))
+      (forward_tube_n n)
+  tendsto_boundary : ∀ (n : ℕ) (α : Fin n → ι)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) {v : Fin 4 → ℝ},
+    v ∈ forward_light_cone →
+    Tendsto
+      (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        (∫ a : A n, ρ n α a * vladimirov_kernel n (tubeBoundaryLine n x v t) (p n α a) ∂(μ n)) *
+          f x)
+      (𝓝[>] 0)
+      (𝓝 (∫ a : A n, ρ n α a * minkowskiFourier f (p n α a) ∂(μ n)))
+
+attribute [instance] TemperedForwardConeSpectralMeasureFamily.instMeas
+attribute [instance] TemperedForwardConeSpectralMeasureFamily.instSFinite
+
+namespace TemperedForwardConeSpectralMeasureFamily
+
+variable {ι : Type*}
+
+noncomputable def euclidSchwartzCLM (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) :
+    SchwartzMap (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ →L[ℂ] ℂ :=
+  SchwartzMap.mkCLMtoNormedSpace
+    (fun g => ∫ a : F.A n, F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a)) ∂(F.μ n))
+    (fun g₁ g₂ => by
+      have h_add :
+          (fun a : F.A n =>
+            F.ρ n α a * (g₁ + g₂) (momentumToEuclidCLMN n (F.p n α a))) =
+          fun a : F.A n =>
+            F.ρ n α a * g₁ (momentumToEuclidCLMN n (F.p n α a)) +
+              F.ρ n α a * g₂ (momentumToEuclidCLMN n (F.p n α a)) := by
+        ext a
+        simp [mul_add]
+      rw [h_add]
+      exact integral_add (F.integrable_ρ_mul_schwartz n α g₁)
+        (F.integrable_ρ_mul_schwartz n α g₂))
+    (fun c g => by
+      have h_smul :
+          (fun a : F.A n =>
+            F.ρ n α a * (c • g) (momentumToEuclidCLMN n (F.p n α a))) =
+          fun a : F.A n =>
+            c * (F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a))) := by
+        ext a
+        simp [smul_eq_mul, mul_left_comm]
+      rw [h_smul, RingHom.id_apply, smul_eq_mul, integral_const_mul])
+    (F.schwartz_seminorm_bound n α)
+
+noncomputable def toWightmanFamily (F : TemperedForwardConeSpectralMeasureFamily ι) :
+    WightmanFamily ι :=
+  fun n α =>
+    PointwiseConvergenceCLM.precomp ℂ (minkowskiFourierSchwartzCLM n)
+      (ContinuousLinearMap.toPointwiseConvergenceCLM _ _ _ _ (F.euclidSchwartzCLM n α))
+
+@[simp]
+theorem toWightmanFamily_apply (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    F.toWightmanFamily n α f =
+      ∫ a : F.A n, F.ρ n α a * minkowskiFourier f (F.p n α a) ∂(F.μ n) := by
+  change ∫ a : F.A n, F.ρ n α a *
+    (minkowskiFourierSchwartzCLM n f) (momentumToEuclidCLMN n (F.p n α a)) ∂(F.μ n) = _
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp only
+  rw [← minkowskiFourier_eq_minkowskiFourierSchwartzCLM n f (F.p n α a)]
+
+theorem integrable_ρ_mul_minkowskiFourier (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) :
+    Integrable (fun a : F.A n => F.ρ n α a * minkowskiFourier f (F.p n α a)) (F.μ n) := by
+  have h_eq : (fun a : F.A n => F.ρ n α a * minkowskiFourier f (F.p n α a)) =
+      fun a : F.A n => F.ρ n α a *
+        (minkowskiFourierSchwartzCLM n f) (momentumToEuclidCLMN n (F.p n α a)) := by
+    ext a
+    rw [minkowskiFourier_eq_minkowskiFourierSchwartzCLM n f (F.p n α a)]
+  rw [h_eq]
+  exact F.integrable_ρ_mul_schwartz n α (minkowskiFourierSchwartzCLM n f)
+
+noncomputable def H (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) : ℂ :=
+  ∫ a : F.A n, F.ρ n α a * vladimirov_kernel n z (F.p n α a) ∂(F.μ n)
+
+theorem analyticOn_H (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) :
+    AnalyticOn ℂ (F.H n α) (forward_tube_n n) :=
+  F.analyticOn_H_raw n α
+
+theorem analyticAt_H (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) {z₀ : Fin n → Fin 4 → ℂ} (hz₀ : z₀ ∈ forward_tube_n n) :
+    AnalyticAt ℂ (F.H n α) z₀ :=
+  (F.analyticOn_H n α).analyticAt ((forward_tube_n_isOpen n).mem_nhds hz₀)
+
+theorem tendsto_integral_H_line_mul_f (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    {v : Fin 4 → ℝ} (hv : v ∈ forward_light_cone) :
+    Tendsto (fun t : ℝ => ∫ x : Fin n → Fin 4 → ℝ,
+        F.H n α (tubeBoundaryLine n x v t) * f x)
+      (𝓝[>] 0)
+      (𝓝 (F.toWightmanFamily n α f)) := by
+  rw [F.toWightmanFamily_apply]
+  exact F.tendsto_boundary n α f hv
+
+noncomputable def toTubeExtension (F : TemperedForwardConeSpectralMeasureFamily ι) :
+    TubeExtension F.toWightmanFamily where
+  H := F.H
+  analytic n α := F.analyticOn_H n α
+  boundary n α f _v hv := F.tendsto_integral_H_line_mul_f n α f hv
+
+@[simp]
+theorem toTubeExtension_H (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    F.toTubeExtension.H n α z = F.H n α z := rfl
+
+theorem forwardConeSpectrumCondition (F : TemperedForwardConeSpectralMeasureFamily ι) :
+    ForwardConeSpectrumCondition F.toWightmanFamily := by
+  intro n α f ⟨U, _hU_open, hU_sub, hU_zero⟩
+  rw [F.toWightmanFamily_apply]
+  have h0 : (fun a : F.A n => F.ρ n α a * minkowskiFourier f (F.p n α a)) = fun _ => 0 := by
+    ext a
+    rw [hU_zero (F.p n α a) (hU_sub (F.mem_forwardCone n α a)), mul_zero]
+  rw [h0, integral_zero]
+
+theorem H_add_const (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (a : Fin 4 → ℂ) :
+    F.H n α (fun i => z i + a) = F.H n α z := by
+  unfold H
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun b => ?_))
+  dsimp only
+  rw [vladimirov_kernel_add_const_of_forwardConeSpectralRegion n
+    (F.mem_forwardCone n α b) z a]
+
+theorem tubeTranslationInvariant (F : TemperedForwardConeSpectralMeasureFamily ι) :
+    TubeTranslationInvariant F.toTubeExtension := by
+  intro n α z a _hz
+  exact F.H_add_const n α z a
+
+theorem wightman_translationInvariant (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (a : Fin 4 → ℝ)
+    (f f' : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ)
+    (hf' : ∀ x : Fin n → Fin 4 → ℝ, f' (fun i => x i + a) = f x) :
+    F.toWightmanFamily n α f' = F.toWightmanFamily n α f :=
+  wightman_translationInvariant_of_tubeTranslationInvariant F.toTubeExtension
+    F.tubeTranslationInvariant n α a f f' hf'
+
+noncomputable def toSchwingerFamily (F : TemperedForwardConeSpectralMeasureFamily ι) :
+    SchwingerFamily ι :=
+  schwingerFromTube F.toTubeExtension
+
+@[simp]
+theorem toSchwingerFamily_apply (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) :
+    F.toSchwingerFamily n α x = F.H n α (wickEmbedN n x) := rfl
+
+theorem H_eq_of_schwinger_eq (F₁ F₂ : TemperedForwardConeSpectralMeasureFamily ι)
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → F₁.toSchwingerFamily n α x = F₂.toSchwingerFamily n α x)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) (hz : z ∈ forward_tube_n n) :
+    F₁.H n α z = F₂.H n α z :=
+  tubeExtension_eq_of_posOrdered_schwingerFromTube_eq F₁.toTubeExtension F₂.toTubeExtension
+    h_eq n α z hz
+
+theorem wightman_eq_of_schwinger_eq (F₁ F₂ : TemperedForwardConeSpectralMeasureFamily ι)
+    (h_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n → F₁.toSchwingerFamily n α x = F₂.toSchwingerFamily n α x) :
+    F₁.toWightmanFamily = F₂.toWightmanFamily :=
+  wightman_eq_of_posOrdered_schwingerFromTube_eq F₁.toTubeExtension F₂.toTubeExtension h_eq
+
+theorem analyticOn_H_spinorPhi (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (A : SL2C) (α : Fin n → ι) :
+    AnalyticOn ℂ
+      (fun w : Fin n → Fin 4 → ℂ => F.H n α (spinorPhi (A, sl2c_conj A) • w))
+      (forward_tube_n n) := by
+  refine AnalyticOnNhd.analyticOn (fun w hw => ?_)
+  have hw_lor : spinorPhi (A, sl2c_conj A) • w ∈ forward_tube_n n :=
+    spinorPhi_real_preserves_forward_tube_n n A hw
+  exact (F.analyticAt_H n α hw_lor).comp
+    ((ForwardConeSpectralFamily.spinorPhiRealCLM n A).analyticAt w)
+
+theorem tubeCovariant_of_posOrderedEuclidN [Fintype ι] [DecidableEq ι]
+    (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (R : HolomorphicLorentzRep ι)
+    (h_euclid : ∀ (n : ℕ) (A : SL2C) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (spinorPhi (A, sl2c_conj A) • wickEmbedN n x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.toSchwingerFamily n β x) :
+    TubeCovariant R F.toTubeExtension := by
+  intro n A z hz _hAz α
+  have h_rhs_analytic :
+      AnalyticOn ℂ
+        (fun w : Fin n → Fin 4 → ℂ =>
+          ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * F.H n β w)
+        (forward_tube_n n) := by
+    refine AnalyticOnNhd.analyticOn (fun w hw => ?_)
+    refine analyticAt_finset_sum_normed Finset.univ (fun β _ => ?_)
+    exact analyticAt_const.mul (F.analyticAt_H n β hw)
+  refine analyticOn_forward_tube_eq_of_posOrderedEuclidN_eq n
+    (F.analyticOn_H_spinorPhi n A α)
+    h_rhs_analytic
+    (fun x hx => h_euclid n A α x hx) hz
+
+theorem poincareCovariant_of_tubeCovariant [Fintype ι] [DecidableEq ι]
+    (F : TemperedForwardConeSpectralMeasureFamily ι) (R : HolomorphicLorentzRep ι)
+    (h_tcov : TubeCovariant R F.toTubeExtension) :
+    PoincareCovariant R F.toWightmanFamily :=
+  poincareCovariant_of_tubeCovariant_general R F.toWightmanFamily F.toTubeExtension
+    h_tcov F.tubeTranslationInvariant
+
+theorem toWightmanFamily_borchersProduct_apply (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (j k : ℕ) (γ : Fin (j + k) → ι)
+    (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ)
+    (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ)
+    (G : SchwartzMap (Fin (j + k) → Fin 4 → ℝ) ℂ)
+    (hG : ∀ x : Fin (j + k) → Fin 4 → ℝ,
+      G x = (starRingEnd ℂ) (f (fun i => x (Fin.castAdd k (Fin.rev i)))) *
+        g (fun i => x (Fin.natAdd j i))) :
+    F.toWightmanFamily (j + k) γ G =
+      ∫ a : F.A (j + k),
+        F.ρ (j + k) γ a *
+          (star (minkowskiFourier f
+            (fun i => -F.p (j + k) γ a (Fin.castAdd k (Fin.rev i)))) *
+            minkowskiFourier g
+              (fun i => F.p (j + k) γ a (Fin.natAdd j i))) ∂(F.μ (j + k)) := by
+  rw [F.toWightmanFamily_apply]
+  refine integral_congr_ae (Filter.Eventually.of_forall (fun a => ?_))
+  dsimp only
+  rw [minkowskiFourier_borchersProduct_eq j k f g G hG (F.p (j + k) γ a)]
+
+theorem positivity_of_hilbertWavepacket [Fintype ι] [DecidableEq ι]
+    (F : TemperedForwardConeSpectralMeasureFamily ι)
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    {H_sp : Type*} [NormedAddCommGroup H_sp] [InnerProductSpace ℂ H_sp]
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ → H_sp)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∫ a : F.A (j + k),
+          F.ρ (j + k) (Fin.append (β ∘ Fin.rev) α') a *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') a
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') a
+                  (Fin.natAdd j i))) ∂(F.μ (j + k)))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ) :
+    Positivity S F.toWightmanFamily := by
+  intro N F_test G hG
+  have h_sum_eq :
+      (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+        ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+          (∏ i : Fin j, S.C (α i) (β i)) *
+            F.toWightmanFamily (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+        (‖∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)‖ ^ 2 : ℂ) := by
+    have h_ip :
+        (∑ j ∈ Finset.range (N + 1), ∑ k ∈ Finset.range (N + 1),
+          ∑ α : Fin j → ι, ∑ α' : Fin k → ι, ∑ β : Fin j → ι,
+            (∏ i : Fin j, S.C (α i) (β i)) *
+              F.toWightmanFamily (j + k) (Fin.append (β ∘ Fin.rev) α') (G j k α α')) =
+          ⟪∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α),
+            ∑ k ∈ Finset.range (N + 1), ∑ α' : Fin k → ι, Φ k α' (F_test k α')⟫_ℂ := by
+      rw [sum_inner]
+      refine Finset.sum_congr rfl (fun j _ => ?_)
+      rw [inner_sum]
+      refine Finset.sum_congr rfl (fun k _ => ?_)
+      rw [sum_inner]
+      refine Finset.sum_congr rfl (fun α _ => ?_)
+      rw [inner_sum]
+      refine Finset.sum_congr rfl (fun α' _ => ?_)
+      rw [← h_inner j k α α' (F_test j α) (F_test k α')]
+      refine Finset.sum_congr rfl (fun β _ => ?_)
+      rw [F.toWightmanFamily_borchersProduct_apply j k (Fin.append (β ∘ Fin.rev) α')
+        (F_test j α) (F_test k α') (G j k α α') (hG j k α α')]
+    exact h_ip.trans
+      (inner_self_eq_norm_sq_to_K (𝕜 := ℂ)
+        (∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)))
+  rw [h_sum_eq]
+  have h_nonneg :
+      0 ≤ ‖∑ j ∈ Finset.range (N + 1), ∑ α : Fin j → ι, Φ j α (F_test j α)‖ ^ 2 :=
+    sq_nonneg _
+  exact_mod_cast h_nonneg
+
+theorem positivity_of_osHilbertWavepacket [Fintype ι] [DecidableEq ι]
+    (F : TemperedForwardConeSpectralMeasureFamily ι)
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S)
+    (Φ : ∀ j : ℕ, (Fin j → ι) → SchwartzMap (Fin j → Fin 4 → ℝ) ℂ → OSHilbert D)
+    (h_inner : ∀ (j k : ℕ) (α : Fin j → ι) (α' : Fin k → ι)
+      (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) (g : SchwartzMap (Fin k → Fin 4 → ℝ) ℂ),
+      (∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+        (∫ a : F.A (j + k),
+          F.ρ (j + k) (Fin.append (β ∘ Fin.rev) α') a *
+            (star (minkowskiFourier f
+              (fun i => -F.p (j + k) (Fin.append (β ∘ Fin.rev) α') a
+                (Fin.castAdd k (Fin.rev i)))) *
+              minkowskiFourier g
+                (fun i => F.p (j + k) (Fin.append (β ∘ Fin.rev) α') a
+                  (Fin.natAdd j i))) ∂(F.μ (j + k)))) =
+        ⟪Φ j α f, Φ k α' g⟫_ℂ) :
+    Positivity S F.toWightmanFamily :=
+  F.positivity_of_hilbertWavepacket S Φ h_inner
+
+def toForwardConeOSEuclideanTubeBridge [Fintype ι] [DecidableEq ι]
+    (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_tcov : TubeCovariant R F.toTubeExtension)
+    (h_tpct : TubePCT η R F.toTubeExtension)
+    (h_poinc : PoincareCovariant R F.toWightmanFamily)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 where
+  W := F.toWightmanFamily
+  E := F.toTubeExtension
+  schwinger_eq := h_schw
+  tube_covariant := h_tcov
+  tube_pct := h_tpct
+  spectrum := F.forwardConeSpectrumCondition
+  poincare := h_poinc
+  weakLocality := h_loc
+  positivity := h_pos
+
+end TemperedForwardConeSpectralMeasureFamily
+
+namespace ForwardConeSpectralMeasureFamily
+
+variable {ι : Type*}
+
+noncomputable def toTempered (F : ForwardConeSpectralMeasureFamily ι) :
+    TemperedForwardConeSpectralMeasureFamily ι where
+  A := F.A
+  instMeas := F.instMeas
+  μ := F.μ
+  instSFinite := F.instSFinite
+  ρ := F.ρ
+  p := F.p
+  measurable_p := F.measurable_p
+  mem_forwardCone := F.mem_forwardCone
+  integrable_ρ_mul_schwartz := F.integrable_ρ_mul_schwartz
+  schwartz_seminorm_bound n α := by
+    refine ⟨{(0, 0)}, ∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n),
+      integral_nonneg (fun _ => norm_nonneg _), fun g => ?_⟩
+    let S0 : ℝ := ({(0, 0)} : Finset (ℕ × ℕ)).sup
+      (schwartzSeminormFamily ℂ (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ) g
+    have hS0 : SchwartzMap.seminorm ℂ 0 0 g ≤ S0 :=
+      Seminorm.le_def.mp
+        (Finset.le_sup (f := schwartzSeminormFamily ℂ (EuclideanSpace ℝ (Fin n × Fin 4)) ℂ)
+          (Finset.mem_singleton_self (0, 0))) g
+    calc ‖∫ a : F.A n, F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a)) ∂(F.μ n)‖
+        ≤ ∫ a : F.A n, ‖F.ρ n α a * g (momentumToEuclidCLMN n (F.p n α a))‖ ∂(F.μ n) :=
+          norm_integral_le_integral_norm _
+      _ ≤ ∫ a : F.A n, ‖F.ρ n α a‖ * S0 ∂(F.μ n) := by
+          refine integral_mono_of_nonneg (Filter.Eventually.of_forall (fun _ => norm_nonneg _))
+            ((F.integrable_ρ n α).norm.mul_const S0)
+            (Filter.Eventually.of_forall (fun a => ?_))
+          dsimp only
+          rw [norm_mul]
+          exact mul_le_mul_of_nonneg_left
+            ((SchwartzMap.norm_le_seminorm ℂ g
+              (momentumToEuclidCLMN n (F.p n α a))).trans hS0)
+            (norm_nonneg (F.ρ n α a))
+      _ = (∫ a : F.A n, ‖F.ρ n α a‖ ∂(F.μ n)) * S0 := integral_mul_const S0 _
+  analyticOn_H_raw := F.analyticOn_H
+  tendsto_boundary n α f _v hv := by
+    rw [← F.toWightmanFamily_apply n α f]
+    exact F.tendsto_integral_H_line_mul_f n α f hv
+
+@[simp]
+theorem toTempered_H (F : ForwardConeSpectralMeasureFamily ι)
+    (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    F.toTempered.H n α z = F.H n α z := rfl
+
+@[simp]
+theorem toTempered_toWightmanFamily (F : ForwardConeSpectralMeasureFamily ι) :
+    F.toTempered.toWightmanFamily = F.toWightmanFamily := by
+  ext n α f
+  rw [F.toTempered.toWightmanFamily_apply, F.toWightmanFamily_apply]
+  rfl
+
+end ForwardConeSpectralMeasureFamily
+
+structure OSMeasureReconstructionData {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData) where
+  Ω_spec : Type
+  instMeasSpec : MeasurableSpace Ω_spec
+  spec : @OSContinuousSpectralData ι _ _ R S hOS.toReflectionPositiveData
+    (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+      hOS.os1_translation hcluster)
+    Ω_spec instMeasSpec
+  F : TemperedForwardConeSpectralMeasureFamily ι
+  schwinger_eq : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+    x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x
+  tube_covariant : TubeCovariant R F.toTubeExtension
+  tube_pct : TubePCT η R F.toTubeExtension
+  poincare : PoincareCovariant R F.toWightmanFamily
+  weakLocality : WeakLocality η F.toWightmanFamily
+  positivity : Positivity S F.toWightmanFamily
+
+attribute [instance] OSMeasureReconstructionData.instMeasSpec
+
+namespace OSMeasureReconstructionData
+
+variable {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {η : ℂ} {𝒮 : SchwingerFamily ι}
+  {hOS : OSAxioms R S η 𝒮}
+  {hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData}
+
+noncomputable def toOSHolomorphicSemigroup
+    (G : OSMeasureReconstructionData hOS hcluster) :
+    OSHolomorphicSemigroup hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster) :=
+  G.spec.ℰ
+
+noncomputable def toForwardConeOSEuclideanTubeBridge
+    (G : OSMeasureReconstructionData hOS hcluster) :
+    ForwardConeOSEuclideanTubeBridge R S η 𝒮 :=
+  G.F.toForwardConeOSEuclideanTubeBridge R S η 𝒮
+    G.schwinger_eq G.tube_covariant G.tube_pct
+    G.poincare G.weakLocality G.positivity
+
+noncomputable def toForwardConeOSReconstructedWightman
+    (G : OSMeasureReconstructionData hOS hcluster) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 :=
+  forwardConeOSReconstructedWightmanOfTimeCluster R S η 𝒮
+    hOS hcluster G.toOSHolomorphicSemigroup G.toForwardConeOSEuclideanTubeBridge
+
+@[simp]
+theorem toForwardConeOSReconstructedWightman_W
+    (G : OSMeasureReconstructionData hOS hcluster) :
+    G.toForwardConeOSReconstructedWightman.W = G.F.toWightmanFamily := rfl
+
+@[simp]
+theorem toForwardConeOSReconstructedWightman_E
+    (G : OSMeasureReconstructionData hOS hcluster) :
+    G.toForwardConeOSReconstructedWightman.E = G.F.toTubeExtension := rfl
+
+def ofEuclideanPosOrdered
+    (Ω_spec : Type) [instMeas : MeasurableSpace Ω_spec]
+    (spec : OSContinuousSpectralData hOS.toReflectionPositiveData
+      (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+        hOS.os1_translation hcluster)
+      Ω_spec)
+    (F : TemperedForwardConeSpectralMeasureFamily ι)
+    (h_schw : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = F.toSchwingerFamily n α x)
+    (h_euclid_cov : ∀ (n : ℕ) (A : SL2C) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ posOrderedEuclidN n →
+      F.H n α (spinorPhi (A, sl2c_conj A) • wickEmbedN n x) =
+        ∑ β : Fin n → ι, (∏ i, R.rep A (α i) (β i)) * 𝒮 n β x)
+    (h_loc : WeakLocality η F.toWightmanFamily)
+    (h_pos : Positivity S F.toWightmanFamily) :
+    OSMeasureReconstructionData hOS hcluster :=
+  let h_tcov : TubeCovariant R F.toTubeExtension :=
+    F.tubeCovariant_of_posOrderedEuclidN R (fun n A α x hx => by
+      have hx' := posOrderedEuclidN_subset_orderedEuclidN n hx
+      rw [h_euclid_cov n A α x hx]
+      refine Finset.sum_congr rfl (fun β _ => ?_)
+      rw [h_schw n β x hx'])
+  let h_tpct : TubePCT η R F.toTubeExtension :=
+    tubePCT_of_schwinger_eq_and_osPCTSymmetry R F.toTubeExtension 𝒮
+      h_schw hOS.os3_symmetry
+  { Ω_spec := Ω_spec
+    instMeasSpec := instMeas
+    spec := spec
+    F := F
+    schwinger_eq := h_schw
+    tube_covariant := h_tcov
+    tube_pct := h_tpct
+    poincare := F.poincareCovariant_of_tubeCovariant R h_tcov
+    weakLocality := h_loc
+    positivity := h_pos }
+
+end OSMeasureReconstructionData
+
+theorem osterwalder_schrader_measure_reconstruction_of_data
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) (𝒮 : SchwingerFamily ι)
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdata : OSMeasureReconstructionData hOS hcluster) :
+    let P := hdata.toForwardConeOSReconstructedWightman
+    (∀ a b : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (a + b) =
+        (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a).comp
+          (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation b)) ∧
+    (∀ a : Fin 4 → ℝ,
+      P.semigroup.spacetimeTranslate P.osAxioms.os1_translation a P.vacuum = P.vacuum) ∧
+    (∀ Ψ : P.Hilbert,
+      (∀ (τ : ℝ) (hτ : 0 ≤ τ), P.timeContraction τ hτ Ψ = Ψ) →
+      Ψ = ⟪P.vacuum, Ψ⟫_ℂ • P.vacuum) ∧
+    TubeTranslationInvariant P.E ∧
+    ComplexCovariant R P.E ∧
+    ExtendedTubeWeakLocality η P.H_ext ∧
+    WightmanPCT η R P.W ∧
+    (∀ P' : ForwardConeOSReconstructedWightman R S η 𝒮,
+      P'.W = P.W ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ),
+        z ∈ forward_tube_n n → P'.E.H n α z = P.E.H n α z) := by
+  intro P
+  exact ⟨P.semigroup.spacetimeTranslate_add P.osAxioms.os1_translation,
+    P.semigroup.spacetimeTranslate_vacuum P.osAxioms.os1_translation,
+    fun _ hfixed => P.vacuum_unique_of_timeCluster hcluster hfixed,
+    P.tube_translationInvariant,
+    P.complexCovariant,
+    P.extendedTubeWeakLocality,
+    P.wightman_pct,
+    fun P' => ⟨P'.wightman_unique_unconditional P, P'.tube_H_unique P⟩⟩
+
+end
+end QFT
