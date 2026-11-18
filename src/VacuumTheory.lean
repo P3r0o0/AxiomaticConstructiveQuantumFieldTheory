@@ -13200,5 +13200,147 @@ theorem massiveDirac_master {m : ℝ} (hm : 0 < m) :
    massiveDiracOneParticlePositivity hm,
    fun _ hloc => massiveDirac_spin_statistics hm hloc⟩
 
+theorem osDampedFieldBounded_of_vacS {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hD : D.𝒮 = vacS) :
+    OSDampedFieldBounded D := by
+  refine ⟨0, 0, le_rfl, fun α₀ x_sp ε hε Ψ => ?_⟩
+  have h_vac_coeff : (osPrependShiftLM D α₀ x_sp ε hε Ψ).toFinsupp (osVacuumConfig ι) = 0 := by
+    let ev0 : OSPreHilbertSpace D →ₗ[ℂ] ℂ :=
+      { toFun := fun u => u.toFinsupp (osVacuumConfig ι)
+        map_add' := fun u v => rfl
+        map_smul' := fun c u => rfl }
+    change ev0 (osPrependShiftLM D α₀ x_sp ε hε Ψ) = 0
+    conv_lhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ]
+    rw [map_finsuppSum, map_finsuppSum]
+    unfold Finsupp.sum
+    refine Finset.sum_eq_zero (fun A _ => ?_)
+    dsimp only
+    rw [LinearMap.map_smul, LinearMap.map_smul]
+    unfold osPrependShiftLM osFieldPrependLM osTimeShiftLM
+    rw [LinearMap.comp_apply, osLiftConfigMap_osBasisPre, osLiftConfigMap_osBasisPre]
+    have hne : osFieldPrependConfig α₀ (euclidTimeVec ε + euclidSpatialVec x_sp)
+        (time_pos_euclidTimeVec_add_spatial hε x_sp)
+        (osConfigTimeShift ε hε.le A) ≠ osVacuumConfig ι := by
+      rw [Ne, osConfig_eq_osVacuumConfig_iff]
+      exact Nat.succ_ne_zero A.1
+    change Ψ.toFinsupp A *
+      (Finsupp.single _ (1 : ℂ)) (osVacuumConfig ι) = 0
+    rw [Finsupp.single_eq_of_ne hne.symm, mul_zero]
+  have h_sq0 : ‖osPrependShiftLM D α₀ x_sp ε hε Ψ‖ ^ 2 = 0 := by
+    rw [norm_sq_eq_re_inner (𝕜 := ℂ)]
+    change (osPreInner S D.𝒮
+      (osPrependShiftLM D α₀ x_sp ε hε Ψ).toFinsupp
+      (osPrependShiftLM D α₀ x_sp ε hε Ψ).toFinsupp).re = 0
+    rw [hD, osPreInner_vacS, h_vac_coeff, mul_zero, Complex.zero_re]
+  have h_z : ‖osPrependShiftLM D α₀ x_sp ε hε Ψ‖ = 0 :=
+    sq_eq_zero_iff.mp h_sq0
+  rw [h_z, pow_zero, mul_one, zero_mul]
+
+theorem vacOSDampedFieldBounded (R : HolomorphicLorentzRep ι) (S : StarStructure R) (η : ℂ) :
+    OSDampedFieldBounded (vacOSAxioms R S η).toReflectionPositiveData :=
+  osDampedFieldBounded_of_vacS (vacOSAxioms R S η).toReflectionPositiveData rfl
+
+theorem twoModeOSDampedFieldBounded {w₁ w₂ : ℝ} (hw₁ : 0 ≤ w₁) (hw₂ : 0 ≤ w₂) (r₁ r₂ : ℝ) :
+    OSDampedFieldBounded (twoModeOSAxioms hw₁ hw₂ r₁ r₂).toReflectionPositiveData := by
+  let D := (twoModeOSAxioms hw₁ hw₂ r₁ r₂).toReflectionPositiveData
+  let M : ℝ := max |r₁| |r₂|
+  refine ⟨M, 0, by positivity, fun α₀ x_sp ε hε Ψ => ?_⟩
+  rw [pow_zero, mul_one]
+  let f : OSConfig Unit → OSConfig Unit := fun A =>
+    osFieldPrependConfig α₀ (euclidTimeVec ε + euclidSpatialVec x_sp)
+      (by simp [euclidTimeVec, euclidSpatialVec, hε])
+      (osConfigTimeShift ε hε.le A)
+  have hf_len : ∀ A : OSConfig Unit, osConfigLen (f A) = osConfigLen A + 1 := fun _ => rfl
+  have h_norm_sq : ∀ Φ : OSPreHilbertSpace D,
+      ‖Φ‖ ^ 2 = w₁ * Complex.normSq (∑ a ∈ Φ.toFinsupp.support,
+          (r₁ : ℂ) ^ osConfigLen a * Φ.toFinsupp a) +
+        w₂ * Complex.normSq (∑ a ∈ Φ.toFinsupp.support,
+          (r₂ : ℂ) ^ osConfigLen a * Φ.toFinsupp a) := by
+    intro Φ
+    rw [norm_sq_eq_re_inner (𝕜 := ℂ)]
+    change (osPreInner trivialStarStructure (momentS (twoModeMoment w₁ w₂ r₁ r₂))
+      Φ.toFinsupp Φ.toFinsupp).re = _
+    unfold osPreInner Finsupp.sum
+    simp_rw [osKernel_trivialStarStructure_momentS, twoModeMoment_add]
+    have h_sp : ∀ a b : OSConfig Unit,
+        star (Φ.toFinsupp a) * Φ.toFinsupp b *
+          ((w₁ : ℂ) * ((r₁ : ℂ) ^ osConfigLen a * (r₁ : ℂ) ^ osConfigLen b) +
+           (w₂ : ℂ) * ((r₂ : ℂ) ^ osConfigLen a * (r₂ : ℂ) ^ osConfigLen b)) =
+        (w₁ : ℂ) * ((starRingEnd ℂ) (Φ.toFinsupp a) * Φ.toFinsupp b *
+          ((r₁ : ℂ) ^ osConfigLen a * (r₁ : ℂ) ^ osConfigLen b)) +
+        (w₂ : ℂ) * ((starRingEnd ℂ) (Φ.toFinsupp a) * Φ.toFinsupp b *
+          ((r₂ : ℂ) ^ osConfigLen a * (r₂ : ℂ) ^ osConfigLen b)) := by
+      intro a b
+      change (starRingEnd ℂ) (Φ.toFinsupp a) * Φ.toFinsupp b * _ = _
+      ring
+    simp_rw [h_sp, Finset.sum_add_distrib, ← Finset.mul_sum]
+    rw [sum_star_mul_pow_eq_normSq Φ.toFinsupp.support Φ.toFinsupp osConfigLen r₁,
+        sum_star_mul_pow_eq_normSq Φ.toFinsupp.support Φ.toFinsupp osConfigLen r₂]
+    norm_cast
+  have h_sum_shift : ∀ r : ℝ,
+      (∑ b ∈ (osPrependShiftLM D α₀ x_sp ε hε Ψ).toFinsupp.support,
+        (r : ℂ) ^ osConfigLen b * (osPrependShiftLM D α₀ x_sp ε hε Ψ).toFinsupp b) =
+      (r : ℂ) * ∑ a ∈ Ψ.toFinsupp.support, (r : ℂ) ^ osConfigLen a * Ψ.toFinsupp a := by
+    intro r
+    let Lr : OSPreHilbertSpace D →ₗ[ℂ] ℂ :=
+      { toFun := fun Φ => Φ.toFinsupp.sum (fun a c => (r : ℂ) ^ osConfigLen a * c)
+        map_add' := fun u v =>
+          Finsupp.sum_add_index' (fun _ => mul_zero _) (fun _ _ _ => mul_add _ _ _)
+        map_smul' := fun c u => by
+          rw [RingHom.id_apply]
+          change (c • u.toFinsupp).sum (fun a d => (r : ℂ) ^ osConfigLen a * d) =
+            c * u.toFinsupp.sum (fun a d => (r : ℂ) ^ osConfigLen a * d)
+          rw [Finsupp.sum_smul_index' (fun _ => mul_zero _), Finsupp.mul_sum]
+          refine Finsupp.sum_congr (fun a _ => ?_)
+          dsimp
+          ring }
+    have hL_basis : ∀ A : OSConfig Unit,
+        Lr (osPrependShiftLM D α₀ x_sp ε hε (osBasisPre D A)) =
+          (r : ℂ) * Lr (osBasisPre D A) := by
+      intro A
+      unfold osPrependShiftLM osFieldPrependLM osTimeShiftLM
+      rw [LinearMap.comp_apply, osLiftConfigMap_osBasisPre, osLiftConfigMap_osBasisPre]
+      change (Finsupp.single (f A) (1 : ℂ)).sum (fun b c => (r : ℂ) ^ osConfigLen b * c) =
+        (r : ℂ) * (Finsupp.single A (1 : ℂ)).sum (fun a c => (r : ℂ) ^ osConfigLen a * c)
+      rw [Finsupp.sum_single_index (mul_zero _), Finsupp.sum_single_index (mul_zero _),
+          hf_len A, pow_succ]
+      ring
+    have hL_eq : Lr (osPrependShiftLM D α₀ x_sp ε hε Ψ) = (r : ℂ) * Lr Ψ := by
+      conv_lhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ]
+      conv_rhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ]
+      rw [map_finsuppSum, map_finsuppSum, map_finsuppSum, Finsupp.mul_sum]
+      refine Finsupp.sum_congr (fun A _ => ?_)
+      rw [LinearMap.map_smul, LinearMap.map_smul, LinearMap.map_smul, hL_basis A]
+      dsimp
+      ring
+    exact hL_eq
+  have h_sq_le : ‖osPrependShiftLM D α₀ x_sp ε hε Ψ‖ ^ 2 ≤ (M * ‖Ψ‖) ^ 2 := by
+    rw [h_norm_sq, mul_pow, h_norm_sq, h_sum_shift r₁, h_sum_shift r₂,
+        map_mul, map_mul, Complex.normSq_ofReal, Complex.normSq_ofReal]
+    have hr1 : r₁ * r₁ ≤ M ^ 2 := by
+      have h1 : |r₁| ≤ M := le_max_left _ _
+      have h2 := pow_le_pow_left₀ (abs_nonneg r₁) h1 2
+      rwa [sq_abs, sq] at h2
+    have hr2 : r₂ * r₂ ≤ M ^ 2 := by
+      have h1 : |r₂| ≤ M := le_max_right _ _
+      have h2 := pow_le_pow_left₀ (abs_nonneg r₂) h1 2
+      rwa [sq_abs, sq] at h2
+    have h_t1 := mul_le_mul_of_nonneg_left
+      (mul_le_mul_of_nonneg_right hr1 (Complex.normSq_nonneg
+        (∑ a ∈ Ψ.toFinsupp.support, (r₁ : ℂ) ^ osConfigLen a * Ψ.toFinsupp a))) hw₁
+    have h_t2 := mul_le_mul_of_nonneg_left
+      (mul_le_mul_of_nonneg_right hr2 (Complex.normSq_nonneg
+        (∑ a ∈ Ψ.toFinsupp.support, (r₂ : ℂ) ^ osConfigLen a * Ψ.toFinsupp a))) hw₂
+    linarith
+  exact le_of_sq_le_sq h_sq_le (mul_nonneg (by positivity) (norm_nonneg Ψ))
+
+theorem coherentOSDampedFieldBounded (r : ℝ) :
+    OSDampedFieldBounded (coherentOSReconstructedWightman r).osData :=
+  twoModeOSDampedFieldBounded zero_le_one le_rfl r 0
+
+theorem z2FreeOSDampedFieldBounded :
+    OSDampedFieldBounded z2FreeOSData :=
+  twoModeOSDampedFieldBounded (by positivity) (by positivity) 1 (-1)
+
 end
 end QFT

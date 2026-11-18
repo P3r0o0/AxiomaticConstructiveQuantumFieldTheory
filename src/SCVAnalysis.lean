@@ -29,6 +29,7 @@ import Mathlib.Analysis.Fourier.Inversion
 import Mathlib.MeasureTheory.Measure.Haar.NormedSpace
 import Mathlib.Analysis.Complex.LocallyUniformLimit
 import Mathlib.Analysis.Calculus.BumpFunction.FiniteDimension
+import Mathlib.MeasureTheory.Integral.Pi
 
 open Complex Filter Topology Set ContinuousLinearMap ContinuousMultilinearMap MeasureTheory
 open intervalIntegral
@@ -10537,5 +10538,2446 @@ theorem eow_all_dim {n : ℕ} (V_plus U : Set (Fin n → ℝ))
     wedge_subset_union_balls V_plus U r hr, ?_⟩
   exact eow_nd_glue V_plus U hV_plus_open hV_plus_cone hU_open f h_cont
     h_holo_plus h_holo_minus r hr F_loc hF_holo hF_eq hF_compat
+
+lemma partial_deriv_pi_eq_intervalIntegral {N : ℕ}
+    (f : (Fin N → ℂ) → ℂ) (z : Fin N → ℂ) (m : Fin N) (R : ℝ) (hR : 0 < R)
+    (h_diff : DifferentiableOn ℂ (fun w => f (Function.update z m w))
+      (Metric.closedBall (z m) R)) :
+    deriv (fun w => f (Function.update z m w)) (z m) =
+      (2 * ↑Real.pi * I)⁻¹ * ∫ θ in (0 : ℝ)..(2 * Real.pi),
+        (I / (↑R * exp (↑θ * I))) * f (Function.update z m (z m + ↑R * exp (↑θ * I))) := by
+  let g : ℂ × ℂ → ℂ := fun p => f (Function.update z m p.1)
+  exact Analysis.partial_deriv_eq_intervalIntegral g (z m) 0 R hR h_diff
+
+lemma continuousAt_partial_deriv_pi {N : ℕ} {U : Set (Fin N → ℂ)} (hU : IsOpen U)
+    (f : (Fin N → ℂ) → ℂ) (h_cont : ContinuousOn f U) (m : Fin N)
+    (h_holo : ∀ z ∈ U, DifferentiableAt ℂ (fun w => f (Function.update z m w)) (z m))
+    {z₀ : Fin N → ℂ} (hz₀ : z₀ ∈ U) :
+    ContinuousAt (fun z => deriv (fun w => f (Function.update z m w)) (z m)) z₀ := by
+  rcases Metric.isOpen_iff.mp hU z₀ hz₀ with ⟨ε, hε, h_ball⟩
+  let R : ℝ := ε / 2
+  have hR : 0 < R := half_pos hε
+  have h_upd_mem : ∀ z ∈ Metric.ball z₀ R, ∀ w ∈ Metric.closedBall (z m) R,
+      Function.update z m w ∈ U := by
+    intro z hz w hw
+    apply h_ball
+    rw [Metric.mem_ball] at hz ⊢
+    refine (dist_pi_lt_iff hε).mpr fun j => ?_
+    by_cases hjm : j = m
+    · subst hjm
+      rw [Function.update_self]
+      have hw' : dist w (z j) ≤ R := Metric.mem_closedBall.mp hw
+      have hz' : dist (z j) (z₀ j) < R := (dist_le_pi_dist z z₀ j).trans_lt hz
+      calc dist w (z₀ j) ≤ dist w (z j) + dist (z j) (z₀ j) := dist_triangle _ _ _
+        _ < R + R := by linarith
+        _ = ε := add_halves ε
+    · rw [Function.update_of_ne hjm]
+      exact ((dist_le_pi_dist z z₀ j).trans_lt hz).trans (half_lt_self hε)
+  have h_circ_mem : ∀ z ∈ Metric.ball z₀ R, ∀ θ : ℝ,
+      z m + ↑R * exp (↑θ * I) ∈ Metric.closedBall (z m) R := by
+    intro z _ θ
+    rw [Metric.mem_closedBall, dist_eq_norm, add_sub_cancel_left, norm_mul,
+      Complex.norm_real, Real.norm_of_nonneg hR.le, Complex.norm_exp_ofReal_mul_I, mul_one]
+  let f_int : Metric.ball z₀ R → ℝ → ℂ := fun p θ =>
+    (I / (↑R * exp (↑θ * I))) * f (Function.update p.val m (p.val m + ↑R * exp (↑θ * I)))
+  have h_cont_int : Continuous (Function.uncurry f_int) := by
+    have h_left : Continuous (fun X : Metric.ball z₀ R × ℝ => I / (↑R * exp (↑X.2 * I))) := by
+      refine Continuous.div continuous_const ?_ ?_
+      · exact continuous_const.mul
+          (Complex.continuous_exp.comp
+            ((Complex.continuous_ofReal.comp continuous_snd).mul continuous_const))
+      · intro X
+        exact mul_ne_zero (Complex.ofReal_ne_zero.mpr hR.ne') (Complex.exp_ne_zero _)
+    have h_inner : Continuous (fun X : Metric.ball z₀ R × ℝ =>
+        Function.update X.1.val m (X.1.val m + ↑R * exp (↑X.2 * I))) := by
+      refine continuous_pi fun j => ?_
+      by_cases hjm : j = m
+      · subst hjm
+        simp only [Function.update_self]
+        exact ((continuous_apply j).comp (continuous_subtype_val.comp continuous_fst)).add
+          (continuous_const.mul
+            (Complex.continuous_exp.comp
+              ((Complex.continuous_ofReal.comp continuous_snd).mul continuous_const)))
+      · simp only [Function.update_of_ne hjm]
+        exact (continuous_apply j).comp (continuous_subtype_val.comp continuous_fst)
+    have h_right : Continuous (fun X : Metric.ball z₀ R × ℝ =>
+        f (Function.update X.1.val m (X.1.val m + ↑R * exp (↑X.2 * I)))) :=
+      h_cont.comp_continuous h_inner (fun X =>
+        h_upd_mem X.1.val X.1.property _ (h_circ_mem X.1.val X.1.property X.2))
+    exact h_left.mul h_right
+  let F_int : (Fin N → ℂ) → ℂ := fun z =>
+    ∫ θ in (0 : ℝ)..(2 * Real.pi),
+      (I / (↑R * exp (↑θ * I))) * f (Function.update z m (z m + ↑R * exp (↑θ * I)))
+  have h_int_cont : Continuous (fun p : Metric.ball z₀ R => F_int p.val) :=
+    intervalIntegral.continuous_parametric_intervalIntegral_of_continuous'
+      h_cont_int 0 (2 * Real.pi)
+  have h_int_contAt : ContinuousAt F_int z₀ :=
+    (continuousOn_iff_continuous_restrict.mpr h_int_cont).continuousAt
+      (Metric.ball_mem_nhds z₀ hR)
+  have h_mul : ContinuousAt (fun z => (2 * ↑Real.pi * I)⁻¹ * F_int z) z₀ :=
+    continuousAt_const.mul h_int_contAt
+  refine h_mul.congr ?_
+  filter_upwards [Metric.ball_mem_nhds z₀ hR] with z hz
+  have h_diff_z : DifferentiableOn ℂ (fun w => f (Function.update z m w))
+      (Metric.closedBall (z m) R) := by
+    intro w hw
+    have hd := h_holo (Function.update z m w) (h_upd_mem z hz w hw)
+    have h_fn : (fun w₁ => f (Function.update (Function.update z m w) m w₁)) =
+        fun w₁ => f (Function.update z m w₁) := by
+      ext w₁
+      rw [Function.update_idem]
+    rw [h_fn, Function.update_self] at hd
+    exact hd.differentiableWithinAt
+  exact (partial_deriv_pi_eq_intervalIntegral f z m R hR h_diff_z).symm
+
+lemma hasDerivAt_update_pi {N : ℕ} (y : Fin N → ℂ) (j : Fin N) (u₀ : ℂ) :
+    HasDerivAt (fun u : ℂ => Function.update y j u) (Pi.single j (1 : ℂ)) u₀ := by
+  classical
+  rw [hasDerivAt_pi]
+  intro k
+  by_cases hkj : k = j
+  · subst hkj
+    simp only [Function.update_self, Pi.single_eq_same]
+    exact hasDerivAt_id u₀
+  · simp only [Function.update_of_ne hkj, Pi.single_eq_of_ne hkj]
+    exact hasDerivAt_const u₀ (y k)
+
+lemma fderiv_pi_eq_sum_partial {N : ℕ} {g : (Fin N → ℂ) → ℂ} {y : Fin N → ℂ}
+    (hg : DifferentiableAt ℂ g y) :
+    fderiv ℂ g y = ∑ j : Fin N,
+      (ContinuousLinearMap.proj j).smulRight
+        (deriv (fun u => g (Function.update y j u)) (y j)) := by
+  classical
+  ext v
+  have hv_sum : v = ∑ j : Fin N, v j • Pi.single j (1 : ℂ) := by
+    ext k
+    simp [Pi.single_apply]
+  have h_lhs : (fderiv ℂ g y) v = ∑ j : Fin N, v j * (fderiv ℂ g y) (Pi.single j (1 : ℂ)) := by
+    conv_lhs => rw [hv_sum]
+    rw [_root_.map_sum]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [map_smul, smul_eq_mul]
+  rw [h_lhs, sum_apply]
+  refine Finset.sum_congr rfl fun j _ => ?_
+  simp only [ContinuousLinearMap.smulRight_apply, ContinuousLinearMap.proj_apply, smul_eq_mul]
+  congr 1
+  have hg' : HasFDerivAt g (fderiv ℂ g y) (Function.update y j (y j)) := by
+    rw [Function.update_eq_self]
+    exact hg.hasFDerivAt
+  exact (hg'.comp_hasDerivAt (y j) (hasDerivAt_update_pi y j (y j))).deriv.symm
+
+noncomputable def osgoodSplitToCLM (N : ℕ) : (Fin (N + 1) → ℂ) →L[ℂ] ℂ × (Fin N → ℂ) :=
+  ContinuousLinearMap.prod (ContinuousLinearMap.proj 0)
+    (ContinuousLinearMap.pi fun j => ContinuousLinearMap.proj j.succ)
+
+noncomputable def osgoodSplitFromCLM (N : ℕ) : ℂ × (Fin N → ℂ) →L[ℂ] (Fin (N + 1) → ℂ) :=
+  ContinuousLinearMap.pi (Fin.cases (ContinuousLinearMap.fst ℂ ℂ (Fin N → ℂ))
+    (fun j => (ContinuousLinearMap.proj j).comp (ContinuousLinearMap.snd ℂ ℂ (Fin N → ℂ))))
+
+lemma osgoodSplit_from_to {N : ℕ} (z : Fin (N + 1) → ℂ) :
+    osgoodSplitFromCLM N (osgoodSplitToCLM N z) = z := by
+  ext i
+  refine Fin.cases ?_ ?_ i
+  · rfl
+  · intro j; rfl
+
+lemma osgoodSplit_to_from {N : ℕ} (p : ℂ × (Fin N → ℂ)) :
+    osgoodSplitToCLM N (osgoodSplitFromCLM N p) = p := by
+  ext
+  · rfl
+  · rename_i j
+    change osgoodSplitFromCLM N p j.succ = p.2 j
+    simp [osgoodSplitFromCLM]
+
+lemma osgoodSplitFrom_update_zero {N : ℕ} (p : ℂ × (Fin N → ℂ)) (w : ℂ) :
+    osgoodSplitFromCLM N (w, p.2) = Function.update (osgoodSplitFromCLM N p) 0 w := by
+  ext i
+  refine Fin.cases ?_ ?_ i
+  · simp [osgoodSplitFromCLM]
+  · intro j
+    simp [osgoodSplitFromCLM]
+
+lemma osgoodSplitFrom_update_succ {N : ℕ} (p : ℂ × (Fin N → ℂ)) (j : Fin N) (u : ℂ) :
+    osgoodSplitFromCLM N (p.1, Function.update p.2 j u) =
+      Function.update (osgoodSplitFromCLM N p) j.succ u := by
+  ext i
+  refine Fin.cases ?_ ?_ i
+  · rw [Function.update_of_ne (Fin.succ_ne_zero j).symm]
+    rfl
+  · intro k
+    by_cases hkj : k = j
+    · subst hkj
+      simp [osgoodSplitFromCLM]
+    · have h_succ : k.succ ≠ j.succ := fun h => hkj (Fin.succ_inj.mp h)
+      simp [osgoodSplitFromCLM, hkj, h_succ]
+
+theorem osgood_nd : ∀ (N : ℕ) {U : Set (Fin N → ℂ)}, IsOpen U →
+    ∀ (f : (Fin N → ℂ) → ℂ), ContinuousOn f U →
+    (∀ z ∈ U, ∀ m : Fin N, DifferentiableAt ℂ (fun w => f (Function.update z m w)) (z m)) →
+    DifferentiableOn ℂ f U
+  | 0, U, _hU, f, _h_cont, _h_holo => by
+    have hf_const : f = fun _ => f 0 := by
+      ext z
+      congr 1
+      ext i
+      exact Fin.elim0 i
+    rw [hf_const]
+    exact differentiableOn_const (f 0)
+  | N + 1, U, hU, f, h_cont, h_holo => by
+    intro z₀ hz₀
+    let toL := osgoodSplitToCLM N
+    let frL := osgoodSplitFromCLM N
+    let U' : Set (ℂ × (Fin N → ℂ)) := frL ⁻¹' U
+    have hU' : IsOpen U' := hU.preimage frL.continuous
+    let f' : ℂ × (Fin N → ℂ) → ℂ := f ∘ frL
+    have h_cont' : ContinuousOn f' U' := h_cont.comp frL.continuous.continuousOn (fun _ hp => hp)
+    let p₀ := toL z₀
+    have hp₀ : p₀ ∈ U' := by
+      change frL (toL z₀) ∈ U
+      rwa [osgoodSplit_from_to]
+    have h_holo_y : ∀ x : ℂ, DifferentiableOn ℂ (fun y => f' (x, y)) {y | (x, y) ∈ U'} := by
+      intro x
+      have hUx : IsOpen {y : Fin N → ℂ | (x, y) ∈ U'} :=
+        hU'.preimage (Continuous.prodMk continuous_const continuous_id)
+      have hc_x : ContinuousOn (fun y => f' (x, y)) {y | (x, y) ∈ U'} :=
+        h_cont'.comp (Continuous.prodMk continuous_const continuous_id).continuousOn
+          (fun _ hy => hy)
+      refine osgood_nd N hUx (fun y => f' (x, y)) hc_x ?_
+      intro y hy j
+      have h_eq_fn : (fun u => f' (x, Function.update y j u)) =
+          fun u => f (Function.update (frL (x, y)) j.succ u) := by
+        ext u
+        dsimp [f']
+        rw [osgoodSplitFrom_update_succ (x, y) j u]
+      rw [h_eq_fn]
+      have h_val : y j = frL (x, y) j.succ := by simp [frL, osgoodSplitFromCLM]
+      rw [h_val]
+      exact h_holo (frL (x, y)) hy j.succ
+    let f₁ : ℂ → (Fin N → ℂ) → ℂ →L[ℂ] ℂ := fun x y =>
+      (1 : ℂ →L[ℂ] ℂ).smulRight
+        (deriv (fun w => f (Function.update (frL (x, y)) 0 w)) (frL (x, y) 0))
+    let f₂ : ℂ → (Fin N → ℂ) → (Fin N → ℂ) →L[ℂ] ℂ := fun x y =>
+      ∑ j : Fin N, (ContinuousLinearMap.proj j).smulRight
+        (deriv (fun u => f (Function.update (frL (x, y)) j.succ u)) (frL (x, y) j.succ))
+    have df₁ : ∀ᶠ p in 𝓝 p₀, HasFDerivAt (fun x => f' (x, p.2)) (f₁ p.1 p.2) p.1 := by
+      filter_upwards [hU'.mem_nhds hp₀] with p hp
+      have h_eq_fn : (fun x => f' (x, p.2)) =
+          fun w => f (Function.update (frL p) 0 w) := by
+        ext w
+        dsimp [f']
+        rw [osgoodSplitFrom_update_zero p w]
+      have h_val : p.1 = frL p 0 := by simp [frL, osgoodSplitFromCLM]
+      rw [h_eq_fn]
+      dsimp [f₁]
+      rw [Prod.mk.eta, h_val]
+      exact (h_holo (frL p) hp 0).hasDerivAt.hasFDerivAt
+    have df₂ : ∀ᶠ p in 𝓝 p₀, HasFDerivAt (fun y => f' (p.1, y)) (f₂ p.1 p.2) p.2 := by
+      filter_upwards [hU'.mem_nhds hp₀] with p hp
+      have hUx : IsOpen {y : Fin N → ℂ | (p.1, y) ∈ U'} :=
+        hU'.preimage (Continuous.prodMk continuous_const continuous_id)
+      have hd_at : DifferentiableAt ℂ (fun y => f' (p.1, y)) p.2 :=
+        ((h_holo_y p.1) p.2 hp).differentiableAt (hUx.mem_nhds hp)
+      have hf_eq := fderiv_pi_eq_sum_partial hd_at
+      have h_sum_eq : (∑ j : Fin N, (ContinuousLinearMap.proj j).smulRight
+          (deriv (fun u => f' (p.1, Function.update p.2 j u)) (p.2 j))) = f₂ p.1 p.2 := by
+        dsimp [f₂]
+        rw [Prod.mk.eta]
+        refine Finset.sum_congr rfl fun j _ => ?_
+        congr 1
+        have h_eq_fn : (fun u => f' (p.1, Function.update p.2 j u)) =
+            fun u => f (Function.update (frL p) j.succ u) := by
+          ext u
+          dsimp [f']
+          rw [osgoodSplitFrom_update_succ p j u]
+        have h_val : p.2 j = frL p j.succ := by simp [frL, osgoodSplitFromCLM]
+        rw [h_eq_fn, h_val]
+      rw [← h_sum_eq, ← hf_eq]
+      exact hd_at.hasFDerivAt
+    have cf₁ : ContinuousAt ↿f₁ p₀ := by
+      have hc0 := continuousAt_partial_deriv_pi hU f h_cont 0
+        (fun z hz => h_holo z hz 0) (z₀ := frL p₀) hp₀
+      have hc_comp : ContinuousAt
+          (fun p : ℂ × (Fin N → ℂ) =>
+            deriv (fun w => f (Function.update (frL p) 0 w)) (frL p 0)) p₀ :=
+        hc0.comp frL.continuous.continuousAt
+      have h_smul : Continuous (fun c : ℂ => (1 : ℂ →L[ℂ] ℂ).smulRight c) :=
+        (ContinuousLinearMap.smulRightL ℂ ℂ ℂ (1 : ℂ →L[ℂ] ℂ)).continuous
+      exact h_smul.continuousAt.comp hc_comp
+    have cf₂ : ContinuousAt ↿f₂ p₀ := by
+      have h_eq_fn : (↿f₂ : ℂ × (Fin N → ℂ) → (Fin N → ℂ) →L[ℂ] ℂ) =
+          fun p : ℂ × (Fin N → ℂ) =>
+            ∑ j : Fin N, (ContinuousLinearMap.proj j).smulRight
+              (deriv (fun u => f (Function.update (frL p) j.succ u)) (frL p j.succ)) := by
+        ext p v
+        rfl
+      rw [h_eq_fn, ContinuousAt]
+      refine tendsto_finsetSum Finset.univ fun j _ => ?_
+      have hcj := continuousAt_partial_deriv_pi hU f h_cont j.succ
+        (fun z hz => h_holo z hz j.succ) (z₀ := frL p₀) hp₀
+      have hc_comp : ContinuousAt
+          (fun p : ℂ × (Fin N → ℂ) =>
+            deriv (fun u => f (Function.update (frL p) j.succ u)) (frL p j.succ)) p₀ :=
+        hcj.comp frL.continuous.continuousAt
+      have h_smul : Continuous
+          (fun c : ℂ => (ContinuousLinearMap.proj j : (Fin N → ℂ) →L[ℂ] ℂ).smulRight c) :=
+        (ContinuousLinearMap.smulRightL ℂ (Fin N → ℂ) ℂ
+          (ContinuousLinearMap.proj j)).continuous
+      exact (h_smul.continuousAt.comp hc_comp).tendsto
+    have h_strict := hasStrictFDerivAt_uncurry_coprod (f := fun x y => f' (x, y)) df₁ df₂ cf₁ cf₂
+    have hf'_diff : DifferentiableAt ℂ f' p₀ := h_strict.hasFDerivAt.differentiableAt
+    have hf_eq : f = f' ∘ toL := by
+      ext z
+      dsimp [f', toL, frL]
+      rw [osgoodSplit_from_to]
+    rw [hf_eq]
+    exact (hf'_diff.comp z₀ toL.differentiableAt).differentiableWithinAt
+
+def FlatStrip (N : ℕ) (α : ℝ) (m : Fin N) : Set (Fin N → ℂ) :=
+  { z | |(z m).im| < α ∧ ∀ j : Fin N, j ≠ m → (z j).im = 0 }
+
+def Octahedron (N : ℕ) (α : ℝ) : Set (Fin N → ℝ) :=
+  { y | ∑ m : Fin N, |y m| < α }
+
+lemma isOpen_Octahedron (N : ℕ) (α : ℝ) : IsOpen (Octahedron N α) := by
+  have h_cont : Continuous (fun y : Fin N → ℝ => ∑ m : Fin N, |y m|) :=
+    continuous_finsetSum Finset.univ fun m _ => (continuous_apply m).abs
+  exact isOpen_Iio.preimage h_cont
+
+lemma convex_Octahedron (N : ℕ) (α : ℝ) : Convex ℝ (Octahedron N α) := by
+  intro y₁ hy₁ y₂ hy₂ a b ha hb hab
+  change ∑ m : Fin N, |a * y₁ m + b * y₂ m| < α
+  rcases eq_or_lt_of_le ha with rfl | ha_pos
+  · simp only [zero_add] at hab
+    subst hab
+    simpa [Octahedron] using hy₂
+  · calc ∑ m : Fin N, |a * y₁ m + b * y₂ m|
+        ≤ ∑ m : Fin N, (a * |y₁ m| + b * |y₂ m|) := by
+          refine Finset.sum_le_sum fun m _ => ?_
+          calc |a * y₁ m + b * y₂ m|
+              ≤ |a * y₁ m| + |b * y₂ m| := abs_add_le _ _
+            _ = a * |y₁ m| + b * |y₂ m| := by
+                rw [abs_mul, abs_mul, abs_of_pos ha_pos, abs_of_nonneg hb]
+      _ = a * (∑ m : Fin N, |y₁ m|) + b * (∑ m : Fin N, |y₂ m|) := by
+          rw [Finset.sum_add_distrib, ← Finset.mul_sum, ← Finset.mul_sum]
+      _ < a * α + b * α := by
+          have h1 : a * (∑ m : Fin N, |y₁ m|) < a * α := mul_lt_mul_of_pos_left hy₁ ha_pos
+          have h2 : b * (∑ m : Fin N, |y₂ m|) ≤ b * α := mul_le_mul_of_nonneg_left hy₂.le hb
+          linarith
+      _ = α := by linear_combination α * hab
+
+noncomputable def fourierTransformND {N : ℕ} (φ : (Fin N → ℝ) → ℂ) (ξ : Fin N → ℝ) : ℂ :=
+  ∫ x : Fin N → ℝ, φ x * Complex.exp (-I * ∑ j : Fin N, (x j : ℂ) * (ξ j : ℂ))
+
+open Real FiniteDimensional VectorFourier in
+lemma fourier_inversion_nd {N : ℕ} (φ : (Fin N → ℝ) → ℂ) (x₀ : Fin N → ℝ)
+    (hφ_cont : Continuous φ) (hφ_int : Integrable φ volume)
+    (hφ_hat_int : Integrable (fourierTransformND φ) volume) :
+    ((2 * Real.pi)⁻¹ : ℂ) ^ N *
+      (∫ ξ : Fin N → ℝ, fourierTransformND φ ξ *
+        Complex.exp (I * ∑ j : Fin N, (x₀ j : ℂ) * (ξ j : ℂ))) = φ x₀ := by
+  let f : EuclideanSpace ℝ (Fin N) → ℂ := fun v => φ v
+  have h_euc_int_iff : ∀ g : (Fin N → ℝ) → ℂ,
+      Integrable (fun v : EuclideanSpace ℝ (Fin N) => g v) volume ↔ Integrable g volume :=
+    fun g =>
+      (EuclideanSpace.volume_preserving_symm_measurableEquiv_toLp (Fin N)).integrable_comp_emb
+        (MeasurableEquiv.measurableEmbedding _)
+  have h_euc_int_eq : ∀ g : (Fin N → ℝ) → ℂ,
+      ∫ v : EuclideanSpace ℝ (Fin N), g v = ∫ x : Fin N → ℝ, g x :=
+    fun g => (EuclideanSpace.volume_preserving_symm_measurableEquiv_toLp (Fin N)).integral_comp' g
+  have h_F_eq : ∀ w : EuclideanSpace ℝ (Fin N),
+      𝓕 f w = fourierTransformND φ (((2 * Real.pi) • w : EuclideanSpace ℝ (Fin N))) := by
+    intro w
+    rw [fourier_eq']
+    dsimp [fourierTransformND, f]
+    rw [← h_euc_int_eq]
+    congr 1
+    ext v
+    rw [mul_comm]
+    congr 1
+    congr 1
+    simp only [PiLp.inner_apply, RCLike.inner_apply, conj_trivial]
+    have h_arg : (↑(-2 * Real.pi * ∑ x : Fin N, w.ofLp x * v.ofLp x) : ℂ) * I =
+        -I * ∑ j : Fin N, (v.ofLp j : ℂ) *
+          (((2 * Real.pi) • w : EuclideanSpace ℝ (Fin N)).ofLp j : ℂ) := by
+      change (↑(-2 * Real.pi * ∑ x : Fin N, w.ofLp x * v.ofLp x) : ℂ) * I =
+        -I * ∑ j : Fin N, (v.ofLp j : ℂ) * (((2 * Real.pi) * w.ofLp j : ℝ) : ℂ)
+      simp only [Complex.ofReal_mul, Complex.ofReal_neg, Complex.ofReal_ofNat,
+        Complex.ofReal_sum, Finset.mul_sum, Finset.sum_mul]
+      refine Finset.sum_congr rfl fun j _ => ?_
+      ring
+    exact h_arg
+  have hf_cont : Continuous f := hφ_cont.comp (PiLp.continuous_ofLp (p := 2) (β := fun _ => ℝ))
+  have hf_int : Integrable f volume := (h_euc_int_iff φ).2 hφ_int
+  have h_2pi_ne : (2 * Real.pi : ℝ) ≠ 0 := by positivity
+  have h_F_int : Integrable (𝓕 f) volume := by
+    have h1 : Integrable
+        (fun ξ : EuclideanSpace ℝ (Fin N) => fourierTransformND φ ξ) volume :=
+      (h_euc_int_iff (fourierTransformND φ)).2 hφ_hat_int
+    have h2 : Integrable (fun w : EuclideanSpace ℝ (Fin N) =>
+        fourierTransformND φ (((2 * Real.pi) • w : EuclideanSpace ℝ (Fin N)))) volume :=
+      h1.comp_smul h_2pi_ne
+    have h_fn : 𝓕 f = fun w : EuclideanSpace ℝ (Fin N) =>
+        fourierTransformND φ (((2 * Real.pi) • w : EuclideanSpace ℝ (Fin N))) :=
+      funext h_F_eq
+    rwa [h_fn]
+  have h_inv_at := congr_fun (Continuous.fourierInv_fourier_eq hf_cont hf_int h_F_int)
+    (WithLp.toLp 2 x₀)
+  change _ = f (WithLp.toLp 2 x₀)
+  rw [← h_inv_at, fourierInv_eq]
+  simp only [Circle.smul_def, Real.fourierChar_apply, smul_eq_mul]
+  let H_fin : (Fin N → ℝ) → ℂ := fun ξ =>
+    fourierTransformND φ ξ * Complex.exp (I * ∑ j : Fin N, (x₀ j : ℂ) * (ξ j : ℂ))
+  let H : EuclideanSpace ℝ (Fin N) → ℂ := fun ξ => H_fin ξ
+  have h_int_H : (∫ w : EuclideanSpace ℝ (Fin N),
+      Complex.exp (↑(2 * Real.pi * ⟪w, WithLp.toLp 2 x₀⟫) * I) * 𝓕 f w) =
+      ∫ w : EuclideanSpace ℝ (Fin N), H ((2 * Real.pi) • w) := by
+    congr 1
+    ext w
+    rw [h_F_eq w]
+    dsimp [H, H_fin]
+    rw [mul_comm]
+    congr 1
+    congr 1
+    change (↑(2 * Real.pi * ⟪w, WithLp.toLp 2 x₀⟫) : ℂ) * I =
+      I * ∑ j : Fin N, (x₀ j : ℂ) * (((2 * Real.pi) * w.ofLp j : ℝ) : ℂ)
+    simp only [PiLp.inner_apply, RCLike.inner_apply, conj_trivial, Complex.ofReal_mul,
+      Complex.ofReal_ofNat, Complex.ofReal_sum, Finset.mul_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    ring
+  rw [h_int_H]
+  have hR : 0 ≤ 2 * Real.pi := by positivity
+  have h_smul := Measure.integral_comp_smul_of_nonneg
+    (μ := (volume : Measure (EuclideanSpace ℝ (Fin N)))) H (2 * Real.pi) (hR := hR)
+  have hdim : Module.finrank ℝ (EuclideanSpace ℝ (Fin N)) = N := by simp
+  rw [hdim] at h_smul
+  rw [h_smul, h_euc_int_eq H_fin]
+  simp only [Complex.real_smul, inv_pow, Complex.ofReal_inv, Complex.ofReal_pow,
+    Complex.ofReal_mul, Complex.ofReal_ofNat]
+  rfl
+
+noncomputable def mzGaussianDamped {N : ℕ} (f₀ : (Fin N → ℝ) → ℂ) (ε : ℝ)
+    (x : Fin N → ℝ) : ℂ :=
+  f₀ x * Complex.exp (-↑ε * ∑ j : Fin N, (x j : ℂ) ^ 2)
+
+lemma norm_mzGaussianKernel {N : ℕ} (ε : ℝ) (z : Fin N → ℂ) :
+    ‖Complex.exp (-↑ε * ∑ j : Fin N, (z j) ^ 2)‖ =
+      Real.exp (-ε * ∑ j : Fin N, (z j).re ^ 2) *
+        Real.exp (ε * ∑ j : Fin N, (z j).im ^ 2) := by
+  rw [Complex.norm_exp, ← Real.exp_add]
+  congr 1
+  have h_re : (-↑ε * ∑ j : Fin N, (z j) ^ 2).re =
+      -ε * ∑ j : Fin N, ((z j) ^ 2).re := by
+    rw [neg_mul, Complex.neg_re, Complex.re_ofReal_mul, neg_mul, Complex.re_sum]
+  rw [h_re]
+  have h_sq : ∀ j : Fin N, ((z j) ^ 2).re = (z j).re ^ 2 - (z j).im ^ 2 := by
+    intro j
+    rw [sq, Complex.mul_re, sq, sq]
+  simp_rw [h_sq, Finset.sum_sub_distrib]
+  ring
+
+lemma integrable_mzGaussian_real (N : ℕ) {ε : ℝ} (hε : 0 < ε) :
+    Integrable (fun x : Fin N → ℝ => ∏ j : Fin N, Real.exp (-ε * (x j) ^ 2)) volume :=
+  Integrable.fintype_prod (f := fun _ : Fin N => fun t : ℝ => Real.exp (-ε * t ^ 2))
+    (fun _ => integrable_exp_neg_mul_sq hε)
+
+lemma integrable_exp_neg_abs_sum (N : ℕ) {c : ℝ} (hc : 0 < c) :
+    Integrable (fun ξ : Fin N → ℝ => Real.exp (-c * ∑ j : Fin N, |ξ j|)) volume := by
+  have h_eq : (fun ξ : Fin N → ℝ => Real.exp (-c * ∑ j : Fin N, |ξ j|)) =
+      fun ξ => ∏ j : Fin N, Real.exp (-c * |ξ j|) := by
+    ext ξ
+    rw [← Real.exp_sum, Finset.mul_sum]
+  rw [h_eq]
+  exact Integrable.fintype_prod (f := fun _ : Fin N => fun t : ℝ => Real.exp (-c * |t|))
+    (fun _ => Bochner.integrable_exp_neg_abs hc)
+
+lemma integrable_exp_neg_abs_sum_mul_abs (N : ℕ) (m : Fin N) {c : ℝ} (hc : 0 < c) :
+    Integrable (fun ξ : Fin N → ℝ => Real.exp (-c * ∑ j : Fin N, |ξ j|) * |ξ m|) volume := by
+  have hc2 : 0 < c / 2 := half_pos hc
+  have h_dom : Integrable
+      (fun ξ : Fin N → ℝ => (2 / c + 1) * Real.exp (-(c / 2) * ∑ j : Fin N, |ξ j|)) volume :=
+    (integrable_exp_neg_abs_sum N hc2).const_mul (2 / c + 1)
+  have h_cont : Continuous
+      (fun ξ : Fin N → ℝ => Real.exp (-c * ∑ j : Fin N, |ξ j|) * |ξ m|) :=
+    (Real.continuous_exp.comp
+      (continuous_const.mul (continuous_finsetSum Finset.univ fun j _ =>
+        (continuous_apply j).abs))).mul (continuous_apply m).abs
+  refine h_dom.mono' h_cont.aestronglyMeasurable (Filter.Eventually.of_forall fun ξ => ?_)
+  have h_nn : 0 ≤ Real.exp (-c * ∑ j : Fin N, |ξ j|) * |ξ m| := by positivity
+  rw [Real.norm_of_nonneg h_nn]
+  have h_poly : |ξ m| ≤ (2 / c + 1) * Real.exp (c / 2 * |ξ m|) := by
+    have hp := Bochner.poly_le_exp_half c hc (ξ m)
+    linarith
+  have h_le_sum : |ξ m| ≤ ∑ j : Fin N, |ξ j| :=
+    Finset.single_le_sum (fun j _ => abs_nonneg (ξ j)) (Finset.mem_univ m)
+  have h_exp_le : Real.exp (c / 2 * |ξ m|) ≤ Real.exp (c / 2 * ∑ j : Fin N, |ξ j|) :=
+    Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_left h_le_sum hc2.le)
+  calc Real.exp (-c * ∑ j : Fin N, |ξ j|) * |ξ m|
+      ≤ Real.exp (-c * ∑ j : Fin N, |ξ j|) *
+          ((2 / c + 1) * Real.exp (c / 2 * ∑ j : Fin N, |ξ j|)) := by
+        refine mul_le_mul_of_nonneg_left ?_ (Real.exp_pos _).le
+        exact h_poly.trans (mul_le_mul_of_nonneg_left h_exp_le (by positivity))
+    _ = (2 / c + 1) *
+          (Real.exp (-c * ∑ j : Fin N, |ξ j|) * Real.exp (c / 2 * ∑ j : Fin N, |ξ j|)) := by ring
+    _ = (2 / c + 1) * Real.exp (-(c / 2) * ∑ j : Fin N, |ξ j|) := by
+        rw [← Real.exp_add]
+        congr 2
+        ring
+
+lemma integrable_mzGaussianDamped {N : ℕ} {f₀ : (Fin N → ℝ) → ℂ} {M ε : ℝ}
+    (_hM : 0 ≤ M) (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M) (hε : 0 < ε) :
+    Integrable (mzGaussianDamped f₀ ε) volume := by
+  have h_dom : Integrable
+      (fun x : Fin N → ℝ => M * ∏ j : Fin N, Real.exp (-ε * (x j) ^ 2)) volume :=
+    (integrable_mzGaussian_real N hε).const_mul M
+  have h_cont : Continuous (mzGaussianDamped f₀ ε) := by
+    refine hf₀_cont.mul (Complex.continuous_exp.comp (continuous_const.mul ?_))
+    exact continuous_finsetSum Finset.univ fun j _ =>
+      (Complex.continuous_ofReal.comp (continuous_apply j)).pow 2
+  refine h_dom.mono' h_cont.aestronglyMeasurable (Filter.Eventually.of_forall fun x => ?_)
+  dsimp [mzGaussianDamped]
+  rw [norm_mul, norm_mzGaussianKernel]
+  have h_im0 : (∑ j : Fin N, ((x j : ℂ)).im ^ 2) = 0 := by simp
+  have h_re_eq : (∑ j : Fin N, ((x j : ℂ)).re ^ 2) = ∑ j : Fin N, (x j) ^ 2 := by simp
+  rw [h_im0, mul_zero, Real.exp_zero, mul_one, h_re_eq]
+  have h_prod : Real.exp (-ε * ∑ j : Fin N, (x j) ^ 2) =
+      ∏ j : Fin N, Real.exp (-ε * (x j) ^ 2) := by
+    rw [← Real.exp_sum, Finset.mul_sum]
+  rw [h_prod]
+  exact mul_le_mul_of_nonneg_right (hf₀_bdd x)
+    (Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+
+lemma mz_fourier_bound_coord {n : ℕ} {α M : ℝ} (_hα : 0 < α) (hM : 0 ≤ M)
+    {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ}
+    (_hf₀_cont : Continuous f₀) (_hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ),
+      f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m))
+    (h_bdd_br : ∀ (m : Fin (n + 1)), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ),
+      DifferentiableOn ℂ (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w))
+        { w : ℂ | |w.im| < α })
+    {ε β : ℝ} (hε : 0 < ε) (hβ_pos : 0 < β) (hβ_lt : β < α)
+    (m : Fin (n + 1)) (ξ : Fin (n + 1) → ℝ) :
+    ‖fourierTransformND (mzGaussianDamped f₀ ε) ξ‖ ≤
+      (M * Real.exp (ε * β ^ 2) *
+        ∫ x : Fin (n + 1) → ℝ, ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2)) *
+        Real.exp (-β * |ξ m|) := by
+  classical
+  let b : ℝ := if 0 ≤ ξ m then -β else β
+  have hb_abs : |b| = β := by
+    dsimp [b]
+    split_ifs <;> simp [abs_of_pos hβ_pos]
+  have hb_lt : |b| < α := by rwa [hb_abs]
+  have hb_xi : b * ξ m = -β * |ξ m| := by
+    dsimp [b]
+    split_ifs with hxi
+    · rw [abs_of_nonneg hxi]
+    · push Not at hxi
+      rw [abs_of_neg hxi]; ring
+  let z_sh : (Fin (n + 1) → ℝ) → ℝ → (Fin (n + 1) → ℂ) := fun x y =>
+    Function.update (fun j => (x j : ℂ)) m ((x m : ℂ) + I * (y : ℂ))
+  let G_y : ℝ → (Fin (n + 1) → ℝ) → ℂ := fun y x =>
+    f_br m (z_sh x y) *
+      Complex.exp (-↑ε * ∑ j : Fin (n + 1), (z_sh x y j) ^ 2) *
+      Complex.exp (-I * ∑ j : Fin (n + 1), (z_sh x y j) * (ξ j : ℂ))
+  have hz_sh_mem : ∀ (x : Fin (n + 1) → ℝ) {y : ℝ}, |y| < α →
+      z_sh x y ∈ FlatStrip (n + 1) α m := by
+    intro x y hy
+    refine ⟨?_, fun j hj => ?_⟩
+    · simp [z_sh, hy]
+    · simp [z_sh, hj]
+  have hG_norm_le : ∀ {y : ℝ}, |y| ≤ β → ∀ x : Fin (n + 1) → ℝ,
+      ‖G_y y x‖ ≤ (M * Real.exp (ε * β ^ 2) * Real.exp (y * ξ m)) *
+        ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2) := by
+    intro y hy x
+    have hy_lt : |y| < α := lt_of_le_of_lt hy hβ_lt
+    dsimp [G_y]
+    rw [norm_mul, norm_mul, norm_mzGaussianKernel, Complex.norm_exp]
+    have hf_le : ‖f_br m (z_sh x y)‖ ≤ M := h_bdd_br m _ (hz_sh_mem x hy_lt)
+    have h_re_sum : (∑ j : Fin (n + 1), (z_sh x y j).re ^ 2) = ∑ j : Fin (n + 1), (x j) ^ 2 := by
+      refine Finset.sum_congr rfl fun j _ => ?_
+      by_cases hjm : j = m
+      · subst hjm; simp [z_sh]
+      · simp [z_sh, hjm]
+    have h_im_sum : (∑ j : Fin (n + 1), (z_sh x y j).im ^ 2) = y ^ 2 := by
+      rw [Finset.sum_eq_single m]
+      · simp [z_sh]
+      · intro j _ hjm; simp [z_sh, hjm]
+      · intro hm; exact (hm (Finset.mem_univ m)).elim
+    have h_phase_re : (-I * ∑ j : Fin (n + 1), z_sh x y j * (ξ j : ℂ)).re = y * ξ m := by
+      rw [Finset.mul_sum, Complex.re_sum, Finset.sum_eq_single m]
+      · simp [z_sh]
+      · intro j _ hjm
+        simp [z_sh, hjm]
+      · intro hm; exact (hm (Finset.mem_univ m)).elim
+    rw [h_re_sum, h_im_sum, h_phase_re]
+    have h_prod : Real.exp (-ε * ∑ j : Fin (n + 1), (x j) ^ 2) =
+        ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2) := by
+      rw [← Real.exp_sum, Finset.mul_sum]
+    rw [h_prod]
+    have hy_sq : y ^ 2 ≤ β ^ 2 := by
+      have := mul_le_mul hy hy (abs_nonneg y) hβ_pos.le
+      rwa [← sq, ← sq, sq_abs] at this
+    have hexp_im : Real.exp (ε * y ^ 2) ≤ Real.exp (ε * β ^ 2) :=
+      Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_left hy_sq hε.le)
+    calc ‖f_br m (z_sh x y)‖ *
+          ((∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2)) * Real.exp (ε * y ^ 2)) *
+          Real.exp (y * ξ m)
+        = (‖f_br m (z_sh x y)‖ * Real.exp (ε * y ^ 2) * Real.exp (y * ξ m)) *
+            ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2) := by ring
+      _ ≤ (M * Real.exp (ε * β ^ 2) * Real.exp (y * ξ m)) *
+            ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2) := by
+          refine mul_le_mul_of_nonneg_right ?_
+            (Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+          refine mul_le_mul_of_nonneg_right ?_ (Real.exp_pos _).le
+          exact mul_le_mul hf_le hexp_im (Real.exp_pos _).le hM
+  have hG_int : ∀ {y : ℝ}, |y| ≤ β → Integrable (G_y y) volume := by
+    intro y hy
+    have hy_lt : |y| < α := lt_of_le_of_lt hy hβ_lt
+    have hz_cont : Continuous (fun x : Fin (n + 1) → ℝ => z_sh x y) := by
+      refine continuous_pi fun j => ?_
+      by_cases hjm : j = m
+      · subst hjm
+        simp only [z_sh, Function.update_self]
+        exact (Complex.continuous_ofReal.comp (continuous_apply j)).add continuous_const
+      · simp only [z_sh, Function.update_of_ne hjm]
+        exact Complex.continuous_ofReal.comp (continuous_apply j)
+    have h_cont : Continuous (G_y y) := by
+      refine Continuous.mul
+        (Continuous.mul ((h_cont_br m).comp_continuous hz_cont (fun x => hz_sh_mem x hy_lt)) ?_) ?_
+      · refine Complex.continuous_exp.comp (continuous_const.mul ?_)
+        exact continuous_finsetSum Finset.univ fun j _ =>
+          ((continuous_apply j).comp hz_cont).pow 2
+      · refine Complex.continuous_exp.comp (continuous_const.mul ?_)
+        exact continuous_finsetSum Finset.univ fun j _ =>
+          ((continuous_apply j).comp hz_cont).mul continuous_const
+    refine ((integrable_mzGaussian_real (n + 1) hε).const_mul
+      (M * Real.exp (ε * β ^ 2) * Real.exp (y * ξ m))).mono'
+      h_cont.aestronglyMeasurable (Filter.Eventually.of_forall (hG_norm_le hy))
+  have hG0_eq : fourierTransformND (mzGaussianDamped f₀ ε) ξ = ∫ x, G_y 0 x := by
+    dsimp [fourierTransformND, mzGaussianDamped, G_y]
+    congr 1
+    ext x
+    have hz0 : z_sh x 0 = fun j => (x j : ℂ) := by
+      ext j
+      by_cases hjm : j = m
+      · subst hjm; simp [z_sh]
+      · simp [z_sh, hjm]
+    rw [hz0, h_real m x, mul_assoc]
+  let mp := (volume_preserving_piFinSuccAbove (fun _ : Fin (n + 1) => ℝ) m).symm
+  let e := (MeasurableEquiv.piFinSuccAbove (fun _ : Fin (n + 1) => ℝ) m).symm
+  have he_upd : ∀ (s : ℝ) (x' : Fin n → ℝ), e (s, x') = Function.update (e (0, x')) m s := by
+    intro s x'
+    ext j
+    by_cases hjm : j = m
+    · subst hjm
+      simp [e, MeasurableEquiv.piFinSuccAbove]
+    · obtain ⟨k, rfl⟩ := Fin.exists_succAbove_eq hjm
+      simp [e, MeasurableEquiv.piFinSuccAbove, Fin.succAbove_ne]
+  have h_shift_eq : ∫ x, G_y 0 x = ∫ x, G_y b x := by
+    have h0_int : Integrable (fun p : ℝ × (Fin n → ℝ) => G_y 0 (e p)) (volume.prod volume) :=
+      (mp.integrable_comp_emb e.measurableEmbedding).mpr (hG_int (by simp [hβ_pos.le]))
+    have hb_int : Integrable (fun p : ℝ × (Fin n → ℝ) => G_y b (e p)) (volume.prod volume) :=
+      (mp.integrable_comp_emb e.measurableEmbedding).mpr (hG_int (by rw [hb_abs]))
+    rw [← mp.integral_comp' (G_y 0), ← mp.integral_comp' (G_y b)]
+    change (∫ p : ℝ × (Fin n → ℝ), G_y 0 (e p) ∂(volume.prod volume)) =
+      ∫ p : ℝ × (Fin n → ℝ), G_y b (e p) ∂(volume.prod volume)
+    rw [MeasureTheory.integral_prod _ h0_int, MeasureTheory.integral_prod _ hb_int,
+      MeasureTheory.integral_integral_swap (f := fun s x' => G_y 0 (e (s, x'))) h0_int,
+      MeasureTheory.integral_integral_swap (f := fun s x' => G_y b (e (s, x'))) hb_int]
+    congr 1
+    ext x'
+    let x₀ : Fin (n + 1) → ℝ := e (0, x')
+    let g_sl : ℂ → ℂ := fun w =>
+      f_br m (Function.update (fun j => (x₀ j : ℂ)) m w) *
+        Complex.exp (-↑ε * ∑ j : Fin (n + 1),
+          (Function.update (fun j => (x₀ j : ℂ)) m w j) ^ 2) *
+        Complex.exp (-I * ∑ j : Fin (n + 1),
+          (Function.update (fun j => (x₀ j : ℂ)) m w j) * (ξ j : ℂ))
+    have h_sl_eq : ∀ y : ℝ, ∀ s : ℝ, G_y y (e (s, x')) = g_sl (↑s + I * ↑y) := by
+      intro y s
+      dsimp [G_y, g_sl, z_sh]
+      have h_u : Function.update (fun j => (e (s, x') j : ℂ)) m (↑(e (s, x') m) + I * ↑y) =
+          Function.update (fun j => (x₀ j : ℂ)) m (↑s + I * ↑y) := by
+        rw [he_upd s x']
+        ext j
+        by_cases hjm : j = m
+        · subst hjm; simp
+        · simp [hjm, x₀]
+      rw [h_u]
+    simp_rw [h_sl_eq 0, h_sl_eq b]
+    have huIcc_sub : ∀ w : ℂ, w.im ∈ uIcc 0 b → |w.im| ≤ β := by
+      intro w hw
+      rw [uIcc] at hw
+      rw [abs_le]
+      have hb_le : -β ≤ b ∧ b ≤ β := abs_le.mp (le_of_eq hb_abs)
+      exact ⟨(le_min (by linarith) hb_le.1).trans hw.1, hw.2.trans (max_le hβ_pos.le hb_le.2)⟩
+    have hg_holo : DifferentiableOn ℂ g_sl {w : ℂ | w.im ∈ uIcc 0 b} := by
+      have h_sub : {w : ℂ | w.im ∈ uIcc 0 b} ⊆ {w : ℂ | |w.im| < α} :=
+        fun w hw => lt_of_le_of_lt (huIcc_sub w hw) hβ_lt
+      have h_upd_diff : Differentiable ℂ
+          (fun w : ℂ => Function.update (fun j => (x₀ j : ℂ)) m w) := by
+        refine differentiable_pi.mpr fun j => ?_
+        by_cases hjm : j = m
+        · subst hjm; simp only [Function.update_self]; exact differentiable_id
+        · simp only [Function.update_of_ne hjm]; exact differentiable_const _
+      refine (((h_holo_br m x₀).mono h_sub).mul ?_).mul ?_
+      · refine (Complex.differentiable_exp.comp (differentiable_const _ |>.mul ?_)).differentiableOn
+        exact Differentiable.fun_sum fun j _ => ((differentiable_apply j).comp h_upd_diff).pow 2
+      · refine (Complex.differentiable_exp.comp (differentiable_const _ |>.mul ?_)).differentiableOn
+        exact Differentiable.fun_sum fun j _ =>
+          ((differentiable_apply j).comp h_upd_diff).mul (differentiable_const _)
+    have hg_bd : ∃ C : ℝ, ∀ w : ℂ, w.im ∈ uIcc 0 b → ‖g_sl w‖ ≤ C * Real.exp (-ε * w.re ^ 2) := by
+      let K_xi := Real.exp (β * |ξ m|)
+      refine ⟨M * Real.exp (ε * β ^ 2) * K_xi, fun w hw => ?_⟩
+      have hw_le : |w.im| ≤ β := huIcc_sub w hw
+      have hw_eq : w = ↑w.re + I * ↑w.im := by rw [mul_comm I, Complex.re_add_im]
+      have hg_eq : g_sl w = G_y w.im (Function.update x₀ m w.re) := by
+        dsimp [G_y, g_sl, z_sh]
+        have h_u : Function.update (fun j => (Function.update x₀ m w.re j : ℂ)) m
+            (↑(Function.update x₀ m w.re m) + I * ↑w.im) =
+            Function.update (fun j => (x₀ j : ℂ)) m w := by
+          ext j
+          by_cases hjm : j = m
+          · subst hjm; simp [← hw_eq]
+          · simp [hjm]
+        rw [h_u]
+      rw [hg_eq]
+      have h1 := hG_norm_le hw_le (Function.update x₀ m w.re)
+      have h_prod_le : (∏ j : Fin (n + 1), Real.exp (-ε * (Function.update x₀ m w.re j) ^ 2)) ≤
+          Real.exp (-ε * w.re ^ 2) := by
+        rw [← Finset.mul_prod_erase Finset.univ _ (Finset.mem_univ m)]
+        simp only [Function.update_self]
+        refine mul_le_of_le_one_right (Real.exp_pos _).le ?_
+        refine Finset.prod_le_one (fun j _ => (Real.exp_pos _).le) fun j _ => ?_
+        rw [Real.exp_le_one_iff]
+        have : 0 ≤ (Function.update x₀ m w.re j) ^ 2 := sq_nonneg _
+        nlinarith
+      have h_xi_le : Real.exp (w.im * ξ m) ≤ K_xi := by
+        apply Real.exp_le_exp.mpr
+        calc w.im * ξ m ≤ |w.im * ξ m| := le_abs_self _
+          _ = |w.im| * |ξ m| := abs_mul _ _
+          _ ≤ β * |ξ m| := mul_le_mul_of_nonneg_right hw_le (abs_nonneg _)
+      calc ‖G_y w.im (Function.update x₀ m w.re)‖
+          ≤ (M * Real.exp (ε * β ^ 2) * Real.exp (w.im * ξ m)) *
+              ∏ j : Fin (n + 1), Real.exp (-ε * (Function.update x₀ m w.re j) ^ 2) := h1
+        _ ≤ (M * Real.exp (ε * β ^ 2) * K_xi) * Real.exp (-ε * w.re ^ 2) := by
+            refine mul_le_mul ?_ h_prod_le
+              (Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le) (by positivity)
+            exact mul_le_mul_of_nonneg_left h_xi_le (by positivity)
+    exact Bochner.fourier_shift_1d_eps_uIcc 0 b ε hε g_sl hg_holo hg_bd
+  rw [hG0_eq, h_shift_eq]
+  refine (MeasureTheory.norm_integral_le_integral_norm _).trans ?_
+  have h_int_bd : ∫ x, ‖G_y b x‖ ≤
+      ∫ x : Fin (n + 1) → ℝ,
+        (M * Real.exp (ε * β ^ 2) * Real.exp (b * ξ m)) *
+          ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2) :=
+    integral_mono_of_nonneg (Filter.Eventually.of_forall fun _ => norm_nonneg _)
+      ((integrable_mzGaussian_real (n + 1) hε).const_mul _)
+      (Filter.Eventually.of_forall (hG_norm_le (le_of_eq hb_abs)))
+  refine h_int_bd.trans ?_
+  rw [MeasureTheory.integral_const_mul, hb_xi]
+  exact le_of_eq (by ring)
+
+lemma mz_fourier_phase_domination {n : ℕ} {α : ℝ}
+    {C_β β δ : ℝ} (hC_nn : 0 ≤ C_β) (hδ_pos : 0 < δ)
+    {g_hat : (Fin (n + 1) → ℝ) → ℂ}
+    (h_coord : ∀ (m : Fin (n + 1)) (ξ : Fin (n + 1) → ℝ),
+      ‖g_hat ξ‖ ≤ C_β * Real.exp (-β * |ξ m|))
+    {w : Fin (n + 1) → ℂ}
+    (hw_sum : ∑ m : Fin (n + 1), |(w m).im| ≤ β - ((n + 1 : ℕ) : ℝ) * δ)
+    (_hα : 0 < α) (ξ : Fin (n + 1) → ℝ) :
+    ‖g_hat ξ * Complex.exp (I * ∑ m : Fin (n + 1), w m * (ξ m : ℂ))‖ ≤
+      C_β * Real.exp (-δ * ∑ m : Fin (n + 1), |ξ m|) := by
+  obtain ⟨m₀, _, hm₀_max⟩ :=
+    Finset.exists_max_image Finset.univ (fun m : Fin (n + 1) => |ξ m|) Finset.univ_nonempty
+  rw [norm_mul, Complex.norm_exp]
+  have h_re : (I * ∑ m : Fin (n + 1), w m * (ξ m : ℂ)).re =
+      -∑ m : Fin (n + 1), (w m).im * ξ m := by
+    rw [Finset.mul_sum, Complex.re_sum, ← Finset.sum_neg_distrib]
+    refine Finset.sum_congr rfl fun m _ => ?_
+    simp [Complex.mul_re]
+  rw [h_re]
+  have h_phase_le : -∑ m : Fin (n + 1), (w m).im * ξ m ≤
+      (β - ((n + 1 : ℕ) : ℝ) * δ) * |ξ m₀| := by
+    calc -∑ m : Fin (n + 1), (w m).im * ξ m
+        = ∑ m : Fin (n + 1), (-(w m).im * ξ m) := by
+          rw [← Finset.sum_neg_distrib]
+          exact Finset.sum_congr rfl fun m _ => by ring
+      _ ≤ ∑ m : Fin (n + 1), |(w m).im| * |ξ m| := by
+          refine Finset.sum_le_sum fun m _ => ?_
+          calc -(w m).im * ξ m ≤ |-(w m).im * ξ m| := le_abs_self _
+            _ = |(w m).im| * |ξ m| := by rw [abs_mul, abs_neg]
+      _ ≤ ∑ m : Fin (n + 1), |(w m).im| * |ξ m₀| :=
+          Finset.sum_le_sum fun m _ =>
+            mul_le_mul_of_nonneg_left (hm₀_max m (Finset.mem_univ m)) (abs_nonneg _)
+      _ = (∑ m : Fin (n + 1), |(w m).im|) * |ξ m₀| := (Finset.sum_mul _ _ _).symm
+      _ ≤ (β - ((n + 1 : ℕ) : ℝ) * δ) * |ξ m₀| :=
+          mul_le_mul_of_nonneg_right hw_sum (abs_nonneg _)
+  have h_sum_xi : ∑ m : Fin (n + 1), |ξ m| ≤ ((n + 1 : ℕ) : ℝ) * |ξ m₀| := by
+    calc ∑ m : Fin (n + 1), |ξ m|
+        ≤ ∑ _m : Fin (n + 1), |ξ m₀| :=
+          Finset.sum_le_sum fun m _ => hm₀_max m (Finset.mem_univ m)
+      _ = ((n + 1 : ℕ) : ℝ) * |ξ m₀| := by
+          rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+  have h_exp_le : Real.exp (-β * |ξ m₀|) * Real.exp (-∑ m : Fin (n + 1), (w m).im * ξ m) ≤
+      Real.exp (-δ * ∑ m : Fin (n + 1), |ξ m|) := by
+    rw [← Real.exp_add]
+    apply Real.exp_le_exp.mpr
+    have h1 : -β * |ξ m₀| + (-∑ m : Fin (n + 1), (w m).im * ξ m) ≤
+        -(((n + 1 : ℕ) : ℝ) * δ * |ξ m₀|) := by linarith
+    have h2 : δ * ∑ m : Fin (n + 1), |ξ m| ≤ δ * (((n + 1 : ℕ) : ℝ) * |ξ m₀|) :=
+      mul_le_mul_of_nonneg_left h_sum_xi hδ_pos.le
+    linarith
+  calc ‖g_hat ξ‖ * Real.exp (-∑ m : Fin (n + 1), (w m).im * ξ m)
+      ≤ (C_β * Real.exp (-β * |ξ m₀|)) * Real.exp (-∑ m : Fin (n + 1), (w m).im * ξ m) :=
+        mul_le_mul_of_nonneg_right (h_coord m₀ ξ) (Real.exp_pos _).le
+    _ = C_β * (Real.exp (-β * |ξ m₀|) * Real.exp (-∑ m : Fin (n + 1), (w m).im * ξ m)) := by ring
+    _ ≤ C_β * Real.exp (-δ * ∑ m : Fin (n + 1), |ξ m|) :=
+        mul_le_mul_of_nonneg_left h_exp_le hC_nn
+
+noncomputable def mzFEps {N : ℕ} (f₀ : (Fin N → ℝ) → ℂ) (ε : ℝ) (z : Fin N → ℂ) : ℂ :=
+  ((2 * Real.pi)⁻¹ : ℂ) ^ N *
+    ∫ ξ : Fin N → ℝ, fourierTransformND (mzGaussianDamped f₀ ε) ξ *
+      Complex.exp (I * ∑ j : Fin N, z j * (ξ j : ℂ))
+
+lemma continuous_fourierTransformND_of_integrable {N : ℕ} {φ : (Fin N → ℝ) → ℂ}
+    (hφ : Integrable φ volume) :
+    Continuous (fourierTransformND φ) := by
+  unfold fourierTransformND
+  refine MeasureTheory.continuous_of_dominated
+    (bound := fun x => ‖φ x‖)
+    (fun ξ => ?_) (fun ξ => Filter.Eventually.of_forall fun x => ?_) hφ.norm
+    (Filter.Eventually.of_forall fun x => ?_)
+  · refine hφ.aestronglyMeasurable.mul ?_
+    refine (Complex.continuous_exp.comp (continuous_const.mul ?_)).aestronglyMeasurable
+    exact continuous_finsetSum Finset.univ fun j _ =>
+      (Complex.continuous_ofReal.comp (continuous_apply j)).mul continuous_const
+  · rw [norm_mul, Complex.norm_exp]
+    have h_re : (-I * ∑ j : Fin N, (x j : ℂ) * (ξ j : ℂ)).re = 0 := by
+      rw [Finset.mul_sum, Complex.re_sum]
+      exact Finset.sum_eq_zero fun j _ => by simp
+    rw [h_re, Real.exp_zero, mul_one]
+  · refine continuous_const.mul (Complex.continuous_exp.comp (continuous_const.mul ?_))
+    exact continuous_finsetSum Finset.univ fun j _ =>
+      continuous_const.mul (Complex.continuous_ofReal.comp (continuous_apply j))
+
+lemma mzFEps_holomorphic {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
+    {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ}
+    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m))
+    (h_bdd_br : ∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
+      (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α})
+    {ε : ℝ} (hε : 0 < ε) :
+    DifferentiableOn ℂ (mzFEps f₀ ε) (TubeDomain (Octahedron (n + 1) α)) := by
+  let g_hat := fourierTransformND (mzGaussianDamped f₀ ε)
+  have hg_cont : Continuous g_hat :=
+    continuous_fourierTransformND_of_integrable
+      (integrable_mzGaussianDamped hM hf₀_cont hf₀_bdd hε)
+  have hU_open : IsOpen (TubeDomain (Octahedron (n + 1) α)) :=
+    isOpen_TubeDomain (isOpen_Octahedron (n + 1) α)
+  have h_loc_setup : ∀ z₀ ∈ TubeDomain (Octahedron (n + 1) α),
+      ∃ (C_β δ η : ℝ), 0 ≤ C_β ∧ 0 < δ ∧ 0 < η ∧
+        Metric.ball z₀ η ⊆ TubeDomain (Octahedron (n + 1) α) ∧
+        ∀ w ∈ Metric.ball z₀ η, ∀ ξ : Fin (n + 1) → ℝ,
+          ‖g_hat ξ * Complex.exp (I * ∑ j : Fin (n + 1), w j * (ξ j : ℂ))‖ ≤
+            C_β * Real.exp (-δ * ∑ j : Fin (n + 1), |ξ j|) := by
+    intro z₀ hz₀
+    let S_y : ℝ := ∑ m : Fin (n + 1), |(z₀ m).im|
+    have hSy_lt : S_y < α := hz₀
+    have hSy_nn : 0 ≤ S_y := Finset.sum_nonneg fun m _ => abs_nonneg _
+    let β : ℝ := (S_y + α) / 2
+    have hβ_pos : 0 < β := by dsimp [β]; linarith
+    have hβ_lt : β < α := by dsimp [β]; linarith
+    have hSy_lt_β : S_y < β := by dsimp [β]; linarith
+    have hN_pos : (0 : ℝ) < ((n + 1 : ℕ) : ℝ) := Nat.cast_pos.mpr (Nat.succ_pos n)
+    let δ : ℝ := (β - S_y) / (2 * ((n + 1 : ℕ) : ℝ))
+    have hδ_pos : 0 < δ := div_pos (sub_pos.mpr hSy_lt_β) (mul_pos two_pos hN_pos)
+    let C_β : ℝ := M * Real.exp (ε * β ^ 2) *
+      ∫ x : Fin (n + 1) → ℝ, ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2)
+    have hC_nn : 0 ≤ C_β :=
+      mul_nonneg (mul_nonneg hM (Real.exp_pos _).le)
+        (integral_nonneg fun _ => Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+    have h_coord : ∀ m ξ, ‖g_hat ξ‖ ≤ C_β * Real.exp (-β * |ξ m|) :=
+      fun m ξ => mz_fourier_bound_coord hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+        h_holo_br hε hβ_pos hβ_lt m ξ
+    have hw_sum_of_ball : ∀ w ∈ Metric.ball z₀ δ,
+        ∑ m : Fin (n + 1), |(w m).im| ≤ β - ((n + 1 : ℕ) : ℝ) * δ := by
+      intro w hw
+      have hw_dist : ‖w - z₀‖ < δ := by simpa [dist_eq_norm] using Metric.mem_ball.mp hw
+      have h_each : ∀ m : Fin (n + 1), |(w m).im| ≤ |(z₀ m).im| + δ := by
+        intro m
+        have hdm : |(w m).im - (z₀ m).im| ≤ δ := by
+          calc |(w m).im - (z₀ m).im| = |(w m - z₀ m).im| := by simp
+            _ ≤ ‖w m - z₀ m‖ := Complex.abs_im_le_norm _
+            _ ≤ ‖w - z₀‖ := norm_le_pi_norm (w - z₀) m
+            _ ≤ δ := hw_dist.le
+        linarith [abs_sub_abs_le_abs_sub (w m).im (z₀ m).im]
+      calc ∑ m : Fin (n + 1), |(w m).im|
+          ≤ ∑ m : Fin (n + 1), (|(z₀ m).im| + δ) := Finset.sum_le_sum fun m _ => h_each m
+        _ = S_y + ((n + 1 : ℕ) : ℝ) * δ := by
+            rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+              nsmul_eq_mul]
+        _ = β - ((n + 1 : ℕ) : ℝ) * δ := by
+            dsimp [δ]
+            field_simp [hN_pos.ne']
+            ring
+    have h_sub_tube : Metric.ball z₀ δ ⊆ TubeDomain (Octahedron (n + 1) α) := by
+      intro w hw
+      change ∑ m : Fin (n + 1), |(w m).im| < α
+      have h1 := hw_sum_of_ball w hw
+      have h2 : 0 < ((n + 1 : ℕ) : ℝ) * δ := mul_pos hN_pos hδ_pos
+      linarith
+    refine ⟨C_β, δ, δ, hC_nn, hδ_pos, hδ_pos, h_sub_tube, fun w hw ξ => ?_⟩
+    exact mz_fourier_phase_domination hC_nn hδ_pos h_coord (hw_sum_of_ball w hw) hα ξ
+  have h_meas_integrand : ∀ w : Fin (n + 1) → ℂ,
+      AEStronglyMeasurable
+        (fun ξ : Fin (n + 1) → ℝ =>
+          g_hat ξ * Complex.exp (I * ∑ j : Fin (n + 1), w j * (ξ j : ℂ))) volume := by
+    intro w
+    refine (hg_cont.mul
+      (Complex.continuous_exp.comp (continuous_const.mul ?_))).aestronglyMeasurable
+    exact continuous_finsetSum Finset.univ fun j _ =>
+      continuous_const.mul (Complex.continuous_ofReal.comp (continuous_apply j))
+  have h_cont : ContinuousOn (mzFEps f₀ ε) (TubeDomain (Octahedron (n + 1) α)) := by
+    intro z₀ hz₀
+    rcases h_loc_setup z₀ hz₀ with ⟨C_β, δ, η, _hC_nn, hδ_pos, hη_pos, _h_sub, h_bd⟩
+    have h_cont_ball : ContinuousOn (mzFEps f₀ ε) (Metric.ball z₀ η) := by
+      refine continuousOn_const.mul ?_
+      refine MeasureTheory.continuousOn_of_dominated
+        (bound := fun ξ => C_β * Real.exp (-δ * ∑ j : Fin (n + 1), |ξ j|))
+        (fun w _ => h_meas_integrand w)
+        (fun w hw => Filter.Eventually.of_forall (h_bd w hw))
+        ((integrable_exp_neg_abs_sum (n + 1) hδ_pos).const_mul C_β)
+        (Filter.Eventually.of_forall fun ξ => ?_)
+      refine continuousOn_const.mul
+        ((Complex.continuous_exp.comp (continuous_const.mul ?_)).continuousOn)
+      exact continuous_finsetSum Finset.univ fun j _ =>
+        (continuous_apply j).mul continuous_const
+    exact (h_cont_ball.continuousAt (Metric.ball_mem_nhds z₀ hη_pos)).continuousWithinAt
+  refine osgood_nd (n + 1) hU_open (mzFEps f₀ ε) h_cont ?_
+  intro z₀ hz₀ m
+  rcases h_loc_setup z₀ hz₀ with ⟨C_β, δ, η, _hC_nn, hδ_pos, hη_pos, _h_sub, h_bd⟩
+  let F_sl : ℂ → (Fin (n + 1) → ℝ) → ℂ := fun u ξ =>
+    g_hat ξ * Complex.exp (I * ∑ j : Fin (n + 1), Function.update z₀ m u j * (ξ j : ℂ))
+  let F_sl' : ℂ → (Fin (n + 1) → ℝ) → ℂ := fun u ξ =>
+    g_hat ξ * (Complex.exp (I * ∑ j : Fin (n + 1), Function.update z₀ m u j * (ξ j : ℂ)) *
+      (I * (ξ m : ℂ)))
+  have h_upd_ball : ∀ u ∈ Metric.ball (z₀ m) η, Function.update z₀ m u ∈ Metric.ball z₀ η := by
+    intro u hu
+    rw [Metric.mem_ball] at hu ⊢
+    refine (dist_pi_lt_iff hη_pos).mpr fun j => ?_
+    by_cases hjm : j = m
+    · subst hjm; simpa using hu
+    · simp [hjm, hη_pos]
+  have h_hasDeriv : ∀ (ξ : Fin (n + 1) → ℝ) (u : ℂ),
+      HasDerivAt (fun u' => F_sl u' ξ) (F_sl' u ξ) u := by
+    intro ξ u
+    dsimp [F_sl, F_sl']
+    have h_sum_der : HasDerivAt
+        (fun u' : ℂ => I * ∑ j : Fin (n + 1), Function.update z₀ m u' j * (ξ j : ℂ))
+        (I * (ξ m : ℂ)) u := by
+      have h_s : (fun u' : ℂ => ∑ j : Fin (n + 1), Function.update z₀ m u' j * (ξ j : ℂ)) =
+          fun u' => u' * (ξ m : ℂ) +
+            ∑ j ∈ Finset.univ.erase m, z₀ j * (ξ j : ℂ) := by
+        ext u'
+        rw [← Finset.add_sum_erase Finset.univ _ (Finset.mem_univ m)]
+        simp only [Function.update_self]
+        congr 1
+        refine Finset.sum_congr rfl fun j hj => ?_
+        rw [Function.update_of_ne (Finset.ne_of_mem_erase hj)]
+      have h_s2 :
+          (fun u' : ℂ => I * ∑ j : Fin (n + 1), Function.update z₀ m u' j * (ξ j : ℂ)) =
+          fun u' => I * (u' * (ξ m : ℂ) + ∑ j ∈ Finset.univ.erase m, z₀ j * (ξ j : ℂ)) := by
+        ext u'
+        rw [congr_fun h_s u']
+      rw [h_s2]
+      have h1 : HasDerivAt
+          (fun u' : ℂ => u' * (ξ m : ℂ) + ∑ j ∈ Finset.univ.erase m, z₀ j * (ξ j : ℂ))
+          (1 * (ξ m : ℂ) + 0) u :=
+        ((hasDerivAt_id u).mul_const (ξ m : ℂ)).add (hasDerivAt_const u _)
+      simpa using h1.const_mul I
+    exact h_sum_der.cexp.const_mul (g_hat ξ)
+  have hF_int0 : Integrable (F_sl (z₀ m)) volume := by
+    have hz_self : Function.update z₀ m (z₀ m) = z₀ := Function.update_eq_self m z₀
+    refine ((integrable_exp_neg_abs_sum (n + 1) hδ_pos).const_mul C_β).mono'
+      (by simpa [F_sl, hz_self] using h_meas_integrand z₀)
+      (Filter.Eventually.of_forall fun ξ => ?_)
+    simpa [F_sl, hz_self] using h_bd z₀ (Metric.mem_ball_self hη_pos) ξ
+  have hF'_meas0 : AEStronglyMeasurable (F_sl' (z₀ m)) volume := by
+    have hc_F' : Continuous (F_sl' (z₀ m)) := by
+      refine hg_cont.mul ((Complex.continuous_exp.comp (continuous_const.mul ?_)).mul ?_)
+      · exact continuous_finsetSum Finset.univ fun j _ =>
+          continuous_const.mul (Complex.continuous_ofReal.comp (continuous_apply j))
+      · exact continuous_const.mul (Complex.continuous_ofReal.comp (continuous_apply m))
+    exact hc_F'.aestronglyMeasurable
+  have h_int_der := (hasDerivAt_integral_of_dominated_loc_of_deriv_le
+    (F := F_sl) (F' := F_sl')
+    (bound := fun ξ => C_β * (Real.exp (-δ * ∑ j : Fin (n + 1), |ξ j|) * |ξ m|))
+    (s := Metric.ball (z₀ m) η)
+    (Metric.ball_mem_nhds (z₀ m) hη_pos)
+    (Filter.Eventually.of_forall fun u => h_meas_integrand (Function.update z₀ m u))
+    hF_int0 hF'_meas0
+    (Filter.Eventually.of_forall fun ξ u hu => by
+      dsimp [F_sl']
+      rw [← mul_assoc, norm_mul, norm_mul (I : ℂ), Complex.norm_I, one_mul, Complex.norm_real,
+        Real.norm_eq_abs, ← mul_assoc]
+      exact mul_le_mul_of_nonneg_right (h_bd _ (h_upd_ball u hu) ξ) (abs_nonneg _))
+    ((integrable_exp_neg_abs_sum_mul_abs (n + 1) m hδ_pos).const_mul C_β)
+    (Filter.Eventually.of_forall fun ξ u _ => h_hasDeriv ξ u)).2
+  exact (h_int_der.const_mul (((2 * Real.pi)⁻¹ : ℂ) ^ (n + 1))).differentiableAt
+
+lemma mzFEps_eq_on_flatStrip {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
+    {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ}
+    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m))
+    (h_bdd_br : ∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
+      (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α})
+    {ε : ℝ} (hε : 0 < ε) (m : Fin (n + 1)) {z : Fin (n + 1) → ℂ}
+    (hz : z ∈ FlatStrip (n + 1) α m) :
+    mzFEps f₀ ε z = f_br m z * Complex.exp (-↑ε * ∑ j : Fin (n + 1), (z j) ^ 2) := by
+  have hg_cont : Continuous (mzGaussianDamped f₀ ε) := by
+    refine hf₀_cont.mul (Complex.continuous_exp.comp (continuous_const.mul ?_))
+    exact continuous_finsetSum Finset.univ fun j _ =>
+      (Complex.continuous_ofReal.comp (continuous_apply j)).pow 2
+  have hg_int : Integrable (mzGaussianDamped f₀ ε) volume :=
+    integrable_mzGaussianDamped hM hf₀_cont hf₀_bdd hε
+  have hg_hat_int : Integrable (fourierTransformND (mzGaussianDamped f₀ ε)) volume := by
+    let β := α / 2
+    have hβ_pos : 0 < β := half_pos hα
+    have hβ_lt : β < α := half_lt_self hα
+    have hN_pos : (0 : ℝ) < ((n + 1 : ℕ) : ℝ) := Nat.cast_pos.mpr (Nat.succ_pos n)
+    let δ := β / ((n + 1 : ℕ) : ℝ)
+    have hδ_pos : 0 < δ := div_pos hβ_pos hN_pos
+    let C_β : ℝ := M * Real.exp (ε * β ^ 2) *
+      ∫ x : Fin (n + 1) → ℝ, ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2)
+    have hC_nn : 0 ≤ C_β :=
+      mul_nonneg (mul_nonneg hM (Real.exp_pos _).le)
+        (integral_nonneg fun _ => Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+    have h_coord : ∀ k ξ,
+        ‖fourierTransformND (mzGaussianDamped f₀ ε) ξ‖ ≤ C_β * Real.exp (-β * |ξ k|) :=
+      fun k ξ => mz_fourier_bound_coord hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+        h_holo_br hε hβ_pos hβ_lt k ξ
+    refine ((integrable_exp_neg_abs_sum (n + 1) hδ_pos).const_mul C_β).mono'
+      (continuous_fourierTransformND_of_integrable hg_int).aestronglyMeasurable
+      (Filter.Eventually.of_forall fun ξ => ?_)
+    have h_rhs0 : β - ((n + 1 : ℕ) : ℝ) * δ = 0 := by
+      dsimp [δ]
+      field_simp [hN_pos.ne']
+      ring
+    have h_zero := mz_fourier_phase_domination (w := 0) hC_nn hδ_pos h_coord
+      (by rw [h_rhs0]; simp) hα ξ
+    simpa using h_zero
+  have h_real_eq : ∀ x : Fin (n + 1) → ℝ,
+      mzFEps f₀ ε (fun j => (x j : ℂ)) = mzGaussianDamped f₀ ε x :=
+    fun x => fourier_inversion_nd (mzGaussianDamped f₀ ε) x hg_cont hg_int hg_hat_int
+  let x_re : Fin (n + 1) → ℝ := fun j => (z j).re
+  let S_strip : Set ℂ := {w : ℂ | |w.im| < α}
+  have hS_open : IsOpen S_strip :=
+    isOpen_lt (continuous_abs.comp Complex.continuous_im) continuous_const
+  have hS_conv : Convex ℝ S_strip := by
+    intro w₁ hw₁ w₂ hw₂ a b ha hb hab
+    simp only [S_strip, Set.mem_setOf_eq, Complex.add_im, Complex.real_smul,
+      Complex.mul_im, Complex.ofReal_re, Complex.ofReal_im, zero_mul, add_zero] at hw₁ hw₂ ⊢
+    rcases eq_or_lt_of_le ha with rfl | ha_pos
+    · simp only [zero_add] at hab; subst hab; simpa using hw₂
+    · calc |a * w₁.im + b * w₂.im|
+          ≤ |a * w₁.im| + |b * w₂.im| := abs_add_le _ _
+        _ = a * |w₁.im| + b * |w₂.im| := by
+            rw [abs_mul, abs_mul, abs_of_pos ha_pos, abs_of_nonneg hb]
+        _ < a * α + b * α := by
+            have h1 := mul_lt_mul_of_pos_left hw₁ ha_pos
+            have h2 := mul_le_mul_of_nonneg_left hw₂.le hb
+            linarith
+        _ = α := by linear_combination α * hab
+  let γ : ℂ → (Fin (n + 1) → ℂ) := fun w => Function.update (fun j => (x_re j : ℂ)) m w
+  have hγ_diff : Differentiable ℂ γ := by
+    refine differentiable_pi.mpr fun j => ?_
+    by_cases hjm : j = m
+    · subst hjm; simp only [γ, Function.update_self]; exact differentiable_id
+    · simp only [γ, Function.update_of_ne hjm]; exact differentiable_const _
+  have hγ_maps : Set.MapsTo γ S_strip (TubeDomain (Octahedron (n + 1) α)) := by
+    intro w hw
+    change |w.im| < α at hw
+    change ∑ j : Fin (n + 1), |(γ w j).im| < α
+    rw [Finset.sum_eq_single m]
+    · simpa [γ] using hw
+    · intro j _ hjm; simp [γ, hjm]
+    · intro hm; exact (hm (Finset.mem_univ m)).elim
+  let L₁ : ℂ → ℂ := fun w => mzFEps f₀ ε (γ w)
+  let L₂ : ℂ → ℂ := fun w =>
+    f_br m (γ w) * Complex.exp (-↑ε * ∑ j : Fin (n + 1), (γ w j) ^ 2)
+  have hL₁_diff : DifferentiableOn ℂ L₁ S_strip :=
+    (mzFEps_holomorphic hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+      h_holo_br hε).comp hγ_diff.differentiableOn hγ_maps
+  have hL₂_diff : DifferentiableOn ℂ L₂ S_strip := by
+    refine (h_holo_br m x_re).mul ?_
+    refine (Complex.differentiable_exp.comp (differentiable_const _ |>.mul ?_)).differentiableOn
+    have h_sum_fn : (fun w : ℂ => ∑ j : Fin (n + 1), (γ w j) ^ 2) =
+        ∑ j : Fin (n + 1), fun w => (γ w j) ^ 2 := by
+      ext w; simp
+    rw [h_sum_fn]
+    exact Differentiable.sum fun j _ => ((differentiable_apply j).comp hγ_diff).pow 2
+  have hL₁_an : AnalyticOnNhd ℂ L₁ S_strip :=
+    hS_open.analyticOn_iff_analyticOnNhd.mp (hL₁_diff.analyticOn hS_open)
+  have hL₂_an : AnalyticOnNhd ℂ L₂ S_strip :=
+    hS_open.analyticOn_iff_analyticOnNhd.mp (hL₂_diff.analyticOn hS_open)
+  have h0_S : (0 : ℂ) ∈ S_strip := by simp [S_strip, hα]
+  have h_real_1d : ∀ᶠ t : ℝ in 𝓝 (0 : ℝ), L₁ (t : ℂ) = L₂ (t : ℂ) := by
+    refine Filter.Eventually.of_forall fun t => ?_
+    dsimp [L₁, L₂]
+    have hγ_real : γ (t : ℂ) = fun j => (Function.update x_re m t j : ℂ) := by
+      ext j
+      by_cases hjm : j = m
+      · subst hjm; simp [γ]
+      · simp [γ, hjm]
+    rw [hγ_real, h_real_eq (Function.update x_re m t), h_real m (Function.update x_re m t)]
+    rfl
+  have h_nhds := Analysis.analytic_nhds_eq_of_real_eq_1D L₁ L₂ 0
+    (hL₁_an 0 h0_S) (hL₂_an 0 h0_S) h_real_1d
+  have h_ne_bot : (𝓝[≠] (0 : ℂ)).NeBot := PerfectSpace.not_isolated 0
+  have h_ev_ne : ∀ᶠ w in 𝓝[≠] (0 : ℂ), L₁ w = L₂ w := nhdsWithin_le_nhds h_nhds
+  have h_freq : ∃ᶠ w in 𝓝[≠] (0 : ℂ), L₁ w = L₂ w := h_ev_ne.frequently
+  have h_eqOn := hL₁_an.eqOn_of_preconnected_of_frequently_eq hL₂_an
+    hS_conv.isPreconnected h0_S h_freq
+  have hzm_S : z m ∈ S_strip := hz.1
+  have hγ_zm : γ (z m) = z := by
+    ext j
+    by_cases hjm : j = m
+    · subst hjm; simp [γ]
+    · simp only [γ, Function.update_of_ne hjm, x_re]
+      have hj_eq := Complex.re_add_im (z j)
+      rw [hz.2 j hjm] at hj_eq
+      simpa using hj_eq
+  have h_at := h_eqOn hzm_S
+  dsimp [L₁, L₂] at h_at
+  rwa [hγ_zm] at h_at
+
+def OctaSubTube (N : ℕ) (α : ℝ) (A : Finset (Fin N)) : Set (Fin N → ℂ) :=
+  { z | (∑ m : Fin N, |(z m).im| < α) ∧ ∀ j : Fin N, j ∉ A → (z j).im = 0 }
+
+noncomputable def mzSweepLine {N : ℕ} (z : Fin N → ℂ) (m₁ m₂ : Fin N)
+    (s₁ s₂ : ℝ) (w : ℂ) : Fin N → ℂ :=
+  fun j =>
+    if j = m₁ then z m₁ + (s₁ : ℂ) * w
+    else if j = m₂ then z m₂ - (s₂ : ℂ) * w
+    else z j
+
+lemma differentiable_mzSweepLine {N : ℕ} (z : Fin N → ℂ) (m₁ m₂ : Fin N) (s₁ s₂ : ℝ) :
+    Differentiable ℂ (mzSweepLine z m₁ m₂ s₁ s₂) := by
+  refine differentiable_pi.mpr fun j => ?_
+  dsimp [mzSweepLine]
+  split_ifs
+  · exact (differentiable_const _).add ((differentiable_const _).mul differentiable_id)
+  · exact (differentiable_const _).sub ((differentiable_const _).mul differentiable_id)
+  · exact differentiable_const _
+
+lemma mzSweepLine_zero {N : ℕ} (z : Fin N → ℂ) (m₁ m₂ : Fin N) (s₁ s₂ : ℝ) :
+    mzSweepLine z m₁ m₂ s₁ s₂ 0 = z := by
+  ext j
+  dsimp [mzSweepLine]
+  split_ifs with h1 h2
+  · subst h1; simp
+  · subst h2; simp
+  · rfl
+
+lemma mzSweepLine_im_sum {N : ℕ} {z : Fin N → ℂ} {m₁ m₂ : Fin N} (hne : m₁ ≠ m₂)
+    (hy₁ : (z m₁).im ≠ 0) (hy₂ : (z m₂).im ≠ 0) :
+    let s₁ : ℝ := if 0 < (z m₁).im then 1 else -1
+    let s₂ : ℝ := if 0 < (z m₂).im then 1 else -1
+    let t₁ : ℝ := -|(z m₁).im|
+    let t₂ : ℝ := |(z m₂).im|
+    (∀ w : ℂ, w.im ∈ Set.Icc t₁ t₂ →
+      ∑ j : Fin N, |(mzSweepLine z m₁ m₂ s₁ s₂ w j).im| = ∑ j : Fin N, |(z j).im|) ∧
+    (∀ (σ : ℝ), 0 < σ → ∀ w : ℂ, w.im ∈ Set.Ioo (t₁ - σ) (t₂ + σ) →
+      ∑ j : Fin N, |(mzSweepLine z m₁ m₂ s₁ s₂ w j).im| <
+        (∑ j : Fin N, |(z j).im|) + 2 * σ) ∧
+    (∀ w : ℂ, w.im = t₁ → (mzSweepLine z m₁ m₂ s₁ s₂ w m₁).im = 0) ∧
+    (∀ w : ℂ, w.im = t₂ → (mzSweepLine z m₁ m₂ s₁ s₂ w m₂).im = 0) := by
+  intro s₁ s₂ t₁ t₂
+  have hs₁_sq : s₁ * s₁ = 1 := by dsimp [s₁]; split_ifs <;> ring
+  have hs₂_sq : s₂ * s₂ = 1 := by dsimp [s₂]; split_ifs <;> ring
+  have hs₁_abs : |s₁| = 1 := by dsimp [s₁]; split_ifs <;> norm_num
+  have hs₂_abs : |s₂| = 1 := by dsimp [s₂]; split_ifs <;> norm_num
+  have hs₁_val : (z m₁).im = s₁ * |(z m₁).im| := by
+    dsimp [s₁]
+    split_ifs with h1
+    · rw [abs_of_pos h1, one_mul]
+    · have h1' : (z m₁).im < 0 := lt_of_le_of_ne (le_of_not_gt h1) hy₁
+      rw [abs_of_neg h1']; ring
+  have hs₂_val : (z m₂).im = s₂ * |(z m₂).im| := by
+    dsimp [s₂]
+    split_ifs with h2
+    · rw [abs_of_pos h2, one_mul]
+    · have h2' : (z m₂).im < 0 := lt_of_le_of_ne (le_of_not_gt h2) hy₂
+      rw [abs_of_neg h2']; ring
+  have h_im_m1 : ∀ w : ℂ, (mzSweepLine z m₁ m₂ s₁ s₂ w m₁).im = (z m₁).im + s₁ * w.im := by
+    intro w; simp [mzSweepLine]
+  have h_im_m2 : ∀ w : ℂ, (mzSweepLine z m₁ m₂ s₁ s₂ w m₂).im = (z m₂).im - s₂ * w.im := by
+    intro w; simp [mzSweepLine, hne.symm]
+  have h_im_other : ∀ (j : Fin N), j ≠ m₁ → j ≠ m₂ →
+      ∀ w : ℂ, (mzSweepLine z m₁ m₂ s₁ s₂ w j).im = (z j).im := by
+    intro j hj1 hj2 w; simp [mzSweepLine, hj1, hj2]
+  have h_pair_icc : ∀ t ∈ Set.Icc t₁ t₂,
+      |(z m₁).im + s₁ * t| + |(z m₂).im - s₂ * t| = |(z m₁).im| + |(z m₂).im| := by
+    intro t ht
+    have h1_eq : (z m₁).im + s₁ * t = s₁ * (|(z m₁).im| + t) := by
+      conv_lhs => rw [hs₁_val]
+      ring
+    have h2_eq : (z m₂).im - s₂ * t = s₂ * (|(z m₂).im| - t) := by
+      conv_lhs => rw [hs₂_val]
+      ring
+    rw [h1_eq, h2_eq, abs_mul, abs_mul, hs₁_abs, hs₂_abs, one_mul, one_mul]
+    have ht1 : 0 ≤ |(z m₁).im| + t := by dsimp [t₁] at ht; linarith [ht.1]
+    have ht2 : 0 ≤ |(z m₂).im| - t := by dsimp [t₂] at ht; linarith [ht.2]
+    rw [abs_of_nonneg ht1, abs_of_nonneg ht2]
+    ring
+  have h_split_sum : ∀ f : Fin N → ℝ,
+      ∑ j : Fin N, f j = f m₁ + f m₂ + ∑ j ∈ (Finset.univ.erase m₁).erase m₂, f j := by
+    intro f
+    have hm1 : m₁ ∈ (Finset.univ : Finset (Fin N)) := Finset.mem_univ m₁
+    have hm2 : m₂ ∈ Finset.univ.erase m₁ := Finset.mem_erase.mpr ⟨hne.symm, Finset.mem_univ m₂⟩
+    rw [← Finset.add_sum_erase Finset.univ f hm1,
+      ← Finset.add_sum_erase (Finset.univ.erase m₁) f hm2, add_assoc]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro w hw
+    rw [h_split_sum (fun j => |(mzSweepLine z m₁ m₂ s₁ s₂ w j).im|),
+      h_split_sum (fun j => |(z j).im|), h_im_m1, h_im_m2, h_pair_icc w.im hw]
+    congr 1
+    refine Finset.sum_congr rfl fun j hj => ?_
+    have hj2 : j ≠ m₂ := (Finset.mem_erase.mp hj).1
+    have hj1 : j ≠ m₁ := (Finset.mem_erase.mp (Finset.mem_erase.mp hj).2).1
+    rw [h_im_other j hj1 hj2]
+  · intro σ hσ w hw
+    let t' : ℝ := max t₁ (min w.im t₂)
+    have ht₁_le_t₂ : t₁ ≤ t₂ := by
+      dsimp [t₁, t₂]
+      linarith [abs_nonneg (z m₁).im, abs_nonneg (z m₂).im]
+    have ht'_mem : t' ∈ Set.Icc t₁ t₂ :=
+      ⟨le_max_left _ _, max_le ht₁_le_t₂ (min_le_right _ _)⟩
+    have h_diff_lt : |w.im - t'| < σ := by
+      dsimp [t']
+      rcases lt_or_ge w.im t₁ with hlt1 | hge1
+      · have hmin : min w.im t₂ = w.im := min_eq_left (hlt1.le.trans ht₁_le_t₂)
+        rw [hmin, max_eq_left hlt1.le, abs_of_neg (by linarith)]
+        linarith [hw.1]
+      · rcases le_or_gt w.im t₂ with hle2 | hgt2
+        · rw [min_eq_left hle2, max_eq_right hge1, sub_self, abs_zero]
+          exact hσ
+        · rw [min_eq_right hgt2.le, max_eq_right ht₁_le_t₂, abs_of_pos (by linarith)]
+          linarith [hw.2]
+    have hp1 : |(z m₁).im + s₁ * w.im| ≤ |(z m₁).im + s₁ * t'| + |w.im - t'| := by
+      have heq : (z m₁).im + s₁ * w.im = ((z m₁).im + s₁ * t') + s₁ * (w.im - t') := by ring
+      rw [heq]
+      calc |((z m₁).im + s₁ * t') + s₁ * (w.im - t')|
+          ≤ |(z m₁).im + s₁ * t'| + |s₁ * (w.im - t')| := abs_add_le _ _
+        _ = |(z m₁).im + s₁ * t'| + |w.im - t'| := by rw [abs_mul, hs₁_abs, one_mul]
+    have hp2 : |(z m₂).im - s₂ * w.im| ≤ |(z m₂).im - s₂ * t'| + |w.im - t'| := by
+      have heq : (z m₂).im - s₂ * w.im = ((z m₂).im - s₂ * t') + (-s₂) * (w.im - t') := by ring
+      rw [heq]
+      calc |((z m₂).im - s₂ * t') + (-s₂) * (w.im - t')|
+          ≤ |(z m₂).im - s₂ * t'| + |(-s₂) * (w.im - t')| := abs_add_le _ _
+        _ = |(z m₂).im - s₂ * t'| + |w.im - t'| := by rw [abs_mul, abs_neg, hs₂_abs, one_mul]
+    rw [h_split_sum (fun j => |(mzSweepLine z m₁ m₂ s₁ s₂ w j).im|),
+      h_split_sum (fun j => |(z j).im|), h_im_m1, h_im_m2]
+    have h_rest : (∑ j ∈ (Finset.univ.erase m₁).erase m₂,
+        |(mzSweepLine z m₁ m₂ s₁ s₂ w j).im|) =
+        ∑ j ∈ (Finset.univ.erase m₁).erase m₂, |(z j).im| := by
+      refine Finset.sum_congr rfl fun j hj => ?_
+      have hj2 : j ≠ m₂ := (Finset.mem_erase.mp hj).1
+      have hj1 : j ≠ m₁ := (Finset.mem_erase.mp (Finset.mem_erase.mp hj).2).1
+      rw [h_im_other j hj1 hj2]
+    rw [h_rest]
+    linarith [h_pair_icc t' ht'_mem]
+  · intro w hw
+    rw [h_im_m1, hw, hs₁_val]
+    dsimp [t₁]
+    ring
+  · intro w hw
+    rw [h_im_m2, hw, hs₂_val]
+    dsimp [t₂]
+    ring
+
+lemma mzFEps_strip_uniform_bdd_fixed_eps {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
+    {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ}
+    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m))
+    (h_bdd_br : ∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
+      (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α})
+    {ε S₀ : ℝ} (hε : 0 < ε) (hS₀ : S₀ < α) (hS₀_nn : 0 ≤ S₀) :
+    ∃ K : ℝ, ∀ z : Fin (n + 1) → ℂ, (∑ m : Fin (n + 1), |(z m).im| ≤ S₀) →
+      ‖mzFEps f₀ ε z‖ ≤ K := by
+  let β : ℝ := (S₀ + α) / 2
+  have hβ_pos : 0 < β := by dsimp [β]; linarith
+  have hβ_lt : β < α := by dsimp [β]; linarith
+  have hS₀_lt_β : S₀ < β := by dsimp [β]; linarith
+  have hN_pos : (0 : ℝ) < ((n + 1 : ℕ) : ℝ) := Nat.cast_pos.mpr (Nat.succ_pos n)
+  let δ : ℝ := (β - S₀) / ((n + 1 : ℕ) : ℝ)
+  have hδ_pos : 0 < δ := div_pos (sub_pos.mpr hS₀_lt_β) hN_pos
+  let C_β : ℝ := M * Real.exp (ε * β ^ 2) *
+    ∫ x : Fin (n + 1) → ℝ, ∏ j : Fin (n + 1), Real.exp (-ε * (x j) ^ 2)
+  have hC_nn : 0 ≤ C_β :=
+    mul_nonneg (mul_nonneg hM (Real.exp_pos _).le)
+      (integral_nonneg fun _ => Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+  have h_coord : ∀ m ξ,
+      ‖fourierTransformND (mzGaussianDamped f₀ ε) ξ‖ ≤ C_β * Real.exp (-β * |ξ m|) :=
+    fun m ξ => mz_fourier_bound_coord hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+      h_holo_br hε hβ_pos hβ_lt m ξ
+  refine ⟨((2 * Real.pi)⁻¹) ^ (n + 1) *
+    ∫ ξ : Fin (n + 1) → ℝ, C_β * Real.exp (-δ * ∑ j : Fin (n + 1), |ξ j|), ?_⟩
+  intro z hz
+  dsimp [mzFEps]
+  rw [norm_mul, norm_pow, norm_inv, Complex.norm_mul, Complex.norm_ofNat, Complex.norm_real,
+    Real.norm_of_nonneg Real.pi_pos.le]
+  refine mul_le_mul_of_nonneg_left ?_ (pow_nonneg (by positivity) _)
+  refine (MeasureTheory.norm_integral_le_integral_norm _).trans ?_
+  refine integral_mono_of_nonneg (Filter.Eventually.of_forall fun _ => norm_nonneg _)
+    ((integrable_exp_neg_abs_sum (n + 1) hδ_pos).const_mul C_β)
+    (Filter.Eventually.of_forall fun ξ => ?_)
+  have hw_sum : ∑ m : Fin (n + 1), |(z m).im| ≤ β - ((n + 1 : ℕ) : ℝ) * δ := by
+    have h_eq : β - ((n + 1 : ℕ) : ℝ) * δ = S₀ := by
+      dsimp [δ]; field_simp [hN_pos.ne']; ring
+    rwa [h_eq]
+  exact mz_fourier_phase_domination hC_nn hδ_pos h_coord hw_sum hα ξ
+
+lemma octaSubTube_subset_flatStrip_of_card_le_one {n : ℕ} {α : ℝ}
+    {A : Finset (Fin (n + 1))} (hA : A.card ≤ 1) {z : Fin (n + 1) → ℂ}
+    (hz : z ∈ OctaSubTube (n + 1) α A) :
+    ∃ m₀ : Fin (n + 1), z ∈ FlatStrip (n + 1) α m₀ := by
+  rcases Finset.card_le_one_iff_subset_singleton.mp hA with ⟨m₀, hm₀⟩
+  refine ⟨m₀, ?_, fun j hj => hz.2 j (fun hjA => hj (Finset.mem_singleton.mp (hm₀ hjA)))⟩
+  calc |(z m₀).im| ≤ ∑ m : Fin (n + 1), |(z m).im| :=
+        Finset.single_le_sum (f := fun m : Fin (n + 1) => |(z m).im|)
+          (fun m _ => abs_nonneg _) (Finset.mem_univ m₀)
+    _ < α := hz.1
+
+lemma mzFEps_norm_le_all {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
+    {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ}
+    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m))
+    (h_bdd_br : ∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
+      (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α})
+    {ε : ℝ} (hε : 0 < ε) :
+    ∀ {z : Fin (n + 1) → ℂ}, z ∈ TubeDomain (Octahedron (n + 1) α) →
+      ‖mzFEps f₀ ε z‖ ≤ M * Real.exp (ε * α ^ 2) := by
+  have h_holo := mzFEps_holomorphic hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+    h_holo_br hε
+  have h_base : ∀ (A : Finset (Fin (n + 1))), A.card ≤ 1 →
+      ∀ z ∈ OctaSubTube (n + 1) α A, ‖mzFEps f₀ ε z‖ ≤ M * Real.exp (ε * α ^ 2) := by
+    intro A hA z hz
+    obtain ⟨m₀, hm₀⟩ := octaSubTube_subset_flatStrip_of_card_le_one hA hz
+    rw [mzFEps_eq_on_flatStrip hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+      h_holo_br hε m₀ hm₀, norm_mul, norm_mzGaussianKernel]
+    have h_re_le : Real.exp (-ε * ∑ j : Fin (n + 1), (z j).re ^ 2) ≤ 1 := by
+      rw [Real.exp_le_one_iff]
+      have : 0 ≤ ∑ j : Fin (n + 1), (z j).re ^ 2 := Finset.sum_nonneg fun _ _ => sq_nonneg _
+      nlinarith
+    have h_im_sq : ∑ j : Fin (n + 1), (z j).im ^ 2 ≤ α ^ 2 := by
+      rw [Finset.sum_eq_single m₀]
+      · have hm0_le : |(z m₀).im| ≤ α := hm₀.1.le
+        have := mul_le_mul hm0_le hm0_le (abs_nonneg _) hα.le
+        rwa [← sq, ← sq, sq_abs] at this
+      · intro j _ hj; simp [hm₀.2 j hj]
+      · intro hm; exact (hm (Finset.mem_univ m₀)).elim
+    have h_im_le : Real.exp (ε * ∑ j : Fin (n + 1), (z j).im ^ 2) ≤ Real.exp (ε * α ^ 2) :=
+      Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_left h_im_sq hε.le)
+    calc ‖f_br m₀ z‖ * (Real.exp (-ε * ∑ j : Fin (n + 1), (z j).re ^ 2) *
+          Real.exp (ε * ∑ j : Fin (n + 1), (z j).im ^ 2))
+        ≤ M * (1 * Real.exp (ε * α ^ 2)) :=
+          mul_le_mul (h_bdd_br m₀ z hm₀)
+            (mul_le_mul h_re_le h_im_le (Real.exp_pos _).le zero_le_one)
+            (by positivity) hM
+      _ = M * Real.exp (ε * α ^ 2) := by ring
+  have h_ind : ∀ (k : ℕ) (A : Finset (Fin (n + 1))), A.card ≤ k →
+      ∀ z ∈ OctaSubTube (n + 1) α A, ‖mzFEps f₀ ε z‖ ≤ M * Real.exp (ε * α ^ 2) := by
+    intro k
+    induction k with
+    | zero =>
+      intro A hA z hz
+      exact h_base A (hA.trans zero_le_one) z hz
+    | succ k ih =>
+      intro A hA z hz
+      by_cases hA1 : A.card ≤ 1
+      · exact h_base A hA1 z hz
+      · push Not at hA1
+        obtain ⟨m₁, hm₁, m₂, hm₂, hne⟩ := Finset.one_lt_card.mp hA1
+        by_cases hy₁ : (z m₁).im = 0
+        · refine ih (A.erase m₁) (by rw [Finset.card_erase_of_mem hm₁]; omega) z ⟨hz.1, ?_⟩
+          intro j hj
+          by_cases hjm : j = m₁
+          · subst hjm; exact hy₁
+          · exact hz.2 j (fun hjA => hj (Finset.mem_erase.mpr ⟨hjm, hjA⟩))
+        · by_cases hy₂ : (z m₂).im = 0
+          · refine ih (A.erase m₂) (by rw [Finset.card_erase_of_mem hm₂]; omega) z ⟨hz.1, ?_⟩
+            intro j hj
+            by_cases hjm : j = m₂
+            · subst hjm; exact hy₂
+            · exact hz.2 j (fun hjA => hj (Finset.mem_erase.mpr ⟨hjm, hjA⟩))
+          · let s₁ : ℝ := if 0 < (z m₁).im then 1 else -1
+            let s₂ : ℝ := if 0 < (z m₂).im then 1 else -1
+            let t₁ : ℝ := -|(z m₁).im|
+            let t₂ : ℝ := |(z m₂).im|
+            have ht₁_neg : t₁ < 0 := neg_lt_zero.mpr (abs_pos.mpr hy₁)
+            have ht₂_pos : 0 < t₂ := abs_pos.mpr hy₂
+            have ht₁_lt_t₂ : t₁ < t₂ := ht₁_neg.trans ht₂_pos
+            obtain ⟨h_icc, h_ioo, h_end1, h_end2⟩ := mzSweepLine_im_sum hne hy₁ hy₂
+            let S₀ : ℝ := ∑ j : Fin (n + 1), |(z j).im|
+            have hS₀_lt : S₀ < α := hz.1
+            have hS₀_nn : 0 ≤ S₀ := Finset.sum_nonneg fun _ _ => abs_nonneg _
+            let σ : ℝ := (α - S₀) / 4
+            have hσ_pos : 0 < σ := by dsimp [σ]; linarith
+            let g_w : ℂ → ℂ := fun w => mzFEps f₀ ε (mzSweepLine z m₁ m₂ s₁ s₂ w)
+            have hg_wide : DifferentiableOn ℂ g_w (Complex.im ⁻¹' Set.Ioo (t₁ - σ) (t₂ + σ)) := by
+              refine h_holo.comp (differentiable_mzSweepLine z m₁ m₂ s₁ s₂).differentiableOn ?_
+              intro w hw
+              change ∑ j : Fin (n + 1), |(mzSweepLine z m₁ m₂ s₁ s₂ w j).im| < α
+              have hlt := h_ioo σ hσ_pos w hw
+              dsimp [S₀, σ] at hlt ⊢
+              linarith
+            obtain ⟨K, hK⟩ := mzFEps_strip_uniform_bdd_fixed_eps hα hM hf₀_cont hf₀_bdd
+              h_real h_cont_br h_bdd_br h_holo_br hε hS₀_lt hS₀_nn
+            have h_sub_ioo : Complex.im ⁻¹' Set.Ioo t₁ t₂ ⊆
+                Complex.im ⁻¹' Set.Ioo (t₁ - σ) (t₂ + σ) :=
+              fun u hu => ⟨by linarith [hu.1], by linarith [hu.2]⟩
+            have h_sub_icc : Complex.im ⁻¹' Set.Icc t₁ t₂ ⊆
+                Complex.im ⁻¹' Set.Ioo (t₁ - σ) (t₂ + σ) :=
+              fun u hu => ⟨by linarith [hu.1], by linarith [hu.2]⟩
+            have h0 : ‖g_w 0‖ ≤ M * Real.exp (ε * α ^ 2) := by
+              refine Bochner.norm_le_on_horizontal_strip_of_bdd ht₁_lt_t₂
+                (hg_wide.mono h_sub_ioo) (hg_wide.continuousOn.mono h_sub_icc)
+                (fun u hu => hK _ (le_of_eq (h_icc u ⟨hu.1.le, hu.2.le⟩)))
+                (fun u hu => ?_) (fun u hu => ?_)
+                (z := 0) (by simpa using ht₁_neg.le) (by simpa using ht₂_pos.le)
+              · have hu_icc : u.im ∈ Set.Icc (-|(z m₁).im|) |(z m₂).im| :=
+                  ⟨by dsimp [t₁] at hu; linarith, by dsimp [t₁, t₂] at hu ht₁_lt_t₂; linarith⟩
+                refine ih (A.erase m₁) (by rw [Finset.card_erase_of_mem hm₁]; omega) _ ⟨?_, ?_⟩
+                · rw [h_icc u hu_icc]; exact hz.1
+                · intro j hj
+                  by_cases hjm1 : j = m₁
+                  · subst hjm1; exact h_end1 u hu
+                  · have hj_notA : j ∉ A := fun hjA => hj (Finset.mem_erase.mpr ⟨hjm1, hjA⟩)
+                    have hjm2 : j ≠ m₂ := fun h => hj_notA (h ▸ hm₂)
+                    simp only [mzSweepLine, if_neg hjm1, if_neg hjm2, hz.2 j hj_notA]
+              · have hu_icc : u.im ∈ Set.Icc (-|(z m₁).im|) |(z m₂).im| :=
+                  ⟨by dsimp [t₁, t₂] at hu ht₁_lt_t₂; linarith, by dsimp [t₂] at hu; linarith⟩
+                refine ih (A.erase m₂) (by rw [Finset.card_erase_of_mem hm₂]; omega) _ ⟨?_, ?_⟩
+                · rw [h_icc u hu_icc]; exact hz.1
+                · intro j hj
+                  by_cases hjm2 : j = m₂
+                  · subst hjm2; exact h_end2 u hu
+                  · have hj_notA : j ∉ A := fun hjA => hj (Finset.mem_erase.mpr ⟨hjm2, hjA⟩)
+                    have hjm1 : j ≠ m₁ := fun h => hj_notA (h ▸ hm₁)
+                    simp only [mzSweepLine, if_neg hjm1, if_neg hjm2, hz.2 j hj_notA]
+            simpa [g_w, mzSweepLine_zero] using h0
+  intro z hz
+  exact h_ind (n + 1) Finset.univ (by simp) z ⟨hz, fun j hj => (hj (Finset.mem_univ j)).elim⟩
+
+lemma mzFEps_bounded_cauchy {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
+    {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ}
+    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m))
+    (h_bdd_br : ∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
+      (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α}) :
+    ∀ (k : ℕ) {B γ : ℝ}, 0 < B → 0 < γ →
+      ∃ ε₀ > 0, ∀ ε₁ ∈ Set.Ioo 0 ε₀, ∀ ε₂ ∈ Set.Ioo 0 ε₀,
+        ∀ (A : Finset (Fin (n + 1))), A.card ≤ k →
+          ∀ z ∈ OctaSubTube (n + 1) α A, ‖z‖ ≤ B →
+            ‖mzFEps f₀ ε₁ z - mzFEps f₀ ε₂ z‖ ≤ γ := by
+  have h_base : ∀ {B γ : ℝ}, 0 < B → 0 < γ →
+      ∃ ε₀ > 0, ∀ ε₁ ∈ Set.Ioo 0 ε₀, ∀ ε₂ ∈ Set.Ioo 0 ε₀,
+        ∀ (A : Finset (Fin (n + 1))), A.card ≤ 1 →
+          ∀ z ∈ OctaSubTube (n + 1) α A, ‖z‖ ≤ B →
+            ‖mzFEps f₀ ε₁ z - mzFEps f₀ ε₂ z‖ ≤ γ := by
+    intro B γ hB hγ
+    let S : ℝ := ((n + 1 : ℕ) : ℝ) * B ^ 2 + 1
+    have hS_pos : 0 < S := by dsimp [S]; positivity
+    let ε₀ : ℝ := min 1 (min (1 / S) (γ / (4 * (M + 1) * S)))
+    have hε₀_pos : 0 < ε₀ := by dsimp [ε₀]; positivity
+    refine ⟨ε₀, hε₀_pos, fun ε₁ hε₁ ε₂ hε₂ A hA z hz hzB => ?_⟩
+    obtain ⟨m₀, hm₀⟩ := octaSubTube_subset_flatStrip_of_card_le_one hA hz
+    rw [mzFEps_eq_on_flatStrip hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+      h_holo_br hε₁.1 m₀ hm₀,
+      mzFEps_eq_on_flatStrip hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+      h_holo_br hε₂.1 m₀ hm₀]
+    let s : ℂ := ∑ j : Fin (n + 1), (z j) ^ 2
+    have hs_norm : ‖s‖ ≤ S := by
+      calc ‖s‖ ≤ ∑ j : Fin (n + 1), ‖(z j) ^ 2‖ := norm_sum_le _ _
+        _ ≤ ∑ _j : Fin (n + 1), B ^ 2 := by
+            refine Finset.sum_le_sum fun j _ => ?_
+            rw [norm_pow]
+            exact pow_le_pow_left₀ (norm_nonneg _) ((norm_le_pi_norm z j).trans hzB) 2
+        _ = ((n + 1 : ℕ) : ℝ) * B ^ 2 := by
+            rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+        _ ≤ S := by dsimp [S]; linarith
+    have hε₁_S : ε₁ * S ≤ 1 := by
+      have hle : ε₁ ≤ 1 / S := hε₁.2.le.trans ((min_le_right _ _).trans (min_le_left _ _))
+      exact (mul_le_mul_of_nonneg_right hle hS_pos.le).trans
+        (by rw [one_div, inv_mul_cancel₀ hS_pos.ne'])
+    have hε₂_S : ε₂ * S ≤ 1 := by
+      have hle : ε₂ ≤ 1 / S := hε₂.2.le.trans ((min_le_right _ _).trans (min_le_left _ _))
+      exact (mul_le_mul_of_nonneg_right hle hS_pos.le).trans
+        (by rw [one_div, inv_mul_cancel₀ hS_pos.ne'])
+    have hn1 : ‖-↑ε₁ * s‖ ≤ ε₁ * S := by
+      rw [norm_mul, norm_neg, Complex.norm_real, Real.norm_of_nonneg hε₁.1.le]
+      exact mul_le_mul_of_nonneg_left hs_norm hε₁.1.le
+    have hn2 : ‖-↑ε₂ * s‖ ≤ ε₂ * S := by
+      rw [norm_mul, norm_neg, Complex.norm_real, Real.norm_of_nonneg hε₂.1.le]
+      exact mul_le_mul_of_nonneg_left hs_norm hε₂.1.le
+    have he1 : ‖Complex.exp (-↑ε₁ * s) - 1‖ ≤ 2 * (ε₁ * S) :=
+      (Complex.norm_exp_sub_one_le (hn1.trans hε₁_S)).trans (by linarith)
+    have he2 : ‖Complex.exp (-↑ε₂ * s) - 1‖ ≤ 2 * (ε₂ * S) :=
+      (Complex.norm_exp_sub_one_le (hn2.trans hε₂_S)).trans (by linarith)
+    have h_alg : f_br m₀ z * Complex.exp (-↑ε₁ * s) - f_br m₀ z * Complex.exp (-↑ε₂ * s) =
+        f_br m₀ z * ((Complex.exp (-↑ε₁ * s) - 1) - (Complex.exp (-↑ε₂ * s) - 1)) := by ring
+    change ‖f_br m₀ z * Complex.exp (-↑ε₁ * s) - f_br m₀ z * Complex.exp (-↑ε₂ * s)‖ ≤ γ
+    rw [h_alg, norm_mul]
+    have h_sub : ‖(Complex.exp (-↑ε₁ * s) - 1) - (Complex.exp (-↑ε₂ * s) - 1)‖ ≤
+        4 * (ε₀ * S) := by
+      have h1 : ε₁ * S ≤ ε₀ * S := mul_le_mul_of_nonneg_right hε₁.2.le hS_pos.le
+      have h2 : ε₂ * S ≤ ε₀ * S := mul_le_mul_of_nonneg_right hε₂.2.le hS_pos.le
+      exact (norm_sub_le _ _).trans (by linarith)
+    have h_cap_div : ε₀ ≤ γ / (4 * (M + 1) * S) :=
+      (min_le_right _ _).trans (min_le_right _ _)
+    have h_denom_pos : 0 < 4 * (M + 1) * S := by positivity
+    have h_cap : 4 * (M + 1) * S * ε₀ ≤ γ := by
+      have := (le_div_iff₀ h_denom_pos).mp h_cap_div
+      linarith
+    calc ‖f_br m₀ z‖ * ‖(Complex.exp (-↑ε₁ * s) - 1) - (Complex.exp (-↑ε₂ * s) - 1)‖
+        ≤ (M + 1) * (4 * (ε₀ * S)) :=
+          mul_le_mul ((h_bdd_br m₀ z hm₀).trans (by linarith)) h_sub (norm_nonneg _) (by positivity)
+      _ = 4 * (M + 1) * S * ε₀ := by ring
+      _ ≤ γ := h_cap
+  intro k
+  induction k with
+  | zero =>
+    intro B γ hB hγ
+    obtain ⟨ε₀, hε₀, hbd⟩ := h_base hB hγ
+    exact ⟨ε₀, hε₀, fun ε₁ hε₁ ε₂ hε₂ A hA z hz hzB =>
+      hbd ε₁ hε₁ ε₂ hε₂ A (hA.trans zero_le_one) z hz hzB⟩
+  | succ k ih =>
+    intro B γ hB hγ
+    let M₀ : ℝ := M * Real.exp (α ^ 2)
+    have hM₀_nn : 0 ≤ M₀ := by dsimp [M₀]; positivity
+    let E_α : ℝ := Real.exp (α ^ 2)
+    have hE_pos : 0 < E_α := Real.exp_pos _
+    have hE_ge1 : 1 ≤ E_α := Real.one_le_exp (sq_nonneg α)
+    let L : ℝ := max 1 ((2 * M₀ * E_α + 1) / γ)
+    have hL_ge1 : 1 ≤ L := le_max_left _ _
+    have hL_pos : 0 < L := zero_lt_one.trans_le hL_ge1
+    let B' : ℝ := B + L + α
+    have hB'_pos : 0 < B' := by dsimp [B']; positivity
+    let γ' : ℝ := γ / E_α
+    have hγ'_pos : 0 < γ' := div_pos hγ hE_pos
+    obtain ⟨ε_ih, hε_ih, hbd_ih⟩ := ih hB'_pos hγ'_pos
+    obtain ⟨ε_b, hε_b, hbd_b⟩ := h_base hB hγ
+    let ε₀ : ℝ := min 1 (min ε_ih ε_b)
+    have hε₀_pos : 0 < ε₀ := lt_min zero_lt_one (lt_min hε_ih hε_b)
+    refine ⟨ε₀, hε₀_pos, fun ε₁ hε₁ ε₂ hε₂ A hA z hz hzB => ?_⟩
+    have hε₁_le1 : ε₁ ≤ 1 := hε₁.2.le.trans (min_le_left _ _)
+    have hε₂_le1 : ε₂ ≤ 1 := hε₂.2.le.trans (min_le_left _ _)
+    have hε₁_ih : ε₁ ∈ Set.Ioo 0 ε_ih :=
+      ⟨hε₁.1, hε₁.2.trans_le ((min_le_right _ _).trans (min_le_left _ _))⟩
+    have hε₂_ih : ε₂ ∈ Set.Ioo 0 ε_ih :=
+      ⟨hε₂.1, hε₂.2.trans_le ((min_le_right _ _).trans (min_le_left _ _))⟩
+    have hε₁_b : ε₁ ∈ Set.Ioo 0 ε_b :=
+      ⟨hε₁.1, hε₁.2.trans_le ((min_le_right _ _).trans (min_le_right _ _))⟩
+    have hε₂_b : ε₂ ∈ Set.Ioo 0 ε_b :=
+      ⟨hε₂.1, hε₂.2.trans_le ((min_le_right _ _).trans (min_le_right _ _))⟩
+    have hγ'_le : γ' ≤ γ := div_le_self hγ.le hE_ge1
+    have hB_le : B ≤ B' := by dsimp [B']; linarith
+    by_cases hA1 : A.card ≤ 1
+    · exact hbd_b ε₁ hε₁_b ε₂ hε₂_b A hA1 z hz hzB
+    · push Not at hA1
+      obtain ⟨m₁, hm₁, m₂, hm₂, hne⟩ := Finset.one_lt_card.mp hA1
+      by_cases hy₁ : (z m₁).im = 0
+      · refine (hbd_ih ε₁ hε₁_ih ε₂ hε₂_ih (A.erase m₁)
+          (by rw [Finset.card_erase_of_mem hm₁]; omega) z ⟨hz.1, ?_⟩ (hzB.trans hB_le)).trans hγ'_le
+        intro j hj
+        by_cases hjm : j = m₁
+        · subst hjm; exact hy₁
+        · exact hz.2 j (fun hjA => hj (Finset.mem_erase.mpr ⟨hjm, hjA⟩))
+      · by_cases hy₂ : (z m₂).im = 0
+        · refine (hbd_ih ε₁ hε₁_ih ε₂ hε₂_ih (A.erase m₂)
+            (by rw [Finset.card_erase_of_mem hm₂]; omega) z ⟨hz.1, ?_⟩
+              (hzB.trans hB_le)).trans hγ'_le
+          intro j hj
+          by_cases hjm : j = m₂
+          · subst hjm; exact hy₂
+          · exact hz.2 j (fun hjA => hj (Finset.mem_erase.mpr ⟨hjm, hjA⟩))
+        · let s₁ : ℝ := if 0 < (z m₁).im then 1 else -1
+          let s₂ : ℝ := if 0 < (z m₂).im then 1 else -1
+          let t₁ : ℝ := -|(z m₁).im|
+          let t₂ : ℝ := |(z m₂).im|
+          have ht₁_neg : t₁ < 0 := neg_lt_zero.mpr (abs_pos.mpr hy₁)
+          have ht₂_pos : 0 < t₂ := abs_pos.mpr hy₂
+          have ht₁_lt_t₂ : t₁ < t₂ := ht₁_neg.trans ht₂_pos
+          have ht₁_gt : -α < t₁ := by
+            have h1 : |(z m₁).im| < α :=
+              (Finset.single_le_sum (f := fun m : Fin (n + 1) => |(z m).im|)
+                (fun m _ => abs_nonneg _) (Finset.mem_univ m₁)).trans_lt hz.1
+            dsimp [t₁]
+            linarith
+          have ht₂_lt : t₂ < α :=
+            (Finset.single_le_sum (f := fun m : Fin (n + 1) => |(z m).im|)
+              (fun m _ => abs_nonneg _) (Finset.mem_univ m₂)).trans_lt hz.1
+          obtain ⟨h_icc, h_ioo, h_end1, h_end2⟩ := mzSweepLine_im_sum hne hy₁ hy₂
+          let S₀ : ℝ := ∑ j : Fin (n + 1), |(z j).im|
+          let σ : ℝ := (α - S₀) / 4
+          have hσ_pos : 0 < σ := by dsimp [σ, S₀]; linarith [hz.1]
+          let d : ℂ → ℂ := fun w =>
+            (mzFEps f₀ ε₁ (mzSweepLine z m₁ m₂ s₁ s₂ w) -
+              mzFEps f₀ ε₂ (mzSweepLine z m₁ m₂ s₁ s₂ w)) * Complex.exp (-w ^ 2)
+          have hd_wide : DifferentiableOn ℂ d (Complex.im ⁻¹' Set.Ioo (t₁ - σ) (t₂ + σ)) := by
+            have h_maps : Set.MapsTo (mzSweepLine z m₁ m₂ s₁ s₂)
+                (Complex.im ⁻¹' Set.Ioo (t₁ - σ) (t₂ + σ))
+                (TubeDomain (Octahedron (n + 1) α)) := by
+              intro w hw
+              change ∑ j : Fin (n + 1), |(mzSweepLine z m₁ m₂ s₁ s₂ w j).im| < α
+              have hlt := h_ioo σ hσ_pos w hw
+              dsimp [S₀, σ] at hlt ⊢; linarith [hz.1]
+            have hd1 := (mzFEps_holomorphic hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+              h_holo_br hε₁.1).comp (differentiable_mzSweepLine z m₁ m₂ s₁ s₂).differentiableOn
+                h_maps
+            have hd2 := (mzFEps_holomorphic hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+              h_holo_br hε₂.1).comp (differentiable_mzSweepLine z m₁ m₂ s₁ s₂).differentiableOn
+                h_maps
+            exact (hd1.sub hd2).mul
+              (Complex.differentiable_exp.comp ((differentiable_id.pow 2).neg)).differentiableOn
+          have hexp_norm : ∀ w : ℂ,
+              ‖Complex.exp (-w ^ 2)‖ = Real.exp (-w.re ^ 2 + w.im ^ 2) := by
+            intro w
+            rw [Complex.norm_exp]
+            congr 1
+            rw [neg_re, sq, Complex.mul_re]
+            ring
+          have h_im_sq_le : ∀ w : ℂ, w.im ∈ Set.Icc t₁ t₂ → w.im ^ 2 ≤ α ^ 2 := by
+            intro w hw
+            have habs : |w.im| ≤ α :=
+              abs_le.mpr ⟨by linarith [ht₁_gt, hw.1], by linarith [ht₂_lt, hw.2]⟩
+            have := mul_le_mul habs habs (abs_nonneg _) hα.le
+            rwa [← sq, ← sq, sq_abs] at this
+          have h_diff_M0 : ∀ w : ℂ, w.im ∈ Set.Icc t₁ t₂ →
+              ‖mzFEps f₀ ε₁ (mzSweepLine z m₁ m₂ s₁ s₂ w) -
+                mzFEps f₀ ε₂ (mzSweepLine z m₁ m₂ s₁ s₂ w)‖ ≤ 2 * M₀ := by
+            intro w hw
+            have hw_tube : mzSweepLine z m₁ m₂ s₁ s₂ w ∈ TubeDomain (Octahedron (n + 1) α) := by
+              change ∑ j : Fin (n + 1), |(mzSweepLine z m₁ m₂ s₁ s₂ w j).im| < α
+              rw [h_icc w hw]; exact hz.1
+            have hb1 := (mzFEps_norm_le_all hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+              h_holo_br hε₁.1 hw_tube).trans
+              (mul_le_mul_of_nonneg_left
+                (Real.exp_le_exp.mpr (mul_le_of_le_one_left (sq_nonneg α) hε₁_le1)) hM)
+            have hb2 := (mzFEps_norm_le_all hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
+              h_holo_br hε₂.1 hw_tube).trans
+              (mul_le_mul_of_nonneg_left
+                (Real.exp_le_exp.mpr (mul_le_of_le_one_left (sq_nonneg α) hε₂_le1)) hM)
+            exact (norm_sub_le _ _).trans (by dsimp [M₀]; linarith)
+          have hd_edge : ∀ (u : ℂ) (A' : Finset (Fin (n + 1))),
+              u.im ∈ Set.Icc t₁ t₂ → A'.card ≤ k →
+              mzSweepLine z m₁ m₂ s₁ s₂ u ∈ OctaSubTube (n + 1) α A' →
+              ‖d u‖ ≤ γ := by
+            intro u A' hu_icc hA'_card hu_sub
+            by_cases hu_re : L ≤ |u.re|
+            · have hre_sq : L ^ 2 ≤ u.re ^ 2 := by
+                have := mul_le_mul hu_re hu_re hL_pos.le (abs_nonneg _)
+                rwa [← sq, ← sq, sq_abs] at this
+              have hexp_le : ‖Complex.exp (-u ^ 2)‖ ≤ E_α * Real.exp (-L ^ 2) := by
+                rw [hexp_norm, ← Real.exp_add]
+                exact Real.exp_le_exp.mpr (by linarith [h_im_sq_le u hu_icc])
+              have hL_exp : L ≤ Real.exp (L ^ 2) := by
+                have h1 : L ≤ L ^ 2 := by nlinarith
+                linarith [Real.add_one_le_exp (L ^ 2)]
+              have hL_cap : 2 * M₀ * E_α ≤ γ * L := by
+                have hdiv : (2 * M₀ * E_α + 1) / γ ≤ L := le_max_right _ _
+                have := (div_le_iff₀ hγ).mp hdiv
+                linarith
+              dsimp [d]
+              rw [norm_mul]
+              calc ‖mzFEps f₀ ε₁ (mzSweepLine z m₁ m₂ s₁ s₂ u) -
+                    mzFEps f₀ ε₂ (mzSweepLine z m₁ m₂ s₁ s₂ u)‖ * ‖Complex.exp (-u ^ 2)‖
+                  ≤ (2 * M₀) * (E_α * Real.exp (-L ^ 2)) :=
+                    mul_le_mul (h_diff_M0 u hu_icc) hexp_le (norm_nonneg _) (by positivity)
+                _ = (2 * M₀ * E_α) * Real.exp (-L ^ 2) := by ring
+                _ ≤ (γ * Real.exp (L ^ 2)) * Real.exp (-L ^ 2) :=
+                    mul_le_mul_of_nonneg_right
+                      (hL_cap.trans (mul_le_mul_of_nonneg_left hL_exp hγ.le)) (Real.exp_pos _).le
+                _ = γ := by rw [mul_assoc, ← Real.exp_add]; simp
+            · push Not at hu_re
+              have hu_im_abs : |u.im| ≤ α :=
+                abs_le.mpr ⟨by linarith [ht₁_gt, hu_icc.1], by linarith [ht₂_lt, hu_icc.2]⟩
+              have hu_norm : ‖u‖ ≤ L + α := by
+                have hu_eq : u = ↑u.re + I * ↑u.im := by rw [mul_comm I, Complex.re_add_im]
+                calc ‖u‖ = ‖(u.re : ℂ) + I * (u.im : ℂ)‖ := by conv_lhs => rw [hu_eq]
+                  _ ≤ ‖(u.re : ℂ)‖ + ‖I * (u.im : ℂ)‖ := norm_add_le _ _
+                  _ = |u.re| + |u.im| := by simp [Complex.norm_real]
+                  _ ≤ L + α := by linarith
+              have hs1_norm : ‖(s₁ : ℂ)‖ = 1 := by dsimp [s₁]; split_ifs <;> norm_num
+              have hs2_norm : ‖(s₂ : ℂ)‖ = 1 := by dsimp [s₂]; split_ifs <;> norm_num
+              have h_sw_norm : ‖mzSweepLine z m₁ m₂ s₁ s₂ u‖ ≤ B' := by
+                refine (pi_norm_le_iff_of_nonneg hB'_pos.le).mpr fun j => ?_
+                dsimp [mzSweepLine]
+                split_ifs with hj1 hj2
+                · calc ‖z m₁ + (s₁ : ℂ) * u‖ ≤ ‖z m₁‖ + ‖(s₁ : ℂ) * u‖ := norm_add_le _ _
+                    _ = ‖z m₁‖ + ‖u‖ := by rw [norm_mul, hs1_norm, one_mul]
+                    _ ≤ B + (L + α) := add_le_add ((norm_le_pi_norm z m₁).trans hzB) hu_norm
+                    _ = B' := by dsimp [B']; ring
+                · calc ‖z m₂ - (s₂ : ℂ) * u‖ ≤ ‖z m₂‖ + ‖(s₂ : ℂ) * u‖ := norm_sub_le _ _
+                    _ = ‖z m₂‖ + ‖u‖ := by rw [norm_mul, hs2_norm, one_mul]
+                    _ ≤ B + (L + α) := add_le_add ((norm_le_pi_norm z m₂).trans hzB) hu_norm
+                    _ = B' := by dsimp [B']; ring
+                · exact ((norm_le_pi_norm z j).trans hzB).trans hB_le
+              have h_ih_u := hbd_ih ε₁ hε₁_ih ε₂ hε₂_ih A' hA'_card _ hu_sub h_sw_norm
+              have hexp_le : ‖Complex.exp (-u ^ 2)‖ ≤ E_α := by
+                rw [hexp_norm]
+                exact Real.exp_le_exp.mpr
+                  (by linarith [sq_nonneg u.re, h_im_sq_le u hu_icc])
+              dsimp [d]
+              rw [norm_mul]
+              calc ‖mzFEps f₀ ε₁ (mzSweepLine z m₁ m₂ s₁ s₂ u) -
+                    mzFEps f₀ ε₂ (mzSweepLine z m₁ m₂ s₁ s₂ u)‖ * ‖Complex.exp (-u ^ 2)‖
+                  ≤ γ' * E_α := mul_le_mul h_ih_u hexp_le (norm_nonneg _) hγ'_pos.le
+                _ = γ := div_mul_cancel₀ γ hE_pos.ne'
+          have h_sub_ioo : Complex.im ⁻¹' Set.Ioo t₁ t₂ ⊆
+              Complex.im ⁻¹' Set.Ioo (t₁ - σ) (t₂ + σ) :=
+            fun u hu => ⟨by linarith [hu.1], by linarith [hu.2]⟩
+          have h_sub_icc : Complex.im ⁻¹' Set.Icc t₁ t₂ ⊆
+              Complex.im ⁻¹' Set.Ioo (t₁ - σ) (t₂ + σ) :=
+            fun u hu => ⟨by linarith [hu.1], by linarith [hu.2]⟩
+          have hd0 := Bochner.norm_le_on_horizontal_strip_of_bdd ht₁_lt_t₂
+            (hd_wide.mono h_sub_ioo) (hd_wide.continuousOn.mono h_sub_icc)
+            (fun u hu => by
+              dsimp [d]; rw [norm_mul]
+              have hexp : ‖Complex.exp (-u ^ 2)‖ ≤ E_α := by
+                rw [hexp_norm]
+                exact Real.exp_le_exp.mpr
+                  (by linarith [sq_nonneg u.re, h_im_sq_le u ⟨hu.1.le, hu.2.le⟩])
+              calc ‖mzFEps f₀ ε₁ (mzSweepLine z m₁ m₂ s₁ s₂ u) -
+                    mzFEps f₀ ε₂ (mzSweepLine z m₁ m₂ s₁ s₂ u)‖ * ‖Complex.exp (-u ^ 2)‖
+                  ≤ (2 * M₀) * E_α :=
+                    mul_le_mul (h_diff_M0 u ⟨hu.1.le, hu.2.le⟩) hexp (norm_nonneg _)
+                      (by positivity)
+                _ = 2 * M₀ * E_α := by ring)
+            (fun u hu => hd_edge u (A.erase m₁) ⟨by rw [hu], by rw [hu]; exact ht₁_lt_t₂.le⟩
+              (by rw [Finset.card_erase_of_mem hm₁]; omega) ⟨by
+                rw [h_icc u ⟨by rw [hu], by rw [hu]; exact ht₁_lt_t₂.le⟩]; exact hz.1,
+                fun j hj => by
+                  by_cases hjm1 : j = m₁
+                  · subst hjm1; exact h_end1 u hu
+                  · have hj_notA : j ∉ A := fun hjA => hj (Finset.mem_erase.mpr ⟨hjm1, hjA⟩)
+                    have hjm2 : j ≠ m₂ := fun h => hj_notA (h ▸ hm₂)
+                    simp [mzSweepLine, hjm1, hjm2, hz.2 j hj_notA]⟩)
+            (fun u hu => hd_edge u (A.erase m₂) ⟨by rw [hu]; exact ht₁_lt_t₂.le, by rw [hu]⟩
+              (by rw [Finset.card_erase_of_mem hm₂]; omega) ⟨by
+                rw [h_icc u ⟨by rw [hu]; exact ht₁_lt_t₂.le, by rw [hu]⟩]; exact hz.1,
+                fun j hj => by
+                  by_cases hjm2 : j = m₂
+                  · subst hjm2; exact h_end2 u hu
+                  · have hj_notA : j ∉ A := fun hjA => hj (Finset.mem_erase.mpr ⟨hjm2, hjA⟩)
+                    have hjm1 : j ≠ m₁ := fun h => hj_notA (h ▸ hm₁)
+                    simp [mzSweepLine, hjm1, hjm2, hz.2 j hj_notA]⟩)
+            (z := 0) (by simpa using ht₁_neg.le) (by simpa using ht₂_pos.le)
+          simpa [d, mzSweepLine_zero] using hd0
+
+theorem malgrange_zerner_flat_tube (N : ℕ) {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
+    (f₀ : (Fin N → ℝ) → ℂ) (f_br : Fin N → (Fin N → ℂ) → ℂ)
+    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x : Fin N → ℝ, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin N) (x : Fin N → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin N, ContinuousOn (f_br m) (FlatStrip N α m))
+    (h_bdd_br : ∀ (m : Fin N), ∀ z ∈ FlatStrip N α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin N) (x : Fin N → ℝ),
+      DifferentiableOn ℂ (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w))
+        { w : ℂ | |w.im| < α }) :
+    ∃ F : (Fin N → ℂ) → ℂ,
+      DifferentiableOn ℂ F (TubeDomain (Octahedron N α)) ∧
+      (∀ z ∈ TubeDomain (Octahedron N α), ‖F z‖ ≤ M) ∧
+      (∀ x : Fin N → ℝ, F (fun j => (x j : ℂ)) = f₀ x) ∧
+      (∀ (m : Fin N), ∀ z ∈ FlatStrip N α m, F z = f_br m z) := by
+  cases N with
+  | zero =>
+    refine ⟨fun _ => f₀ 0, differentiableOn_const _, fun _ _ => hf₀_bdd 0, fun x => ?_,
+      fun m => Fin.elim0 m⟩
+    dsimp only
+    congr 1
+    ext i
+    exact Fin.elim0 i
+  | succ n =>
+    let F : (Fin (n + 1) → ℂ) → ℂ :=
+      fun z => limUnder (𝓝[>] (0 : ℝ)) (fun ε => mzFEps f₀ ε z)
+    have hU_open : IsOpen (TubeDomain (Octahedron (n + 1) α)) :=
+      isOpen_TubeDomain (isOpen_Octahedron (n + 1) α)
+    have h_ev_holo : ∀ᶠ ε in 𝓝[>] (0 : ℝ),
+        DifferentiableOn ℂ (mzFEps f₀ ε) (TubeDomain (Octahedron (n + 1) α)) :=
+      eventually_nhdsWithin_of_forall fun ε hε =>
+        mzFEps_holomorphic hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br hε
+    have h_unif_ball : ∀ z₀ ∈ TubeDomain (Octahedron (n + 1) α),
+        ∃ η > 0, Metric.ball z₀ η ⊆ TubeDomain (Octahedron (n + 1) α) ∧
+          TendstoUniformlyOn (fun ε z => mzFEps f₀ ε z) F (𝓝[>] (0 : ℝ))
+            (Metric.ball z₀ η) := by
+      intro z₀ hz₀
+      rcases Metric.isOpen_iff.mp hU_open z₀ hz₀ with ⟨η, hη, h_sub⟩
+      refine ⟨η, hη, h_sub, Bochner.tendstoUniformlyOn_limUnder_of_uniform_cauchy _ ?_⟩
+      intro γ hγ
+      let B : ℝ := ‖z₀‖ + η + 1
+      have hB_pos : 0 < B := by dsimp [B]; positivity
+      obtain ⟨ε₀, hε₀, hbd⟩ := mzFEps_bounded_cauchy hα hM hf₀_cont hf₀_bdd h_real h_cont_br
+        h_bdd_br h_holo_br (n + 1) hB_pos hγ
+      refine ⟨ε₀, hε₀, fun ε₁ hε₁ ε₂ hε₂ z hz => ?_⟩
+      have hz_norm : ‖z‖ ≤ B := by
+        have hd : ‖z - z₀‖ < η := by simpa [dist_eq_norm] using Metric.mem_ball.mp hz
+        calc ‖z‖ = ‖(z - z₀) + z₀‖ := by ring_nf
+          _ ≤ ‖z - z₀‖ + ‖z₀‖ := norm_add_le _ _
+          _ ≤ B := by dsimp [B]; linarith
+      exact hbd ε₁ hε₁ ε₂ hε₂ Finset.univ (by simp) z
+        ⟨h_sub hz, fun j hj => (hj (Finset.mem_univ j)).elim⟩ hz_norm
+    have h_loc : TendstoLocallyUniformlyOn (fun ε z => mzFEps f₀ ε z) F (𝓝[>] (0 : ℝ))
+        (TubeDomain (Octahedron (n + 1) α)) := by
+      refine tendstoLocallyUniformlyOn_of_forall_exists_nhds fun z₀ hz₀ => ?_
+      obtain ⟨η, hη, _, hunif⟩ := h_unif_ball z₀ hz₀
+      exact ⟨Metric.ball z₀ η, nhdsWithin_le_nhds (Metric.ball_mem_nhds z₀ hη), hunif⟩
+    have hF_cont : ContinuousOn F (TubeDomain (Octahedron (n + 1) α)) := by
+      intro z₀ hz₀
+      obtain ⟨η, hη, h_sub, hunif⟩ := h_unif_ball z₀ hz₀
+      have h_ev_cont : ∀ᶠ ε in 𝓝[>] (0 : ℝ),
+          ContinuousOn (mzFEps f₀ ε) (Metric.ball z₀ η) :=
+        h_ev_holo.mono fun ε hε => hε.continuousOn.mono h_sub
+      exact (hunif.continuousOn h_ev_cont.frequently |>.continuousAt
+        (Metric.ball_mem_nhds z₀ hη)).continuousWithinAt
+    have hF_holo : DifferentiableOn ℂ F (TubeDomain (Octahedron (n + 1) α)) := by
+      refine osgood_nd (n + 1) hU_open F hF_cont ?_
+      intro z₀ hz₀ m
+      let φ : ℂ → (Fin (n + 1) → ℂ) := fun w => Function.update z₀ m w
+      have hφ_diff : Differentiable ℂ φ := by
+        refine differentiable_pi.mpr fun j => ?_
+        by_cases hjm : j = m
+        · subst hjm; simp only [φ, Function.update_self]; exact differentiable_id
+        · simp only [φ, Function.update_of_ne hjm]; exact differentiable_const _
+      let S_m : Set ℂ := φ ⁻¹' TubeDomain (Octahedron (n + 1) α)
+      have hSm_open : IsOpen S_m := hU_open.preimage hφ_diff.continuous
+      have h_loc_sl : TendstoLocallyUniformlyOn (fun ε w => mzFEps f₀ ε (φ w))
+          (fun w => F (φ w)) (𝓝[>] (0 : ℝ)) S_m :=
+        h_loc.comp φ (fun _ hw => hw) hφ_diff.continuous.continuousOn
+      have h_ev_sl : ∀ᶠ ε in 𝓝[>] (0 : ℝ),
+          DifferentiableOn ℂ (fun w => mzFEps f₀ ε (φ w)) S_m :=
+        h_ev_holo.mono fun ε hε => hε.comp hφ_diff.differentiableOn (fun _ hw => hw)
+      have h_diffOn := h_loc_sl.differentiableOn h_ev_sl hSm_open
+      have hzm_Sm : z₀ m ∈ S_m := by
+        change Function.update z₀ m (z₀ m) ∈ TubeDomain (Octahedron (n + 1) α)
+        rwa [Function.update_eq_self]
+      exact (h_diffOn (z₀ m) hzm_Sm).differentiableAt (hSm_open.mem_nhds hzm_Sm)
+    have hF_bdd : ∀ z ∈ TubeDomain (Octahedron (n + 1) α), ‖F z‖ ≤ M := by
+      intro z hz
+      obtain ⟨η, hη, _, hunif⟩ := h_unif_ball z hz
+      have h_tendsto : Tendsto (fun ε => mzFEps f₀ ε z) (𝓝[>] (0 : ℝ)) (𝓝 (F z)) :=
+        hunif.tendsto_at (Metric.mem_ball_self hη)
+      have h_rhs : Tendsto (fun ε : ℝ => M * Real.exp (ε * α ^ 2)) (𝓝[>] (0 : ℝ)) (𝓝 M) := by
+        have hc : Continuous (fun ε : ℝ => M * Real.exp (ε * α ^ 2)) :=
+          continuous_const.mul (Real.continuous_exp.comp (continuous_id.mul continuous_const))
+        have h_lim := tendsto_nhdsWithin_of_tendsto_nhds
+          (s := Set.Ioi (0 : ℝ)) (hc.continuousAt (x := 0)).tendsto
+        simpa using h_lim
+      refine le_of_tendsto_of_tendsto h_tendsto.norm h_rhs ?_
+      exact eventually_nhdsWithin_of_forall fun ε hε =>
+        mzFEps_norm_le_all hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br hε hz
+    have hF_strip : ∀ (m : Fin (n + 1)), ∀ z ∈ FlatStrip (n + 1) α m, F z = f_br m z := by
+      intro m z hz
+      have hz_tube : z ∈ TubeDomain (Octahedron (n + 1) α) := by
+        change ∑ j : Fin (n + 1), |(z j).im| < α
+        rw [Finset.sum_eq_single m]
+        · exact hz.1
+        · intro j _ hjm; simp [hz.2 j hjm]
+        · intro hm; exact (hm (Finset.mem_univ m)).elim
+      obtain ⟨η, hη, _, hunif⟩ := h_unif_ball z hz_tube
+      have h_t1 : Tendsto (fun ε => mzFEps f₀ ε z) (𝓝[>] (0 : ℝ)) (𝓝 (F z)) :=
+        hunif.tendsto_at (Metric.mem_ball_self hη)
+      let s : ℂ := ∑ j : Fin (n + 1), (z j) ^ 2
+      have h_t2 : Tendsto (fun ε : ℝ => f_br m z * Complex.exp (-↑ε * s))
+          (𝓝[>] (0 : ℝ)) (𝓝 (f_br m z)) := by
+        have hc : Continuous (fun ε : ℝ => f_br m z * Complex.exp (-↑ε * s)) :=
+          continuous_const.mul
+            (Complex.continuous_exp.comp
+              ((Complex.continuous_ofReal.neg).mul continuous_const))
+        have h_lim := tendsto_nhdsWithin_of_tendsto_nhds
+          (s := Set.Ioi (0 : ℝ)) (hc.continuousAt (x := 0)).tendsto
+        simpa using h_lim
+      have h_ev_eq : (fun ε => mzFEps f₀ ε z) =ᶠ[𝓝[>] (0 : ℝ)]
+          fun ε => f_br m z * Complex.exp (-↑ε * s) :=
+        eventually_nhdsWithin_of_forall fun ε hε =>
+          mzFEps_eq_on_flatStrip hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br hε m hz
+      exact tendsto_nhds_unique h_t1 (h_t2.congr' h_ev_eq.symm)
+    refine ⟨F, hF_holo, hF_bdd, fun x => ?_, hF_strip⟩
+    have hx_strip : (fun j : Fin (n + 1) => (x j : ℂ)) ∈ FlatStrip (n + 1) α 0 :=
+      ⟨by simp [hα], fun j _ => by simp⟩
+    rw [hF_strip 0 _ hx_strip, h_real 0 x]
+
+def RealCube (N : ℕ) (x₀ : Fin N → ℝ) (r : ℝ) : Set (Fin N → ℝ) :=
+  { x | ∀ m : Fin N, |x m - x₀ m| < r }
+
+def LocalCrossBranch (N : ℕ) (x₀ : Fin N → ℝ) (r R : ℝ) (m : Fin N) : Set (Fin N → ℂ) :=
+  { z | |(z m).re - x₀ m| < r ∧ |(z m).im| < R ∧
+    ∀ j : Fin N, j ≠ m → (z j).im = 0 ∧ |(z j).re - x₀ j| < r }
+
+noncomputable def mzCrossRadius (N : ℕ) (r R : ℝ) : ℝ :=
+  r * min (1 / 4) (min (Real.pi / 8) (R / (2 * r)) / (2 * ((N : ℝ) + 1)))
+
+lemma mzCrossRadius_pos (N : ℕ) {r R : ℝ} (hr : 0 < r) (hR : 0 < R) :
+    0 < mzCrossRadius N r R := by
+  dsimp [mzCrossRadius]
+  refine mul_pos hr (lt_min (by norm_num) (div_pos (lt_min ?_ ?_) (by positivity)))
+  · positivity
+  · positivity
+
+noncomputable def mzTanhC (w : ℂ) : ℂ :=
+  (Complex.exp (2 * w) - 1) / (Complex.exp (2 * w) + 1)
+
+noncomputable def mzArtanhC (ζ : ℂ) : ℂ :=
+  (2 : ℂ)⁻¹ * Complex.log ((1 + ζ) * (1 - ζ)⁻¹)
+
+lemma mzTanhC_strip_props {w : ℂ} (hw : |w.im| ≤ Real.pi / 8) :
+    Complex.exp (2 * w) + 1 ≠ 0 ∧ |(mzTanhC w).re| < 1 ∧ |(mzTanhC w).im| ≤ 2 * |w.im| := by
+  let u : ℝ := w.re
+  let v : ℝ := w.im
+  let E : ℝ := Real.exp (2 * u)
+  have hE_pos : 0 < E := Real.exp_pos _
+  have hv_le := abs_le.mp hw
+  have hcos_pos : 0 < Real.cos (2 * v) :=
+    Real.cos_pos_of_mem_Ioo ⟨by linarith [Real.pi_pos], by linarith [Real.pi_pos]⟩
+  have hexp_re_im : Complex.exp (2 * w) =
+      (E * Real.cos (2 * v) : ℝ) + (E * Real.sin (2 * v) : ℝ) * I := by
+    have h2w : 2 * w = ↑(2 * u) + ↑(2 * v) * I := by
+      conv_lhs => rw [← Complex.re_add_im w]
+      dsimp [u, v]
+      push_cast
+      ring
+    rw [h2w, Complex.exp_add, ← Complex.ofReal_exp, Complex.exp_mul_I,
+      ← Complex.ofReal_cos, ← Complex.ofReal_sin]
+    dsimp [E]
+    rw [Complex.ofReal_mul, Complex.ofReal_mul]
+    ring
+  have hexp_re : (Complex.exp (2 * w)).re = E * Real.cos (2 * v) := by
+    rw [hexp_re_im]
+    simp only [Complex.add_re, Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im,
+      Complex.I_re, Complex.I_im]
+    ring
+  have hexp_im : (Complex.exp (2 * w)).im = E * Real.sin (2 * v) := by
+    rw [hexp_re_im]
+    simp only [Complex.add_im, Complex.mul_im, Complex.ofReal_re, Complex.ofReal_im,
+      Complex.I_re, Complex.I_im]
+    ring
+  let z_den : ℂ := Complex.exp (2 * w) + 1
+  have hden_re : z_den.re = E * Real.cos (2 * v) + 1 := by simp [z_den, hexp_re]
+  have hden_im : z_den.im = E * Real.sin (2 * v) := by simp [z_den, hexp_im]
+  have hden_normSq : Complex.normSq z_den = E ^ 2 + 2 * E * Real.cos (2 * v) + 1 := by
+    rw [Complex.normSq_apply, hden_re, hden_im]
+    have hcs := Real.cos_sq_add_sin_sq (2 * v)
+    calc (E * Real.cos (2 * v) + 1) * (E * Real.cos (2 * v) + 1) +
+          (E * Real.sin (2 * v)) * (E * Real.sin (2 * v))
+        = E ^ 2 * (Real.cos (2 * v) ^ 2 + Real.sin (2 * v) ^ 2) +
+            2 * E * Real.cos (2 * v) + 1 := by ring
+      _ = E ^ 2 + 2 * E * Real.cos (2 * v) + 1 := by rw [hcs]; ring
+  have hden_gt_sq : E ^ 2 + 1 < Complex.normSq z_den := by
+    rw [hden_normSq]
+    nlinarith [mul_pos hE_pos hcos_pos]
+  have hden_ge_2E : 2 * E ≤ Complex.normSq z_den := by
+    have hsq : 2 * E ≤ E ^ 2 + 1 := by nlinarith [sq_nonneg (E - 1)]
+    exact hsq.trans hden_gt_sq.le
+  have hden_pos : 0 < Complex.normSq z_den := by linarith [sq_nonneg E]
+  have hden_ne : z_den ≠ 0 := Complex.normSq_pos.mp hden_pos
+  have hnum_re : (Complex.exp (2 * w) - 1).re = E * Real.cos (2 * v) - 1 := by
+    simp [hexp_re]
+  have hnum_im : (Complex.exp (2 * w) - 1).im = E * Real.sin (2 * v) := by
+    simp [hexp_im]
+  have htanh_re : (mzTanhC w).re = (E ^ 2 - 1) / Complex.normSq z_den := by
+    dsimp [mzTanhC]
+    rw [Complex.div_re, ← add_div]
+    change ((Complex.exp (2 * w) - 1).re * z_den.re +
+        (Complex.exp (2 * w) - 1).im * z_den.im) / Complex.normSq z_den = _
+    rw [hnum_re, hnum_im, hden_re, hden_im]
+    congr 1
+    have hcs := Real.cos_sq_add_sin_sq (2 * v)
+    calc (E * Real.cos (2 * v) - 1) * (E * Real.cos (2 * v) + 1) +
+          E * Real.sin (2 * v) * (E * Real.sin (2 * v))
+        = E ^ 2 * (Real.cos (2 * v) ^ 2 + Real.sin (2 * v) ^ 2) - 1 := by ring
+      _ = E ^ 2 - 1 := by rw [hcs]; ring
+  have htanh_im : (mzTanhC w).im = (2 * E * Real.sin (2 * v)) / Complex.normSq z_den := by
+    dsimp [mzTanhC]
+    rw [Complex.div_im, ← sub_div]
+    change ((Complex.exp (2 * w) - 1).im * z_den.re -
+        (Complex.exp (2 * w) - 1).re * z_den.im) / Complex.normSq z_den = _
+    rw [hnum_re, hnum_im, hden_re, hden_im]
+    congr 1
+    ring
+  refine ⟨hden_ne, ?_, ?_⟩
+  · rw [htanh_re, abs_div, abs_of_pos hden_pos, div_lt_one hden_pos]
+    have habs : |E ^ 2 - 1| ≤ E ^ 2 + 1 :=
+      abs_le.mpr ⟨by nlinarith [sq_nonneg E], by linarith⟩
+    exact habs.trans_lt hden_gt_sq
+  · rw [htanh_im, abs_div, abs_of_pos hden_pos, abs_mul, abs_of_pos (mul_pos two_pos hE_pos)]
+    have hsin_le : |Real.sin (2 * v)| ≤ 2 * |v| := by
+      calc |Real.sin (2 * v)| ≤ |2 * v| := Real.abs_sin_le_abs
+        _ = 2 * |v| := by rw [abs_mul, abs_of_pos two_pos]
+    have h_div_le : (2 * E * |Real.sin (2 * v)|) / Complex.normSq z_den ≤
+        (2 * E * (2 * |v|)) / (2 * E) := by
+      refine div_le_div₀ (by positivity)
+        (mul_le_mul_of_nonneg_left hsin_le (by positivity))
+        (mul_pos two_pos hE_pos) hden_ge_2E
+    have h2E_ne : (2 * E : ℝ) ≠ 0 := (mul_pos two_pos hE_pos).ne'
+    have h_simp : (2 * E * (2 * |v|)) / (2 * E) = 2 * |v| := by
+      field_simp [h2E_ne]
+    exact h_div_le.trans_eq h_simp
+
+lemma mzTanhC_ofReal_im (t : ℝ) : (mzTanhC (t : ℂ)).im = 0 := by
+  have hp := (mzTanhC_strip_props (w := (t : ℂ))
+    (by simp only [Complex.ofReal_im, abs_zero]; positivity)).2.2
+  have h0 : |(mzTanhC (t : ℂ)).im| ≤ 0 := by simpa using hp
+  exact abs_nonpos_iff.mp h0
+
+lemma differentiableOn_mzTanhC :
+    DifferentiableOn ℂ mzTanhC {w : ℂ | |w.im| < Real.pi / 8} := by
+  have h_exp : Differentiable ℂ (fun w : ℂ => Complex.exp (2 * w)) :=
+    Complex.differentiable_exp.comp ((differentiable_const 2).mul differentiable_id)
+  exact ((h_exp.sub (differentiable_const 1)).differentiableOn).div
+    ((h_exp.add (differentiable_const 1)).differentiableOn)
+    (fun w hw => (mzTanhC_strip_props (le_of_lt hw)).1)
+
+lemma mzArtanhC_slit_and_deriv {ζ : ℂ} (hζ : ‖ζ‖ < 1 / 2) :
+    1 - ζ ≠ 0 ∧ (1 + ζ) * (1 - ζ)⁻¹ ∈ Complex.slitPlane ∧
+      HasDerivAt mzArtanhC ((1 - ζ ^ 2)⁻¹) ζ ∧ mzTanhC (mzArtanhC ζ) = ζ := by
+  have h1_norm : 1 / 2 < ‖1 - ζ‖ := by
+    have htri : ‖(1 : ℂ)‖ ≤ ‖1 - ζ‖ + ‖ζ‖ := by
+      simpa using norm_add_le (1 - ζ) ζ
+    rw [norm_one] at htri
+    linarith
+  have h1_ne : 1 - ζ ≠ 0 := norm_ne_zero_iff.mp (by linarith)
+  have hden_pos : 0 < Complex.normSq (1 - ζ) := Complex.normSq_pos.mpr h1_ne
+  have hq_re : ((1 + ζ) * (1 - ζ)⁻¹).re =
+      (1 - Complex.normSq ζ) / Complex.normSq (1 - ζ) := by
+    rw [← div_eq_mul_inv, Complex.div_re, ← add_div]
+    congr 1
+    rw [Complex.normSq_apply]
+    simp [Complex.add_re, Complex.sub_re]
+    ring
+  have hζ_nsq : Complex.normSq ζ < 1 / 4 := by
+    rw [Complex.normSq_eq_norm_sq]
+    have := mul_lt_mul' hζ.le hζ (norm_nonneg ζ) (by norm_num)
+    nlinarith
+  have hq_pos : 0 < ((1 + ζ) * (1 - ζ)⁻¹).re := by
+    rw [hq_re]
+    exact div_pos (by linarith) hden_pos
+  have hq_slit : (1 + ζ) * (1 - ζ)⁻¹ ∈ Complex.slitPlane :=
+    Complex.mem_slitPlane_iff.mpr (Or.inl hq_pos)
+  have hq_ne : (1 + ζ) * (1 - ζ)⁻¹ ≠ 0 := Complex.slitPlane_ne_zero hq_slit
+  have h1_plus_ne : 1 + ζ ≠ 0 := left_ne_zero_of_mul hq_ne
+  have h_sub_der : HasDerivAt (fun u : ℂ => 1 - u) (-1) ζ :=
+    (hasDerivAt_id ζ).const_sub (1 : ℂ)
+  have h_inv_der : HasDerivAt (fun u : ℂ => (1 - u)⁻¹) (-(-1) / (1 - ζ) ^ 2) ζ :=
+    h_sub_der.inv h1_ne
+  have h_q_der : HasDerivAt (fun u : ℂ => (1 + u) * (1 - u)⁻¹)
+      (1 * (1 - ζ)⁻¹ + (1 + ζ) * (-(-1) / (1 - ζ) ^ 2)) ζ :=
+    ((hasDerivAt_id ζ).const_add (1 : ℂ)).mul h_inv_der
+  have h_log_der := (Complex.hasDerivAt_log hq_slit).comp ζ h_q_der
+  have h_art_der0 := h_log_der.const_mul (2 : ℂ)⁻¹
+  have h_der_simp : (2 : ℂ)⁻¹ *
+      (((1 + ζ) * (1 - ζ)⁻¹)⁻¹ * (1 * (1 - ζ)⁻¹ + (1 + ζ) * (-(-1) / (1 - ζ) ^ 2))) =
+      (1 - ζ ^ 2)⁻¹ := by
+    have hsq_ne : 1 - ζ ^ 2 ≠ 0 := by
+      have hf : 1 - ζ ^ 2 = (1 + ζ) * (1 - ζ) := by ring
+      rw [hf]
+      exact mul_ne_zero h1_plus_ne h1_ne
+    field_simp [h1_ne, h1_plus_ne, hsq_ne]
+    ring
+  rw [h_der_simp] at h_art_der0
+  have h_inv_eq : mzTanhC (mzArtanhC ζ) = ζ := by
+    dsimp [mzTanhC, mzArtanhC]
+    have h2 : 2 * ((2 : ℂ)⁻¹ * Complex.log ((1 + ζ) * (1 - ζ)⁻¹)) =
+        Complex.log ((1 + ζ) * (1 - ζ)⁻¹) := by ring
+    rw [h2, Complex.exp_log hq_ne]
+    have hq_plus1 : (1 + ζ) * (1 - ζ)⁻¹ + 1 ≠ 0 := by
+      have hf : (1 + ζ) * (1 - ζ)⁻¹ + 1 = 2 * (1 - ζ)⁻¹ := by
+        field_simp [h1_ne]; ring
+      rw [hf]
+      exact mul_ne_zero two_ne_zero (inv_ne_zero h1_ne)
+    field_simp [h1_ne, hq_plus1]
+    ring
+  exact ⟨h1_ne, hq_slit, h_art_der0, h_inv_eq⟩
+
+lemma norm_mzArtanhC_le {ζ : ℂ} (hζ : ‖ζ‖ ≤ 1 / 3) :
+    ‖mzArtanhC ζ‖ ≤ 2 * ‖ζ‖ := by
+  have h0 : mzArtanhC 0 = 0 := by simp [mzArtanhC]
+  let g : ℝ → ℂ := fun t => mzArtanhC ((t : ℂ) * ζ)
+  have hg_dw : ∀ t ∈ Set.Icc (0 : ℝ) 1,
+      HasDerivWithinAt g (ζ * (1 - ((t : ℂ) * ζ) ^ 2)⁻¹) (Set.Icc 0 1) t := by
+    intro t ht
+    have ht_lt : ‖(t : ℂ) * ζ‖ < 1 / 2 := by
+      rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg ht.1]
+      calc t * ‖ζ‖ ≤ 1 * (1 / 3) := mul_le_mul ht.2 hζ (norm_nonneg _) zero_le_one
+        _ < 1 / 2 := by norm_num
+    have hd_art := (mzArtanhC_slit_and_deriv ht_lt).2.2.1
+    have hd_lin : HasDerivAt (fun s : ℝ => (s : ℂ) * ζ) ζ t := by
+      simpa using (Complex.ofRealCLM.hasFDerivAt.hasDerivAt (x := t)).mul_const ζ
+    have hd_comp := hd_art.comp t hd_lin
+    rw [mul_comm] at hd_comp
+    exact hd_comp.hasDerivWithinAt
+  have hg_nb : ∀ t ∈ Set.Icc (0 : ℝ) 1,
+      ‖ζ * (1 - ((t : ℂ) * ζ) ^ 2)⁻¹‖ ≤ 2 * ‖ζ‖ := by
+    intro t ht
+    rw [norm_mul, norm_inv, mul_comm]
+    have ht_sq : ‖((t : ℂ) * ζ) ^ 2‖ ≤ 1 / 9 := by
+      rw [norm_pow, norm_mul, Complex.norm_real, Real.norm_of_nonneg ht.1]
+      have h1 : t * ‖ζ‖ ≤ 1 / 3 := by
+        calc t * ‖ζ‖ ≤ 1 * (1 / 3) := mul_le_mul ht.2 hζ (norm_nonneg _) zero_le_one
+          _ = 1 / 3 := one_mul _
+      nlinarith [mul_nonneg ht.1 (norm_nonneg ζ)]
+    have h_den_ge : 1 / 2 ≤ ‖1 - ((t : ℂ) * ζ) ^ 2‖ := by
+      have htri := norm_add_le (1 - ((t : ℂ) * ζ) ^ 2) (((t : ℂ) * ζ) ^ 2)
+      have hsum1 : (1 - ((t : ℂ) * ζ) ^ 2) + ((t : ℂ) * ζ) ^ 2 = 1 := by ring
+      rw [hsum1, norm_one] at htri
+      linarith
+    have h_inv_le : ‖1 - ((t : ℂ) * ζ) ^ 2‖⁻¹ ≤ 2 := by
+      have := inv_anti₀ (by norm_num : (0 : ℝ) < 1 / 2) h_den_ge
+      norm_num at this
+      exact this
+    exact mul_le_mul_of_nonneg_right h_inv_le (norm_nonneg ζ)
+  have h_mvt := (convex_Icc (0 : ℝ) 1).norm_image_sub_le_of_norm_hasDerivWithin_le
+    hg_dw hg_nb ⟨le_rfl, zero_le_one⟩ ⟨zero_le_one, le_rfl⟩
+  simpa [g, h0] using h_mvt
+
+lemma mzArtanhC_ofReal_im {u : ℝ} (hu : |u| < 1 / 2) :
+    (mzArtanhC (u : ℂ)).im = 0 := by
+  have hu' := abs_lt.mp hu
+  have h_pos : 0 < (1 + u) / (1 - u) := div_pos (by linarith) (by linarith)
+  have hq : (1 + (u : ℂ)) * (1 - (u : ℂ))⁻¹ = (((1 + u) / (1 - u) : ℝ) : ℂ) := by
+    rw [← div_eq_mul_inv]
+    push_cast
+    rfl
+  dsimp [mzArtanhC]
+  rw [hq, ← Complex.ofReal_log h_pos.le]
+  have h2 : (2 : ℂ)⁻¹ * ↑(Real.log ((1 + u) / (1 - u))) =
+      (((2 : ℝ)⁻¹ * Real.log ((1 + u) / (1 - u)) : ℝ) : ℂ) := by
+    push_cast; ring
+  rw [h2, Complex.ofReal_im]
+
+theorem malgrange_zerner_local_cross (N : ℕ) {r R M : ℝ}
+    (hr : 0 < r) (hR : 0 < R) (hM : 0 ≤ M) (x₀ : Fin N → ℝ)
+    (f₀ : (Fin N → ℝ) → ℂ) (f_br : Fin N → (Fin N → ℂ) → ℂ)
+    (hf₀_cont : ContinuousOn f₀ (RealCube N x₀ r))
+    (hf₀_bdd : ∀ x ∈ RealCube N x₀ r, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin N), ∀ x ∈ RealCube N x₀ r, f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin N, ContinuousOn (f_br m) (LocalCrossBranch N x₀ r R m))
+    (h_bdd_br : ∀ (m : Fin N), ∀ z ∈ LocalCrossBranch N x₀ r R m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin N), ∀ x ∈ RealCube N x₀ r,
+      DifferentiableOn ℂ (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w))
+        { w : ℂ | |w.re - x₀ m| < r ∧ |w.im| < R }) :
+    let ρ := mzCrossRadius N r R
+    ∃ H : (Fin N → ℂ) → ℂ,
+      DifferentiableOn ℂ H (Metric.ball (fun m => (x₀ m : ℂ)) ρ) ∧
+      (∀ z ∈ Metric.ball (fun m => (x₀ m : ℂ)) ρ, ‖H z‖ ≤ M) ∧
+      (∀ x : Fin N → ℝ, (fun m => (x m : ℂ)) ∈ Metric.ball (fun m => (x₀ m : ℂ)) ρ →
+        H (fun m => (x m : ℂ)) = f₀ x) ∧
+      (∀ (m : Fin N), ∀ z ∈ Metric.ball (fun m => (x₀ m : ℂ)) ρ ∩ LocalCrossBranch N x₀ r R m,
+        H z = f_br m z) ∧
+      (∀ m : Fin N,
+        ‖deriv (fun ζ => H (Function.update (fun j => (x₀ j : ℂ)) m ζ)) (x₀ m)‖ ≤
+          2 * M / ρ) := by
+  intro ρ
+  have hρ_pos : 0 < ρ := mzCrossRadius_pos N hr hR
+  let α : ℝ := min (Real.pi / 8) (R / (2 * r))
+  have hα_pos : 0 < α := lt_min (by positivity) (by positivity)
+  have hα_pi : α ≤ Real.pi / 8 := min_le_left _ _
+  have hα_R : 2 * r * α ≤ R := by
+    have h1 : α ≤ R / (2 * r) := min_le_right _ _
+    have h2r : 0 < 2 * r := by positivity
+    have := (le_div_iff₀ h2r).mp h1
+    linarith
+  let ψC : Fin N → ℂ → ℂ := fun m w => (x₀ m : ℂ) + (r : ℂ) * mzTanhC w
+  let ψR : (Fin N → ℝ) → (Fin N → ℝ) := fun u m => x₀ m + r * (mzTanhC (u m : ℂ)).re
+  have hψC_real : ∀ (u : Fin N → ℝ) (m : Fin N), ψC m (u m : ℂ) = (ψR u m : ℂ) := by
+    intro u m
+    dsimp [ψC, ψR]
+    have him := mzTanhC_ofReal_im (u m)
+    have h_eq := (Complex.re_add_im (mzTanhC (u m : ℂ))).symm
+    rw [him] at h_eq
+    have h_re : mzTanhC (u m : ℂ) = ((mzTanhC (u m : ℂ)).re : ℂ) := by simpa using h_eq
+    rw [h_re]
+    push_cast
+    rfl
+  have hψC_strip : ∀ (m : Fin N) {w : ℂ}, |w.im| < α →
+      |(ψC m w).re - x₀ m| < r ∧ |(ψC m w).im| < R := by
+    intro m w hw
+    have hw_pi : |w.im| ≤ Real.pi / 8 := hw.le.trans hα_pi
+    obtain ⟨_, hre_lt, him_le⟩ := mzTanhC_strip_props hw_pi
+    have h_re : (ψC m w).re - x₀ m = r * (mzTanhC w).re := by
+      dsimp [ψC]
+      simp
+    have h_im : (ψC m w).im = r * (mzTanhC w).im := by
+      dsimp [ψC]
+      simp
+    refine ⟨?_, ?_⟩
+    · rw [h_re, abs_mul, abs_of_pos hr]
+      calc r * |(mzTanhC w).re| < r * 1 := mul_lt_mul_of_pos_left hre_lt hr
+        _ = r := mul_one r
+    · rw [h_im, abs_mul, abs_of_pos hr]
+      calc r * |(mzTanhC w).im| ≤ r * (2 * |w.im|) :=
+            mul_le_mul_of_nonneg_left him_le hr.le
+        _ < r * (2 * α) := mul_lt_mul_of_pos_left (by linarith) hr
+        _ = 2 * r * α := by ring
+        _ ≤ R := hα_R
+  have hψR_cube : ∀ u : Fin N → ℝ, ψR u ∈ RealCube N x₀ r := by
+    intro u m
+    have h := (hψC_strip m (w := (u m : ℂ)) (by simp [hα_pos])).1
+    rwa [hψC_real u m, Complex.ofReal_re] at h
+  have hψC_diff : ∀ m : Fin N, DifferentiableOn ℂ (ψC m) {w : ℂ | |w.im| < α} := by
+    intro m
+    have h_sub : {w : ℂ | |w.im| < α} ⊆ {w : ℂ | |w.im| < Real.pi / 8} :=
+      fun w hw => lt_of_lt_of_le hw hα_pi
+    exact (differentiableOn_const (x₀ m : ℂ)).add
+      ((differentiableOn_const (r : ℂ)).mul (differentiableOn_mzTanhC.mono h_sub))
+  have hψR_cont : Continuous ψR := by
+    refine continuous_pi fun m => continuous_const.add (continuous_const.mul ?_)
+    have h_emb : Continuous (fun u : Fin N → ℝ => (u m : ℂ)) :=
+      Complex.continuous_ofReal.comp (continuous_apply m)
+    exact Complex.continuous_re.comp
+      (differentiableOn_mzTanhC.continuousOn.comp_continuous h_emb
+        (fun u => by simp [Real.pi_pos]))
+  let g₀ : (Fin N → ℝ) → ℂ := fun u => f₀ (ψR u)
+  let g_br : Fin N → (Fin N → ℂ) → ℂ := fun m w => f_br m (fun j => ψC j (w j))
+  have h_maps_br : ∀ m : Fin N,
+      Set.MapsTo (fun w : Fin N → ℂ => fun j => ψC j (w j))
+        (FlatStrip N α m) (LocalCrossBranch N x₀ r R m) := by
+    intro m w hw
+    obtain ⟨h1, h2⟩ := hψC_strip m hw.1
+    refine ⟨h1, h2, fun j hj => ?_⟩
+    have hj_im : (w j).im = 0 := hw.2 j hj
+    have hj_real : w j = ((w j).re : ℂ) :=
+      (Complex.re_add_im (w j)).symm.trans (by simp [hj_im])
+    dsimp only
+    rw [hj_real, hψC_real (fun k => (w k).re) j]
+    exact ⟨Complex.ofReal_im _, hψR_cube (fun k => (w k).re) j⟩
+  have hg₀_cont : Continuous g₀ :=
+    hf₀_cont.comp_continuous hψR_cont hψR_cube
+  have hg₀_bdd : ∀ u : Fin N → ℝ, ‖g₀ u‖ ≤ M := fun u => hf₀_bdd _ (hψR_cube u)
+  have hg_real : ∀ (m : Fin N) (u : Fin N → ℝ), g_br m (fun j => (u j : ℂ)) = g₀ u := by
+    intro m u
+    dsimp [g_br, g₀]
+    have h_eq : (fun j : Fin N => ψC j (u j : ℂ)) = fun j => (ψR u j : ℂ) :=
+      funext (hψC_real u)
+    rw [h_eq, h_real m (ψR u) (hψR_cube u)]
+  have hg_cont_br : ∀ m : Fin N, ContinuousOn (g_br m) (FlatStrip N α m) := by
+    intro m
+    have h_map_cont : ContinuousOn (fun w : Fin N → ℂ => fun j => ψC j (w j))
+        (FlatStrip N α m) := by
+      refine continuousOn_pi.mpr fun j => ?_
+      refine (hψC_diff j).continuousOn.comp (continuous_apply j).continuousOn ?_
+      intro w hw
+      by_cases hjm : j = m
+      · subst hjm; exact hw.1
+      · change |(w j).im| < α; rw [hw.2 j hjm, abs_zero]; exact hα_pos
+    exact (h_cont_br m).comp h_map_cont (h_maps_br m)
+  have hg_bdd_br : ∀ (m : Fin N), ∀ w ∈ FlatStrip N α m, ‖g_br m w‖ ≤ M :=
+    fun m w hw => h_bdd_br m _ (h_maps_br m hw)
+  have hg_holo_br : ∀ (m : Fin N) (u : Fin N → ℝ),
+      DifferentiableOn ℂ (fun ζ => g_br m (Function.update (fun j => (u j : ℂ)) m ζ))
+        {ζ : ℂ | |ζ.im| < α} := by
+    intro m u
+    have h_fn : (fun ζ : ℂ => g_br m (Function.update (fun j => (u j : ℂ)) m ζ)) =
+        (fun ω => f_br m (Function.update (fun j => (ψR u j : ℂ)) m ω)) ∘ (ψC m) := by
+      ext ζ
+      dsimp [g_br]
+      congr 1
+      ext j
+      by_cases hjm : j = m
+      · subst hjm; simp
+      · simp [hjm, hψC_real u j]
+    rw [h_fn]
+    exact (h_holo_br m (ψR u) (hψR_cube u)).comp (hψC_diff m)
+      (fun ζ hζ => hψC_strip m hζ)
+  obtain ⟨F, hF_holo, hF_bdd, hF_real, hF_strip⟩ :=
+    malgrange_zerner_flat_tube N hα_pos hM g₀ g_br hg₀_cont hg₀_bdd hg_real
+      hg_cont_br hg_bdd_br hg_holo_br
+  let x₀_c : Fin N → ℂ := fun m => (x₀ m : ℂ)
+  let φInv : (Fin N → ℂ) → (Fin N → ℂ) :=
+    fun z m => mzArtanhC ((z m - x₀ m) * (r : ℂ)⁻¹)
+  have hρ_div_le_quarter : ρ / r ≤ 1 / 4 := by
+    dsimp [ρ, mzCrossRadius]
+    rw [mul_div_cancel_left₀ _ hr.ne']
+    exact min_le_left _ _
+  have hρ_div_le_α : ρ / r ≤ α / (2 * ((N : ℝ) + 1)) := by
+    dsimp [ρ, mzCrossRadius, α]
+    rw [mul_div_cancel_left₀ _ hr.ne']
+    exact min_le_right _ _
+  have h_arg_lt : ∀ {z : Fin N → ℂ}, z ∈ Metric.ball x₀_c ρ →
+      ∀ m : Fin N, ‖(z m - x₀ m) * (r : ℂ)⁻¹‖ < ρ / r := by
+    intro z hz m
+    have hzm : ‖z m - x₀ m‖ < ρ := by
+      have hd := (dist_le_pi_dist z x₀_c m).trans_lt (Metric.mem_ball.mp hz)
+      simpa [dist_eq_norm, x₀_c] using hd
+    rw [norm_mul, norm_inv, Complex.norm_real, Real.norm_of_nonneg hr.le, ← div_eq_mul_inv]
+    exact div_lt_div_of_pos_right hzm hr
+  have hφInv_maps : Set.MapsTo φInv (Metric.ball x₀_c ρ) (TubeDomain (Octahedron N α)) := by
+    intro z hz
+    change ∑ m : Fin N, |(φInv z m).im| < α
+    have h_each : ∀ m : Fin N, |(φInv z m).im| ≤ α / ((N : ℝ) + 1) := by
+      intro m
+      have hlt := h_arg_lt hz m
+      have hle_third : ‖(z m - x₀ m) * (r : ℂ)⁻¹‖ ≤ 1 / 3 :=
+        hlt.le.trans (hρ_div_le_quarter.trans (by norm_num))
+      calc |(φInv z m).im| ≤ ‖φInv z m‖ := Complex.abs_im_le_norm _
+        _ ≤ 2 * ‖(z m - x₀ m) * (r : ℂ)⁻¹‖ := norm_mzArtanhC_le hle_third
+        _ ≤ 2 * (ρ / r) := mul_le_mul_of_nonneg_left hlt.le two_pos.le
+        _ ≤ 2 * (α / (2 * ((N : ℝ) + 1))) :=
+            mul_le_mul_of_nonneg_left hρ_div_le_α two_pos.le
+        _ = α / ((N : ℝ) + 1) := by
+            have hN1 : ((N : ℝ) + 1) ≠ 0 := by positivity
+            field_simp [hN1]
+    calc ∑ m : Fin N, |(φInv z m).im|
+        ≤ ∑ _m : Fin N, α / ((N : ℝ) + 1) := Finset.sum_le_sum fun m _ => h_each m
+      _ = (N : ℝ) * (α / ((N : ℝ) + 1)) := by
+          rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+      _ < α := by
+          have hN1_pos : 0 < (N : ℝ) + 1 := by positivity
+          rw [mul_div_assoc', div_lt_iff₀ hN1_pos]
+          linarith
+  have hφInv_diff : DifferentiableOn ℂ φInv (Metric.ball x₀_c ρ) := by
+    refine differentiableOn_pi.mpr fun m z hz => ?_
+    have hlt : ‖(z m - x₀ m) * (r : ℂ)⁻¹‖ < 1 / 2 :=
+      (h_arg_lt hz m).trans_le (hρ_div_le_quarter.trans (by norm_num))
+    have hd_art := (mzArtanhC_slit_and_deriv hlt).2.2.1
+    have hd_aff : DifferentiableAt ℂ
+        (fun w : Fin N → ℂ => (w m - x₀ m) * (r : ℂ)⁻¹) z :=
+      (((differentiable_apply m).differentiableAt.sub
+        (differentiableAt_const _)).mul (differentiableAt_const _))
+    exact (hd_art.differentiableAt.comp z hd_aff).differentiableWithinAt
+  have hψ_φInv : ∀ {z : Fin N → ℂ}, z ∈ Metric.ball x₀_c ρ →
+      ∀ m : Fin N, ψC m (φInv z m) = z m := by
+    intro z hz m
+    have hlt : ‖(z m - x₀ m) * (r : ℂ)⁻¹‖ < 1 / 2 :=
+      (h_arg_lt hz m).trans_le (hρ_div_le_quarter.trans (by norm_num))
+    dsimp [ψC, φInv]
+    rw [(mzArtanhC_slit_and_deriv hlt).2.2.2]
+    have hr_c : (r : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hr.ne'
+    field_simp [hr_c]
+    ring
+  let H : (Fin N → ℂ) → ℂ := fun z => F (φInv z)
+  have hH_holo : DifferentiableOn ℂ H (Metric.ball x₀_c ρ) :=
+    hF_holo.comp hφInv_diff hφInv_maps
+  have hH_bdd : ∀ z ∈ Metric.ball x₀_c ρ, ‖H z‖ ≤ M :=
+    fun z hz => hF_bdd (φInv z) (hφInv_maps hz)
+  have hH_real : ∀ x : Fin N → ℝ, (fun m => (x m : ℂ)) ∈ Metric.ball x₀_c ρ →
+      H (fun m => (x m : ℂ)) = f₀ x := by
+    intro x hx
+    let u : Fin N → ℝ := fun m => (φInv (fun k => (x k : ℂ)) m).re
+    have hφ_real : φInv (fun k => (x k : ℂ)) = fun m => (u m : ℂ) := by
+      ext m
+      have hlt := h_arg_lt hx m
+      have hu_abs : |(x m - x₀ m) * r⁻¹| < 1 / 2 := by
+        have h_eq : (((x m - x₀ m) * r⁻¹ : ℝ) : ℂ) = ((x m : ℂ) - x₀ m) * (r : ℂ)⁻¹ := by
+          push_cast; rfl
+        have hn : ‖(((x m - x₀ m) * r⁻¹ : ℝ) : ℂ)‖ < 1 / 2 := by
+          rw [h_eq]
+          exact hlt.trans_le (hρ_div_le_quarter.trans (by norm_num))
+        rwa [Complex.norm_real, Real.norm_eq_abs] at hn
+      have him : (φInv (fun k => (x k : ℂ)) m).im = 0 := by
+        dsimp [φInv]
+        have h_eq : ((x m : ℂ) - x₀ m) * (r : ℂ)⁻¹ = (((x m - x₀ m) * r⁻¹ : ℝ) : ℂ) := by
+          push_cast; rfl
+        rw [h_eq]
+        exact mzArtanhC_ofReal_im hu_abs
+      exact (Complex.re_add_im _).symm.trans (by simp [u, him])
+    dsimp [H]
+    rw [hφ_real, hF_real u]
+    dsimp [g₀]
+    congr 1
+    ext m
+    have h_inv_m := hψ_φInv hx m
+    rw [hφ_real, hψC_real u m] at h_inv_m
+    exact Complex.ofReal_inj.mp h_inv_m
+  have hH_branch : ∀ (m : Fin N),
+      ∀ z ∈ Metric.ball x₀_c ρ ∩ LocalCrossBranch N x₀ r R m, H z = f_br m z := by
+    intro m z ⟨hz_ball, hz_br⟩
+    have hφ_strip : φInv z ∈ FlatStrip N α m := by
+      refine ⟨?_, fun j hj => ?_⟩
+      · have hsum : ∑ k : Fin N, |(φInv z k).im| < α := hφInv_maps hz_ball
+        exact (Finset.single_le_sum (f := fun k : Fin N => |(φInv z k).im|)
+          (fun _ _ => abs_nonneg _) (Finset.mem_univ m)).trans_lt hsum
+      · have hj_im : (z j).im = 0 := (hz_br.2.2 j hj).1
+        have hj_eq : z j = ((z j).re : ℂ) :=
+          (Complex.re_add_im (z j)).symm.trans (by simp [hj_im])
+        have hlt := h_arg_lt hz_ball j
+        rw [hj_eq] at hlt
+        have hu_abs : |((z j).re - x₀ j) * r⁻¹| < 1 / 2 := by
+          have h_eq : ((((z j).re - x₀ j) * r⁻¹ : ℝ) : ℂ) =
+              (((z j).re : ℂ) - x₀ j) * (r : ℂ)⁻¹ := by push_cast; rfl
+          have hn : ‖((((z j).re - x₀ j) * r⁻¹ : ℝ) : ℂ)‖ < 1 / 2 := by
+            rw [h_eq]
+            exact hlt.trans_le (hρ_div_le_quarter.trans (by norm_num))
+          rwa [Complex.norm_real, Real.norm_eq_abs] at hn
+        dsimp [φInv]
+        rw [hj_eq]
+        have h_eq : (((z j).re : ℂ) - x₀ j) * (r : ℂ)⁻¹ =
+            ((((z j).re - x₀ j) * r⁻¹ : ℝ) : ℂ) := by push_cast; rfl
+        rw [h_eq]
+        exact mzArtanhC_ofReal_im hu_abs
+    dsimp [H]
+    rw [hF_strip m (φInv z) hφ_strip]
+    dsimp [g_br]
+    congr 1
+    ext j
+    exact hψ_φInv hz_ball j
+  refine ⟨H, hH_holo, hH_bdd, hH_real, hH_branch, fun m => ?_⟩
+  let sl : ℂ → (Fin N → ℂ) := fun ζ => Function.update x₀_c m ζ
+  have hsl_diff : Differentiable ℂ sl := by
+    refine differentiable_pi.mpr fun j => ?_
+    by_cases hjm : j = m
+    · subst hjm; simp only [sl, Function.update_self]; exact differentiable_id
+    · simp only [sl, Function.update_of_ne hjm]; exact differentiable_const _
+  have hsl_maps : Set.MapsTo sl (Metric.ball (x₀ m : ℂ) ρ) (Metric.ball x₀_c ρ) := by
+    intro ζ hζ
+    rw [Metric.mem_ball] at hζ ⊢
+    refine (dist_pi_lt_iff hρ_pos).mpr fun j => ?_
+    by_cases hjm : j = m
+    · subst hjm; simpa [sl, x₀_c] using hζ
+    · simp [sl, hjm, hρ_pos]
+  have hsl_holo : DifferentiableOn ℂ (fun ζ => H (Function.update x₀_c m ζ))
+      (Metric.ball (x₀ m : ℂ) ρ) :=
+    hH_holo.comp hsl_diff.differentiableOn hsl_maps
+  have hρ2_pos : 0 < ρ / 2 := half_pos hρ_pos
+  have hsl_cb : DifferentiableOn ℂ (fun ζ => H (Function.update x₀_c m ζ))
+      (Metric.closedBall (x₀_c m) (ρ / 2)) :=
+    hsl_holo.mono (Metric.closedBall_subset_ball (half_lt_self hρ_pos))
+  rw [partial_deriv_pi_eq_intervalIntegral H x₀_c m (ρ / 2) hρ2_pos hsl_cb,
+    norm_mul, norm_inv, norm_mul, norm_mul, Complex.norm_ofNat, Complex.norm_real,
+    Real.norm_of_nonneg Real.pi_pos.le, Complex.norm_I, mul_one]
+  have h_int_bd :
+      ‖∫ θ in (0 : ℝ)..(2 * Real.pi),
+        (I / (↑(ρ / 2) * exp (↑θ * I))) *
+          H (Function.update x₀_c m (x₀_c m + ↑(ρ / 2) * exp (↑θ * I)))‖ ≤
+        ((ρ / 2)⁻¹ * M) * |2 * Real.pi - 0| := by
+    refine intervalIntegral.norm_integral_le_of_norm_le_const fun θ _ => ?_
+    rw [norm_mul, norm_div, Complex.norm_I, norm_mul, Complex.norm_real,
+      Real.norm_of_nonneg hρ2_pos.le, Complex.norm_exp_ofReal_mul_I, mul_one, one_div]
+    refine mul_le_mul_of_nonneg_left ?_ (inv_nonneg.mpr hρ2_pos.le)
+    refine hH_bdd _ (hsl_maps ?_)
+    rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_left, norm_mul, Complex.norm_real,
+      Real.norm_of_nonneg hρ2_pos.le, Complex.norm_exp_ofReal_mul_I, mul_one]
+    exact half_lt_self hρ_pos
+  have h2pi_pos : 0 < 2 * Real.pi := by positivity
+  calc (2 * Real.pi)⁻¹ *
+        ‖∫ θ in (0 : ℝ)..(2 * Real.pi),
+          (I / (↑(ρ / 2) * exp (↑θ * I))) *
+            H (Function.update x₀_c m (x₀_c m + ↑(ρ / 2) * exp (↑θ * I)))‖
+      ≤ (2 * Real.pi)⁻¹ * (((ρ / 2)⁻¹ * M) * |2 * Real.pi - 0|) :=
+        mul_le_mul_of_nonneg_left h_int_bd (inv_nonneg.mpr h2pi_pos.le)
+    _ = 2 * M / ρ := by
+        rw [sub_zero, abs_of_pos h2pi_pos]
+        field_simp [h2pi_pos.ne', hρ_pos.ne']
 
 end QFT

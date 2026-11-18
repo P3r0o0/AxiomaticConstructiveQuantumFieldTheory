@@ -21115,5 +21115,1801 @@ theorem osterwalder_schrader_measure_reconstruction_of_data
     P.wightman_pct,
     fun P' => ⟨P'.wightman_unique_unconditional P, P'.tube_H_unique P⟩⟩
 
+lemma euclidSpatialVec_spatialPart_of_time_zero {v : Fin 4 → ℝ} (hv : v 0 = 0) :
+    euclidSpatialVec (spatialPart v) = v := by
+  ext μ
+  refine Fin.cases ?_ (fun i => ?_) μ
+  · simp [euclidSpatialVec, hv]
+  · simp [euclidSpatialVec, spatialPart]
+
+def euclidSpatialRot (U : SU2) (a : Fin 3 → ℝ) : Fin 3 → ℝ :=
+  spatialPart (euclidRotApply U (su2Conj U) (euclidSpatialVec a))
+
+lemma euclidRotApply_su2Conj_euclidSpatialVec (U : SU2) (a : Fin 3 → ℝ) :
+    euclidRotApply U (su2Conj U) (euclidSpatialVec a) =
+      euclidSpatialVec (euclidSpatialRot U a) :=
+  (euclidSpatialVec_spatialPart_of_time_zero (by
+    rw [euclidRotApply_su2Conj_time, euclidSpatialVec_zero_apply])).symm
+
+@[simp]
+lemma euclidSpatialRot_one (a : Fin 3 → ℝ) :
+    euclidSpatialRot 1 a = a := by
+  unfold euclidSpatialRot
+  have h1 : euclidRotApply 1 (su2Conj 1) (euclidSpatialVec a) = euclidSpatialVec a := by
+    rw [su2Conj_one, ← euclidRotOfSU2_mulVec, euclidRotOfSU2_one, Matrix.one_mulVec]
+  rw [h1, spatialPart_euclidSpatialVec]
+
+lemma euclidSpatialRot_mul (U₁ U₂ : SU2) (a : Fin 3 → ℝ) :
+    euclidSpatialRot (U₁ * U₂) a = euclidSpatialRot U₁ (euclidSpatialRot U₂ a) := by
+  have h_eq : euclidSpatialVec (euclidSpatialRot (U₁ * U₂) a) =
+      euclidSpatialVec (euclidSpatialRot U₁ (euclidSpatialRot U₂ a)) := by
+    rw [← euclidRotApply_su2Conj_euclidSpatialVec, ← euclidRotApply_su2Conj_euclidSpatialVec,
+        ← euclidRotApply_su2Conj_euclidSpatialVec, su2Conj_mul,
+        ← euclidRotOfSU2_mulVec, ← euclidRotOfSU2_mulVec, ← euclidRotOfSU2_mulVec,
+        euclidRotOfSU2_mul, Matrix.mulVec_mulVec]
+  simpa only [spatialPart_euclidSpatialVec] using congrArg spatialPart h_eq
+
+@[simp]
+lemma euclidSpatialRot_inv_apply (U : SU2) (a : Fin 3 → ℝ) :
+    euclidSpatialRot U⁻¹ (euclidSpatialRot U a) = a := by
+  rw [← euclidSpatialRot_mul, inv_mul_cancel, euclidSpatialRot_one]
+
+@[simp]
+lemma euclidSpatialRot_apply_inv (U : SU2) (a : Fin 3 → ℝ) :
+    euclidSpatialRot U (euclidSpatialRot U⁻¹ a) = a := by
+  rw [← euclidSpatialRot_mul, mul_inv_cancel, euclidSpatialRot_one]
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma continuous_euclidSpatialVec : Continuous euclidSpatialVec := by
+  refine continuous_pi (fun μ => ?_)
+  refine Fin.cases ?_ (fun i => ?_) μ
+  · exact continuous_const
+  · simpa [euclidSpatialVec] using continuous_apply i
+
+omit [Fintype ι] [DecidableEq ι] in
+lemma continuous_osConcatPoint_spatialShift_right (j k : ℕ)
+    (x : Fin j → Fin 4 → ℝ) (y : Fin k → Fin 4 → ℝ) :
+    Continuous (fun a : Fin 3 → ℝ => osConcatPoint j k x (fun i => y i + euclidSpatialVec a)) := by
+  refine continuous_pi (fun m => continuous_pi (fun μ => ?_))
+  by_cases hm : m.val < j
+  · have h_eq : m = Fin.castAdd k ⟨m.val, hm⟩ := by ext; rfl
+    have h_fn : (fun a : Fin 3 → ℝ =>
+        osConcatPoint j k x (fun i => y i + euclidSpatialVec a) m μ) =
+        fun _ : Fin 3 → ℝ => euclidTimeReflect (x (Fin.rev ⟨m.val, hm⟩)) μ := by
+      ext a
+      conv_lhs => rw [h_eq]
+      rw [osConcatPoint_castAdd]
+    rw [h_fn]
+    exact continuous_const
+  · have h_ge : j ≤ m.val := by omega
+    have h_eq : m = Fin.natAdd j ⟨m.val - j, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+      ext; dsimp; omega
+    have h_fn : (fun a : Fin 3 → ℝ =>
+        osConcatPoint j k x (fun i => y i + euclidSpatialVec a) m μ) =
+        fun a : Fin 3 → ℝ => y ⟨m.val - j, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ μ +
+          euclidSpatialVec a μ := by
+      ext a
+      conv_lhs => rw [h_eq]
+      rw [osConcatPoint_natAdd, Pi.add_apply]
+    rw [h_fn]
+    exact continuous_const.add ((continuous_apply μ).comp continuous_euclidSpatialVec)
+
+lemma continuousAt_osKernel_spatialShift_zero {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (𝒮 : SchwingerFamily ι)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (𝒮 n α) (orderedEuclidN n))
+    (A B : OSConfig ι) :
+    ContinuousAt (fun a : Fin 3 → ℝ => osKernel S 𝒮 A (osConfigSpatialShift a B)) 0 := by
+  rcases A with ⟨j, α, x, hx⟩
+  rcases B with ⟨k, α', y, hy⟩
+  rw [ContinuousAt]
+  dsimp [osKernel, osConfigSpatialShift]
+  refine tendsto_finsetSum _ (fun β _ => ?_)
+  refine Tendsto.mul tendsto_const_nhds ?_
+  let φ : (Fin 3 → ℝ) → (Fin (j + k) → Fin 4 → ℝ) :=
+    fun a => osConcatPoint j k x (fun i => y i + euclidSpatialVec a)
+  have hφ_cont : Continuous φ := continuous_osConcatPoint_spatialShift_right j k x y
+  have hφ0 : φ 0 = osConcatPoint j k x y := by
+    dsimp [φ]
+    congr 1
+    ext i μ
+    simp [euclidSpatialVec_zero]
+  have h_mem : φ 0 ∈ orderedEuclidN (j + k) := by
+    rw [hφ0]
+    exact osConcatPoint_mem_orderedEuclidN j k hx hy
+  have h_schw_at : ContinuousAt (𝒮 (j + k) (osConcatIdx j k β α')) (φ 0) :=
+    (hcont (j + k) (osConcatIdx j k β α')).continuousAt
+      ((isOpen_orderedEuclidN (j + k)).mem_nhds h_mem)
+  exact (ContinuousAt.comp (g := 𝒮 (j + k) (osConcatIdx j k β α')) (f := φ)
+    h_schw_at hφ_cont.continuousAt).tendsto
+
+lemma tendsto_osSpatialTranslate_osBasis_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (A : OSConfig ι) :
+    Tendsto (fun a : Fin 3 → ℝ => osSpatialTranslate D htrans a (osBasis D A))
+      (𝓝 0) (𝓝 (osBasis D A)) := by
+  have h_basis_shift : ∀ a : Fin 3 → ℝ,
+      osSpatialTranslate D htrans a (osBasis D A) = osBasis D (osConfigSpatialShift a A) := by
+    intro a
+    dsimp [osBasis]
+    rw [osSpatialTranslate_toOSHilbert]
+    dsimp [osSpatialTranslateLM]
+    rw [osLiftConfigMap_osBasisPre]
+  have h_z0 : osConfigSpatialShift 0 A = A :=
+    congrFun osConfigSpatialShift_zero A
+  have h_k : Tendsto
+      (fun a : Fin 3 → ℝ => RCLike.re (osKernel S D.𝒮 A (osConfigSpatialShift a A)))
+      (𝓝 0) (𝓝 (RCLike.re (osKernel S D.𝒮 A A))) := by
+    have h0 := (continuousAt_osKernel_spatialShift_zero S D.𝒮 hcont A A).tendsto
+    rw [h_z0] at h0
+    exact ((RCLike.reCLM (K := ℂ)).continuous.tendsto _).comp h0
+  have h_sq : Tendsto
+      (fun a : Fin 3 → ℝ => ‖osSpatialTranslate D htrans a (osBasis D A) - osBasis D A‖ ^ 2)
+      (𝓝 0) (𝓝 0) := by
+    have h_eq : (fun a : Fin 3 → ℝ =>
+        ‖osSpatialTranslate D htrans a (osBasis D A) - osBasis D A‖ ^ 2) =
+        fun a : Fin 3 → ℝ =>
+          2 * RCLike.re (osKernel S D.𝒮 A A) -
+            2 * RCLike.re (osKernel S D.𝒮 A (osConfigSpatialShift a A)) := by
+      ext a
+      rw [norm_sub_rev, h_basis_shift a, norm_sub_sq (𝕜 := ℂ)]
+      have h_n1 : ‖osBasis D A‖ ^ 2 = RCLike.re (osKernel S D.𝒮 A A) := by
+        rw [@norm_sq_eq_re_inner ℂ (OSHilbert D) _ _ _ (osBasis D A), inner_osBasis]
+      have h_n2 : ‖osBasis D (osConfigSpatialShift a A)‖ ^ 2 =
+          RCLike.re (osKernel S D.𝒮 A A) := by
+        rw [@norm_sq_eq_re_inner ℂ (OSHilbert D) _ _ _ (osBasis D (osConfigSpatialShift a A)),
+            inner_osBasis, osKernel_spatialShift_invariant S D.𝒮 htrans a A A]
+      rw [h_n1, h_n2, inner_osBasis]
+      ring
+    rw [h_eq]
+    have h_z : 2 * RCLike.re (osKernel S D.𝒮 A A) - 2 * RCLike.re (osKernel S D.𝒮 A A) = 0 := by
+      ring
+    have h_lim := (tendsto_const_nhds (x := 2 * RCLike.re (osKernel S D.𝒮 A A))).sub
+      (h_k.const_mul 2)
+    rwa [h_z] at h_lim
+  rw [Metric.tendsto_nhds_nhds]
+  intro ε hε
+  rcases Metric.tendsto_nhds_nhds.mp h_sq (ε ^ 2) (by positivity) with ⟨δ, hδ, h_δ⟩
+  refine ⟨δ, hδ, fun a ha => ?_⟩
+  rw [dist_eq_norm]
+  have h_lt_sq : ‖osSpatialTranslate D htrans a (osBasis D A) - osBasis D A‖ ^ 2 < ε ^ 2 := by
+    have hd := h_δ ha
+    rwa [Real.dist_eq, sub_zero, abs_of_nonneg (sq_nonneg _)] at hd
+  exact lt_of_pow_lt_pow_left₀ 2 hε.le h_lt_sq
+
+lemma tendsto_osSpatialTranslate_toOSHilbert_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (Ψ : OSPreHilbertSpace D) :
+    Tendsto (fun a : Fin 3 → ℝ => osSpatialTranslate D htrans a (toOSHilbert D Ψ))
+      (𝓝 0) (𝓝 (toOSHilbert D Ψ)) := by
+  have h_exp : toOSHilbert D Ψ =
+      ∑ A ∈ Ψ.toFinsupp.support, Ψ.toFinsupp A • osBasis D A := by
+    conv_lhs => rw [osPreHilbert_eq_sum_osBasisPre D Ψ]
+    rw [map_sum]
+    refine Finset.sum_congr rfl (fun A _ => map_smul (toOSHilbert D) _ _)
+  have h_fn : (fun a : Fin 3 → ℝ => osSpatialTranslate D htrans a (toOSHilbert D Ψ)) =
+      fun a : Fin 3 → ℝ => ∑ A ∈ Ψ.toFinsupp.support,
+        Ψ.toFinsupp A • osSpatialTranslate D htrans a (osBasis D A) := by
+    ext a
+    rw [h_exp, map_sum]
+    refine Finset.sum_congr rfl (fun A _ => map_smul _ _ _)
+  rw [h_fn, h_exp]
+  exact tendsto_finsetSum _ (fun A _ =>
+    (tendsto_osSpatialTranslate_osBasis_zero D htrans hcont A).const_smul _)
+
+lemma tendsto_osSpatialTranslate_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (x : OSHilbert D) :
+    Tendsto (fun a : Fin 3 → ℝ => osSpatialTranslate D htrans a x) (𝓝 0) (𝓝 x) := by
+  rw [Metric.tendsto_nhds_nhds]
+  intro ε hε
+  rcases Metric.denseRange_iff.mp
+      (UniformSpace.Completion.denseRange_coe (α := OSPreHilbertSpace D))
+      x (ε / 3) (by positivity) with ⟨Ψ, hΨ_dist⟩
+  let y : OSHilbert D := toOSHilbert D Ψ
+  have hy_lt : ‖y - x‖ < ε / 3 := by
+    rwa [dist_comm, dist_eq_norm] at hΨ_dist
+  rcases Metric.tendsto_nhds_nhds.mp
+      (tendsto_osSpatialTranslate_toOSHilbert_zero D htrans hcont Ψ)
+      (ε / 3) (by positivity) with ⟨δ, hδ, h_δ⟩
+  refine ⟨δ, hδ, fun a ha => ?_⟩
+  rw [dist_eq_norm]
+  let Ua := osSpatialTranslate D htrans a
+  have h_split : Ua x - x = Ua (x - y) + (Ua y - y) + (y - x) := by
+    rw [map_sub]
+    abel
+  rw [h_split]
+  have h1 : ‖Ua (x - y)‖ = ‖y - x‖ := by
+    dsimp [Ua]
+    rw [norm_osSpatialTranslate, norm_sub_rev]
+  have h2 : ‖Ua y - y‖ < ε / 3 := by
+    simpa [Ua, y, dist_eq_norm] using h_δ ha
+  calc ‖Ua (x - y) + (Ua y - y) + (y - x)‖
+      ≤ ‖Ua (x - y)‖ + ‖Ua y - y‖ + ‖y - x‖ :=
+        (norm_add_le _ _).trans (add_le_add (norm_add_le _ _) le_rfl)
+    _ < ε / 3 + ε / 3 + ε / 3 := by linarith
+    _ = ε := by ring
+
+theorem continuous_osSpatialTranslate_of_continuousOn
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (x : OSHilbert D) :
+    Continuous (fun a : Fin 3 → ℝ => osSpatialTranslate D htrans a x) := by
+  rw [continuous_iff_continuousAt]
+  intro a₀
+  rw [ContinuousAt, Metric.tendsto_nhds_nhds]
+  intro ε hε
+  rcases Metric.tendsto_nhds_nhds.mp (tendsto_osSpatialTranslate_zero D htrans hcont x) ε hε with
+    ⟨δ, hδ, h_δ⟩
+  refine ⟨δ, hδ, fun a ha => ?_⟩
+  have h_sub_dist : dist (a - a₀) 0 < δ := by
+    simpa [dist_eq_norm] using ha
+  have h_step := h_δ h_sub_dist
+  rw [dist_eq_norm] at h_step ⊢
+  have h_eq : osSpatialTranslate D htrans a x - osSpatialTranslate D htrans a₀ x =
+      osSpatialTranslate D htrans a₀ (osSpatialTranslate D htrans (a - a₀) x - x) := by
+    rw [map_sub, ← ContinuousLinearMap.comp_apply, ← osSpatialTranslate_add, add_sub_cancel]
+  rw [h_eq, norm_osSpatialTranslate]
+  exact h_step
+
+theorem continuous_osSpatialTranslate_uncurry_of_continuousOn
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n)) :
+    Continuous (fun p : (Fin 3 → ℝ) × OSHilbert D => osSpatialTranslate D htrans p.1 p.2) := by
+  rw [continuous_iff_continuousAt]
+  intro ⟨a₀, x₀⟩
+  rw [ContinuousAt, Metric.tendsto_nhds_nhds]
+  intro ε hε
+  rcases Metric.tendsto_nhds_nhds.mp
+      ((continuous_osSpatialTranslate_of_continuousOn D htrans hcont x₀).continuousAt (x := a₀))
+      (ε / 2) (half_pos hε) with ⟨δ, hδ, h_δ⟩
+  refine ⟨min δ (ε / 2), lt_min hδ (half_pos hε), fun ⟨a, x⟩ hp => ?_⟩
+  have ha' : dist a a₀ < δ := by
+    have h1 : dist a a₀ ≤ dist (a, x) (a₀, x₀) := le_max_left _ _
+    exact h1.trans_lt (lt_of_lt_of_le hp (min_le_left _ _))
+  have hx' : dist x x₀ < ε / 2 := by
+    have h1 : dist x x₀ ≤ dist (a, x) (a₀, x₀) := le_max_right _ _
+    exact h1.trans_lt (lt_of_lt_of_le hp (min_le_right _ _))
+  rw [dist_eq_norm] at hx' ⊢
+  have h_split : osSpatialTranslate D htrans a x - osSpatialTranslate D htrans a₀ x₀ =
+      osSpatialTranslate D htrans a (x - x₀) +
+        (osSpatialTranslate D htrans a x₀ - osSpatialTranslate D htrans a₀ x₀) := by
+    rw [map_sub]
+    abel
+  rw [h_split]
+  have h1 : ‖osSpatialTranslate D htrans a (x - x₀)‖ < ε / 2 := by
+    rwa [norm_osSpatialTranslate]
+  have h2 : ‖osSpatialTranslate D htrans a x₀ - osSpatialTranslate D htrans a₀ x₀‖ < ε / 2 := by
+    simpa [dist_eq_norm] using h_δ ha'
+  calc ‖osSpatialTranslate D htrans a (x - x₀) +
+        (osSpatialTranslate D htrans a x₀ - osSpatialTranslate D htrans a₀ x₀)‖
+      ≤ ‖osSpatialTranslate D htrans a (x - x₀)‖ +
+        ‖osSpatialTranslate D htrans a x₀ - osSpatialTranslate D htrans a₀ x₀‖ := norm_add_le _ _
+    _ < ε / 2 + ε / 2 := add_lt_add h1 h2
+    _ = ε := add_halves ε
+
+theorem canonicalOSHolomorphicSemigroupTotal_eq_zero_of_notMem
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    {z : ℂ} (hz : z ∉ rightHalfPlane) :
+    canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z = 0 := by
+  have hz' : ¬ 0 ≤ z.re := hz
+  unfold canonicalOSHolomorphicSemigroupTotal semigroupRightHalfPlaneTotal
+  exact dif_neg hz'
+
+theorem norm_canonicalOSHolomorphicSemigroupTotal_apply_le
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    (z : ℂ) (x : OSHilbert D) :
+    ‖canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z x‖ ≤ ‖x‖ := by
+  by_cases hz : z ∈ rightHalfPlane
+  · rw [canonicalOSHolomorphicSemigroupTotal_eq D htrans hcontr hsmooth hz]
+    exact (canonicalOSHolomorphicSemigroup D htrans hcontr hsmooth).contraction z hz x
+  · rw [canonicalOSHolomorphicSemigroupTotal_eq_zero_of_notMem D htrans hcontr hsmooth hz,
+        _root_.zero_apply, norm_zero]
+    exact norm_nonneg x
+
+theorem opNorm_canonicalOSHolomorphicSemigroupTotal_le_one
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    (z : ℂ) :
+    ‖canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z‖ ≤ 1 :=
+  ContinuousLinearMap.opNorm_le_bound _ zero_le_one (fun x => by
+    simpa using norm_canonicalOSHolomorphicSemigroupTotal_apply_le D htrans hcontr hsmooth z x)
+
+theorem continuousOn_canonicalOSHolomorphicSemigroupTotal_uncurry
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n)) :
+    ContinuousOn
+      (fun p : ℂ × OSHilbert D =>
+        canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth p.1 p.2)
+      (rightHalfPlane ×ˢ Set.univ) := by
+  intro ⟨z₀, x₀⟩ hp₀
+  have hz₀ : z₀ ∈ rightHalfPlane := hp₀.1
+  rw [ContinuousWithinAt, Metric.tendsto_nhdsWithin_nhds]
+  intro ε hε
+  have h_at := continuousOn_canonicalOSHolomorphicSemigroupTotal_apply
+    D htrans hcontr hsmooth x₀ z₀ hz₀
+  rcases Metric.tendsto_nhdsWithin_nhds.mp h_at (ε / 2) (half_pos hε) with ⟨δ, hδ, h_δ⟩
+  refine ⟨min δ (ε / 2), lt_min hδ (half_pos hε), fun ⟨z, x⟩ hp h_dist => ?_⟩
+  have hz : z ∈ rightHalfPlane := hp.1
+  have hz_dist : dist z z₀ < δ :=
+    (le_max_left _ _).trans_lt (lt_of_lt_of_le h_dist (min_le_left _ _))
+  have hx_dist : dist x x₀ < ε / 2 :=
+    (le_max_right _ _).trans_lt (lt_of_lt_of_le h_dist (min_le_right _ _))
+  let Z := canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth
+  rw [dist_eq_norm] at hx_dist ⊢
+  have h_split : Z z x - Z z₀ x₀ = Z z (x - x₀) + (Z z x₀ - Z z₀ x₀) := by
+    rw [map_sub]
+    abel
+  rw [h_split]
+  have h1 : ‖Z z (x - x₀)‖ < ε / 2 :=
+    (norm_canonicalOSHolomorphicSemigroupTotal_apply_le D htrans hcontr hsmooth z (x - x₀)).trans_lt
+      hx_dist
+  have h2 : ‖Z z x₀ - Z z₀ x₀‖ < ε / 2 := by
+    simpa [Z, dist_eq_norm] using h_δ hz hz_dist
+  calc ‖Z z (x - x₀) + (Z z x₀ - Z z₀ x₀)‖
+      ≤ ‖Z z (x - x₀)‖ + ‖Z z x₀ - Z z₀ x₀‖ := norm_add_le _ _
+    _ < ε / 2 + ε / 2 := add_lt_add h1 h2
+    _ = ε := add_halves ε
+
+theorem canonicalOSHolomorphicSemigroupTotal_real_eq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    (τ : ℝ) (hτ : 0 ≤ τ) :
+    canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth (τ : ℂ) =
+      osContractionSemigroup D hcontr τ hτ := by
+  rw [canonicalOSHolomorphicSemigroupTotal_eq D htrans hcontr hsmooth
+      (ofReal_mem_rightHalfPlane hτ)]
+  exact (canonicalOSHolomorphicSemigroup D htrans hcontr hsmooth).real_eq τ hτ
+
+theorem canonicalOSHolomorphicSemigroupTotal_add
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    {z₁ z₂ : ℂ} (hz₁ : z₁ ∈ rightHalfPlane) (hz₂ : z₂ ∈ rightHalfPlane) :
+    canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth (z₁ + z₂) =
+      (canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z₁).comp
+        (canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z₂) := by
+  rw [canonicalOSHolomorphicSemigroupTotal_eq D htrans hcontr hsmooth
+        (add_mem_rightHalfPlane hz₁ hz₂),
+      canonicalOSHolomorphicSemigroupTotal_eq D htrans hcontr hsmooth hz₁,
+      canonicalOSHolomorphicSemigroupTotal_eq D htrans hcontr hsmooth hz₂]
+  exact (canonicalOSHolomorphicSemigroup D htrans hcontr hsmooth).map_add z₁ z₂ hz₁ hz₂
+
+theorem osSpatialTranslate_comm_canonicalOSHolomorphicSemigroupTotal
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    (a : Fin 3 → ℝ) (z : ℂ) :
+    (osSpatialTranslate D htrans a).comp
+        (canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z) =
+      (canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z).comp
+        (osSpatialTranslate D htrans a) := by
+  by_cases hz : z ∈ rightHalfPlane
+  · rw [canonicalOSHolomorphicSemigroupTotal_eq D htrans hcontr hsmooth hz]
+    exact (canonicalOSHolomorphicSemigroup D htrans hcontr hsmooth).comm_spatial htrans a z hz
+  · rw [canonicalOSHolomorphicSemigroupTotal_eq_zero_of_notMem D htrans hcontr hsmooth hz,
+        ContinuousLinearMap.comp_zero, ContinuousLinearMap.zero_comp]
+
+theorem osSpinorRot_comm_canonicalOSHolomorphicSemigroupTotal
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hrot : OSSpinorRotCovariant R D.𝒮)
+    (hcontr : OSContractionCondition D)
+    (hsmooth : ∀ (n : ℕ) (α : Fin n → ι), ContDiffOn ℝ (⊤ : ℕ∞) (D.𝒮 n α) (orderedEuclidN n))
+    (U : SU2) (z : ℂ) :
+    (osSpinorRot D hrot U).comp
+        (canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z) =
+      (canonicalOSHolomorphicSemigroupTotal D htrans hcontr hsmooth z).comp
+        (osSpinorRot D hrot U) := by
+  by_cases hz : z ∈ rightHalfPlane
+  · rw [canonicalOSHolomorphicSemigroupTotal_eq D htrans hcontr hsmooth hz]
+    exact commute_semigroupRightHalfPlane
+      (T := fun s : NNReal => osContractionSemigroup D hcontr (s : ℝ) s.2)
+      (fun s₁ s₂ => osContractionSemigroup_add D hcontr (s₁ : ℝ) (s₂ : ℝ) s₁.2 s₂.2)
+      (fun s => osContractionSemigroup_nonneg D htrans hcontr (s : ℝ) s.2)
+      (opNorm_osContractionSemigroup_le_one D hcontr 1 zero_le_one)
+      (continuous_osContractionSemigroup_of_continuousOn D htrans hcontr
+        (fun n α => (hsmooth n α).continuousOn))
+      (osSpinorRot_comm_osContractionSemigroup D hrot hcontr U 1 zero_le_one) hz
+  · rw [canonicalOSHolomorphicSemigroupTotal_eq_zero_of_notMem D htrans hcontr hsmooth hz,
+        ContinuousLinearMap.comp_zero, ContinuousLinearMap.zero_comp]
+
+lemma time_pos_euclidTimeVec_add_spatial {ε : ℝ} (hε : 0 < ε) (x_sp : Fin 3 → ℝ) :
+    0 < (euclidTimeVec ε + euclidSpatialVec x_sp) 0 :=
+  time_pos_of_add_euclidSpatialVec (by simpa [euclidTimeVec] using hε) x_sp
+
+def osPrependShiftLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x_sp : Fin 3 → ℝ)
+    (ε : ℝ) (hε : 0 < ε) :
+    OSPreHilbertSpace D →ₗ[ℂ] OSPreHilbertSpace D :=
+  (osFieldPrependLM D α₀ (euclidTimeVec ε + euclidSpatialVec x_sp)
+    (time_pos_euclidTimeVec_add_spatial hε x_sp)).comp (osTimeShiftLM D ε hε.le)
+
+lemma osSpatialTranslateLM_comm_osTimeShiftLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (a : Fin 3 → ℝ) (τ : ℝ) (hτ : 0 ≤ τ) :
+    (osSpatialTranslateLM D a).comp (osTimeShiftLM D τ hτ) =
+      (osTimeShiftLM D τ hτ).comp (osSpatialTranslateLM D a) := by
+  unfold osSpatialTranslateLM osTimeShiftLM
+  rw [← osLiftConfigMap_comp, ← osLiftConfigMap_comp, osConfigSpatialShift_comm_osConfigTimeShift]
+
+theorem osSpatialTranslateLM_osPrependShiftLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x_sp a : Fin 3 → ℝ)
+    (ε : ℝ) (hε : 0 < ε) (Ψ : OSPreHilbertSpace D) :
+    osSpatialTranslateLM D a (osPrependShiftLM D α₀ x_sp ε hε Ψ) =
+      osPrependShiftLM D α₀ (x_sp + a) ε hε (osSpatialTranslateLM D a Ψ) := by
+  unfold osPrependShiftLM
+  have h_comm : osSpatialTranslateLM D a (osTimeShiftLM D ε hε.le Ψ) =
+      osTimeShiftLM D ε hε.le (osSpatialTranslateLM D a Ψ) :=
+    LinearMap.congr_fun (osSpatialTranslateLM_comm_osTimeShiftLM D a ε hε.le) Ψ
+  rw [LinearMap.comp_apply, osSpatialTranslateLM_osFieldPrependLM, h_comm, LinearMap.comp_apply]
+  have h_pt : euclidTimeVec ε + euclidSpatialVec x_sp + euclidSpatialVec a =
+      euclidTimeVec ε + euclidSpatialVec (x_sp + a) := by
+    rw [add_assoc, euclidSpatialVec_add]
+  congr 2
+
+theorem osPrependShiftLM_eq_conjugate_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x_sp : Fin 3 → ℝ)
+    (ε : ℝ) (hε : 0 < ε) (Ψ : OSPreHilbertSpace D) :
+    osPrependShiftLM D α₀ x_sp ε hε Ψ =
+      osSpatialTranslateLM D x_sp
+        (osPrependShiftLM D α₀ 0 ε hε (osSpatialTranslateLM D (-x_sp) Ψ)) := by
+  have h_cancel : osSpatialTranslateLM D x_sp (osSpatialTranslateLM D (-x_sp) Ψ) = Ψ := by
+    have h1 := LinearMap.congr_fun (osSpatialTranslateLM_add D x_sp (-x_sp)).symm Ψ
+    simp only [LinearMap.comp_apply, add_neg_cancel, osSpatialTranslateLM_zero,
+      LinearMap.id_apply] at h1
+    exact h1
+  rw [osSpatialTranslateLM_osPrependShiftLM, zero_add, h_cancel]
+
+theorem osSpinorRotLM_osPrependShiftLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (U : SU2) (α₀ : ι) (x_sp : Fin 3 → ℝ)
+    (ε : ℝ) (hε : 0 < ε) (Ψ : OSPreHilbertSpace D) :
+    osSpinorRotLM D U (osPrependShiftLM D α₀ x_sp ε hε Ψ) =
+      ∑ β₀ : ι, osSpinorRotMatrix R U⁻¹ α₀ β₀ •
+        osPrependShiftLM D β₀ (euclidSpatialRot U x_sp) ε hε (osSpinorRotLM D U Ψ) := by
+  unfold osPrependShiftLM
+  rw [LinearMap.comp_apply, osSpinorRotLM_osFieldPrependLM]
+  refine Finset.sum_congr rfl (fun β₀ _ => ?_)
+  congr 1
+  rw [← LinearMap.comp_apply (osSpinorRotLM D U) (osTimeShiftLM D ε hε.le),
+      osSpinorRotLM_comm_osTimeShiftLM, LinearMap.comp_apply, LinearMap.comp_apply]
+  have h_pt : euclidRotApply U (su2Conj U) (euclidTimeVec ε + euclidSpatialVec x_sp) =
+      euclidTimeVec ε + euclidSpatialVec (euclidSpatialRot U x_sp) := by
+    rw [euclidRotApply_add, euclidRotApply_su2Conj_euclidTimeVec,
+        euclidRotApply_su2Conj_euclidSpatialVec]
+  congr 2
+
+theorem osTimeShiftLM_osPrependShiftLM_osTimeShiftLM
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (α₀ : ι) (x_sp : Fin 3 → ℝ)
+    {ε : ℝ} (hε : 0 < ε) {δ : ℝ} (hδ : 0 ≤ δ) (Ψ : OSPreHilbertSpace D) :
+    osTimeShiftLM D δ hδ (osPrependShiftLM D α₀ x_sp ε hε (osTimeShiftLM D δ hδ Ψ)) =
+      osPrependShiftLM D α₀ x_sp (ε + δ) (by linarith) Ψ := by
+  unfold osPrependShiftLM
+  rw [LinearMap.comp_apply, osTimeShiftLM_osFieldPrependLM,
+      ← LinearMap.comp_apply (osTimeShiftLM D ε hε.le) (osTimeShiftLM D δ hδ),
+      ← osTimeShiftLM_add, LinearMap.comp_apply]
+  have h_pt : euclidTimeVec ε + euclidSpatialVec x_sp + euclidTimeVec δ =
+      euclidTimeVec (ε + δ) + euclidSpatialVec x_sp := by
+    ext μ
+    fin_cases μ <;> · simp [euclidTimeVec, euclidSpatialVec]; try ring
+  congr 2
+
+def OSDampedFieldBounded {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Prop :=
+  ∃ (C₀ : ℝ) (K : ℕ), 0 ≤ C₀ ∧
+    ∀ (α₀ : ι) (x_sp : Fin 3 → ℝ) (ε : ℝ) (hε : 0 < ε) (Ψ : OSPreHilbertSpace D),
+      ‖osPrependShiftLM D α₀ x_sp ε hε Ψ‖ ≤ C₀ * (1 + ε⁻¹) ^ K * ‖Ψ‖
+
+theorem osDampedFieldBounded_of_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (h0 : ∃ (C₀ : ℝ) (K : ℕ), 0 ≤ C₀ ∧
+      ∀ (α₀ : ι) (ε : ℝ) (hε : 0 < ε) (Ψ : OSPreHilbertSpace D),
+        ‖osPrependShiftLM D α₀ 0 ε hε Ψ‖ ≤ C₀ * (1 + ε⁻¹) ^ K * ‖Ψ‖) :
+    OSDampedFieldBounded D := by
+  rcases h0 with ⟨C₀, K, hC₀, h_bd⟩
+  refine ⟨C₀, K, hC₀, fun α₀ x_sp ε hε Ψ => ?_⟩
+  rw [osPrependShiftLM_eq_conjugate_zero, norm_osSpatialTranslateLM D htrans x_sp]
+  exact (h_bd α₀ ε hε (osSpatialTranslateLM D (-x_sp) Ψ)).trans_eq
+    (by rw [norm_osSpatialTranslateLM D htrans (-x_sp)])
+
+def osDampedFieldPreCLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hdamped : OSDampedFieldBounded D)
+    (α₀ : ι) (x_sp : Fin 3 → ℝ) (ε : ℝ) (hε : 0 < ε) :
+    OSPreHilbertSpace D →L[ℂ] OSPreHilbertSpace D :=
+  let C₀ := Classical.choose hdamped
+  let K := Classical.choose (Classical.choose_spec hdamped)
+  (osPrependShiftLM D α₀ x_sp ε hε).mkContinuous (C₀ * (1 + ε⁻¹) ^ K)
+    (fun Ψ => (Classical.choose_spec (Classical.choose_spec hdamped)).2 α₀ x_sp ε hε Ψ)
+
+def osDampedFieldCLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hdamped : OSDampedFieldBounded D)
+    (α₀ : ι) (x_sp : Fin 3 → ℝ) (ε : ℝ) (hε : 0 < ε) :
+    OSHilbert D →L[ℂ] OSHilbert D :=
+  (osDampedFieldPreCLM D hdamped α₀ x_sp ε hε).completion
+
+@[simp]
+lemma osDampedFieldCLM_toOSHilbert {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hdamped : OSDampedFieldBounded D)
+    (α₀ : ι) (x_sp : Fin 3 → ℝ) (ε : ℝ) (hε : 0 < ε) (Ψ : OSPreHilbertSpace D) :
+    osDampedFieldCLM D hdamped α₀ x_sp ε hε (toOSHilbert D Ψ) =
+      toOSHilbert D (osPrependShiftLM D α₀ x_sp ε hε Ψ) :=
+  ContinuousLinearMap.completion_apply_coe (osDampedFieldPreCLM D hdamped α₀ x_sp ε hε) Ψ
+
+theorem exists_osDampedFieldCLM_bound {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hdamped : OSDampedFieldBounded D) :
+    ∃ (C₀ : ℝ) (K : ℕ), 0 ≤ C₀ ∧
+      ∀ (α₀ : ι) (x_sp : Fin 3 → ℝ) (ε : ℝ) (hε : 0 < ε) (x : OSHilbert D),
+        ‖osDampedFieldCLM D hdamped α₀ x_sp ε hε x‖ ≤ C₀ * (1 + ε⁻¹) ^ K * ‖x‖ := by
+  let C₀ := Classical.choose hdamped
+  let K := Classical.choose (Classical.choose_spec hdamped)
+  have hspec := Classical.choose_spec (Classical.choose_spec hdamped)
+  refine ⟨C₀, K, hspec.1, fun α₀ x_sp ε hε x => ?_⟩
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_le (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change ‖osDampedFieldCLM D hdamped α₀ x_sp ε hε (toOSHilbert D Ψ)‖ ≤
+      C₀ * (1 + ε⁻¹) ^ K * ‖toOSHilbert D Ψ‖
+    rw [osDampedFieldCLM_toOSHilbert, norm_toOSHilbert, norm_toOSHilbert]
+    exact hspec.2 α₀ x_sp ε hε Ψ
+
+@[simp]
+theorem osDampedFieldCLM_osVacuum {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hdamped : OSDampedFieldBounded D)
+    (α₀ : ι) (x_sp : Fin 3 → ℝ) (ε : ℝ) (hε : 0 < ε) :
+    osDampedFieldCLM D hdamped α₀ x_sp ε hε (osVacuum D) =
+      osOneParticleState D α₀ (euclidTimeVec ε + euclidSpatialVec x_sp)
+        (time_pos_euclidTimeVec_add_spatial hε x_sp) := by
+  dsimp [osVacuum, osOneParticleState]
+  rw [osDampedFieldCLM_toOSHilbert]
+  unfold osPrependShiftLM
+  rw [LinearMap.comp_apply, osTimeShiftLM_vacuumPre]
+
+theorem osDampedFieldCLM_osIteratedFieldState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hdamped : OSDampedFieldBounded D)
+    (n : ℕ) (α₀ : ι) (α : Fin n → ι) (x_sp : Fin 3 → ℝ)
+    (x : Fin n → Fin 4 → ℝ) (hx : x ∈ posOrderedEuclidN n) (ε : ℝ) (hε : 0 < ε) :
+    osDampedFieldCLM D hdamped α₀ x_sp ε hε (osIteratedFieldState D n α x hx) =
+      osIteratedFieldState D (n + 1) (Fin.cons α₀ α)
+        (osPrependPoint n (euclidTimeVec ε + euclidSpatialVec x_sp)
+          (fun i => x i + euclidTimeVec ε))
+        (osPrependPoint_mem_posOrderedEuclidN n
+          (time_pos_euclidTimeVec_add_spatial hε x_sp)
+          (timeShift_mem_posOrderedEuclidN n hx hε.le)) := by
+  unfold osIteratedFieldState
+  rw [osDampedFieldCLM_toOSHilbert]
+  congr 1
+  unfold osPrependShiftLM
+  rw [LinearMap.comp_apply, osIteratedFieldPre_eq_osBasisPre]
+  unfold osTimeShiftLM
+  rw [osLiftConfigMap_osBasisPre]
+  unfold osFieldPrependLM
+  rw [osLiftConfigMap_osBasisPre, osIteratedFieldPre_eq_osBasisPre]
+  rfl
+
+theorem osSpatialTranslate_osDampedFieldCLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hdamped : OSDampedFieldBounded D) (α₀ : ι) (x_sp a : Fin 3 → ℝ)
+    (ε : ℝ) (hε : 0 < ε) (x : OSHilbert D) :
+    osSpatialTranslate D htrans a (osDampedFieldCLM D hdamped α₀ x_sp ε hε x) =
+      osDampedFieldCLM D hdamped α₀ (x_sp + a) ε hε (osSpatialTranslate D htrans a x) := by
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osSpatialTranslate D htrans a
+        (osDampedFieldCLM D hdamped α₀ x_sp ε hε (toOSHilbert D Ψ)) =
+      osDampedFieldCLM D hdamped α₀ (x_sp + a) ε hε
+        (osSpatialTranslate D htrans a (toOSHilbert D Ψ))
+    rw [osDampedFieldCLM_toOSHilbert, osSpatialTranslate_toOSHilbert,
+        osSpatialTranslate_toOSHilbert, osDampedFieldCLM_toOSHilbert,
+        osSpatialTranslateLM_osPrependShiftLM]
+
+theorem osDampedFieldCLM_eq_conjugate_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hdamped : OSDampedFieldBounded D) (α₀ : ι) (x_sp : Fin 3 → ℝ)
+    (ε : ℝ) (hε : 0 < ε) (x : OSHilbert D) :
+    osDampedFieldCLM D hdamped α₀ x_sp ε hε x =
+      osSpatialTranslate D htrans x_sp
+        (osDampedFieldCLM D hdamped α₀ 0 ε hε (osSpatialTranslate D htrans (-x_sp) x)) := by
+  have h_cancel : osSpatialTranslate D htrans x_sp (osSpatialTranslate D htrans (-x_sp) x) = x := by
+    have h1 := DFunLike.congr_fun
+      (osSpatialTranslate_add D htrans x_sp (-x_sp)).symm x
+    simp only [ContinuousLinearMap.comp_apply, add_neg_cancel, osSpatialTranslate_zero,
+      ContinuousLinearMap.id_apply] at h1
+    exact h1
+  rw [osSpatialTranslate_osDampedFieldCLM, zero_add, h_cancel]
+
+theorem continuous_osDampedFieldCLM_apply {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (hdamped : OSDampedFieldBounded D) (α₀ : ι) (ε : ℝ) (hε : 0 < ε) (v₀ : OSHilbert D) :
+    Continuous (fun x_sp : Fin 3 → ℝ => osDampedFieldCLM D hdamped α₀ x_sp ε hε v₀) := by
+  rw [continuous_iff_continuousAt]
+  intro x₀
+  rw [ContinuousAt, Metric.tendsto_nhds_nhds]
+  intro δ hδ
+  let A₀ := osDampedFieldCLM D hdamped α₀ 0 ε hε
+  let w₀ := A₀ (osSpatialTranslate D htrans (-x₀) v₀)
+  have h1_cont : Continuous (fun x_sp : Fin 3 → ℝ => osSpatialTranslate D htrans (-x_sp) v₀) :=
+    (continuous_osSpatialTranslate_of_continuousOn D htrans hcont v₀).comp continuous_neg
+  have h2_cont : Continuous (fun x_sp : Fin 3 → ℝ => osSpatialTranslate D htrans x_sp w₀) :=
+    continuous_osSpatialTranslate_of_continuousOn D htrans hcont w₀
+  rcases Metric.tendsto_nhds_nhds.mp (h1_cont.continuousAt (x := x₀))
+      ((δ / 2) / (‖A₀‖ + 1)) (div_pos (half_pos hδ) (by positivity)) with ⟨r₁, hr₁, h_r₁⟩
+  rcases Metric.tendsto_nhds_nhds.mp (h2_cont.continuousAt (x := x₀))
+      (δ / 2) (half_pos hδ) with ⟨r₂, hr₂, h_r₂⟩
+  refine ⟨min r₁ r₂, lt_min hr₁ hr₂, fun x_sp hx => ?_⟩
+  have hx₁ : dist x_sp x₀ < r₁ := lt_of_lt_of_le hx (min_le_left _ _)
+  have hx₂ : dist x_sp x₀ < r₂ := lt_of_lt_of_le hx (min_le_right _ _)
+  rw [dist_eq_norm, osDampedFieldCLM_eq_conjugate_zero D htrans hdamped α₀ x_sp ε hε v₀,
+      osDampedFieldCLM_eq_conjugate_zero D htrans hdamped α₀ x₀ ε hε v₀]
+  have h_split :
+      osSpatialTranslate D htrans x_sp (A₀ (osSpatialTranslate D htrans (-x_sp) v₀)) -
+        osSpatialTranslate D htrans x₀ w₀ =
+      osSpatialTranslate D htrans x_sp
+        (A₀ (osSpatialTranslate D htrans (-x_sp) v₀ - osSpatialTranslate D htrans (-x₀) v₀)) +
+        (osSpatialTranslate D htrans x_sp w₀ - osSpatialTranslate D htrans x₀ w₀) := by
+    dsimp [w₀]
+    rw [map_sub, map_sub]
+    abel
+  change ‖osSpatialTranslate D htrans x_sp (A₀ (osSpatialTranslate D htrans (-x_sp) v₀)) -
+      osSpatialTranslate D htrans x₀ w₀‖ < δ
+  rw [h_split]
+  have hb₁ : ‖osSpatialTranslate D htrans x_sp
+      (A₀ (osSpatialTranslate D htrans (-x_sp) v₀ -
+        osSpatialTranslate D htrans (-x₀) v₀))‖ < δ / 2 := by
+    rw [norm_osSpatialTranslate]
+    have hd₁ : ‖osSpatialTranslate D htrans (-x_sp) v₀ -
+        osSpatialTranslate D htrans (-x₀) v₀‖ < (δ / 2) / (‖A₀‖ + 1) := by
+      simpa [dist_eq_norm] using h_r₁ hx₁
+    calc ‖A₀ (osSpatialTranslate D htrans (-x_sp) v₀ -
+            osSpatialTranslate D htrans (-x₀) v₀)‖
+        ≤ ‖A₀‖ * ‖osSpatialTranslate D htrans (-x_sp) v₀ -
+            osSpatialTranslate D htrans (-x₀) v₀‖ := A₀.le_opNorm _
+      _ ≤ (‖A₀‖ + 1) * ‖osSpatialTranslate D htrans (-x_sp) v₀ -
+            osSpatialTranslate D htrans (-x₀) v₀‖ :=
+          mul_le_mul_of_nonneg_right (by linarith) (norm_nonneg _)
+      _ < (‖A₀‖ + 1) * ((δ / 2) / (‖A₀‖ + 1)) :=
+          mul_lt_mul_of_pos_left hd₁ (by positivity)
+      _ = δ / 2 := mul_div_cancel₀ _ (by positivity)
+  have hb₂ : ‖osSpatialTranslate D htrans x_sp w₀ - osSpatialTranslate D htrans x₀ w₀‖ < δ / 2 := by
+    simpa [dist_eq_norm] using h_r₂ hx₂
+  exact (norm_add_le _ _).trans_lt ((add_lt_add hb₁ hb₂).trans_eq (add_halves δ))
+
+theorem continuous_osDampedFieldCLM_uncurry {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (htrans : OSTranslationInvariant D.𝒮)
+    (hcont : ∀ (n : ℕ) (α : Fin n → ι), ContinuousOn (D.𝒮 n α) (orderedEuclidN n))
+    (hdamped : OSDampedFieldBounded D) (α₀ : ι) (ε : ℝ) (hε : 0 < ε) :
+    Continuous (fun p : (Fin 3 → ℝ) × OSHilbert D =>
+      osDampedFieldCLM D hdamped α₀ p.1 ε hε p.2) := by
+  rw [continuous_iff_continuousAt]
+  intro ⟨x₀, v₀⟩
+  rw [ContinuousAt, Metric.tendsto_nhds_nhds]
+  intro δ hδ
+  let A₀ := osDampedFieldCLM D hdamped α₀ 0 ε hε
+  rcases Metric.tendsto_nhds_nhds.mp
+      ((continuous_osDampedFieldCLM_apply D htrans hcont hdamped α₀ ε hε v₀).continuousAt
+        (x := x₀))
+      (δ / 2) (half_pos hδ) with ⟨r₁, hr₁, h_r₁⟩
+  let r₂ : ℝ := (δ / 2) / (‖A₀‖ + 1)
+  have hr₂ : 0 < r₂ := div_pos (half_pos hδ) (by positivity)
+  refine ⟨min r₁ r₂, lt_min hr₁ hr₂, fun ⟨x_sp, v⟩ hp => ?_⟩
+  have hx' : dist x_sp x₀ < r₁ :=
+    (le_max_left (dist x_sp x₀) (dist v v₀)).trans_lt (lt_of_lt_of_le hp (min_le_left _ _))
+  have hv' : dist v v₀ < r₂ :=
+    (le_max_right (dist x_sp x₀) (dist v v₀)).trans_lt (lt_of_lt_of_le hp (min_le_right _ _))
+  rw [dist_eq_norm] at hv' ⊢
+  have h_split :
+      osDampedFieldCLM D hdamped α₀ x_sp ε hε v - osDampedFieldCLM D hdamped α₀ x₀ ε hε v₀ =
+      osDampedFieldCLM D hdamped α₀ x_sp ε hε (v - v₀) +
+        (osDampedFieldCLM D hdamped α₀ x_sp ε hε v₀ -
+          osDampedFieldCLM D hdamped α₀ x₀ ε hε v₀) := by
+    rw [map_sub]
+    abel
+  rw [h_split]
+  have hb₁ : ‖osDampedFieldCLM D hdamped α₀ x_sp ε hε (v - v₀)‖ < δ / 2 := by
+    rw [osDampedFieldCLM_eq_conjugate_zero D htrans hdamped α₀ x_sp ε hε (v - v₀),
+        norm_osSpatialTranslate]
+    calc ‖A₀ (osSpatialTranslate D htrans (-x_sp) (v - v₀))‖
+        ≤ ‖A₀‖ * ‖osSpatialTranslate D htrans (-x_sp) (v - v₀)‖ := A₀.le_opNorm _
+      _ = ‖A₀‖ * ‖v - v₀‖ := by rw [norm_osSpatialTranslate]
+      _ ≤ (‖A₀‖ + 1) * ‖v - v₀‖ :=
+          mul_le_mul_of_nonneg_right (by linarith) (norm_nonneg _)
+      _ < (‖A₀‖ + 1) * r₂ := mul_lt_mul_of_pos_left hv' (by positivity)
+      _ = δ / 2 := mul_div_cancel₀ _ (by positivity)
+  have hb₂ : ‖osDampedFieldCLM D hdamped α₀ x_sp ε hε v₀ -
+      osDampedFieldCLM D hdamped α₀ x₀ ε hε v₀‖ < δ / 2 := by
+    simpa [dist_eq_norm] using h_r₁ hx'
+  exact (norm_add_le _ _).trans_lt ((add_lt_add hb₁ hb₂).trans_eq (add_halves δ))
+
+theorem osSpinorRot_osDampedFieldCLM {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hrot : OSSpinorRotCovariant R D.𝒮)
+    (hdamped : OSDampedFieldBounded D) (U : SU2) (α₀ : ι) (x_sp : Fin 3 → ℝ)
+    (ε : ℝ) (hε : 0 < ε) (x : OSHilbert D) :
+    osSpinorRot D hrot U (osDampedFieldCLM D hdamped α₀ x_sp ε hε x) =
+      ∑ β₀ : ι, osSpinorRotMatrix R U⁻¹ α₀ β₀ •
+        osDampedFieldCLM D hdamped β₀ (euclidSpatialRot U x_sp) ε hε
+          (osSpinorRot D hrot U x) := by
+  induction x using UniformSpace.Completion.induction_on with
+  | hp =>
+    exact isClosed_eq
+      ((osSpinorRot D hrot U).continuous.comp
+        (osDampedFieldCLM D hdamped α₀ x_sp ε hε).continuous)
+      (continuous_finsetSum _ (fun β₀ _ =>
+        Continuous.const_smul
+          ((osDampedFieldCLM D hdamped β₀ (euclidSpatialRot U x_sp) ε hε).continuous.comp
+            (osSpinorRot D hrot U).continuous)
+          (osSpinorRotMatrix R U⁻¹ α₀ β₀)))
+  | ih Ψ =>
+    change osSpinorRot D hrot U
+        (osDampedFieldCLM D hdamped α₀ x_sp ε hε (toOSHilbert D Ψ)) =
+      ∑ β₀ : ι, osSpinorRotMatrix R U⁻¹ α₀ β₀ •
+        osDampedFieldCLM D hdamped β₀ (euclidSpatialRot U x_sp) ε hε
+          (osSpinorRot D hrot U (toOSHilbert D Ψ))
+    rw [osDampedFieldCLM_toOSHilbert, osSpinorRot_toOSHilbert, osSpinorRotLM_osPrependShiftLM,
+        map_sum]
+    refine Finset.sum_congr rfl (fun β₀ _ => ?_)
+    rw [(toOSHilbert D).map_smul, osSpinorRot_toOSHilbert, osDampedFieldCLM_toOSHilbert]
+
+lemma osDampedFieldCLM_congr_eps {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hdamped : OSDampedFieldBounded D)
+    (α₀ : ι) (x_sp : Fin 3 → ℝ) {ε₁ ε₂ : ℝ} (hε₁ : 0 < ε₁) (hε₂ : 0 < ε₂)
+    (heq : ε₁ = ε₂) (x : OSHilbert D) :
+    osDampedFieldCLM D hdamped α₀ x_sp ε₁ hε₁ x =
+      osDampedFieldCLM D hdamped α₀ x_sp ε₂ hε₂ x := by
+  subst heq
+  rfl
+
+theorem osContractionSemigroup_osDampedFieldCLM_osContractionSemigroup
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (hcontr : OSContractionCondition D)
+    (hdamped : OSDampedFieldBounded D) (α₀ : ι) (x_sp : Fin 3 → ℝ)
+    {ε : ℝ} (hε : 0 < ε) {δ : ℝ} (hδ : 0 ≤ δ) (x : OSHilbert D) :
+    osContractionSemigroup D hcontr δ hδ
+      (osDampedFieldCLM D hdamped α₀ x_sp ε hε
+        (osContractionSemigroup D hcontr δ hδ x)) =
+      osDampedFieldCLM D hdamped α₀ x_sp (ε + δ) (by linarith) x := by
+  induction x using UniformSpace.Completion.induction_on with
+  | hp => exact isClosed_eq (by fun_prop) (by fun_prop)
+  | ih Ψ =>
+    change osContractionSemigroup D hcontr δ hδ
+        (osDampedFieldCLM D hdamped α₀ x_sp ε hε
+          (osContractionSemigroup D hcontr δ hδ (toOSHilbert D Ψ))) =
+      osDampedFieldCLM D hdamped α₀ x_sp (ε + δ) (by linarith) (toOSHilbert D Ψ)
+    rw [osContractionSemigroup_toOSHilbert, osDampedFieldCLM_toOSHilbert,
+        osContractionSemigroup_toOSHilbert, osDampedFieldCLM_toOSHilbert,
+        osTimeShiftLM_osPrependShiftLM_osTimeShiftLM]
+
+def osClusterSemigroupTotal {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData) (z : ℂ) :
+    OSHilbert hOS.toReflectionPositiveData →L[ℂ] OSHilbert hOS.toReflectionPositiveData :=
+  canonicalOSHolomorphicSemigroupTotal hOS.toReflectionPositiveData hOS.os1_translation
+    (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData hOS.os1_translation
+      hcluster)
+    hOS.os0_smooth z
+
+def osMultiTimeState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (m : ℕ) (_ : Fin (m + 1) → ι) (_ : Fin (m + 1) → Fin 3 → ℝ)
+      (_ : Fin m → ℂ) (ε : ℝ) (_ : 0 < ε), OSHilbert hOS.toReflectionPositiveData
+  | 0, α, x_sp, _, ε, hε =>
+      osDampedFieldCLM hOS.toReflectionPositiveData hdamped (α 0) (x_sp 0) ε hε
+        (osVacuum hOS.toReflectionPositiveData)
+  | m + 1, α, x_sp, τ, ε, hε =>
+      osDampedFieldCLM hOS.toReflectionPositiveData hdamped (α 0) (x_sp 0) ε hε
+        (osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ))
+          (osMultiTimeState hOS hcluster hdamped m
+            (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε))
+
+@[simp]
+lemma osMultiTimeState_zero {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (α : Fin 1 → ι) (x_sp : Fin 1 → Fin 3 → ℝ) (τ : Fin 0 → ℂ) (ε : ℝ) (hε : 0 < ε) :
+    osMultiTimeState hOS hcluster hdamped 0 α x_sp τ ε hε =
+      osDampedFieldCLM hOS.toReflectionPositiveData hdamped (α 0) (x_sp 0) ε hε
+        (osVacuum hOS.toReflectionPositiveData) := rfl
+
+@[simp]
+lemma osMultiTimeState_succ {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 2) → ι) (x_sp : Fin (m + 2) → Fin 3 → ℝ)
+    (τ : Fin (m + 1) → ℂ) (ε : ℝ) (hε : 0 < ε) :
+    osMultiTimeState hOS hcluster hdamped (m + 1) α x_sp τ ε hε =
+      osDampedFieldCLM hOS.toReflectionPositiveData hdamped (α 0) (x_sp 0) ε hε
+        (osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ))
+          (osMultiTimeState hOS hcluster hdamped m
+            (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε)) := rfl
+
+def osMultiTimeSlice {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (τ : Fin m → ℂ) (ε : ℝ) (hε : 0 < ε) : ℂ :=
+  ⟪osVacuum hOS.toReflectionPositiveData,
+    osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε⟫_ℂ
+
+theorem differentiableOn_osMultiTimeState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+      (ε : ℝ) (hε : 0 < ε),
+      DifferentiableOn ℂ (fun τ : Fin m → ℂ =>
+        osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε)
+        {τ : Fin m → ℂ | ∀ k, 2 * ε < (τ k).re}
+  | 0, α, x_sp, ε, hε => differentiableOn_const _
+  | m + 1, α, x_sp, ε, hε => by
+      let U := {τ : Fin (m + 1) → ℂ | ∀ k, 2 * ε < (τ k).re}
+      let tailCLM : (Fin (m + 1) → ℂ) →L[ℂ] (Fin m → ℂ) :=
+        ContinuousLinearMap.pi (fun j => ContinuousLinearMap.proj j.succ)
+      have h_tail_diff : DifferentiableOn ℂ (fun τ : Fin (m + 1) → ℂ =>
+          osMultiTimeState hOS hcluster hdamped m
+            (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε) U := by
+        have h_maps : Set.MapsTo tailCLM U {τ' : Fin m → ℂ | ∀ j, 2 * ε < (τ' j).re} :=
+          fun τ (hτ : ∀ k, 2 * ε < (τ k).re) j => hτ j.succ
+        have h_comp := (differentiableOn_osMultiTimeState hOS hcluster hdamped m
+          (Fin.tail α) (Fin.tail x_sp) ε hε).comp tailCLM.differentiableOn h_maps
+        exact h_comp.congr (fun τ _ => rfl)
+      have h_arg_diff : DifferentiableOn ℂ
+          (fun τ : Fin (m + 1) → ℂ => τ 0 - 2 * (ε : ℂ)) U :=
+        (differentiableOn_apply (0 : Fin (m + 1)) U).sub (differentiableOn_const (2 * (ε : ℂ)))
+      have h_Z_diff : DifferentiableOn ℂ
+          (fun τ : Fin (m + 1) → ℂ =>
+            osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ))) U :=
+        (differentiableOn_canonicalOSHolomorphicSemigroupTotal
+          hOS.toReflectionPositiveData hOS.os1_translation
+          (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+            hOS.os1_translation hcluster)
+          hOS.os0_smooth).comp h_arg_diff (fun τ hτ => by
+            change 0 < (τ 0 - 2 * (ε : ℂ)).re
+            have h0 := hτ 0
+            simp only [Complex.sub_re, Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat,
+              Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+            linarith)
+      exact (osDampedFieldCLM hOS.toReflectionPositiveData hdamped (α 0) (x_sp 0) ε hε
+        ).differentiable.comp_differentiableOn (h_Z_diff.clm_apply h_tail_diff)
+
+theorem differentiableOn_osMultiTimeSlice {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (ε : ℝ) (hε : 0 < ε) :
+    DifferentiableOn ℂ (fun τ : Fin m → ℂ =>
+      osMultiTimeSlice hOS hcluster hdamped m α x_sp τ ε hε)
+      {τ : Fin m → ℂ | ∀ k, 2 * ε < (τ k).re} :=
+  (innerSL ℂ (osVacuum hOS.toReflectionPositiveData)).differentiable.comp_differentiableOn
+    (differentiableOn_osMultiTimeState hOS hcluster hdamped m α x_sp ε hε)
+
+theorem continuousOn_osMultiTimeState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) :
+    ∀ (α : Fin (m + 1) → ι) (ε : ℝ) (hε : 0 < ε),
+      ContinuousOn
+        (fun p : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℂ) =>
+          osMultiTimeState hOS hcluster hdamped m α p.1 p.2 ε hε)
+        (Set.univ ×ˢ {τ : Fin m → ℂ | ∀ k, 2 * ε ≤ (τ k).re}) := by
+  induction m with
+  | zero =>
+      intro α ε hε
+      have h_damp := continuous_osDampedFieldCLM_apply
+        hOS.toReflectionPositiveData hOS.os1_translation
+        (fun n β => (hOS.os0_smooth n β).continuousOn) hdamped (α 0) ε hε
+        (osVacuum hOS.toReflectionPositiveData)
+      have h_in : Continuous
+          (fun p : (Fin 1 → Fin 3 → ℝ) × (Fin 0 → ℂ) => p.1 0) :=
+        (@continuous_apply (Fin 1) (fun _ => Fin 3 → ℝ) _ 0).comp continuous_fst
+      exact (h_damp.comp h_in).continuousOn
+  | succ m ih =>
+      intro α ε hε
+      let D := hOS.toReflectionPositiveData
+      let hcontr := osContractionCondition_of_timeCluster D hOS.os1_translation hcluster
+      let Dom := (Fin (m + 2) → Fin 3 → ℝ) × (Fin (m + 1) → ℂ)
+      let W := (Set.univ : Set (Fin (m + 2) → Fin 3 → ℝ)) ×ˢ
+        {τ : Fin (m + 1) → ℂ | ∀ k, 2 * ε ≤ (τ k).re}
+      have h_fst : Continuous (Prod.fst : Dom → Fin (m + 2) → Fin 3 → ℝ) := continuous_fst
+      have h_snd : Continuous (Prod.snd : Dom → Fin (m + 1) → ℂ) := continuous_snd
+      have h_tail_map : Continuous (fun p : Dom => (Fin.tail p.1, Fin.tail p.2)) :=
+        (continuous_pi (fun j : Fin (m + 1) =>
+          (@continuous_apply (Fin (m + 2)) (fun _ => Fin 3 → ℝ) _ j.succ).comp h_fst)).prodMk
+          (continuous_pi (fun j : Fin m =>
+            (@continuous_apply (Fin (m + 1)) (fun _ => ℂ) _ j.succ).comp h_snd))
+      have h_tail_cont : ContinuousOn
+          (fun p : Dom =>
+            osMultiTimeState hOS hcluster hdamped m
+              (Fin.tail α) (Fin.tail p.1) (Fin.tail p.2) ε hε) W :=
+        (ih (Fin.tail α) ε hε).comp h_tail_map.continuousOn
+          (fun p hp => ⟨trivial, fun j => hp.2 j.succ⟩)
+      have h_z_cont : Continuous (fun p : Dom => p.2 0 - 2 * (ε : ℂ)) :=
+        ((@continuous_apply (Fin (m + 1)) (fun _ => ℂ) _ 0).comp h_snd).sub continuous_const
+      have h_x0_cont : Continuous (fun p : Dom => p.1 0) :=
+        (@continuous_apply (Fin (m + 2)) (fun _ => Fin 3 → ℝ) _ 0).comp h_fst
+      intro p₀ hp₀
+      rw [ContinuousWithinAt, Metric.tendsto_nhdsWithin_nhds]
+      intro δ hδ
+      let zf : Dom → ℂ := fun p => p.2 0 - 2 * (ε : ℂ)
+      let vf : Dom → OSHilbert D := fun p =>
+        osMultiTimeState hOS hcluster hdamped m (Fin.tail α) (Fin.tail p.1) (Fin.tail p.2) ε hε
+      let Z := canonicalOSHolomorphicSemigroupTotal D hOS.os1_translation hcontr hOS.os0_smooth
+      let A₀ := osDampedFieldCLM D hdamped (α 0) 0 ε hε
+      let u₀ : OSHilbert D := Z (zf p₀) (vf p₀)
+      have hz_mem : ∀ p ∈ W, zf p ∈ rightHalfPlane := by
+        intro p hp
+        change 0 ≤ (p.2 0 - 2 * (ε : ℂ)).re
+        have h0 := hp.2 0
+        simp only [Complex.sub_re, Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat,
+          Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+        linarith
+      have hA_x0 := (continuous_osDampedFieldCLM_apply D hOS.os1_translation
+        (fun n β => (hOS.os0_smooth n β).continuousOn) hdamped (α 0) ε hε u₀).comp h_x0_cont
+      rcases Metric.tendsto_nhds_nhds.mp (hA_x0.continuousAt (x := p₀))
+          (δ / 2) (half_pos hδ) with ⟨r₁, hr₁, h_r₁⟩
+      let η_u : ℝ := (δ / 2) / (‖A₀‖ + 1)
+      have hη_u : 0 < η_u := div_pos (half_pos hδ) (by positivity)
+      have hZ_z0 : ContinuousWithinAt (fun p : Dom => Z (zf p) (vf p₀)) W p₀ :=
+        (continuousOn_canonicalOSHolomorphicSemigroupTotal_apply
+          D hOS.os1_translation hcontr hOS.os0_smooth (vf p₀)).comp
+          h_z_cont.continuousOn hz_mem p₀ hp₀
+      rcases Metric.tendsto_nhdsWithin_nhds.mp hZ_z0 (η_u / 2) (half_pos hη_u) with
+        ⟨r₂, hr₂, h_r₂⟩
+      rcases Metric.tendsto_nhdsWithin_nhds.mp (h_tail_cont p₀ hp₀)
+          (η_u / 2) (half_pos hη_u) with ⟨r₃, hr₃, h_r₃⟩
+      refine ⟨min r₁ (min r₂ r₃), lt_min hr₁ (lt_min hr₂ hr₃), fun p hp h_dist => ?_⟩
+      have hd₁ : dist p p₀ < r₁ := lt_of_lt_of_le h_dist (min_le_left _ _)
+      have hd₂ : dist p p₀ < r₂ :=
+        lt_of_lt_of_le h_dist ((min_le_right _ _).trans (min_le_left _ _))
+      have hd₃ : dist p p₀ < r₃ :=
+        lt_of_lt_of_le h_dist ((min_le_right _ _).trans (min_le_right _ _))
+      have hu_lt : ‖Z (zf p) (vf p) - u₀‖ < η_u := by
+        have h_sp : Z (zf p) (vf p) - u₀ =
+            Z (zf p) (vf p - vf p₀) + (Z (zf p) (vf p₀) - Z (zf p₀) (vf p₀)) := by
+          dsimp [u₀]
+          rw [map_sub]
+          abel
+        rw [h_sp]
+        have hb_v : ‖Z (zf p) (vf p - vf p₀)‖ < η_u / 2 :=
+          (norm_canonicalOSHolomorphicSemigroupTotal_apply_le D hOS.os1_translation hcontr
+            hOS.os0_smooth (zf p) (vf p - vf p₀)).trans_lt
+            (by simpa [vf, dist_eq_norm] using h_r₃ hp hd₃)
+        have hb_z : ‖Z (zf p) (vf p₀) - Z (zf p₀) (vf p₀)‖ < η_u / 2 := by
+          simpa [dist_eq_norm] using h_r₂ hp hd₂
+        exact (norm_add_le _ _).trans_lt ((add_lt_add hb_v hb_z).trans_eq (add_halves η_u))
+      rw [dist_eq_norm, osMultiTimeState_succ, osMultiTimeState_succ]
+      change ‖osDampedFieldCLM D hdamped (α 0) (p.1 0) ε hε (Z (zf p) (vf p)) -
+          osDampedFieldCLM D hdamped (α 0) (p₀.1 0) ε hε u₀‖ < δ
+      have h_sp2 :
+          osDampedFieldCLM D hdamped (α 0) (p.1 0) ε hε (Z (zf p) (vf p)) -
+            osDampedFieldCLM D hdamped (α 0) (p₀.1 0) ε hε u₀ =
+          osDampedFieldCLM D hdamped (α 0) (p.1 0) ε hε (Z (zf p) (vf p) - u₀) +
+            (osDampedFieldCLM D hdamped (α 0) (p.1 0) ε hε u₀ -
+              osDampedFieldCLM D hdamped (α 0) (p₀.1 0) ε hε u₀) := by
+        rw [map_sub]
+        abel
+      rw [h_sp2]
+      have hb₁ : ‖osDampedFieldCLM D hdamped (α 0) (p.1 0) ε hε (Z (zf p) (vf p) - u₀)‖ <
+          δ / 2 := by
+        rw [osDampedFieldCLM_eq_conjugate_zero D hOS.os1_translation hdamped (α 0) (p.1 0) ε hε,
+            norm_osSpatialTranslate]
+        calc ‖A₀ (osSpatialTranslate D hOS.os1_translation (-p.1 0) (Z (zf p) (vf p) - u₀))‖
+            ≤ ‖A₀‖ * ‖osSpatialTranslate D hOS.os1_translation (-p.1 0)
+                (Z (zf p) (vf p) - u₀)‖ := A₀.le_opNorm _
+          _ = ‖A₀‖ * ‖Z (zf p) (vf p) - u₀‖ := by rw [norm_osSpatialTranslate]
+          _ ≤ (‖A₀‖ + 1) * ‖Z (zf p) (vf p) - u₀‖ :=
+              mul_le_mul_of_nonneg_right (by linarith) (norm_nonneg _)
+          _ < (‖A₀‖ + 1) * η_u := mul_lt_mul_of_pos_left hu_lt (by positivity)
+          _ = δ / 2 := mul_div_cancel₀ _ (by positivity)
+      have hb₂ : ‖osDampedFieldCLM D hdamped (α 0) (p.1 0) ε hε u₀ -
+          osDampedFieldCLM D hdamped (α 0) (p₀.1 0) ε hε u₀‖ < δ / 2 := by
+        simpa [dist_eq_norm] using h_r₁ hd₁
+      exact (norm_add_le _ _).trans_lt ((add_lt_add hb₁ hb₂).trans_eq (add_halves δ))
+
+theorem continuousOn_osMultiTimeSlice {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 1) → ι) (ε : ℝ) (hε : 0 < ε) :
+    ContinuousOn
+      (fun p : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℂ) =>
+        osMultiTimeSlice hOS hcluster hdamped m α p.1 p.2 ε hε)
+      (Set.univ ×ˢ {τ : Fin m → ℂ | ∀ k, 2 * ε ≤ (τ k).re}) :=
+  (innerSL ℂ (osVacuum hOS.toReflectionPositiveData)).continuous.comp_continuousOn
+    (continuousOn_osMultiTimeState hOS hcluster hdamped m α ε hε)
+
+def osShiftedOrderedPoint (m : ℕ) (x : Fin (m + 1) → Fin 4 → ℝ) (ε : ℝ) :
+    Fin (m + 1) → Fin 4 → ℝ :=
+  fun i => x i + euclidTimeVec (ε - x 0 0)
+
+lemma euclidTimeVec_add_spatialPart (v : Fin 4 → ℝ) (ε : ℝ) :
+    euclidTimeVec ε + euclidSpatialVec (spatialPart v) = v + euclidTimeVec (ε - v 0) := by
+  ext μ
+  refine Fin.cases ?_ (fun i => ?_) μ
+  · simp [euclidTimeVec, euclidSpatialVec]
+  · simp [euclidTimeVec, euclidSpatialVec, spatialPart]
+
+lemma osShiftedOrderedPoint_mem_posOrderedEuclidN (m : ℕ)
+    {x : Fin (m + 1) → Fin 4 → ℝ} (hx : x ∈ orderedEuclidN (m + 1))
+    {ε : ℝ} (hε : 0 < ε) :
+    osShiftedOrderedPoint m x ε ∈ posOrderedEuclidN (m + 1) := by
+  refine orderedEuclidN_pos_of_zero_pos (m + 1)
+    (shift_mem_orderedEuclidN (m + 1) hx (euclidTimeVec (ε - x 0 0))) (fun _ => ?_)
+  dsimp [osShiftedOrderedPoint]
+  simp only [euclidTimeVec, ↓reduceIte]
+  linarith
+
+theorem osMultiTimeState_real_eq_osIteratedFieldState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (m : ℕ) (α : Fin (m + 1) → ι) (x : Fin (m + 1) → Fin 4 → ℝ)
+      (hx : x ∈ orderedEuclidN (m + 1)) (ε : ℝ) (hε : 0 < ε)
+      (_ : ∀ k : Fin m, 2 * ε ≤ x k.succ 0 - x k.castSucc 0),
+      osMultiTimeState hOS hcluster hdamped m α (fun i => spatialPart (x i))
+        (fun k => ((x k.succ 0 - x k.castSucc 0 : ℝ) : ℂ)) ε hε =
+        osIteratedFieldState hOS.toReflectionPositiveData (m + 1) α
+          (osShiftedOrderedPoint m x ε)
+          (osShiftedOrderedPoint_mem_posOrderedEuclidN m hx hε)
+  | 0, α, x, hx, ε, hε, _ => by
+      rw [osMultiTimeState_zero, osDampedFieldCLM_osVacuum,
+          osOneParticleState_eq_osBasis, osIteratedFieldState_eq_osBasis]
+      congr 1
+      apply osConfig_mk_eq
+      · ext i
+        fin_cases i
+        rfl
+      · ext i μ
+        fin_cases i
+        exact congrFun (euclidTimeVec_add_spatialPart (x 0) ε) μ
+  | m + 1, α, x, hx, ε, hε, hsep => by
+      let D := hOS.toReflectionPositiveData
+      let hcontr := osContractionCondition_of_timeCluster D hOS.os1_translation hcluster
+      let x' : Fin (m + 1) → Fin 4 → ℝ := Fin.tail x
+      have hx' : x' ∈ orderedEuclidN (m + 1) := by
+        intro j hj
+        have hlt : (Fin.succ j).val + 1 < m + 2 := by dsimp; omega
+        have heq : (⟨(Fin.succ j).val + 1, hlt⟩ : Fin (m + 2)) = Fin.succ ⟨j.val + 1, hj⟩ := by
+          ext; rfl
+        have hstep := hx (Fin.succ j) hlt
+        rwa [heq] at hstep
+      have hsep' : ∀ j : Fin m, 2 * ε ≤ x' j.succ 0 - x' j.castSucc 0 := fun j => hsep j.succ
+      have h_ih := osMultiTimeState_real_eq_osIteratedFieldState hOS hcluster hdamped m
+        (Fin.tail α) x' hx' ε hε hsep'
+      have h_sp_tail : Fin.tail (fun i : Fin (m + 2) => spatialPart (x i)) =
+          fun j : Fin (m + 1) => spatialPart (x' j) := rfl
+      have h_tau_tail : Fin.tail
+          (fun k : Fin (m + 1) => ((x k.succ 0 - x k.castSucc 0 : ℝ) : ℂ)) =
+          fun j : Fin m => ((x' j.succ 0 - x' j.castSucc 0 : ℝ) : ℂ) := by
+        ext j
+        rfl
+      rw [osMultiTimeState_succ, h_sp_tail, h_tau_tail, h_ih]
+      have hτ0_nonneg : 0 ≤ x 1 0 - x 0 0 - 2 * ε := by
+        have h0 := hsep 0
+        dsimp at h0
+        linarith
+      have h_sub_coe : (((x (0 : Fin (m + 1)).succ 0 - x (0 : Fin (m + 1)).castSucc 0 : ℝ) : ℂ) -
+          2 * (ε : ℂ)) = ((x 1 0 - x 0 0 - 2 * ε : ℝ) : ℂ) := by
+        change ((x 1 0 - x 0 0 : ℝ) : ℂ) - 2 * (ε : ℂ) = _
+        push_cast
+        ring
+      rw [h_sub_coe]
+      unfold osClusterSemigroupTotal
+      rw [canonicalOSHolomorphicSemigroupTotal_real_eq D hOS.os1_translation hcontr hOS.os0_smooth
+          (x 1 0 - x 0 0 - 2 * ε) hτ0_nonneg,
+          osContractionSemigroup_osIteratedFieldState,
+          osDampedFieldCLM_osIteratedFieldState,
+          osIteratedFieldState_eq_osBasis, osIteratedFieldState_eq_osBasis]
+      congr 1
+      apply osConfig_mk_eq (Fin.cons_self_tail α)
+      ext i μ
+      refine Fin.cases ?_ (fun j => ?_) i
+      · exact congrFun (euclidTimeVec_add_spatialPart (x 0) ε) μ
+      · refine Fin.cases ?_ (fun r => ?_) μ
+        · simp [osPrependPoint, osShiftedOrderedPoint, x', Fin.tail, euclidTimeVec,
+            euclidSpatialVec]
+          ring
+        · simp [osPrependPoint, osShiftedOrderedPoint, x', Fin.tail, euclidTimeVec]
+
+theorem osMultiTimeSlice_real_eq_schwinger
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x : Fin (m + 1) → Fin 4 → ℝ)
+    (hx : x ∈ orderedEuclidN (m + 1)) (ε : ℝ) (hε : 0 < ε)
+    (hsep : ∀ k : Fin m, 2 * ε ≤ x k.succ 0 - x k.castSucc 0) :
+    osMultiTimeSlice hOS hcluster hdamped m α (fun i => spatialPart (x i))
+      (fun k => ((x k.succ 0 - x k.castSucc 0 : ℝ) : ℂ)) ε hε = 𝒮 (m + 1) α x := by
+  unfold osMultiTimeSlice
+  rw [osMultiTimeState_real_eq_osIteratedFieldState hOS hcluster hdamped m α x hx ε hε hsep,
+      inner_osVacuum_osIteratedFieldState]
+  exact hOS.os1_translation (m + 1) α x hx (euclidTimeVec (ε - x 0 0))
+
+theorem osContractionSemigroup_osMultiTimeState_eq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+      (τ : Fin m → ℂ) {ε₁ ε₂ : ℝ} (hε₁ : 0 < ε₁) (hle : ε₁ ≤ ε₂)
+      (_ : ∀ k : Fin m, 2 * ε₂ ≤ (τ k).re),
+      osContractionSemigroup hOS.toReflectionPositiveData
+        (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+          hOS.os1_translation hcluster)
+        (ε₂ - ε₁) (sub_nonneg.mpr hle)
+        (osMultiTimeState hOS hcluster hdamped m α x_sp τ ε₁ hε₁) =
+        osMultiTimeState hOS hcluster hdamped m α x_sp τ ε₂ (lt_of_lt_of_le hε₁ hle)
+  | 0, α, x_sp, τ, ε₁, ε₂, hε₁, hle, _ => by
+      let D := hOS.toReflectionPositiveData
+      let hcontr := osContractionCondition_of_timeCluster D hOS.os1_translation hcluster
+      rw [osMultiTimeState_zero, osMultiTimeState_zero]
+      conv_lhs =>
+        rw [← osContractionSemigroup_vacuum D hcontr (ε₂ - ε₁) (sub_nonneg.mpr hle)]
+      rw [osContractionSemigroup_osDampedFieldCLM_osContractionSemigroup]
+      exact osDampedFieldCLM_congr_eps D hdamped (α 0) (x_sp 0) _ _ (by ring) (osVacuum D)
+  | m + 1, α, x_sp, τ, ε₁, ε₂, hε₁, hle, hτ => by
+      let D := hOS.toReflectionPositiveData
+      let hcontr := osContractionCondition_of_timeCluster D hOS.os1_translation hcluster
+      let δ := ε₂ - ε₁
+      have hδ : 0 ≤ δ := sub_nonneg.mpr hle
+      have h_ih := osContractionSemigroup_osMultiTimeState_eq hOS hcluster hdamped m
+        (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) hε₁ hle (fun j => hτ j.succ)
+      rw [osMultiTimeState_succ, osMultiTimeState_succ]
+      have hz_mid : (τ 0 - 2 * (ε₂ : ℂ)) ∈ rightHalfPlane := by
+        change 0 ≤ (τ 0 - 2 * (ε₂ : ℂ)).re
+        have h0 := hτ 0
+        simp only [Complex.sub_re, Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat,
+          Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+        linarith
+      have hz_δ : (δ : ℂ) ∈ rightHalfPlane := ofReal_mem_rightHalfPlane hδ
+      have h_split_z : τ 0 - 2 * (ε₁ : ℂ) =
+          (δ : ℂ) + ((τ 0 - 2 * (ε₂ : ℂ)) + (δ : ℂ)) := by
+        dsimp [δ]
+        push_cast
+        ring
+      have h_Z_factor : osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε₁ : ℂ)) =
+          (osContractionSemigroup D hcontr δ hδ).comp
+            ((osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε₂ : ℂ))).comp
+              (osContractionSemigroup D hcontr δ hδ)) := by
+        unfold osClusterSemigroupTotal
+        rw [h_split_z,
+            canonicalOSHolomorphicSemigroupTotal_add D hOS.os1_translation hcontr hOS.os0_smooth
+              hz_δ (add_mem_rightHalfPlane hz_mid hz_δ),
+            canonicalOSHolomorphicSemigroupTotal_add D hOS.os1_translation hcontr hOS.os0_smooth
+              hz_mid hz_δ,
+            canonicalOSHolomorphicSemigroupTotal_real_eq D hOS.os1_translation hcontr
+              hOS.os0_smooth δ hδ]
+      rw [h_Z_factor]
+      simp only [ContinuousLinearMap.comp_apply]
+      rw [h_ih, osContractionSemigroup_osDampedFieldCLM_osContractionSemigroup]
+      exact osDampedFieldCLM_congr_eps D hdamped (α 0) (x_sp 0) _ _ (by ring) _
+
+theorem osMultiTimeSlice_eps_eq_of_le
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (τ : Fin m → ℂ) {ε₁ ε₂ : ℝ} (hε₁ : 0 < ε₁) (hle : ε₁ ≤ ε₂)
+    (hτ : ∀ k : Fin m, 2 * ε₂ ≤ (τ k).re) :
+    osMultiTimeSlice hOS hcluster hdamped m α x_sp τ ε₁ hε₁ =
+      osMultiTimeSlice hOS hcluster hdamped m α x_sp τ ε₂ (lt_of_lt_of_le hε₁ hle) := by
+  unfold osMultiTimeSlice
+  rw [← osContractionSemigroup_osMultiTimeState_eq hOS hcluster hdamped m α x_sp τ hε₁ hle hτ]
+  have h_symm := osContractionSemigroup_isSymmetric hOS.toReflectionPositiveData
+    hOS.os1_translation
+    (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+      hOS.os1_translation hcluster)
+    (ε₂ - ε₁) (sub_nonneg.mpr hle) (osVacuum hOS.toReflectionPositiveData)
+    (osMultiTimeState hOS hcluster hdamped m α x_sp τ ε₁ hε₁)
+  have h_vac := osContractionSemigroup_vacuum hOS.toReflectionPositiveData
+    (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+      hOS.os1_translation hcluster)
+    (ε₂ - ε₁) (sub_nonneg.mpr hle)
+  exact (h_symm.symm.trans
+    (congrArg (fun v => ⟪v, osMultiTimeState hOS hcluster hdamped m α x_sp τ ε₁ hε₁⟫_ℂ) h_vac)).symm
+
+theorem osMultiTimeSlice_eps_eq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (τ : Fin m → ℂ) {ε₁ ε₂ : ℝ} (hε₁ : 0 < ε₁) (hε₂ : 0 < ε₂)
+    (hτ : ∀ k : Fin m, 2 * max ε₁ ε₂ ≤ (τ k).re) :
+    osMultiTimeSlice hOS hcluster hdamped m α x_sp τ ε₁ hε₁ =
+      osMultiTimeSlice hOS hcluster hdamped m α x_sp τ ε₂ hε₂ := by
+  have hmin : 0 < min ε₁ ε₂ := lt_min hε₁ hε₂
+  have h1 := osMultiTimeSlice_eps_eq_of_le hOS hcluster hdamped m α x_sp τ
+    hmin (min_le_left ε₁ ε₂) (fun k => (mul_le_mul_of_nonneg_left
+      (le_max_left ε₁ ε₂) zero_le_two).trans (hτ k))
+  have h2 := osMultiTimeSlice_eps_eq_of_le hOS hcluster hdamped m α x_sp τ
+    hmin (min_le_right ε₁ ε₂) (fun k => (mul_le_mul_of_nonneg_left
+      (le_max_right ε₁ ε₂) zero_le_two).trans (hτ k))
+  exact h1.symm.trans h2
+
+theorem osSpatialTranslate_osMultiTimeState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+      (τ : Fin m → ℂ) (ε : ℝ) (hε : 0 < ε) (a : Fin 3 → ℝ),
+      osSpatialTranslate hOS.toReflectionPositiveData hOS.os1_translation a
+        (osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε) =
+        osMultiTimeState hOS hcluster hdamped m α (fun i => x_sp i + a) τ ε hε
+  | 0, α, x_sp, τ, ε, hε, a => by
+      rw [osMultiTimeState_zero, osMultiTimeState_zero, osSpatialTranslate_osDampedFieldCLM,
+          osSpatialTranslate_vacuum]
+  | m + 1, α, x_sp, τ, ε, hε, a => by
+      let D := hOS.toReflectionPositiveData
+      let hcontr := osContractionCondition_of_timeCluster D hOS.os1_translation hcluster
+      rw [osMultiTimeState_succ, osMultiTimeState_succ, osSpatialTranslate_osDampedFieldCLM]
+      congr 1
+      unfold osClusterSemigroupTotal
+      have h_comm := congrArg
+        (fun L => L (osMultiTimeState hOS hcluster hdamped m
+          (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε))
+        (osSpatialTranslate_comm_canonicalOSHolomorphicSemigroupTotal
+          D hOS.os1_translation hcontr hOS.os0_smooth a (τ 0 - 2 * (ε : ℂ)))
+      dsimp at h_comm
+      rw [h_comm, osSpatialTranslate_osMultiTimeState hOS hcluster hdamped m
+          (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε a]
+      rfl
+
+theorem osMultiTimeSlice_spatial_shift
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (τ : Fin m → ℂ) (ε : ℝ) (hε : 0 < ε) (a : Fin 3 → ℝ) :
+    osMultiTimeSlice hOS hcluster hdamped m α (fun i => x_sp i + a) τ ε hε =
+      osMultiTimeSlice hOS hcluster hdamped m α x_sp τ ε hε := by
+  let D := hOS.toReflectionPositiveData
+  unfold osMultiTimeSlice
+  rw [← osSpatialTranslate_osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε a]
+  conv_lhs => rw [← osSpatialTranslate_vacuum D hOS.os1_translation a]
+  exact inner_osSpatialTranslate D hOS.os1_translation a _ _
+
+theorem osSpinorRot_osMultiTimeState
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (m : ℕ) (U : SU2) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+      (τ : Fin m → ℂ) (ε : ℝ) (hε : 0 < ε),
+      osSpinorRot hOS.toReflectionPositiveData hOS.osSpinorRotCovariant U
+        (osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε) =
+        ∑ β : Fin (m + 1) → ι,
+          (∏ i : Fin (m + 1), osSpinorRotMatrix R U⁻¹ (α i) (β i)) •
+            osMultiTimeState hOS hcluster hdamped m β
+              (fun i => euclidSpatialRot U (x_sp i)) τ ε hε
+  | 0, U, α, x_sp, τ, ε, hε => by
+      rw [osMultiTimeState_zero, osSpinorRot_osDampedFieldCLM, osSpinorRot_osVacuum,
+          ← (Equiv.funUnique (Fin 1) ι).sum_comp]
+      refine Finset.sum_congr rfl (fun β₀ _ => ?_)
+      rw [Fin.prod_univ_one]
+      rfl
+  | m + 1, U, α, x_sp, τ, ε, hε => by
+      let D := hOS.toReflectionPositiveData
+      let hcontr := osContractionCondition_of_timeCluster D hOS.os1_translation hcluster
+      rw [osMultiTimeState_succ, osSpinorRot_osDampedFieldCLM]
+      have h_comm : osSpinorRot D hOS.osSpinorRotCovariant U
+          (osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ))
+            (osMultiTimeState hOS hcluster hdamped m
+              (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε)) =
+          osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ))
+            (osSpinorRot D hOS.osSpinorRotCovariant U
+              (osMultiTimeState hOS hcluster hdamped m
+                (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε)) := by
+        unfold osClusterSemigroupTotal
+        exact congrArg
+          (fun L => L (osMultiTimeState hOS hcluster hdamped m
+            (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε))
+          (osSpinorRot_comm_canonicalOSHolomorphicSemigroupTotal
+            D hOS.os1_translation hOS.osSpinorRotCovariant hcontr hOS.os0_smooth
+            U (τ 0 - 2 * (ε : ℂ)))
+      rw [h_comm, osSpinorRot_osMultiTimeState hOS hcluster hdamped m U
+          (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε, map_sum]
+      rw [← (finConsEquiv (m + 1) ι).sum_comp, Fintype.sum_prod_type]
+      refine Finset.sum_congr rfl (fun β₀ _ => ?_)
+      rw [map_sum, Finset.smul_sum]
+      refine Finset.sum_congr rfl (fun δ _ => ?_)
+      rw [map_smul, map_smul, smul_smul]
+      have h_c : osSpinorRotMatrix R U⁻¹ (α 0) β₀ *
+          ∏ i : Fin (m + 1), osSpinorRotMatrix R U⁻¹ (Fin.tail α i) (δ i) =
+          ∏ i : Fin (m + 2),
+            osSpinorRotMatrix R U⁻¹ (α i) ((finConsEquiv (m + 1) ι (β₀, δ)) i) := by
+        change osSpinorRotMatrix R U⁻¹ (α 0) β₀ *
+            ∏ i : Fin (m + 1), osSpinorRotMatrix R U⁻¹ (Fin.tail α i) (δ i) =
+          ∏ i : Fin (m + 2), osSpinorRotMatrix R U⁻¹ (α i) (@Fin.cons (m + 1) (fun _ => ι) β₀ δ i)
+        conv_rhs => rw [Fin.prod_univ_succ]
+        simp [Fin.tail]
+      have h_v : osDampedFieldCLM D hdamped β₀ (euclidSpatialRot U (x_sp 0)) ε hε
+          ((osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ)))
+            (osMultiTimeState hOS hcluster hdamped m δ
+              (fun i => euclidSpatialRot U (Fin.tail x_sp i)) (Fin.tail τ) ε hε)) =
+          osMultiTimeState hOS hcluster hdamped (m + 1)
+            (finConsEquiv (m + 1) ι (β₀, δ))
+            (fun i => euclidSpatialRot U (x_sp i)) τ ε hε := by
+        change _ = osMultiTimeState hOS hcluster hdamped (m + 1)
+          (@Fin.cons (m + 1) (fun _ => ι) β₀ δ)
+          (fun i => euclidSpatialRot U (x_sp i)) τ ε hε
+        rw [osMultiTimeState_succ]
+        rfl
+      rw [h_c, h_v]
+
+theorem osMultiTimeSlice_spinorRot
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (U : SU2) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (τ : Fin m → ℂ) (ε : ℝ) (hε : 0 < ε) :
+    osMultiTimeSlice hOS hcluster hdamped m α
+      (fun i => euclidSpatialRot U (x_sp i)) τ ε hε =
+      ∑ β : Fin (m + 1) → ι,
+        (∏ i : Fin (m + 1), osSpinorRotMatrix R U (α i) (β i)) *
+          osMultiTimeSlice hOS hcluster hdamped m β x_sp τ ε hε := by
+  let D := hOS.toReflectionPositiveData
+  unfold osMultiTimeSlice
+  have h_unit := (inner_osSpinorRot D hOS.osSpinorRotCovariant U⁻¹
+    (osVacuum D)
+    (osMultiTimeState hOS hcluster hdamped m α
+      (fun i => euclidSpatialRot U (x_sp i)) τ ε hε)).symm
+  rw [osSpinorRot_osVacuum, osSpinorRot_osMultiTimeState hOS hcluster hdamped m U⁻¹,
+      inv_inv, inner_sum] at h_unit
+  have h_sp : (fun i : Fin (m + 1) => euclidSpatialRot U⁻¹ (euclidSpatialRot U (x_sp i))) =
+      x_sp := funext (fun i => euclidSpatialRot_inv_apply U (x_sp i))
+  refine h_unit.trans (Finset.sum_congr rfl (fun β _ => ?_))
+  rw [inner_smul_right, h_sp]
+
+def osMultiTimeMinRe : ∀ {m : ℕ}, (Fin m → ℂ) → ℝ
+  | 0, _ => 4
+  | _ + 1, τ => min (τ 0).re (osMultiTimeMinRe (Fin.tail τ))
+
+lemma osMultiTimeMinRe_le_four : ∀ {m : ℕ} (τ : Fin m → ℂ), osMultiTimeMinRe τ ≤ 4
+  | 0, _ => le_rfl
+  | _ + 1, τ => (min_le_right _ _).trans (osMultiTimeMinRe_le_four (Fin.tail τ))
+
+lemma osMultiTimeMinRe_le_apply :
+    ∀ {m : ℕ} (τ : Fin m → ℂ) (k : Fin m), osMultiTimeMinRe τ ≤ (τ k).re
+  | 0, _, k => Fin.elim0 k
+  | _ + 1, τ, k => by
+      refine Fin.cases ?_ (fun j => ?_) k
+      · exact min_le_left _ _
+      · exact (min_le_right _ _).trans (osMultiTimeMinRe_le_apply (Fin.tail τ) j)
+
+lemma osMultiTimeMinRe_pos_iff :
+    ∀ {m : ℕ} (τ : Fin m → ℂ), 0 < osMultiTimeMinRe τ ↔ ∀ k : Fin m, 0 < (τ k).re
+  | 0, _ => ⟨fun _ k => Fin.elim0 k, fun _ => by norm_num [osMultiTimeMinRe]⟩
+  | _ + 1, τ => by
+      dsimp [osMultiTimeMinRe]
+      rw [lt_min_iff, osMultiTimeMinRe_pos_iff]
+      exact ⟨fun h k => Fin.cases h.1 (fun j => h.2 j) k,
+        fun h => ⟨h 0, fun j => h j.succ⟩⟩
+
+lemma continuous_osMultiTimeMinRe : ∀ (m : ℕ), Continuous (@osMultiTimeMinRe m)
+  | 0 => continuous_const
+  | m + 1 =>
+      (Complex.continuous_re.comp (continuous_apply (0 : Fin (m + 1)))).min
+        ((continuous_osMultiTimeMinRe m).comp
+          (continuous_pi (fun j => continuous_apply j.succ)))
+
+def osMultiTimeEps {m : ℕ} (τ : Fin m → ℂ) : ℝ :=
+  (1 / 4 : ℝ) * osMultiTimeMinRe τ
+
+lemma osMultiTimeEps_pos {m : ℕ} {τ : Fin m → ℂ} (h : 0 < osMultiTimeMinRe τ) :
+    0 < osMultiTimeEps τ :=
+  mul_pos (by norm_num) h
+
+lemma two_mul_osMultiTimeEps_le {m : ℕ} {τ : Fin m → ℂ}
+    (h : 0 < osMultiTimeMinRe τ) (k : Fin m) :
+    2 * osMultiTimeEps τ ≤ (τ k).re := by
+  have h1 : 2 * osMultiTimeEps τ = (1 / 2 : ℝ) * osMultiTimeMinRe τ := by
+    dsimp [osMultiTimeEps]
+    ring
+  have h2 : (1 / 2 : ℝ) * osMultiTimeMinRe τ ≤ osMultiTimeMinRe τ := by linarith
+  exact (h1.trans_le h2).trans (osMultiTimeMinRe_le_apply τ k)
+
+lemma one_add_inv_osMultiTimeEps_le :
+    ∀ {m : ℕ} (τ : Fin m → ℂ), (∀ k : Fin m, 0 < (τ k).re) →
+      1 + (osMultiTimeEps τ)⁻¹ ≤ 4 * ∏ k : Fin m, (1 + ((τ k).re)⁻¹)
+  | 0, _, _ => by
+      dsimp [osMultiTimeEps, osMultiTimeMinRe]
+      norm_num
+  | m + 1, τ, hτ => by
+      have h0 : 0 < (τ 0).re := hτ 0
+      have h_tail : ∀ j : Fin m, 0 < (Fin.tail τ j).re := fun j => hτ j.succ
+      have h_prod_ge : 1 ≤ ∏ j : Fin m, (1 + ((Fin.tail τ j).re)⁻¹) :=
+        Finset.prod_induction _ (1 ≤ ·) (fun _ _ ha hb => by nlinarith) le_rfl
+          (fun j _ => by linarith [inv_pos.mpr (h_tail j)])
+      have h_first_ge : 1 ≤ 1 + ((τ 0).re)⁻¹ := by linarith [inv_pos.mpr h0]
+      rw [Fin.prod_univ_succ]
+      by_cases hle : (τ 0).re ≤ osMultiTimeMinRe (Fin.tail τ)
+      · have h_min : osMultiTimeMinRe τ = (τ 0).re := min_eq_left hle
+        have h_inv : (osMultiTimeEps τ)⁻¹ = 4 * ((τ 0).re)⁻¹ := by
+          dsimp [osMultiTimeEps]
+          rw [h_min, mul_inv, inv_div, div_one]
+        rw [h_inv]
+        calc 1 + 4 * ((τ 0).re)⁻¹
+            ≤ 4 * (1 + ((τ 0).re)⁻¹) * 1 := by linarith
+          _ ≤ 4 * (1 + ((τ 0).re)⁻¹) * ∏ j : Fin m, (1 + ((Fin.tail τ j).re)⁻¹) :=
+              mul_le_mul_of_nonneg_left h_prod_ge (by positivity)
+          _ = 4 * ((1 + ((τ 0).re)⁻¹) * ∏ i : Fin m, (1 + ((τ i.succ).re)⁻¹)) := by
+              simp [Fin.tail, mul_assoc]
+      · have hgt : osMultiTimeMinRe (Fin.tail τ) < (τ 0).re := not_le.mp hle
+        have h_min : osMultiTimeMinRe τ = osMultiTimeMinRe (Fin.tail τ) :=
+          min_eq_right hgt.le
+        have h_eq_eps : osMultiTimeEps τ = osMultiTimeEps (Fin.tail τ) := by
+          dsimp [osMultiTimeEps]
+          rw [h_min]
+        rw [h_eq_eps]
+        calc 1 + (osMultiTimeEps (Fin.tail τ))⁻¹
+            ≤ 4 * ∏ j : Fin m, (1 + ((Fin.tail τ j).re)⁻¹) :=
+              one_add_inv_osMultiTimeEps_le (Fin.tail τ) h_tail
+          _ = 4 * (1 * ∏ j : Fin m, (1 + ((Fin.tail τ j).re)⁻¹)) := by ring
+          _ ≤ 4 * ((1 + ((τ 0).re)⁻¹) * ∏ j : Fin m, (1 + ((Fin.tail τ j).re)⁻¹)) :=
+              mul_le_mul_of_nonneg_left
+                (mul_le_mul_of_nonneg_right h_first_ge (by linarith)) (by norm_num)
+          _ = 4 * ((1 + ((τ 0).re)⁻¹) * ∏ i : Fin m, (1 + ((τ i.succ).re)⁻¹)) := by
+              simp [Fin.tail]
+
+def osMultiTimeH {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (n : ℕ) (_ : Fin n → ι) (_ : Fin n → Fin 3 → ℝ) (_ : Fin (n - 1) → ℂ), ℂ
+  | 0, α, _, _ => 𝒮 0 α 0
+  | m + 1, α, x_sp, τ =>
+      if hpos : 0 < osMultiTimeMinRe τ then
+        osMultiTimeSlice hOS hcluster hdamped m α x_sp τ
+          (osMultiTimeEps τ) (osMultiTimeEps_pos hpos)
+      else 0
+
+theorem osMultiTimeH_eq_slice {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (τ : Fin m → ℂ) (ε : ℝ) (hε : 0 < ε)
+    (hτ : ∀ k : Fin m, 2 * ε ≤ (τ k).re) :
+    osMultiTimeH hOS hcluster hdamped (m + 1) α x_sp τ =
+      osMultiTimeSlice hOS hcluster hdamped m α x_sp τ ε hε := by
+  have hpos : 0 < osMultiTimeMinRe τ :=
+    (osMultiTimeMinRe_pos_iff τ).mpr (fun k => by linarith [hτ k])
+  dsimp [osMultiTimeH]
+  rw [dif_pos hpos]
+  exact osMultiTimeSlice_eps_eq hOS hcluster hdamped m α x_sp τ
+    (osMultiTimeEps_pos hpos) hε (fun k => by
+      rw [mul_max_of_nonneg _ _ zero_le_two]
+      exact max_le (two_mul_osMultiTimeEps_le hpos k) (hτ k))
+
+theorem differentiableOn_osMultiTimeH {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (n : ℕ) (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ) :
+    DifferentiableOn ℂ (osMultiTimeH hOS hcluster hdamped n α x_sp)
+      {τ : Fin (n - 1) → ℂ | ∀ k, 0 < (τ k).re} := by
+  cases n with
+  | zero => exact differentiableOn_const _
+  | succ m =>
+    intro τ₀ hτ₀
+    have hpos₀ : 0 < osMultiTimeMinRe τ₀ := (osMultiTimeMinRe_pos_iff τ₀).mpr hτ₀
+    let ε₀ : ℝ := osMultiTimeEps τ₀
+    have hε₀ : 0 < ε₀ := osMultiTimeEps_pos hpos₀
+    let V : Set (Fin m → ℂ) := {τ | ∀ k, 2 * ε₀ < (τ k).re}
+    have hV_open : IsOpen V := by
+      have h_eq : V = ⋂ k : Fin m, {τ : Fin m → ℂ | 2 * ε₀ < (τ k).re} := by
+        ext τ
+        simp [V]
+      rw [h_eq]
+      exact isOpen_iInter_of_finite (fun k =>
+        isOpen_lt continuous_const (Complex.continuous_re.comp (continuous_apply k)))
+    have hτ₀_mem : τ₀ ∈ V := by
+      intro k
+      have h1 : 2 * ε₀ = (1 / 2 : ℝ) * osMultiTimeMinRe τ₀ := by
+        dsimp [ε₀, osMultiTimeEps]
+        ring
+      have h2 : (1 / 2 : ℝ) * osMultiTimeMinRe τ₀ < osMultiTimeMinRe τ₀ := by linarith
+      exact (h1.trans_lt h2).trans_le (osMultiTimeMinRe_le_apply τ₀ k)
+    have h_diff_V : DifferentiableOn ℂ (osMultiTimeH hOS hcluster hdamped (m + 1) α x_sp) V :=
+      (differentiableOn_osMultiTimeSlice hOS hcluster hdamped m α x_sp ε₀ hε₀).congr
+        (fun τ hτ => osMultiTimeH_eq_slice hOS hcluster hdamped m α x_sp τ ε₀ hε₀
+          (fun k => (hτ k).le))
+    exact (h_diff_V.differentiableAt (hV_open.mem_nhds hτ₀_mem)).differentiableWithinAt
+
+theorem continuousOn_osMultiTimeH {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (n : ℕ) (α : Fin n → ι) :
+    ContinuousOn
+      (fun p : (Fin n → Fin 3 → ℝ) × (Fin (n - 1) → ℂ) =>
+        osMultiTimeH hOS hcluster hdamped n α p.1 p.2)
+      (Set.univ ×ˢ {τ : Fin (n - 1) → ℂ | ∀ k, 0 < (τ k).re}) := by
+  cases n with
+  | zero => exact continuousOn_const
+  | succ m =>
+    intro ⟨x₀, τ₀⟩ hp₀
+    have hτ₀ : ∀ k : Fin m, 0 < (τ₀ k).re := hp₀.2
+    have hpos₀ : 0 < osMultiTimeMinRe τ₀ := (osMultiTimeMinRe_pos_iff τ₀).mpr hτ₀
+    let ε₀ : ℝ := osMultiTimeEps τ₀
+    have hε₀ : 0 < ε₀ := osMultiTimeEps_pos hpos₀
+    let V : Set (Fin m → ℂ) := {τ | ∀ k, 2 * ε₀ < (τ k).re}
+    have hV_open : IsOpen V := by
+      have h_eq : V = ⋂ k : Fin m, {τ : Fin m → ℂ | 2 * ε₀ < (τ k).re} := by
+        ext τ
+        simp [V]
+      rw [h_eq]
+      exact isOpen_iInter_of_finite (fun k =>
+        isOpen_lt continuous_const (Complex.continuous_re.comp (continuous_apply k)))
+    have hτ₀_mem : τ₀ ∈ V := by
+      intro k
+      have h1 : 2 * ε₀ = (1 / 2 : ℝ) * osMultiTimeMinRe τ₀ := by
+        dsimp [ε₀, osMultiTimeEps]
+        ring
+      have h2 : (1 / 2 : ℝ) * osMultiTimeMinRe τ₀ < osMultiTimeMinRe τ₀ := by linarith
+      exact (h1.trans_lt h2).trans_le (osMultiTimeMinRe_le_apply τ₀ k)
+    have h_open_prod : IsOpen ((Set.univ : Set (Fin (m + 1) → Fin 3 → ℝ)) ×ˢ V) :=
+      isOpen_univ.prod hV_open
+    have h_cont_prod : ContinuousOn
+        (fun p : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℂ) =>
+          osMultiTimeH hOS hcluster hdamped (m + 1) α p.1 p.2)
+        (Set.univ ×ˢ V) :=
+      ((continuousOn_osMultiTimeSlice hOS hcluster hdamped m α ε₀ hε₀).mono
+        (Set.prod_mono Set.Subset.rfl (fun _ hτ k => (hτ k).le))).congr
+        (fun p hp => osMultiTimeH_eq_slice hOS hcluster hdamped m α p.1 p.2 ε₀ hε₀
+          (fun k => (hp.2 k).le))
+    exact (h_cont_prod.continuousAt (h_open_prod.mem_nhds ⟨trivial, hτ₀_mem⟩)).continuousWithinAt
+
+theorem osMultiTimeH_real_eq_schwinger {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (_ : x ∈ orderedEuclidN n),
+      osMultiTimeH hOS hcluster hdamped n α (fun i => spatialPart (x i))
+        (fun k : Fin (n - 1) =>
+          ((x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0 : ℝ) : ℂ)) =
+        𝒮 n α x
+  | 0, α, x, _ => by
+      dsimp [osMultiTimeH]
+      congr 1
+      exact Subsingleton.elim 0 x
+  | m + 1, α, x, hx => by
+      let τ_x : Fin m → ℂ := fun k => ((x k.succ 0 - x k.castSucc 0 : ℝ) : ℂ)
+      have h_tau_eq : (fun k : Fin m =>
+          ((x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0 : ℝ) : ℂ)) = τ_x := by
+        ext k
+        rfl
+      change osMultiTimeH hOS hcluster hdamped (m + 1) α (fun i => spatialPart (x i))
+          (fun k : Fin m => ((x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0 : ℝ) : ℂ)) =
+        𝒮 (m + 1) α x
+      rw [h_tau_eq]
+      have hτ_pos : ∀ k : Fin m, 0 < (τ_x k).re := by
+        intro k
+        change 0 < x k.succ 0 - x k.castSucc 0
+        have hlt : (k.castSucc).val + 1 < m + 1 := by dsimp; omega
+        have h_succ : (⟨(k.castSucc).val + 1, hlt⟩ : Fin (m + 1)) = k.succ := by ext; rfl
+        have hstep := hx k.castSucc hlt
+        rw [h_succ] at hstep
+        linarith
+      have hpos : 0 < osMultiTimeMinRe τ_x := (osMultiTimeMinRe_pos_iff τ_x).mpr hτ_pos
+      rw [osMultiTimeH_eq_slice hOS hcluster hdamped m α (fun i => spatialPart (x i))
+          τ_x (osMultiTimeEps τ_x) (osMultiTimeEps_pos hpos)
+          (fun k => two_mul_osMultiTimeEps_le hpos k)]
+      exact osMultiTimeSlice_real_eq_schwinger hOS hcluster hdamped m α x hx
+        (osMultiTimeEps τ_x) (osMultiTimeEps_pos hpos)
+        (fun k => two_mul_osMultiTimeEps_le hpos k)
+
+theorem osMultiTimeH_spatial_shift {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (n : ℕ) (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ)
+      (τ : Fin (n - 1) → ℂ) (a : Fin 3 → ℝ),
+      osMultiTimeH hOS hcluster hdamped n α (fun i => x_sp i + a) τ =
+        osMultiTimeH hOS hcluster hdamped n α x_sp τ
+  | 0, _, _, _, _ => rfl
+  | m + 1, α, x_sp, τ, a => by
+      dsimp [osMultiTimeH]
+      split_ifs with hpos
+      · exact osMultiTimeSlice_spatial_shift hOS hcluster hdamped m α x_sp τ
+          (osMultiTimeEps τ) (osMultiTimeEps_pos hpos) a
+      · rfl
+
+theorem osMultiTimeH_spinorRot {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (n : ℕ) (U : SU2) (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ)
+      (τ : Fin (n - 1) → ℂ),
+      osMultiTimeH hOS hcluster hdamped n α (fun i => euclidSpatialRot U (x_sp i)) τ =
+        ∑ β : Fin n → ι,
+          (∏ i : Fin n, osSpinorRotMatrix R U (α i) (β i)) *
+            osMultiTimeH hOS hcluster hdamped n β x_sp τ
+  | 0, U, α, _, _ => by
+      dsimp [osMultiTimeH]
+      rw [Finset.univ_unique, Finset.sum_singleton]
+      have h_prod : (∏ i : Fin 0, osSpinorRotMatrix R U (α i) ((default : Fin 0 → ι) i)) = 1 :=
+        Finset.prod_eq_one (fun i _ => Fin.elim0 i)
+      have h_eq : (default : Fin 0 → ι) = α := Subsingleton.elim _ _
+      rw [h_prod, one_mul, h_eq]
+  | m + 1, U, α, x_sp, τ => by
+      dsimp [osMultiTimeH]
+      split_ifs with hpos
+      · exact osMultiTimeSlice_spinorRot hOS hcluster hdamped m U α x_sp τ
+          (osMultiTimeEps τ) (osMultiTimeEps_pos hpos)
+      · symm
+        exact Finset.sum_eq_zero (fun _ _ => mul_zero _)
+
+lemma norm_osMultiTimeState_le {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    {C₀ : ℝ} {K : ℕ} (hC₀ : 0 ≤ C₀)
+    (hbd : ∀ (α₀ : ι) (x_sp : Fin 3 → ℝ) (ε : ℝ) (hε : 0 < ε)
+      (x : OSHilbert hOS.toReflectionPositiveData),
+      ‖osDampedFieldCLM hOS.toReflectionPositiveData hdamped α₀ x_sp ε hε x‖ ≤
+        C₀ * (1 + ε⁻¹) ^ K * ‖x‖) :
+    ∀ (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+      (τ : Fin m → ℂ) (ε : ℝ) (hε : 0 < ε),
+      ‖osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε‖ ≤
+        (C₀ * (1 + ε⁻¹) ^ K) ^ (m + 1) * ‖osVacuum hOS.toReflectionPositiveData‖
+  | 0, α, x_sp, τ, ε, hε => by
+      rw [osMultiTimeState_zero, Nat.zero_add, pow_one]
+      exact hbd (α 0) (x_sp 0) ε hε (osVacuum hOS.toReflectionPositiveData)
+  | m + 1, α, x_sp, τ, ε, hε => by
+      rw [osMultiTimeState_succ]
+      have h1 := hbd (α 0) (x_sp 0) ε hε
+        (osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ))
+          (osMultiTimeState hOS hcluster hdamped m
+            (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε))
+      have h2 : ‖osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ))
+          (osMultiTimeState hOS hcluster hdamped m
+            (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε)‖ ≤
+          ‖osMultiTimeState hOS hcluster hdamped m
+            (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε‖ :=
+        norm_canonicalOSHolomorphicSemigroupTotal_apply_le
+          hOS.toReflectionPositiveData hOS.os1_translation
+          (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+            hOS.os1_translation hcluster)
+          hOS.os0_smooth _ _
+      have h3 := norm_osMultiTimeState_le hOS hcluster hdamped hC₀ hbd m
+        (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε
+      have h_fac_nonneg : 0 ≤ C₀ * (1 + ε⁻¹) ^ K :=
+        mul_nonneg hC₀ (pow_nonneg (by positivity) K)
+      calc ‖osDampedFieldCLM hOS.toReflectionPositiveData hdamped (α 0) (x_sp 0) ε hε
+            (osClusterSemigroupTotal hOS hcluster (τ 0 - 2 * (ε : ℂ))
+              (osMultiTimeState hOS hcluster hdamped m
+                (Fin.tail α) (Fin.tail x_sp) (Fin.tail τ) ε hε))‖
+          ≤ (C₀ * (1 + ε⁻¹) ^ K) *
+              ((C₀ * (1 + ε⁻¹) ^ K) ^ (m + 1) *
+                ‖osVacuum hOS.toReflectionPositiveData‖) :=
+            h1.trans (mul_le_mul_of_nonneg_left (h2.trans h3) h_fac_nonneg)
+        _ = (C₀ * (1 + ε⁻¹) ^ K) ^ (m + 1 + 1) * ‖osVacuum hOS.toReflectionPositiveData‖ := by
+            rw [pow_succ' (C₀ * (1 + ε⁻¹) ^ K) (m + 1)]
+            ring
+
+theorem exists_osMultiTimeH_growth_bound
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (n : ℕ), ∃ (C_n : ℝ) (M_n : ℕ), 0 ≤ C_n ∧
+      ∀ (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ) (τ : Fin (n - 1) → ℂ),
+        (∀ k : Fin (n - 1), 0 < (τ k).re) →
+        ‖osMultiTimeH hOS hcluster hdamped n α x_sp τ‖ ≤
+          C_n * ∏ k : Fin (n - 1), (1 + ((τ k).re)⁻¹) ^ M_n
+  | 0 => by
+      refine ⟨‖𝒮 0 Fin.elim0 0‖, 0, norm_nonneg _, fun α x_sp τ _ => ?_⟩
+      dsimp [osMultiTimeH]
+      have hα : α = Fin.elim0 := Subsingleton.elim _ _
+      have h_prod : (∏ k : Fin 0, (1 + ((τ k).re)⁻¹) ^ 0) = 1 :=
+        Finset.prod_eq_one (fun k _ => Fin.elim0 k)
+      rw [hα, h_prod, mul_one]
+  | m + 1 => by
+      rcases exists_osDampedFieldCLM_bound hOS.toReflectionPositiveData hdamped with
+        ⟨C₀, K, hC₀, hbd⟩
+      let M_n : ℕ := (m + 1) * K
+      let C_n : ℝ := ‖osVacuum hOS.toReflectionPositiveData‖ ^ 2 * C₀ ^ (m + 1) * 4 ^ M_n
+      refine ⟨C_n, M_n, by dsimp [C_n]; positivity, fun α x_sp τ hτ => ?_⟩
+      have hpos : 0 < osMultiTimeMinRe τ := (osMultiTimeMinRe_pos_iff τ).mpr hτ
+      let ε := osMultiTimeEps τ
+      have hε : 0 < ε := osMultiTimeEps_pos hpos
+      have h_eq : osMultiTimeH hOS hcluster hdamped (m + 1) α x_sp τ =
+          osMultiTimeSlice hOS hcluster hdamped m α x_sp τ ε hε :=
+        osMultiTimeH_eq_slice hOS hcluster hdamped m α x_sp τ ε hε
+          (fun k => two_mul_osMultiTimeEps_le hpos k)
+      rw [h_eq]
+      unfold osMultiTimeSlice
+      have h_state := norm_osMultiTimeState_le hOS hcluster hdamped hC₀ hbd m α x_sp τ ε hε
+      have h_inner : ‖⟪osVacuum hOS.toReflectionPositiveData,
+          osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε⟫_ℂ‖ ≤
+          (‖osVacuum hOS.toReflectionPositiveData‖ ^ 2 * C₀ ^ (m + 1)) * (1 + ε⁻¹) ^ M_n := by
+        calc ‖⟪osVacuum hOS.toReflectionPositiveData,
+              osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε⟫_ℂ‖
+            ≤ ‖osVacuum hOS.toReflectionPositiveData‖ *
+                ((C₀ * (1 + ε⁻¹) ^ K) ^ (m + 1) * ‖osVacuum hOS.toReflectionPositiveData‖) :=
+              (norm_inner_le_norm _ _).trans
+                (mul_le_mul_of_nonneg_left h_state (norm_nonneg _))
+          _ = (‖osVacuum hOS.toReflectionPositiveData‖ ^ 2 * C₀ ^ (m + 1)) *
+                (1 + ε⁻¹) ^ M_n := by
+              dsimp [M_n]
+              rw [mul_pow, ← pow_mul, mul_comm K (m + 1)]
+              ring
+      have h_eps_prod : (1 + ε⁻¹) ^ M_n ≤
+          4 ^ M_n * ∏ k : Fin m, (1 + ((τ k).re)⁻¹) ^ M_n := by
+        have h1 := pow_le_pow_left₀ (by positivity)
+          (one_add_inv_osMultiTimeEps_le τ hτ) M_n
+        rw [mul_pow, ← Finset.prod_pow] at h1
+        exact h1
+      calc ‖⟪osVacuum hOS.toReflectionPositiveData,
+            osMultiTimeState hOS hcluster hdamped m α x_sp τ ε hε⟫_ℂ‖
+          ≤ (‖osVacuum hOS.toReflectionPositiveData‖ ^ 2 * C₀ ^ (m + 1)) *
+              (4 ^ M_n * ∏ k : Fin m, (1 + ((τ k).re)⁻¹) ^ M_n) :=
+            h_inner.trans (mul_le_mul_of_nonneg_left h_eps_prod (by positivity))
+        _ = C_n * ∏ k : Fin m, (1 + ((τ k).re)⁻¹) ^ M_n := by
+            dsimp [C_n]
+            ring
+
 end
 end QFT

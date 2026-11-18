@@ -5671,6 +5671,3633 @@ theorem freeDirac_os_to_wightman_synthesis {m : ℝ} (hm : 0 < m) :
   rcases hfull (Or.inr rfl) hloc with ⟨hFE, hperm⟩
   exact ⟨hG.trans hW, hschw, hvac, htr, hFE, hperm⟩
 
+def liftTailPerm {r : ℕ} (σ : Equiv.Perm (Fin r)) : Equiv.Perm (Fin (r + 1)) :=
+  Equiv.Perm.decomposeFin.symm (0, σ)
+
+@[simp]
+lemma liftTailPerm_zero {r : ℕ} (σ : Equiv.Perm (Fin r)) :
+    liftTailPerm σ 0 = 0 := by
+  simp [liftTailPerm]
+
+@[simp]
+lemma liftTailPerm_succ {r : ℕ} (σ : Equiv.Perm (Fin r)) (j : Fin r) :
+    liftTailPerm σ j.succ = (σ j).succ := by
+  simp [liftTailPerm]
+
+@[simp]
+lemma liftTailPerm_symm {r : ℕ} (σ : Equiv.Perm (Fin r)) :
+    (liftTailPerm σ).symm = liftTailPerm σ.symm := by
+  apply Equiv.Perm.ext
+  intro i
+  refine Fin.cases ?_ (fun j => ?_) i
+  · apply (liftTailPerm σ).injective
+    simp
+  · apply (liftTailPerm σ).injective
+    simp
+
+lemma liftTailPerm_decomposeFin_snd {n : ℕ} {q : Equiv.Perm (Fin (n + 1))} (hq : q 0 = 0) :
+    liftTailPerm (Equiv.Perm.decomposeFin q).2 = q := by
+  dsimp [liftTailPerm]
+  have hf : (Equiv.Perm.decomposeFin q).1 = q 0 := by
+    conv_rhs => rw [← Equiv.Perm.decomposeFin.symm_apply_apply q]
+    rw [Equiv.Perm.decomposeFin_symm_apply_zero]
+  have h_dec : Equiv.Perm.decomposeFin q = (0, (Equiv.Perm.decomposeFin q).2) :=
+    Prod.ext (hf.trans hq) rfl
+  rw [← h_dec, Equiv.symm_apply_apply]
+
+lemma sign_liftTailPerm {r : ℕ} (σ : Equiv.Perm (Fin r)) :
+    Equiv.Perm.sign (liftTailPerm σ) = Equiv.Perm.sign σ := by
+  simp [liftTailPerm]
+
+lemma eta_pow_permInversions_liftTailPerm {η : ℂ} (hη : η = 1 ∨ η = -1)
+    {r : ℕ} (σ : Equiv.Perm (Fin r)) :
+    η ^ permInversions (liftTailPerm σ) = η ^ permInversions σ := by
+  rcases hη with rfl | rfl
+  · simp
+  · rw [eta_pow_permInversions_eq_sign, eta_pow_permInversions_eq_sign, sign_liftTailPerm]
+
+lemma eta_pow_permInversions_cycleRange {η : ℂ} (hη : η = 1 ∨ η = -1)
+    {r : ℕ} (p : Fin (r + 1)) :
+    η ^ permInversions p.cycleRange = η ^ (p : ℕ) := by
+  rcases hη with rfl | rfl
+  · simp
+  · rw [eta_pow_permInversions_eq_sign, Fin.sign_cycleRange]
+    push_cast
+    rfl
+
+def createPermEquiv (r : ℕ) :
+    Fin (r + 1) × Equiv.Perm (Fin r) ≃ Equiv.Perm (Fin (r + 1)) where
+  toFun ps := ps.1.cycleRange.symm * liftTailPerm ps.2
+  invFun π := (π 0, (Equiv.Perm.decomposeFin ((π 0).cycleRange * π)).2)
+  left_inv := by
+    rintro ⟨p, σ⟩
+    have h0 : (p.cycleRange.symm * liftTailPerm σ) 0 = p := by simp
+    ext1
+    · exact h0
+    · dsimp only
+      rw [h0]
+      have h_mul : p.cycleRange * (p.cycleRange.symm * liftTailPerm σ) = liftTailPerm σ := by
+        ext x
+        simp
+      rw [h_mul]
+      dsimp [liftTailPerm]
+      rw [Equiv.apply_symm_apply]
+  right_inv := by
+    intro π
+    let q := (π 0).cycleRange * π
+    have hq0 : q 0 = 0 := by simp [q]
+    have h_dec : Equiv.Perm.decomposeFin q = (0, (Equiv.Perm.decomposeFin q).2) := by
+      have hf : (Equiv.Perm.decomposeFin q).1 = q 0 := by
+        conv_rhs => rw [← Equiv.Perm.decomposeFin.symm_apply_apply q]
+        rw [Equiv.Perm.decomposeFin_symm_apply_zero]
+      exact Prod.ext (hf.trans hq0) rfl
+    have h_lift : liftTailPerm (Equiv.Perm.decomposeFin q).2 = q := by
+      dsimp [liftTailPerm]
+      rw [← h_dec, Equiv.symm_apply_apply]
+    dsimp only
+    change (π 0).cycleRange.symm * liftTailPerm (Equiv.Perm.decomposeFin q).2 = π
+    rw [h_lift]
+    ext x
+    simp [q]
+
+@[simp]
+lemma createPermEquiv_apply_zero {r : ℕ} (p : Fin (r + 1)) (σ : Equiv.Perm (Fin r)) :
+    createPermEquiv r (p, σ) 0 = p := by
+  simp [createPermEquiv]
+
+@[simp]
+lemma createPermEquiv_apply_succ {r : ℕ} (p : Fin (r + 1)) (σ : Equiv.Perm (Fin r)) (j : Fin r) :
+    createPermEquiv r (p, σ) j.succ = p.succAbove (σ j) := by
+  simp [createPermEquiv]
+
+lemma eta_pow_permInversions_createPermEquiv {η : ℂ} (hη : η = 1 ∨ η = -1)
+    {r : ℕ} (p : Fin (r + 1)) (σ : Equiv.Perm (Fin r)) :
+    η ^ permInversions (createPermEquiv r (p, σ)) = η ^ (p : ℕ) * η ^ permInversions σ := by
+  dsimp [createPermEquiv]
+  change η ^ permInversions ((p.cycleRange)⁻¹ * liftTailPerm σ) = _
+  rw [eta_pow_permInversions_mul hη, eta_pow_permInversions_inv hη,
+      eta_pow_permInversions_cycleRange hη, eta_pow_permInversions_liftTailPerm hη]
+
+def annihPermEquiv (r : ℕ) :
+    Fin (r + 1) × Equiv.Perm (Fin r) ≃ Equiv.Perm (Fin (r + 1)) :=
+  ((Equiv.refl (Fin (r + 1))).prodCongr (Equiv.inv (Equiv.Perm (Fin r)))).trans
+    ((createPermEquiv r).trans (Equiv.inv (Equiv.Perm (Fin (r + 1)))))
+
+lemma annihPermEquiv_eq {r : ℕ} (p : Fin (r + 1)) (σ : Equiv.Perm (Fin r)) :
+    annihPermEquiv r (p, σ) = liftTailPerm σ * p.cycleRange := by
+  apply Equiv.Perm.ext
+  intro x
+  have h_inv : annihPermEquiv r (p, σ) = (p.cycleRange.symm * liftTailPerm σ⁻¹)⁻¹ := rfl
+  rw [h_inv, _root_.mul_inv_rev]
+  change (liftTailPerm σ⁻¹).symm (p.cycleRange.symm.symm x) = _
+  rw [liftTailPerm_symm]
+  rfl
+
+lemma cons_comp_annihPermEquiv {α_t : Type*} {r : ℕ} (a : α_t) (f : Fin r → α_t)
+    (p : Fin (r + 1)) (σ : Equiv.Perm (Fin r)) :
+    (Fin.cons a f : Fin (r + 1) → α_t) ∘ annihPermEquiv r (p, σ) =
+      p.insertNth a (f ∘ σ) := by
+  rw [annihPermEquiv_eq]
+  have h_left : (Fin.cons a f : Fin (r + 1) → α_t) ∘ liftTailPerm σ = Fin.cons a (f ∘ σ) := by
+    ext i
+    refine Fin.cases ?_ (fun j => ?_) i <;> simp
+  change ((Fin.cons a f : Fin (r + 1) → α_t) ∘ liftTailPerm σ) ∘ p.cycleRange = _
+  rw [h_left, Fin.cons_comp_cycleRange]
+
+lemma eta_pow_permInversions_annihPermEquiv {η : ℂ} (hη : η = 1 ∨ η = -1)
+    {r : ℕ} (p : Fin (r + 1)) (σ : Equiv.Perm (Fin r)) :
+    η ^ permInversions (annihPermEquiv r (p, σ)) = η ^ (p : ℕ) * η ^ permInversions σ := by
+  rw [annihPermEquiv_eq, eta_pow_permInversions_mul hη,
+      eta_pow_permInversions_liftTailPerm hη, eta_pow_permInversions_cycleRange hη, mul_comm]
+
+namespace PartialPairing
+
+def prependUnpaired {j r : ℕ} (L : PartialPairing j r) :
+    PartialPairing (j + 1) (r + 1) where
+  unpaired := Fin.cons 0 (fun a => (L.unpaired a).succ)
+  strictMono_unpaired a b hab := by
+    revert hab
+    refine Fin.cases ?_ (fun a' => ?_) a
+    · refine Fin.cases (fun h => False.elim (lt_irrefl 0 h)) (fun _ _ => Fin.succ_pos _) b
+    · refine Fin.cases (fun h => False.elim (Nat.not_lt_zero _ h)) (fun b' h => ?_) b
+      exact Fin.succ_lt_succ_iff.mpr (L.strictMono_unpaired (Fin.succ_lt_succ_iff.mp h))
+  mate := liftTailPerm L.mate
+  involutive u := by
+    refine Fin.cases ?_ (fun i => ?_) u <;> simp
+  fixed_iff u := by
+    refine Fin.cases ?_ (fun i => ?_) u
+    · simp only [liftTailPerm_zero, true_iff]
+      exact ⟨0, rfl⟩
+    · simp only [liftTailPerm_succ, Fin.succ_inj, L.fixed_iff]
+      constructor
+      · rintro ⟨a, rfl⟩
+        exact ⟨a.succ, rfl⟩
+      · rintro ⟨a, ha⟩
+        refine Fin.cases (fun h0 => False.elim (Fin.succ_ne_zero _ h0.symm))
+          (fun b hb => ⟨b, Fin.succ_inj.mp hb⟩) a ha
+
+def unprependUnpaired {j r : ℕ} (L : PartialPairing (j + 1) (r + 1))
+    (h0 : L.mate 0 = 0) : PartialPairing j r where
+  unpaired b :=
+    have hb_pos : L.unpaired b.succ ≠ 0 := by
+      have h0_mem := (L.fixed_iff 0).mp h0
+      rcases h0_mem with ⟨a₀, ha₀⟩
+      have ha₀_eq : a₀ = 0 := by
+        by_contra hne
+        have hpos : 0 < a₀ := Fin.pos_of_ne_zero hne
+        have hlt := L.strictMono_unpaired hpos
+        rw [ha₀] at hlt
+        exact Nat.not_lt_zero _ hlt
+      subst ha₀_eq
+      exact ne_of_gt (ha₀ ▸ L.strictMono_unpaired (Fin.succ_pos b))
+    (L.unpaired b.succ).pred hb_pos
+  strictMono_unpaired b₁ b₂ hb := by
+    dsimp only
+    rw [← Fin.succ_lt_succ_iff, Fin.succ_pred, Fin.succ_pred]
+    exact L.strictMono_unpaired (Fin.succ_lt_succ_iff.mpr hb)
+  mate := (Equiv.Perm.decomposeFin L.mate).2
+  involutive i := by
+    have h_lift := liftTailPerm_decomposeFin_snd h0
+    have h_succ := congrArg (fun p : Equiv.Perm (Fin (j + 1)) => p (p i.succ)) h_lift
+    simp only [liftTailPerm_succ, L.mate_mate] at h_succ
+    exact Fin.succ_inj.mp h_succ
+  fixed_iff i := by
+    have h_lift := liftTailPerm_decomposeFin_snd h0
+    have h_app : ((Equiv.Perm.decomposeFin L.mate).2 i).succ = L.mate i.succ :=
+      (liftTailPerm_succ _ i).symm.trans (congrArg (fun p => p i.succ) h_lift)
+    have h0_eq : L.unpaired 0 = 0 := by
+      rcases (L.fixed_iff 0).mp h0 with ⟨a₀, ha₀⟩
+      have ha₀_z : a₀ = 0 := by
+        by_contra hne
+        have hlt := L.strictMono_unpaired (Fin.pos_of_ne_zero hne)
+        rw [ha₀] at hlt
+        exact Nat.not_lt_zero _ hlt
+      exact ha₀_z ▸ ha₀
+    rw [← Fin.succ_inj, h_app, L.fixed_iff]
+    constructor
+    · rintro ⟨a, ha⟩
+      refine Fin.cases (fun hz => False.elim (Fin.succ_ne_zero i (hz.symm.trans h0_eq)))
+        (fun b hb => ⟨b, ?_⟩) a ha
+      dsimp only
+      rw [← Fin.succ_inj, Fin.succ_pred, hb]
+    · rintro ⟨b, rfl⟩
+      refine ⟨b.succ, ?_⟩
+      dsimp only
+      exact (Fin.succ_pred _ _).symm
+
+lemma prependUnpaired_InternalChord_equiv_aux {j r : ℕ} (L : PartialPairing j r)
+    (u : Fin (j + 1)) :
+    u < (prependUnpaired L).mate u ↔ ∃ i : Fin j, u = i.succ ∧ i < L.mate i := by
+  refine Fin.cases ?_ (fun i => ?_) u
+  · simp only [prependUnpaired, liftTailPerm_zero, lt_self_iff_false, false_iff]
+    rintro ⟨x, hx, _⟩
+    exact Fin.succ_ne_zero x hx.symm
+  · simp only [prependUnpaired, liftTailPerm_succ, Fin.succ_lt_succ_iff, Fin.succ_inj]
+    exact ⟨fun h => ⟨i, rfl, h⟩, fun ⟨i', hi', h⟩ => hi' ▸ h⟩
+
+def prependUnpairedChordEquiv {j r : ℕ} (L : PartialPairing j r) :
+    L.InternalChord ≃ (prependUnpaired L).InternalChord where
+  toFun c := ⟨c.1.succ, by simpa [prependUnpaired] using c.2⟩
+  invFun c :=
+    have hc0 : c.1 ≠ 0 := by
+      intro h0
+      have hlt := c.2
+      rw [h0] at hlt
+      simp [prependUnpaired] at hlt
+    ⟨c.1.pred hc0, by
+      have hlt := c.2
+      have hs : (c.1.pred hc0).succ = c.1 := Fin.succ_pred c.1 hc0
+      rw [← hs] at hlt
+      change (c.1.pred hc0).succ < (L.mate (c.1.pred hc0)).succ at hlt
+      exact Fin.succ_lt_succ_iff.mp hlt⟩
+  left_inv c := by ext; simp
+  right_inv c := by ext; simp
+
+lemma partialCross_prependUnpaired {j r : ℕ} (L : PartialPairing j r) :
+    (prependUnpaired L).partialCross = L.partialCross := by
+  have h_int : (prependUnpaired L).internalCross = L.internalCross := by
+    dsimp [internalCross]
+    refine Finset.card_bij
+      (fun uv huv =>
+        have hu0 : uv.1 ≠ 0 := by
+          intro h0
+          rcases Finset.mem_filter.mp huv with ⟨_, _, h2, _⟩
+          rw [h0] at h2
+          simp [prependUnpaired] at h2
+        have hv0 : uv.2 ≠ 0 := by
+          intro h0
+          rcases Finset.mem_filter.mp huv with ⟨_, h1, _, _⟩
+          rw [h0] at h1
+          exact Nat.not_lt_zero _ h1
+        (uv.1.pred hu0, uv.2.pred hv0))
+      (fun uv huv => ?_)
+      (fun a ha b hb hab => ?_)
+      (fun pq hpq => ⟨(pq.1.succ, pq.2.succ), ?_, by ext <;> simp⟩)
+    · rcases Finset.mem_filter.mp huv with ⟨_, h1, h2, h3⟩
+      have hu0 : uv.1 ≠ 0 := by
+        intro h0; rw [h0] at h2; simp [prependUnpaired] at h2
+      have hv0 : uv.2 ≠ 0 := by
+        intro h0; rw [h0] at h1; exact Nat.not_lt_zero _ h1
+      have hsu : (uv.1.pred hu0).succ = uv.1 := Fin.succ_pred uv.1 hu0
+      have hsv : (uv.2.pred hv0).succ = uv.2 := Fin.succ_pred uv.2 hv0
+      rw [← hsu, ← hsv] at h1 h2 h3
+      simp only [prependUnpaired, liftTailPerm_succ, Fin.succ_lt_succ_iff] at h1 h2 h3
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, h1, h2, h3⟩
+    · have h1 := (Prod.mk.inj hab).1
+      have h2 := (Prod.mk.inj hab).2
+      ext1
+      · exact Fin.succ_inj.mp (by simpa using congrArg Fin.succ h1)
+      · exact Fin.succ_inj.mp (by simpa using congrArg Fin.succ h2)
+    · rcases Finset.mem_filter.mp hpq with ⟨_, h1, h2, h3⟩
+      refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩
+      simp [prependUnpaired, h1, h2, h3]
+  have h_open : (prependUnpaired L).openCross = L.openCross := by
+    dsimp [openCross]
+    refine Finset.card_bij
+      (fun ca hca =>
+        have hc0 : ca.1 ≠ 0 := by
+          intro h0
+          rcases Finset.mem_filter.mp hca with ⟨_, _, h2⟩
+          rw [h0] at h2
+          simp [prependUnpaired] at h2
+        have ha0 : ca.2 ≠ 0 := by
+          intro h0
+          rcases Finset.mem_filter.mp hca with ⟨_, h1, _⟩
+          rw [h0] at h1
+          simp [prependUnpaired] at h1
+        (ca.1.pred hc0, ca.2.pred ha0))
+      (fun ca hca => ?_)
+      (fun a ha b hb hab => ?_)
+      (fun ia hia => ⟨(ia.1.succ, ia.2.succ), ?_, by ext <;> simp⟩)
+    · rcases Finset.mem_filter.mp hca with ⟨_, h1, h2⟩
+      have hc0 : ca.1 ≠ 0 := by
+        intro h0; rw [h0] at h2; simp [prependUnpaired] at h2
+      have ha0 : ca.2 ≠ 0 := by
+        intro h0; rw [h0] at h1; simp [prependUnpaired] at h1
+      have hsc : (ca.1.pred hc0).succ = ca.1 := Fin.succ_pred ca.1 hc0
+      have hsa : (ca.2.pred ha0).succ = ca.2 := Fin.succ_pred ca.2 ha0
+      rw [← hsc, ← hsa] at h1 h2
+      simp only [prependUnpaired, Fin.cons_succ, liftTailPerm_succ, Fin.succ_lt_succ_iff] at h1 h2
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, h1, h2⟩
+    · have h1 := (Prod.mk.inj hab).1
+      have h2 := (Prod.mk.inj hab).2
+      ext1
+      · exact Fin.succ_inj.mp (by simpa using congrArg Fin.succ h1)
+      · exact Fin.succ_inj.mp (by simpa using congrArg Fin.succ h2)
+    · rcases Finset.mem_filter.mp hia with ⟨_, h1, h2⟩
+      refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩
+      simp [prependUnpaired, h1, h2]
+  dsimp [partialCross]
+  rw [h_int, h_open]
+
+def prependPaired {j r : ℕ} (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1)) :
+    PartialPairing (j + 1) r where
+  unpaired b := (L'.unpaired (a₀.succAbove b)).succ
+  strictMono_unpaired b₁ b₂ hb :=
+    Fin.succ_lt_succ_iff.mpr (L'.strictMono_unpaired (Fin.succAbove_lt_succAbove_iff.mpr hb))
+  mate := Equiv.swap 0 (L'.unpaired a₀).succ * liftTailPerm L'.mate
+  involutive u := by
+    let i₀ := L'.unpaired a₀
+    have hi₀_fix : L'.mate i₀ = i₀ := L'.mate_unpaired a₀
+    refine Fin.cases ?_ (fun i => ?_) u
+    · change (Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate
+        ((Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate 0))) = 0
+      simp [i₀, hi₀_fix]
+    · by_cases hi : i = i₀
+      · subst hi
+        change (Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate
+          ((Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate i₀.succ))) = i₀.succ
+        simp [i₀, hi₀_fix]
+      · have hmi : L'.mate i ≠ i₀ := fun hc =>
+          hi (by rw [← L'.mate_mate i, hc, hi₀_fix])
+        have hs1 : (L'.mate i).succ ≠ 0 := Fin.succ_ne_zero _
+        have hs2 : (L'.mate i).succ ≠ i₀.succ := Fin.succ_inj.ne.mpr hmi
+        have hs3 : i.succ ≠ 0 := Fin.succ_ne_zero _
+        have hs4 : i.succ ≠ i₀.succ := Fin.succ_inj.ne.mpr hi
+        change (Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate
+          ((Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate i.succ))) = i.succ
+        rw [liftTailPerm_succ, Equiv.swap_apply_of_ne_of_ne hs1 hs2,
+            liftTailPerm_succ, L'.mate_mate, Equiv.swap_apply_of_ne_of_ne hs3 hs4]
+  fixed_iff u := by
+    let i₀ := L'.unpaired a₀
+    have hi₀_fix : L'.mate i₀ = i₀ := L'.mate_unpaired a₀
+    refine Fin.cases ?_ (fun i => ?_) u
+    · constructor
+      · intro h0
+        change (Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate 0) = 0 at h0
+        simp only [liftTailPerm_zero, Equiv.swap_apply_left] at h0
+        exact False.elim (Fin.succ_ne_zero _ h0)
+      · rintro ⟨b, hb⟩
+        exact False.elim (Fin.succ_ne_zero _ hb)
+    · by_cases hi : i = i₀
+      · subst hi
+        constructor
+        · intro hh
+          change (Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate i₀.succ) = i₀.succ at hh
+          simp only [liftTailPerm_succ, hi₀_fix, Equiv.swap_apply_right] at hh
+          exact False.elim (Fin.succ_ne_zero _ hh.symm)
+        · rintro ⟨b, hb⟩
+          have h_eq := L'.unpaired_injective (Fin.succ_inj.mp hb)
+          exact False.elim (Fin.succAbove_ne a₀ b h_eq)
+      · have hmi : L'.mate i ≠ i₀ := fun hc =>
+          hi (by rw [← L'.mate_mate i, hc, hi₀_fix])
+        have hs1 : (L'.mate i).succ ≠ 0 := Fin.succ_ne_zero _
+        have hs2 : (L'.mate i).succ ≠ i₀.succ := Fin.succ_inj.ne.mpr hmi
+        have h_eval : (Equiv.swap 0 i₀.succ * liftTailPerm L'.mate) i.succ = (L'.mate i).succ := by
+          change (Equiv.swap 0 i₀.succ) (liftTailPerm L'.mate i.succ) = _
+          rw [liftTailPerm_succ, Equiv.swap_apply_of_ne_of_ne hs1 hs2]
+        rw [h_eval, Fin.succ_inj, L'.fixed_iff]
+        constructor
+        · rintro ⟨a, rfl⟩
+          have ha_ne : a ≠ a₀ := fun hc => hi (hc ▸ rfl)
+          rcases Fin.exists_succAbove_eq ha_ne with ⟨b, rfl⟩
+          exact ⟨b, rfl⟩
+        · rintro ⟨b, hb⟩
+          exact ⟨a₀.succAbove b, Fin.succ_inj.mp hb⟩
+
+end PartialPairing
+
+namespace PartialPairing
+
+lemma prependPaired_mate_zero {j r : ℕ} (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1)) :
+    (prependPaired L' a₀).mate 0 = (L'.unpaired a₀).succ := by
+  change (Equiv.swap 0 (L'.unpaired a₀).succ) (liftTailPerm L'.mate 0) = _
+  simp
+
+lemma prependPaired_mate_unpaired_succ {j r : ℕ} (L' : PartialPairing j (r + 1))
+    (a₀ : Fin (r + 1)) :
+    (prependPaired L' a₀).mate (L'.unpaired a₀).succ = 0 := by
+  change (Equiv.swap 0 (L'.unpaired a₀).succ) (liftTailPerm L'.mate (L'.unpaired a₀).succ) = 0
+  simp [L'.mate_unpaired a₀]
+
+lemma prependPaired_mate_succ_of_ne {j r : ℕ} (L' : PartialPairing j (r + 1))
+    (a₀ : Fin (r + 1)) {i : Fin j} (hi : i ≠ L'.unpaired a₀) :
+    (prependPaired L' a₀).mate i.succ = (L'.mate i).succ := by
+  have hmi : L'.mate i ≠ L'.unpaired a₀ := fun hc =>
+    hi (by rw [← L'.mate_mate i, hc, L'.mate_unpaired a₀])
+  change (Equiv.swap 0 (L'.unpaired a₀).succ) (liftTailPerm L'.mate i.succ) = _
+  rw [liftTailPerm_succ,
+      Equiv.swap_apply_of_ne_of_ne (Fin.succ_ne_zero _) (Fin.succ_inj.ne.mpr hmi)]
+
+def unprependPaired {j r : ℕ} (L : PartialPairing (j + 1) r) (h0 : L.mate 0 ≠ 0) :
+    PartialPairing j (r + 1) × Fin (r + 1) :=
+  let i₀ : Fin j := (L.mate 0).pred h0
+  have hi₀_succ : i₀.succ = L.mate 0 := Fin.succ_pred (L.mate 0) h0
+  have hub_ne0 : ∀ b : Fin r, L.unpaired b ≠ 0 := fun b hb =>
+    h0 (by rw [← hb, L.mate_unpaired b])
+  let u_tail : Fin r → Fin j := fun b => (L.unpaired b).pred (hub_ne0 b)
+  have hu_strict : StrictMono u_tail := fun b₁ b₂ hb => by
+    dsimp [u_tail]
+    rw [← Fin.succ_lt_succ_iff, Fin.succ_pred, Fin.succ_pred]
+    exact L.strictMono_unpaired hb
+  have hu_ne_i₀ : ∀ b : Fin r, u_tail b ≠ i₀ := fun b hc => by
+    have hs : L.unpaired b = L.mate 0 := by
+      rw [← Fin.succ_pred (L.unpaired b) (hub_ne0 b), ← hi₀_succ]
+      exact congrArg Fin.succ hc
+    have hm := L.mate_unpaired b
+    rw [hs, L.mate_mate] at hm
+    exact h0 hm.symm
+  let S_lt : Finset (Fin r) := Finset.univ.filter (fun b : Fin r => u_tail b < i₀)
+  let a₀ : Fin (r + 1) :=
+    ⟨S_lt.card, Nat.lt_succ_of_le ((Finset.card_le_univ S_lt).trans_eq (Fintype.card_fin r))⟩
+  have h_lt_iff : ∀ b : Fin r, u_tail b < i₀ ↔ (b : ℕ) < (a₀ : ℕ) := by
+    intro b
+    dsimp [a₀]
+    constructor
+    · intro hlt
+      have h_sub : Finset.Iic b ⊆ S_lt := fun c hc =>
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          lt_of_le_of_lt (hu_strict.monotone (Finset.mem_Iic.mp hc)) hlt⟩
+      have h_card := Finset.card_le_card h_sub
+      rw [Fin.card_Iic] at h_card
+      omega
+    · intro hlt_card
+      by_contra h_nlt
+      have hgt : i₀ < u_tail b :=
+        (lt_or_gt_of_ne (hu_ne_i₀ b)).resolve_left h_nlt
+      have h_sub : S_lt ⊆ Finset.Iio b := fun c hc =>
+        Finset.mem_Iio.mpr (hu_strict.lt_iff_lt.mp (lt_trans (Finset.mem_filter.mp hc).2 hgt))
+      have h_card := Finset.card_le_card h_sub
+      rw [Fin.card_Iio] at h_card
+      omega
+  let m_comb : Equiv.Perm (Fin (j + 1)) := Equiv.swap 0 i₀.succ * L.mate
+  have hm_zero : m_comb 0 = 0 := by
+    change (Equiv.swap 0 i₀.succ) (L.mate 0) = 0
+    rw [← hi₀_succ, Equiv.swap_apply_right]
+  have hm_lift : liftTailPerm (Equiv.Perm.decomposeFin m_comb).2 = m_comb :=
+    liftTailPerm_decomposeFin_snd hm_zero
+  let L' : PartialPairing j (r + 1) :=
+    { unpaired := a₀.insertNth i₀ u_tail
+      strictMono_unpaired := fun x y hxy => by
+        by_cases hx : x = a₀
+        · subst hx
+          have hy_ne : y ≠ a₀ := ne_of_gt hxy
+          rcases Fin.exists_succAbove_eq hy_ne with ⟨b, rfl⟩
+          rw [Fin.insertNth_apply_same, Fin.insertNth_apply_succAbove]
+          have h_nlt : ¬ (b : ℕ) < (a₀ : ℕ) := by
+            have h_sa : a₀ < a₀.succAbove b := hxy
+            rcases lt_or_ge (Fin.castSucc b) a₀ with hcb | hcb
+            · rw [Fin.succAbove_of_castSucc_lt a₀ b hcb] at h_sa
+              exact False.elim (lt_asymm hcb h_sa)
+            · exact not_lt.mpr (Fin.le_iff_val_le_val.mp hcb)
+          exact (lt_or_gt_of_ne (hu_ne_i₀ b)).resolve_left
+            (fun hc => h_nlt ((h_lt_iff b).mp hc))
+        · rcases Fin.exists_succAbove_eq hx with ⟨b₁, rfl⟩
+          by_cases hy : y = a₀
+          · subst hy
+            rw [Fin.insertNth_apply_succAbove, Fin.insertNth_apply_same]
+            have h_cb : Fin.castSucc b₁ < a₀ := by
+              rcases lt_or_ge (Fin.castSucc b₁) a₀ with hcb | hcb
+              · exact hcb
+              · rw [Fin.succAbove_of_le_castSucc a₀ b₁ hcb] at hxy
+                exact False.elim (not_lt_of_ge
+                  (le_trans hcb (Fin.castSucc_lt_succ (i := b₁)).le) hxy)
+            exact (h_lt_iff b₁).mpr h_cb
+          · rcases Fin.exists_succAbove_eq hy with ⟨b₂, rfl⟩
+            rw [Fin.insertNth_apply_succAbove, Fin.insertNth_apply_succAbove]
+            exact hu_strict (Fin.succAbove_lt_succAbove_iff.mp hxy)
+      mate := (Equiv.Perm.decomposeFin m_comb).2
+      involutive := fun i => by
+        have h_app : ∀ k : Fin j,
+            ((Equiv.Perm.decomposeFin m_comb).2 k).succ = m_comb k.succ := fun k =>
+          (liftTailPerm_succ _ k).symm.trans (congrArg (fun p => p k.succ) hm_lift)
+        have hm_inv : ∀ u : Fin (j + 1), m_comb (m_comb u) = u := by
+          intro u
+          by_cases hu0 : u = 0
+          · subst hu0; rw [hm_zero, hm_zero]
+          · by_cases hui : u = i₀.succ
+            · subst hui
+              have hmi : m_comb i₀.succ = i₀.succ := by
+                change (Equiv.swap 0 i₀.succ) (L.mate i₀.succ) = i₀.succ
+                rw [hi₀_succ, L.mate_mate, Equiv.swap_apply_left]
+              rw [hmi, hmi]
+            · have hlu_ne0 : L.mate u ≠ 0 := fun hc =>
+                hui (by rw [← L.mate_mate u, hc, ← hi₀_succ])
+              have hlu_nei : L.mate u ≠ i₀.succ := fun hc =>
+                hu0 (by rw [← L.mate_mate u, hc, hi₀_succ, L.mate_mate])
+              have hmu : m_comb u = L.mate u := by
+                change (Equiv.swap 0 i₀.succ) (L.mate u) = L.mate u
+                exact Equiv.swap_apply_of_ne_of_ne hlu_ne0 hlu_nei
+              rw [hmu]
+              change (Equiv.swap 0 i₀.succ) (L.mate (L.mate u)) = u
+              rw [L.mate_mate, Equiv.swap_apply_of_ne_of_ne hu0 hui]
+        exact Fin.succ_inj.mp ((h_app _).trans ((congrArg m_comb (h_app i)).trans (hm_inv i.succ)))
+      fixed_iff := fun i => by
+        have h_app : ((Equiv.Perm.decomposeFin m_comb).2 i).succ = m_comb i.succ :=
+          (liftTailPerm_succ _ i).symm.trans (congrArg (fun p => p i.succ) hm_lift)
+        rw [← Fin.succ_inj, h_app]
+        by_cases hi : i = i₀
+        · subst hi
+          have hmi : m_comb i₀.succ = i₀.succ := by
+            change (Equiv.swap 0 i₀.succ) (L.mate i₀.succ) = i₀.succ
+            rw [hi₀_succ, L.mate_mate, Equiv.swap_apply_left]
+          simp only [hmi, true_iff]
+          exact ⟨a₀, by simp⟩
+        · have hli_ne0 : L.mate i.succ ≠ 0 := fun hc =>
+            hi (Fin.succ_inj.mp (by rw [← L.mate_mate i.succ, hc, ← hi₀_succ]))
+          have hli_nei : L.mate i.succ ≠ i₀.succ := fun hc =>
+            Fin.succ_ne_zero i (by rw [← L.mate_mate i.succ, hc, hi₀_succ, L.mate_mate])
+          have hmi : m_comb i.succ = L.mate i.succ := by
+            change (Equiv.swap 0 i₀.succ) (L.mate i.succ) = L.mate i.succ
+            exact Equiv.swap_apply_of_ne_of_ne hli_ne0 hli_nei
+          rw [hmi, L.fixed_iff]
+          constructor
+          · rintro ⟨b, hb⟩
+            refine ⟨a₀.succAbove b, ?_⟩
+            rw [Fin.insertNth_apply_succAbove]
+            dsimp [u_tail]
+            exact Fin.succ_inj.mp ((Fin.succ_pred _ _).trans hb)
+          · rintro ⟨a, ha⟩
+            have ha_ne : a ≠ a₀ := fun hc => by
+              rw [hc, Fin.insertNth_apply_same] at ha
+              exact hi ha.symm
+            rcases Fin.exists_succAbove_eq ha_ne with ⟨b, rfl⟩
+            rw [Fin.insertNth_apply_succAbove] at ha
+            exact ⟨b, (Fin.succ_pred _ _).symm.trans (congrArg Fin.succ ha)⟩ }
+  (L', a₀)
+
+end PartialPairing
+
+namespace PartialPairing
+
+lemma prependPaired_unprependPaired {j r : ℕ} (L : PartialPairing (j + 1) r)
+    (h0 : L.mate 0 ≠ 0) :
+    prependPaired (unprependPaired L h0).1 (unprependPaired L h0).2 = L := by
+  let p := unprependPaired L h0
+  let i₀ : Fin j := (L.mate 0).pred h0
+  have hi₀_succ : i₀.succ = L.mate 0 := Fin.succ_pred (L.mate 0) h0
+  have hp_unp : p.1.unpaired p.2 = i₀ := by
+    dsimp [p, unprependPaired]
+    exact Fin.insertNth_apply_same _ _ _
+  let m_comb : Equiv.Perm (Fin (j + 1)) := Equiv.swap 0 i₀.succ * L.mate
+  have hm_zero : m_comb 0 = 0 := by
+    change (Equiv.swap 0 i₀.succ) (L.mate 0) = 0
+    rw [← hi₀_succ, Equiv.swap_apply_right]
+  have hm_lift : liftTailPerm (Equiv.Perm.decomposeFin m_comb).2 = m_comb :=
+    liftTailPerm_decomposeFin_snd hm_zero
+  refine ext_mate ?_
+  dsimp [prependPaired]
+  rw [hp_unp]
+  change Equiv.swap 0 i₀.succ * liftTailPerm (Equiv.Perm.decomposeFin m_comb).2 = L.mate
+  rw [hm_lift]
+  apply Equiv.Perm.ext
+  intro u
+  change (Equiv.swap 0 i₀.succ) ((Equiv.swap 0 i₀.succ) (L.mate u)) = L.mate u
+  exact Equiv.swap_apply_self _ _ _
+
+lemma unprependPaired_prependPaired {j r : ℕ} (L' : PartialPairing j (r + 1))
+    (a₀ : Fin (r + 1)) :
+    unprependPaired (prependPaired L' a₀)
+      (by rw [prependPaired_mate_zero]; exact Fin.succ_ne_zero _) = (L', a₀) := by
+  let L := prependPaired L' a₀
+  have h0 : L.mate 0 ≠ 0 := by
+    dsimp [L]
+    rw [prependPaired_mate_zero]
+    exact Fin.succ_ne_zero _
+  have h_rec := prependPaired_unprependPaired L h0
+  let p := unprependPaired L h0
+  have hL_eq : p.1 = L' := by
+    refine ext_mate ?_
+    apply Equiv.Perm.ext
+    intro i
+    have h_i₀ : (L.mate 0).pred h0 = L'.unpaired a₀ := by
+      dsimp [L]
+      simp [prependPaired_mate_zero]
+    have hp_unp : p.1.unpaired p.2 = L'.unpaired a₀ := by
+      dsimp [p, unprependPaired]
+      rw [Fin.insertNth_apply_same, h_i₀]
+    by_cases hi : i = L'.unpaired a₀
+    · subst hi
+      rw [← hp_unp, p.1.mate_unpaired, hp_unp, L'.mate_unpaired]
+    · have hi_p : i ≠ p.1.unpaired p.2 := by rwa [hp_unp]
+      have hm1 := prependPaired_mate_succ_of_ne p.1 p.2 hi_p
+      have hm2 := prependPaired_mate_succ_of_ne L' a₀ hi
+      have h_eq_m : (prependPaired p.1 p.2).mate i.succ = L.mate i.succ := by
+        rw [h_rec]
+      exact Fin.succ_inj.mp (hm1.symm.trans (h_eq_m.trans hm2))
+  have ha_eq : p.2 = a₀ := by
+    have h_i₀ : (L.mate 0).pred h0 = L'.unpaired a₀ := by
+      dsimp [L]
+      simp [prependPaired_mate_zero]
+    have hp_unp : p.1.unpaired p.2 = L'.unpaired a₀ := by
+      dsimp [p, unprependPaired]
+      rw [Fin.insertNth_apply_same, h_i₀]
+    rw [hL_eq] at hp_unp
+    exact L'.unpaired_injective hp_unp
+  exact Prod.ext hL_eq ha_eq
+
+def partialPairingSuccZeroEquiv (j : ℕ) :
+    (PartialPairing j 1 × Fin 1) ≃ PartialPairing (j + 1) 0 where
+  toFun pa := prependPaired pa.1 pa.2
+  invFun L := unprependPaired L (fun h0 => by
+    rcases (L.fixed_iff 0).mp h0 with ⟨a, _⟩
+    exact Fin.elim0 a)
+  left_inv pa := unprependPaired_prependPaired pa.1 pa.2
+  right_inv L := prependPaired_unprependPaired L _
+
+def partialPairingSuccSuccEquiv (j r : ℕ) :
+    PartialPairing j r ⊕ (PartialPairing j (r + 2) × Fin (r + 2)) ≃
+      PartialPairing (j + 1) (r + 1) where
+  toFun
+    | Sum.inl L => prependUnpaired L
+    | Sum.inr pa => prependPaired pa.1 pa.2
+  invFun L :=
+    if h0 : L.mate 0 = 0 then
+      Sum.inl (unprependUnpaired L h0)
+    else
+      Sum.inr (unprependPaired L h0)
+  left_inv x := by
+    rcases x with L | ⟨L', a₀⟩
+    · have h0 : (prependUnpaired L).mate 0 = 0 := by simp [prependUnpaired]
+      dsimp only
+      rw [dif_pos h0]
+      refine congrArg Sum.inl (ext_mate ?_)
+      dsimp [unprependUnpaired, prependUnpaired, liftTailPerm]
+      rw [Equiv.apply_symm_apply]
+    · have h0 : (prependPaired L' a₀).mate 0 ≠ 0 := by
+        rw [prependPaired_mate_zero]
+        exact Fin.succ_ne_zero _
+      dsimp only
+      rw [dif_neg h0, unprependPaired_prependPaired]
+  right_inv L := by
+    dsimp only
+    split_ifs with h0
+    · refine ext_mate ?_
+      exact liftTailPerm_decomposeFin_snd h0
+    · exact prependPaired_unprependPaired L h0
+
+def prependPairedChordEquiv {j r : ℕ} (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1)) :
+    Unit ⊕ L'.InternalChord ≃ (prependPaired L' a₀).InternalChord where
+  toFun
+    | Sum.inl () => ⟨0, by rw [prependPaired_mate_zero]; exact Fin.succ_pos _⟩
+    | Sum.inr c =>
+      have hc_ne : c.1 ≠ L'.unpaired a₀ := fun hc => by
+        have hlt := c.2
+        rw [hc, L'.mate_unpaired] at hlt
+        exact lt_irrefl _ hlt
+      ⟨c.1.succ, by
+        rw [prependPaired_mate_succ_of_ne L' a₀ hc_ne]
+        exact Fin.succ_lt_succ_iff.mpr c.2⟩
+  invFun u :=
+    if hu0 : u.1 = 0 then
+      Sum.inl ()
+    else
+      Sum.inr ⟨u.1.pred hu0, by
+        have hlt := u.2
+        have hsu : (u.1.pred hu0).succ = u.1 := Fin.succ_pred u.1 hu0
+        have hne : u.1.pred hu0 ≠ L'.unpaired a₀ := fun hc => by
+          rw [← hsu, hc, prependPaired_mate_unpaired_succ] at hlt
+          exact Nat.not_lt_zero _ hlt
+        rw [← hsu, prependPaired_mate_succ_of_ne L' a₀ hne] at hlt
+        exact Fin.succ_lt_succ_iff.mp hlt⟩
+  left_inv x := by
+    rcases x with ⟨⟩ | c
+    · simp
+    · simp only [Fin.succ_ne_zero, ↓reduceDIte]
+      exact congrArg Sum.inr (Subtype.ext (by simp))
+  right_inv u := by
+    by_cases hu0 : u.1 = 0
+    · simp only [hu0, ↓reduceDIte]
+      apply Subtype.ext
+      exact hu0.symm
+    · simp only [hu0, ↓reduceDIte]
+      apply Subtype.ext
+      exact Fin.succ_pred u.1 hu0
+
+end PartialPairing
+
+namespace PartialPairing
+
+lemma partialCross_prependPaired {j r : ℕ} (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1)) :
+    (prependPaired L' a₀).partialCross = L'.partialCross + (a₀ : ℕ) := by
+  let i₀ := L'.unpaired a₀
+  let C_cross : Finset (Fin j) := Finset.univ.filter (fun c : Fin j => c < i₀ ∧ i₀ < L'.mate c)
+  let C_rest : Finset (Fin j × Fin r) := Finset.univ.filter (fun cb : Fin j × Fin r =>
+    cb.1 < L'.unpaired (a₀.succAbove cb.2) ∧ L'.unpaired (a₀.succAbove cb.2) < L'.mate cb.1)
+  have h_int : (prependPaired L' a₀).internalCross = C_cross.card + L'.internalCross := by
+    let S_int := Finset.univ.filter (fun uv : Fin (j + 1) × Fin (j + 1) =>
+      uv.1 < uv.2 ∧ uv.2 < (prependPaired L' a₀).mate uv.1 ∧
+        (prependPaired L' a₀).mate uv.1 < (prependPaired L' a₀).mate uv.2)
+    have h_card_split := (Finset.card_filter_add_card_filter_not
+      (s := S_int) (p := fun uv : Fin (j + 1) × Fin (j + 1) => uv.1 = 0)).symm
+    have h1 : (S_int.filter (fun uv => uv.1 = 0)).card = C_cross.card := by
+      refine Finset.card_bij
+        (fun uv huv =>
+          have hv0 : uv.2 ≠ 0 := by
+            rcases Finset.mem_filter.mp (Finset.mem_filter.mp huv).1 with ⟨_, hlt, _, _⟩
+            exact ne_of_gt (lt_of_le_of_lt (Fin.zero_le _) hlt)
+          uv.2.pred hv0)
+        (fun uv huv => ?_)
+        (fun a ha b hb hab => ?_)
+        (fun c hc => ⟨(0, c.succ), ?_, by simp⟩)
+      · rcases Finset.mem_filter.mp huv with ⟨hS, hu0⟩
+        rcases Finset.mem_filter.mp hS with ⟨_, hlt1, hlt2, hlt3⟩
+        have hv0 : uv.2 ≠ 0 := ne_of_gt (lt_of_le_of_lt (Fin.zero_le _) hlt1)
+        have hsv : (uv.2.pred hv0).succ = uv.2 := Fin.succ_pred uv.2 hv0
+        rw [hu0, prependPaired_mate_zero, ← hsv] at hlt2 hlt3
+        have hc_lt : uv.2.pred hv0 < i₀ := Fin.succ_lt_succ_iff.mp hlt2
+        have hc_ne : uv.2.pred hv0 ≠ i₀ := ne_of_lt hc_lt
+        rw [prependPaired_mate_succ_of_ne L' a₀ hc_ne] at hlt3
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hc_lt, Fin.succ_lt_succ_iff.mp hlt3⟩
+      · have ha0 : a.1 = 0 := (Finset.mem_filter.mp ha).2
+        have hb0 : b.1 = 0 := (Finset.mem_filter.mp hb).2
+        ext1
+        · exact ha0.trans hb0.symm
+        · exact Fin.succ_inj.mp (by simpa using congrArg Fin.succ hab)
+      · rcases Finset.mem_filter.mp hc with ⟨_, hc1, hc2⟩
+        have hc_ne : c ≠ i₀ := ne_of_lt hc1
+        refine Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          Fin.succ_pos c, ?_, ?_⟩, rfl⟩
+        · rw [prependPaired_mate_zero]
+          exact Fin.succ_lt_succ_iff.mpr hc1
+        · rw [prependPaired_mate_zero, prependPaired_mate_succ_of_ne L' a₀ hc_ne]
+          exact Fin.succ_lt_succ_iff.mpr hc2
+    have h2 : (S_int.filter (fun uv => ¬ uv.1 = 0)).card = L'.internalCross := by
+      dsimp [internalCross]
+      refine Finset.card_bij
+        (fun uv huv =>
+          have hu0 : uv.1 ≠ 0 := (Finset.mem_filter.mp huv).2
+          have hv0 : uv.2 ≠ 0 := by
+            rcases Finset.mem_filter.mp (Finset.mem_filter.mp huv).1 with ⟨_, hlt, _, _⟩
+            exact ne_of_gt (lt_of_le_of_lt (Fin.zero_le _) hlt)
+          (uv.1.pred hu0, uv.2.pred hv0))
+        (fun uv huv => ?_)
+        (fun a ha b hb hab => ?_)
+        (fun pq hpq => ⟨(pq.1.succ, pq.2.succ), ?_, by ext <;> simp⟩)
+      · rcases Finset.mem_filter.mp huv with ⟨hS, hu0⟩
+        rcases Finset.mem_filter.mp hS with ⟨_, hlt1, hlt2, hlt3⟩
+        have hv0 : uv.2 ≠ 0 := ne_of_gt (lt_of_le_of_lt (Fin.zero_le _) hlt1)
+        have hsu : (uv.1.pred hu0).succ = uv.1 := Fin.succ_pred uv.1 hu0
+        have hsv : (uv.2.pred hv0).succ = uv.2 := Fin.succ_pred uv.2 hv0
+        rw [← hsu, ← hsv] at hlt1 hlt2 hlt3
+        have hu_ne_i₀ : uv.1.pred hu0 ≠ i₀ := fun hc => by
+          rw [hc, prependPaired_mate_unpaired_succ] at hlt2
+          exact Nat.not_lt_zero _ hlt2
+        have hv_ne_i₀ : uv.2.pred hv0 ≠ i₀ := fun hc => by
+          rw [hc, prependPaired_mate_unpaired_succ] at hlt3
+          exact Nat.not_lt_zero _ hlt3
+        rw [prependPaired_mate_succ_of_ne L' a₀ hu_ne_i₀] at hlt2 hlt3
+        rw [prependPaired_mate_succ_of_ne L' a₀ hv_ne_i₀] at hlt3
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          Fin.succ_lt_succ_iff.mp hlt1, Fin.succ_lt_succ_iff.mp hlt2,
+          Fin.succ_lt_succ_iff.mp hlt3⟩
+      · have h1' := (Prod.mk.inj hab).1
+        have h2' := (Prod.mk.inj hab).2
+        ext1
+        · exact Fin.succ_inj.mp (by simpa using congrArg Fin.succ h1')
+        · exact Fin.succ_inj.mp (by simpa using congrArg Fin.succ h2')
+      · rcases Finset.mem_filter.mp hpq with ⟨_, hlt1, hlt2, hlt3⟩
+        have hp_ne : pq.1 ≠ i₀ := fun hc => by
+          rw [hc] at hlt1 hlt2
+          rw [L'.mate_unpaired] at hlt2
+          exact lt_asymm hlt1 hlt2
+        have hq_ne : pq.2 ≠ i₀ := fun hc => by
+          rw [hc] at hlt2 hlt3
+          rw [L'.mate_unpaired] at hlt3
+          exact lt_asymm hlt2 hlt3
+        refine Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          Fin.succ_lt_succ_iff.mpr hlt1, ?_, ?_⟩, Fin.succ_ne_zero _⟩
+        · rw [prependPaired_mate_succ_of_ne L' a₀ hp_ne]
+          exact Fin.succ_lt_succ_iff.mpr hlt2
+        · rw [prependPaired_mate_succ_of_ne L' a₀ hp_ne,
+              prependPaired_mate_succ_of_ne L' a₀ hq_ne]
+          exact Fin.succ_lt_succ_iff.mpr hlt3
+    change S_int.card = _
+    rw [h_card_split, h1, h2]
+  have h_open : (prependPaired L' a₀).openCross = (a₀ : ℕ) + C_rest.card := by
+    let S_open := Finset.univ.filter (fun ub : Fin (j + 1) × Fin r =>
+      ub.1 < (prependPaired L' a₀).unpaired ub.2 ∧
+        (prependPaired L' a₀).unpaired ub.2 < (prependPaired L' a₀).mate ub.1)
+    have h_card_split := (Finset.card_filter_add_card_filter_not
+      (s := S_open) (p := fun ub : Fin (j + 1) × Fin r => ub.1 = 0)).symm
+    have h1 : (S_open.filter (fun ub => ub.1 = 0)).card = (a₀ : ℕ) := by
+      have ha₀_le : (a₀ : ℕ) ≤ r := Nat.le_of_lt_succ a₀.isLt
+      refine (Finset.card_bij (t := (Finset.univ : Finset (Fin (a₀ : ℕ))))
+        (fun ub hub => ⟨(ub.2 : ℕ), ?_⟩)
+        (fun _ _ => Finset.mem_univ _)
+        (fun a ha b hb hab => ?_)
+        (fun k _ => ⟨(0, ⟨k.val, lt_of_lt_of_le k.isLt ha₀_le⟩), ?_, by ext; rfl⟩)).trans
+        (Finset.card_fin (a₀ : ℕ))
+      · rcases Finset.mem_filter.mp hub with ⟨hS, hu0⟩
+        rcases Finset.mem_filter.mp hS with ⟨_, _, hlt2⟩
+        rw [hu0, prependPaired_mate_zero] at hlt2
+        have h_sa : a₀.succAbove ub.2 < a₀ :=
+          L'.strictMono_unpaired.lt_iff_lt.mp (Fin.succ_lt_succ_iff.mp hlt2)
+        rcases lt_or_ge (Fin.castSucc ub.2) a₀ with hcb | hcb
+        · exact hcb
+        · rw [Fin.succAbove_of_le_castSucc a₀ ub.2 hcb] at h_sa
+          exact False.elim (not_lt_of_ge
+            (le_trans hcb (Fin.castSucc_lt_succ (i := ub.2)).le) h_sa)
+      · have ha0 : a.1 = 0 := (Finset.mem_filter.mp ha).2
+        have hb0 : b.1 = 0 := (Finset.mem_filter.mp hb).2
+        ext1
+        · exact ha0.trans hb0.symm
+        · exact Fin.ext (Fin.mk.inj hab)
+      · let b_k : Fin r := ⟨k.val, lt_of_lt_of_le k.isLt ha₀_le⟩
+        have hcb : Fin.castSucc b_k < a₀ := k.isLt
+        have h_sa : a₀.succAbove b_k < a₀ := by
+          rw [Fin.succAbove_of_castSucc_lt a₀ b_k hcb]
+          exact hcb
+        refine Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          Fin.succ_pos _, ?_⟩, rfl⟩
+        rw [prependPaired_mate_zero]
+        exact Fin.succ_lt_succ_iff.mpr (L'.strictMono_unpaired h_sa)
+    have h2 : (S_open.filter (fun ub => ¬ ub.1 = 0)).card = C_rest.card := by
+      refine Finset.card_bij
+        (fun ub hub => (ub.1.pred (Finset.mem_filter.mp hub).2, ub.2))
+        (fun ub hub => ?_)
+        (fun a ha b hb hab => ?_)
+        (fun cb hcb => ⟨(cb.1.succ, cb.2), ?_, by ext <;> simp⟩)
+      · rcases Finset.mem_filter.mp hub with ⟨hS, hu0⟩
+        rcases Finset.mem_filter.mp hS with ⟨_, hlt1, hlt2⟩
+        have hsu : (ub.1.pred hu0).succ = ub.1 := Fin.succ_pred ub.1 hu0
+        rw [← hsu] at hlt1 hlt2
+        have hc_ne : ub.1.pred hu0 ≠ i₀ := fun hc => by
+          rw [hc, prependPaired_mate_unpaired_succ] at hlt2
+          exact Nat.not_lt_zero _ hlt2
+        rw [prependPaired_mate_succ_of_ne L' a₀ hc_ne] at hlt2
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          Fin.succ_lt_succ_iff.mp hlt1, Fin.succ_lt_succ_iff.mp hlt2⟩
+      · ext1
+        · exact Fin.succ_inj.mp (by simpa using congrArg Fin.succ (Prod.mk.inj hab).1)
+        · exact (Prod.mk.inj hab).2
+      · rcases Finset.mem_filter.mp hcb with ⟨_, hlt1, hlt2⟩
+        have hc_ne : cb.1 ≠ i₀ := fun hc => by
+          rw [hc] at hlt1 hlt2
+          rw [L'.mate_unpaired] at hlt2
+          exact lt_asymm hlt1 hlt2
+        refine Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          Fin.succ_lt_succ_iff.mpr hlt1, ?_⟩, Fin.succ_ne_zero _⟩
+        rw [prependPaired_mate_succ_of_ne L' a₀ hc_ne]
+        exact Fin.succ_lt_succ_iff.mpr hlt2
+    change S_open.card = _
+    rw [h_card_split, h1, h2]
+  have h_open_L' : L'.openCross = C_cross.card + C_rest.card := by
+    let S_L' := Finset.univ.filter (fun ca : Fin j × Fin (r + 1) =>
+      ca.1 < L'.unpaired ca.2 ∧ L'.unpaired ca.2 < L'.mate ca.1)
+    have h_card_split := (Finset.card_filter_add_card_filter_not
+      (s := S_L') (p := fun ca : Fin j × Fin (r + 1) => ca.2 = a₀)).symm
+    have h1 : (S_L'.filter (fun ca => ca.2 = a₀)).card = C_cross.card := by
+      refine Finset.card_bij
+        (fun ca _ => ca.1)
+        (fun ca hca => ?_)
+        (fun a ha b hb hab => ?_)
+        (fun c hc => ⟨(c, a₀), ?_, rfl⟩)
+      · rcases Finset.mem_filter.mp hca with ⟨hS, ha_eq⟩
+        rcases Finset.mem_filter.mp hS with ⟨_, hlt1, hlt2⟩
+        rw [ha_eq] at hlt1 hlt2
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlt1, hlt2⟩
+      · exact Prod.ext hab ((Finset.mem_filter.mp ha).2.trans (Finset.mem_filter.mp hb).2.symm)
+      · rcases Finset.mem_filter.mp hc with ⟨_, hc1, hc2⟩
+        exact Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _, hc1, hc2⟩, rfl⟩
+    have h2 : (S_L'.filter (fun ca => ¬ ca.2 = a₀)).card = C_rest.card := by
+      refine Finset.card_bij
+        (fun ca hca =>
+          have hne : ca.2 ≠ a₀ := (Finset.mem_filter.mp hca).2
+          (ca.1, (Fin.exists_succAbove_eq hne).choose))
+        (fun ca hca => ?_)
+        (fun a ha b hb hab => ?_)
+        (fun cb hcb => ⟨(cb.1, a₀.succAbove cb.2), ?_, ?_⟩)
+      · rcases Finset.mem_filter.mp hca with ⟨hS, hne⟩
+        rcases Finset.mem_filter.mp hS with ⟨_, hlt1, hlt2⟩
+        have hb_spec := (Fin.exists_succAbove_eq hne).choose_spec
+        rw [← hb_spec] at hlt1 hlt2
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlt1, hlt2⟩
+      · have h1' := (Prod.mk.inj hab).1
+        have h2' := (Prod.mk.inj hab).2
+        have ha_spec := (Fin.exists_succAbove_eq (Finset.mem_filter.mp ha).2).choose_spec
+        have hb_spec := (Fin.exists_succAbove_eq (Finset.mem_filter.mp hb).2).choose_spec
+        exact Prod.ext h1' (ha_spec.symm.trans ((congrArg a₀.succAbove h2').trans hb_spec))
+      · rcases Finset.mem_filter.mp hcb with ⟨_, hlt1, hlt2⟩
+        exact Finset.mem_filter.mpr
+          ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlt1, hlt2⟩, Fin.succAbove_ne a₀ cb.2⟩
+      · ext1
+        · rfl
+        · dsimp only
+          exact Fin.succAbove_right_injective
+            (Fin.exists_succAbove_eq (Fin.succAbove_ne a₀ cb.2)).choose_spec
+    change S_L'.card = _
+    rw [h_card_split, h1, h2]
+  dsimp [partialCross]
+  omega
+
+end PartialPairing
+
+namespace PartialPairing
+
+lemma isEmpty_of_lt {j r : ℕ} (h : j < r) : IsEmpty (PartialPairing j r) :=
+  ⟨fun L => by
+    have hcard := Fintype.card_le_of_injective L.unpaired L.unpaired_injective
+    simp only [Fintype.card_fin] at hcard
+    omega⟩
+
+def prependUnpairedParamEquiv {j r : ℕ} (L : PartialPairing j r) :
+    (L.InternalChord → Fin 3 → ℝ) ≃ᵐ ((prependUnpaired L).InternalChord → Fin 3 → ℝ) :=
+  MeasurableEquiv.piCongrLeft
+    (fun _ : (prependUnpaired L).InternalChord => Fin 3 → ℝ)
+    (prependUnpairedChordEquiv L)
+
+lemma measurePreserving_prependUnpairedParamEquiv {j r : ℕ} (L : PartialPairing j r) :
+    MeasurePreserving (prependUnpairedParamEquiv L) volume volume :=
+  volume_measurePreserving_piCongrLeft
+    (fun _ : (prependUnpaired L).InternalChord => Fin 3 → ℝ)
+    (prependUnpairedChordEquiv L)
+
+@[simp]
+lemma prependUnpairedParamEquiv_apply {j r : ℕ} (L : PartialPairing j r)
+    (p_int : L.InternalChord → Fin 3 → ℝ) (c : L.InternalChord) :
+    prependUnpairedParamEquiv L p_int (prependUnpairedChordEquiv L c) = p_int c := by
+  unfold prependUnpairedParamEquiv
+  simp only [MeasurableEquiv.coe_piCongrLeft, Equiv.piCongrLeft_apply_apply]
+
+def prependPairedParamEquiv {j r : ℕ} (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1)) :
+    ((Fin 3 → ℝ) × (L'.InternalChord → Fin 3 → ℝ)) ≃ᵐ
+      ((prependPaired L' a₀).InternalChord → Fin 3 → ℝ) :=
+  (((MeasurableEquiv.funUnique Unit (Fin 3 → ℝ)).symm.prodCongr
+      (MeasurableEquiv.refl (L'.InternalChord → Fin 3 → ℝ))).trans
+    (MeasurableEquiv.sumPiEquivProdPi
+      (fun _ : Unit ⊕ L'.InternalChord => Fin 3 → ℝ)).symm).trans
+    (MeasurableEquiv.piCongrLeft
+      (fun _ : (prependPaired L' a₀).InternalChord => Fin 3 → ℝ)
+      (prependPairedChordEquiv L' a₀))
+
+lemma measurePreserving_prependPairedParamEquiv {j r : ℕ}
+    (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1)) :
+    MeasurePreserving (prependPairedParamEquiv L' a₀) volume volume := by
+  unfold prependPairedParamEquiv
+  exact (((volume_preserving_funUnique Unit (Fin 3 → ℝ)).symm.prod
+      (MeasurePreserving.id volume)).trans
+    (volume_measurePreserving_sumPiEquivProdPi_symm
+      (fun _ : Unit ⊕ L'.InternalChord => Fin 3 → ℝ))).trans
+    (volume_measurePreserving_piCongrLeft
+      (fun _ : (prependPaired L' a₀).InternalChord => Fin 3 → ℝ)
+      (prependPairedChordEquiv L' a₀))
+
+@[simp]
+lemma prependPairedParamEquiv_apply_inl {j r : ℕ}
+    (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1))
+    (q₀ : Fin 3 → ℝ) (p_int : L'.InternalChord → Fin 3 → ℝ) :
+    prependPairedParamEquiv L' a₀ (q₀, p_int)
+      (prependPairedChordEquiv L' a₀ (Sum.inl ())) = q₀ := by
+  unfold prependPairedParamEquiv
+  simp only [MeasurableEquiv.trans_apply, MeasurableEquiv.coe_piCongrLeft,
+    Equiv.piCongrLeft_apply_apply]
+  rfl
+
+@[simp]
+lemma prependPairedParamEquiv_apply_inr {j r : ℕ}
+    (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1))
+    (q₀ : Fin 3 → ℝ) (p_int : L'.InternalChord → Fin 3 → ℝ) (c : L'.InternalChord) :
+    prependPairedParamEquiv L' a₀ (q₀, p_int)
+      (prependPairedChordEquiv L' a₀ (Sum.inr c)) = p_int c := by
+  unfold prependPairedParamEquiv
+  simp only [MeasurableEquiv.trans_apply, MeasurableEquiv.coe_piCongrLeft,
+    Equiv.piCongrLeft_apply_apply]
+  rfl
+
+lemma partialMomentum_prependUnpaired {j r : ℕ} (m : ℝ) (L : PartialPairing j r)
+    (p_int : L.InternalChord → Fin 3 → ℝ) (k' : Fin (r + 1) → Fin 3 → ℝ) :
+    (prependUnpaired L).partialMomentum m (prependUnpairedParamEquiv L p_int) k' =
+      Fin.cons (-massShellVec m (k' 0)) (L.partialMomentum m p_int (k' ∘ Fin.succ)) := by
+  ext u μ
+  refine Fin.cases ?_ (fun i => ?_) u
+  · rw [Fin.cons_zero]
+    have h0 : (0 : Fin (j + 1)) = (prependUnpaired L).unpaired 0 := rfl
+    rw [h0, (prependUnpaired L).partialMomentum_unpaired]
+  · let s := L.partialSlotEquiv.symm i
+    have hi : i = L.partialSlotEquiv s := (L.partialSlotEquiv.apply_symm_apply i).symm
+    rw [hi, Fin.cons_succ]
+    rcases s with b | ⟨c, idx⟩
+    · have hs1 : L.partialSlotEquiv (Sum.inl b) = L.unpaired b := rfl
+      have hs2 : (L.unpaired b).succ = (prependUnpaired L).unpaired b.succ := rfl
+      rw [hs1, hs2, (prependUnpaired L).partialMomentum_unpaired, L.partialMomentum_unpaired]
+      rfl
+    · refine Fin.cases ?_ (fun j0 => ?_) idx
+      · have hs1 : L.partialSlotEquiv (Sum.inr (c, 0)) = c.1 := rfl
+        have hs2 : c.1.succ = (prependUnpairedChordEquiv L c).1 := rfl
+        rw [hs1, hs2, (prependUnpaired L).partialMomentum_fst,
+            prependUnpairedParamEquiv_apply, L.partialMomentum_fst]
+      · have hj0 : j0 = 0 := Subsingleton.elim j0 0
+        subst hj0
+        have hs1 : L.partialSlotEquiv (Sum.inr (c, (0 : Fin 1).succ)) = L.mate c.1 := rfl
+        have hs2 : (L.mate c.1).succ =
+            (prependUnpaired L).mate (prependUnpairedChordEquiv L c).1 := rfl
+        rw [hs1, hs2, (prependUnpaired L).partialMomentum_mate,
+            prependUnpairedParamEquiv_apply, L.partialMomentum_mate]
+
+lemma partialMomentum_prependPaired {j r : ℕ} (m : ℝ) (L' : PartialPairing j (r + 1))
+    (a₀ : Fin (r + 1)) (q₀ : Fin 3 → ℝ) (p_int : L'.InternalChord → Fin 3 → ℝ)
+    (k_ext : Fin r → Fin 3 → ℝ) :
+    (prependPaired L' a₀).partialMomentum m
+        (prependPairedParamEquiv L' a₀ (q₀, p_int)) k_ext =
+      Fin.cons (massShellVec m q₀)
+        (L'.partialMomentum m p_int (a₀.insertNth q₀ k_ext)) := by
+  ext u μ
+  refine Fin.cases ?_ (fun i => ?_) u
+  · rw [Fin.cons_zero]
+    have h0 : (0 : Fin (j + 1)) = (prependPairedChordEquiv L' a₀ (Sum.inl ())).1 := rfl
+    rw [h0, (prependPaired L' a₀).partialMomentum_fst, prependPairedParamEquiv_apply_inl]
+  · let s := L'.partialSlotEquiv.symm i
+    have hi : i = L'.partialSlotEquiv s := (L'.partialSlotEquiv.apply_symm_apply i).symm
+    rw [hi, Fin.cons_succ]
+    rcases s with a | ⟨c, idx⟩
+    · have hs1 : L'.partialSlotEquiv (Sum.inl a) = L'.unpaired a := rfl
+      rw [hs1]
+      by_cases ha : a = a₀
+      · subst ha
+        have hs2 : (L'.unpaired a).succ =
+            (prependPaired L' a).mate (prependPairedChordEquiv L' a (Sum.inl ())).1 := by
+          change _ = (prependPaired L' a).mate 0
+          exact (prependPaired_mate_zero L' a).symm
+        rw [hs2, (prependPaired L' a).partialMomentum_mate, prependPairedParamEquiv_apply_inl,
+            L'.partialMomentum_unpaired, Fin.insertNth_apply_same]
+      · rcases Fin.exists_succAbove_eq ha with ⟨b, rfl⟩
+        have hs2 : (L'.unpaired (a₀.succAbove b)).succ = (prependPaired L' a₀).unpaired b := rfl
+        rw [hs2, (prependPaired L' a₀).partialMomentum_unpaired, L'.partialMomentum_unpaired,
+            Fin.insertNth_apply_succAbove]
+    · refine Fin.cases ?_ (fun j0 => ?_) idx
+      · have hs1 : L'.partialSlotEquiv (Sum.inr (c, 0)) = c.1 := rfl
+        have hs2 : c.1.succ = (prependPairedChordEquiv L' a₀ (Sum.inr c)).1 := rfl
+        rw [hs1, hs2, (prependPaired L' a₀).partialMomentum_fst,
+            prependPairedParamEquiv_apply_inr, L'.partialMomentum_fst]
+      · have hj0 : j0 = 0 := Subsingleton.elim j0 0
+        subst hj0
+        have hs1 : L'.partialSlotEquiv (Sum.inr (c, (0 : Fin 1).succ)) = L'.mate c.1 := rfl
+        have hc_ne : c.1 ≠ L'.unpaired a₀ := fun hc => by
+          have hlt := c.2
+          rw [hc, L'.mate_unpaired] at hlt
+          exact lt_irrefl _ hlt
+        have hs2 : (L'.mate c.1).succ =
+            (prependPaired L' a₀).mate (prependPairedChordEquiv L' a₀ (Sum.inr c)).1 :=
+          (prependPaired_mate_succ_of_ne L' a₀ hc_ne).symm
+        rw [hs1, hs2, (prependPaired L' a₀).partialMomentum_mate,
+            prependPairedParamEquiv_apply_inr, L'.partialMomentum_mate]
+
+end PartialPairing
+
+noncomputable def conjMode {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C)
+    (s : Fin M_mode.ν) (p : Fin 3 → ℝ) (α₀ : ι) : ℂ :=
+  ∑ c : ι, star (S.C α₀ c) * star (M_mode.w s p c)
+
+lemma measurable_conjMode {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C)
+    (s : Fin M_mode.ν) (α₀ : ι) :
+    Measurable (fun p : Fin 3 → ℝ => conjMode M_mode s p α₀) :=
+  Finset.measurable_sum Finset.univ fun c _ =>
+    measurable_const.mul (continuous_star.measurable.comp (M_mode.measurable_w s c))
+
+lemma norm_conjMode_le {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C)
+    (s : Fin M_mode.ν) (p : Fin 3 → ℝ) (α₀ : ι) :
+    ‖conjMode M_mode s p α₀‖ ≤ (∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M := by
+  unfold conjMode
+  calc ‖∑ c : ι, star (S.C α₀ c) * star (M_mode.w s p c)‖
+      ≤ ∑ c : ι, ‖star (S.C α₀ c) * star (M_mode.w s p c)‖ := norm_sum_le _ _
+    _ ≤ ∑ c : ι, ‖S.C α₀ c‖ * M_mode.M := by
+        refine Finset.sum_le_sum fun c _ => ?_
+        rw [norm_mul, norm_star, norm_star]
+        exact mul_le_mul_of_nonneg_left (M_mode.norm_w_le s p c) (norm_nonneg _)
+    _ = (∑ c : ι, ‖S.C α₀ c‖) * M_mode.M := (Finset.sum_mul _ _ _).symm
+    _ ≤ (∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M :=
+        mul_le_mul_of_nonneg_right
+          (Finset.single_le_sum (fun _ _ => Finset.sum_nonneg fun _ _ => norm_nonneg _)
+            (Finset.mem_univ α₀))
+          M_mode.hM
+
+lemma massShellWeight_eq_sum_conjMode_mul_w {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C)
+    (p : Fin 3 → ℝ) (α₀ β : ι) :
+    massShellWeight m C ![α₀, β] p =
+      ∑ s : Fin M_mode.ν, conjMode M_mode s p α₀ * M_mode.w s p β := by
+  unfold conjMode
+  simp_rw [Finset.sum_mul]
+  rw [Finset.sum_comm]
+  have h_inner : ∀ c : ι,
+      (∑ s : Fin M_mode.ν, star (S.C α₀ c) * star (M_mode.w s p c) * M_mode.w s p β) =
+      star (S.C α₀ c) * ∑ δ : ι, S.C c δ * massShellWeight m C ![δ, β] p := by
+    intro c
+    simp_rw [mul_assoc]
+    rw [← Finset.mul_sum, ← M_mode.factor_weight p c β]
+  simp_rw [h_inner, Finset.mul_sum, ← mul_assoc]
+  rw [Finset.sum_comm]
+  have h_orth : ∀ δ : ι,
+      (∑ c : ι, star (S.C α₀ c) * S.C c δ) = if α₀ = δ then 1 else 0 := by
+    intro δ
+    have hm : (∑ c : ι, star (S.C α₀ c) * S.C c δ) = (S.C.map star * S.C) α₀ δ := by
+      simp [Matrix.mul_apply]
+    rw [hm, starStructure_map_star_mul_self S]
+    rfl
+  have h_term : ∀ δ : ι,
+      (∑ c : ι, star (S.C α₀ c) * S.C c δ * massShellWeight m C ![δ, β] p) =
+      (if α₀ = δ then 1 else 0) * massShellWeight m C ![δ, β] p := by
+    intro δ
+    rw [← Finset.sum_mul, h_orth]
+  simp_rw [h_term, ite_mul, one_mul, zero_mul]
+  rw [Finset.sum_ite_eq Finset.univ α₀, if_pos (Finset.mem_univ α₀)]
+
+lemma fockPartialIntWeight_prependUnpaired {ι : Type*} (m : ℝ)
+    (C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ) {j r : ℕ} (α₀ : ι) (α : Fin j → ι)
+    (L : PartialPairing j r) (p_int : L.InternalChord → Fin 3 → ℝ) :
+    fockPartialIntWeight m C (Fin.cons α₀ α) (PartialPairing.prependUnpaired L)
+        (PartialPairing.prependUnpairedParamEquiv L p_int) =
+      fockPartialIntWeight m C α L p_int := by
+  unfold fockPartialIntWeight
+  rw [← Equiv.prod_comp (PartialPairing.prependUnpairedChordEquiv L)]
+  refine Finset.prod_congr rfl fun c _ => ?_
+  rw [PartialPairing.prependUnpairedParamEquiv_apply]
+  have h1 : (PartialPairing.prependUnpairedChordEquiv L c).1 = c.1.succ := rfl
+  have h2 : (PartialPairing.prependUnpaired L).mate c.1.succ = (L.mate c.1).succ := rfl
+  rw [h1, h2]
+  rfl
+
+lemma fockPartialIntWeight_prependPaired {ι : Type*} (m : ℝ)
+    (C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ) {j r : ℕ} (α₀ : ι) (α : Fin j → ι)
+    (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1))
+    (q₀ : Fin 3 → ℝ) (p_int : L'.InternalChord → Fin 3 → ℝ) :
+    fockPartialIntWeight m C (Fin.cons α₀ α) (PartialPairing.prependPaired L' a₀)
+        (PartialPairing.prependPairedParamEquiv L' a₀ (q₀, p_int)) =
+      massShellWeight m C ![α₀, α (L'.unpaired a₀)] q₀ *
+        fockPartialIntWeight m C α L' p_int := by
+  unfold fockPartialIntWeight
+  rw [← Equiv.prod_comp (PartialPairing.prependPairedChordEquiv L' a₀),
+      Fintype.prod_sum_type, Fintype.prod_unique]
+  have hu : (default : Unit) = () := rfl
+  rw [hu]
+  refine congr_arg₂ (· * ·) ?_ ?_
+  · rw [PartialPairing.prependPairedParamEquiv_apply_inl]
+    have h1 : (PartialPairing.prependPairedChordEquiv L' a₀ (Sum.inl ())).1 = 0 := rfl
+    have h2 : (PartialPairing.prependPaired L' a₀).mate
+        (PartialPairing.prependPairedChordEquiv L' a₀ (Sum.inl ())).1 =
+        (L'.unpaired a₀).succ :=
+      PartialPairing.prependPaired_mate_zero L' a₀
+    rw [h1] at h2 ⊢
+    rw [h2]
+    rfl
+  · refine Finset.prod_congr rfl fun c _ => ?_
+    rw [PartialPairing.prependPairedParamEquiv_apply_inr]
+    have hc_ne : c.1 ≠ L'.unpaired a₀ := fun hc => by
+      have hlt := c.2
+      rw [hc, L'.mate_unpaired] at hlt
+      exact lt_irrefl _ hlt
+    have h1 : (PartialPairing.prependPairedChordEquiv L' a₀ (Sum.inr c)).1 = c.1.succ := rfl
+    have h2 : (PartialPairing.prependPaired L' a₀).mate
+        (PartialPairing.prependPairedChordEquiv L' a₀ (Sum.inr c)).1 =
+        (L'.mate c.1).succ :=
+      PartialPairing.prependPaired_mate_succ_of_ne L' a₀ hc_ne
+    rw [h1] at h2 ⊢
+    rw [h2]
+    rfl
+
+lemma euclidLaplace_cons_timeVec_partialMomentum {j r_t : ℕ} (m ε : ℝ)
+    (y : Fin j → Fin 4 → ℝ) (p₀ : Fin 4 → ℝ) (L : PartialPairing j r_t)
+    (p_int : L.InternalChord → Fin 3 → ℝ) (k_tail : Fin r_t → Fin 3 → ℝ) :
+    euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))
+        (Fin.cons p₀ (L.partialMomentum m p_int k_tail)) =
+      (Real.exp (p₀ 0 * ε) : ℂ) *
+        (Real.exp (-(2 * ε * ∑ a : Fin r_t, massShellEnergy m (k_tail a))) : ℂ) *
+        euclidLaplace y (L.partialMomentum m p_int k_tail) := by
+  have h_cons :
+      euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))
+          (Fin.cons p₀ (L.partialMomentum m p_int k_tail)) =
+        (Real.exp (p₀ 0 * ε) : ℂ) *
+          euclidLaplace (fun i => y i + euclidTimeVec (2 * ε))
+            (L.partialMomentum m p_int k_tail) := by
+    unfold euclidLaplace
+    rw [Fin.sum_univ_succ, Complex.ofReal_exp, ← Complex.exp_add]
+    congr 1
+    have h00 : euclidTimeVec ε 0 = ε := rfl
+    have h10 : euclidTimeVec ε 1 = 0 := rfl
+    have h20 : euclidTimeVec ε 2 = 0 := rfl
+    have h30 : euclidTimeVec ε 3 = 0 := rfl
+    simp only [Fin.cons_zero, Fin.cons_succ, h00, h10, h20, h30, Complex.ofReal_zero, mul_zero,
+      add_zero, Complex.ofReal_mul]
+  have h_tail :
+      euclidLaplace (fun i => y i + euclidTimeVec (2 * ε)) (L.partialMomentum m p_int k_tail) =
+        (Real.exp (-(2 * ε * ∑ a : Fin r_t, massShellEnergy m (k_tail a))) : ℂ) *
+          euclidLaplace y (L.partialMomentum m p_int k_tail) := by
+    unfold euclidLaplace
+    rw [Complex.ofReal_exp, ← Complex.exp_add]
+    congr 1
+    have h_sum0 : (∑ i : Fin j, L.partialMomentum m p_int k_tail i 0) =
+        -∑ a : Fin r_t, massShellEnergy m (k_tail a) := by
+      have h := congrArg (fun v : Fin 4 → ℝ => v 0)
+        (partialMomentum_sum_eq m L p_int k_tail)
+      simpa [massShellVec] using h
+    have h_term : ∀ i : Fin j,
+        (L.partialMomentum m p_int k_tail i 0 : ℂ) * ((y i + euclidTimeVec (2 * ε)) 0 : ℂ) +
+          Complex.I * ((L.partialMomentum m p_int k_tail i 1 : ℂ) *
+              ((y i + euclidTimeVec (2 * ε)) 1 : ℂ) +
+            (L.partialMomentum m p_int k_tail i 2 : ℂ) *
+              ((y i + euclidTimeVec (2 * ε)) 2 : ℂ) +
+            (L.partialMomentum m p_int k_tail i 3 : ℂ) *
+              ((y i + euclidTimeVec (2 * ε)) 3 : ℂ)) =
+        (L.partialMomentum m p_int k_tail i 0 : ℂ) * ((2 * ε : ℝ) : ℂ) +
+          ((L.partialMomentum m p_int k_tail i 0 : ℂ) * (y i 0 : ℂ) +
+            Complex.I * ((L.partialMomentum m p_int k_tail i 1 : ℂ) * (y i 1 : ℂ) +
+              (L.partialMomentum m p_int k_tail i 2 : ℂ) * (y i 2 : ℂ) +
+              (L.partialMomentum m p_int k_tail i 3 : ℂ) * (y i 3 : ℂ))) := by
+      intro i
+      simp [euclidTimeVec]
+      ring
+    simp_rw [h_term]
+    rw [Finset.sum_add_distrib, ← Finset.sum_mul, ← Complex.ofReal_sum, h_sum0]
+    push_cast
+    ring
+  rw [h_cons, h_tail]
+  ring
+
+lemma norm_fockPartialTerm_euclidLaplace_le_const {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    {j r : ℕ} (α : Fin j → ι) {y : Fin j → Fin 4 → ℝ} (hy : y ∈ posOrderedEuclidN j)
+    (L : PartialPairing j r) :
+    ∃ B_L : ℝ, 0 ≤ B_L ∧ ∀ x : FockSectorDom M_mode.ν r,
+      ‖fockPartialTerm M_mode α (euclidLaplace y) L x‖ ≤ B_L := by
+  rcases exists_norm_fockPartialIntWeight_le hC α L with ⟨B, hB_nn, hB⟩
+  let u_c : L.InternalChord → (Fin 3 → ℝ) → ℝ :=
+    fun c q => Real.exp (-((y (L.mate c.1) 0 - y c.1 0) * massShellEnergy m q))
+  have hu_int : ∀ c, Integrable (u_c c) volume :=
+    fun c => integrable_exp_neg_massShellEnergy hm
+      (sub_pos.mpr (orderedEuclidN_time_lt_of_lt hy.2 c.2))
+  let Iu : ℝ := ∫ p_int : L.InternalChord → Fin 3 → ℝ, ∏ c, u_c c (p_int c)
+  have hIu_nn : 0 ≤ Iu :=
+    integral_nonneg fun p_int => Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le
+  refine ⟨M_mode.M ^ r * (B * Iu),
+    mul_nonneg (pow_nonneg M_mode.hM r) (mul_nonneg hB_nn hIu_nn), fun x => ?_⟩
+  unfold fockPartialTerm
+  rw [norm_mul, norm_mul, norm_eta_pow M_mode.hη, one_mul, norm_prod]
+  have hw_le : (∏ a : Fin r, ‖M_mode.w (x.2 a) (x.1 a) (α (L.unpaired a))‖) ≤ M_mode.M ^ r := by
+    calc (∏ a : Fin r, ‖M_mode.w (x.2 a) (x.1 a) (α (L.unpaired a))‖)
+        ≤ ∏ _a : Fin r, M_mode.M :=
+          Finset.prod_le_prod (fun _ _ => norm_nonneg _) (fun _ _ => M_mode.norm_w_le _ _ _)
+      _ = M_mode.M ^ r := by rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+  have hint_le :
+      ‖∫ p_int : L.InternalChord → Fin 3 → ℝ,
+        fockPartialIntWeight m C α L p_int * euclidLaplace y (L.partialMomentum m p_int x.1)‖ ≤
+        B * Iu := by
+    have h_dom : Integrable
+        (fun p_int : L.InternalChord → Fin 3 → ℝ => B * ∏ c, u_c c (p_int c)) volume :=
+      (Integrable.fintype_prod (f := u_c) hu_int).const_mul B
+    calc ‖∫ p_int : L.InternalChord → Fin 3 → ℝ,
+          fockPartialIntWeight m C α L p_int * euclidLaplace y (L.partialMomentum m p_int x.1)‖
+        ≤ ∫ p_int : L.InternalChord → Fin 3 → ℝ,
+            ‖fockPartialIntWeight m C α L p_int *
+              euclidLaplace y (L.partialMomentum m p_int x.1)‖ :=
+          norm_integral_le_integral_norm _
+      _ ≤ ∫ p_int : L.InternalChord → Fin 3 → ℝ, B * ∏ c, u_c c (p_int c) := by
+          refine integral_mono_of_nonneg
+            (Filter.Eventually.of_forall fun _ => norm_nonneg _) h_dom
+            (Filter.Eventually.of_forall fun p_int => ?_)
+          dsimp only
+          rw [norm_mul, norm_euclidLaplace_partialMomentum]
+          have h_ext_le :
+              (∏ a : Fin r, Real.exp (-(y (L.unpaired a) 0 * massShellEnergy m (x.1 a)))) ≤ 1 := by
+            calc (∏ a : Fin r, Real.exp (-(y (L.unpaired a) 0 * massShellEnergy m (x.1 a))))
+                ≤ ∏ _a : Fin r, (1 : ℝ) := by
+                  refine Finset.prod_le_prod (fun _ _ => (Real.exp_pos _).le) fun a _ => ?_
+                  exact Real.exp_le_one_iff.mpr
+                    (by nlinarith [hy.1 (L.unpaired a), massShellEnergy_pos hm (x.1 a)])
+              _ = 1 := Finset.prod_const_one
+          have h_lap_le :
+              (∏ c : L.InternalChord, u_c c (p_int c)) *
+                (∏ a : Fin r, Real.exp (-(y (L.unpaired a) 0 * massShellEnergy m (x.1 a)))) ≤
+              ∏ c : L.InternalChord, u_c c (p_int c) := by
+            calc _ ≤ (∏ c : L.InternalChord, u_c c (p_int c)) * 1 :=
+                  mul_le_mul_of_nonneg_left h_ext_le
+                    (Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+              _ = _ := mul_one _
+          exact mul_le_mul (hB p_int) h_lap_le (by positivity) hB_nn
+      _ = B * Iu := integral_const_mul B _
+  exact mul_le_mul hw_le hint_le (norm_nonneg _) (pow_nonneg M_mode.hM r)
+
+lemma fockPartialTerm_prependUnpaired_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C)
+    {j r : ℕ} (α₀ : ι) (α : Fin j → ι) (ε : ℝ) (y : Fin j → Fin 4 → ℝ)
+    (L : PartialPairing j r) (x : FockSectorDom M_mode.ν (r + 1)) :
+    fockPartialTerm M_mode (Fin.cons α₀ α)
+        (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+        (PartialPairing.prependUnpaired L) x =
+      ((Real.exp (-(ε * massShellEnergy m (x.1 0))) : ℂ) * M_mode.w (x.2 0) (x.1 0) α₀) *
+        (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b.succ))) : ℂ) *
+        fockPartialTerm M_mode α (euclidLaplace y) L (x.1 ∘ Fin.succ, x.2 ∘ Fin.succ) := by
+  unfold fockPartialTerm
+  rw [PartialPairing.partialCross_prependUnpaired, Fin.prod_univ_succ,
+      ← (PartialPairing.measurePreserving_prependUnpairedParamEquiv L).integral_comp']
+  · have h_w0 : M_mode.w (x.2 0) (x.1 0)
+        ((Fin.cons α₀ α : Fin (j + 1) → ι) ((PartialPairing.prependUnpaired L).unpaired 0)) =
+        M_mode.w (x.2 0) (x.1 0) α₀ := rfl
+    have h_ws : (∏ b : Fin r, M_mode.w (x.2 b.succ) (x.1 b.succ)
+        ((Fin.cons α₀ α : Fin (j + 1) → ι)
+          ((PartialPairing.prependUnpaired L).unpaired b.succ))) =
+        ∏ b : Fin r, M_mode.w (x.2 b.succ) (x.1 b.succ) (α (L.unpaired b)) := rfl
+    have h_int : (∫ p_int : L.InternalChord → Fin 3 → ℝ,
+        fockPartialIntWeight m C (Fin.cons α₀ α) (PartialPairing.prependUnpaired L)
+          (PartialPairing.prependUnpairedParamEquiv L p_int) *
+          euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))
+            ((PartialPairing.prependUnpaired L).partialMomentum m
+              (PartialPairing.prependUnpairedParamEquiv L p_int) x.1)) =
+        ((Real.exp (-(ε * massShellEnergy m (x.1 0))) : ℂ) *
+          (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b.succ))) : ℂ)) *
+        ∫ p_int : L.InternalChord → Fin 3 → ℝ,
+          fockPartialIntWeight m C α L p_int *
+            euclidLaplace y (L.partialMomentum m p_int (x.1 ∘ Fin.succ)) := by
+      rw [← integral_const_mul]
+      refine integral_congr_ae (Filter.Eventually.of_forall fun p_int => ?_)
+      dsimp only
+      rw [fockPartialIntWeight_prependUnpaired, PartialPairing.partialMomentum_prependUnpaired,
+          euclidLaplace_cons_timeVec_partialMomentum]
+      have hp0 : (-massShellVec m (x.1 0)) 0 * ε = -(ε * massShellEnergy m (x.1 0)) := by
+        simp [massShellVec]
+        ring
+      rw [hp0]
+      dsimp only [Function.comp_apply]
+      ring
+    rw [h_w0, h_ws, h_int]
+    dsimp only [Function.comp_apply]
+    ring
+
+lemma fockPartialTerm_prependPaired_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    {j r : ℕ} (α₀ : ι) (α : Fin j → ι) {ε : ℝ} (hε : 0 < ε)
+    {y : Fin j → Fin 4 → ℝ} (hy : y ∈ posOrderedEuclidN j)
+    (L' : PartialPairing j (r + 1)) (a₀ : Fin (r + 1))
+    (x : FockSectorDom M_mode.ν r) :
+    fockPartialTerm M_mode (Fin.cons α₀ α)
+        (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+        (PartialPairing.prependPaired L' a₀) x =
+      η ^ (a₀ : ℕ) *
+        (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ) *
+        ∑ s₀ : Fin M_mode.ν,
+          ∫ q₀ : Fin 3 → ℝ,
+            ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+              fockPartialTerm M_mode α (euclidLaplace y) L'
+                (a₀.insertNth q₀ x.1, a₀.insertNth s₀ x.2) := by
+  let y' : Fin (j + 1) → Fin 4 → ℝ :=
+    Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))
+  have hy'_pos : y' ∈ posOrderedEuclidN (j + 1) := by
+    have hy_sh := timeShift_mem_posOrderedEuclidN j hy hε.le
+    have h_eq : y' = osPrependPoint j (euclidTimeVec ε) (fun i => y i + euclidTimeVec ε) := by
+      ext u μ
+      refine Fin.cases (by rfl) (fun i => ?_) u
+      simp [y', osPrependPoint, euclidTimeVec]
+      split_ifs <;> ring
+    rw [h_eq]
+    exact osPrependPoint_mem_posOrderedEuclidN j (by simpa [euclidTimeVec] using hε) hy_sh
+  have h_int_pair : Integrable
+      (fun qp : (Fin 3 → ℝ) × (L'.InternalChord → Fin 3 → ℝ) =>
+        fockPartialIntWeight m C (Fin.cons α₀ α) (PartialPairing.prependPaired L' a₀)
+            (PartialPairing.prependPairedParamEquiv L' a₀ qp) *
+          euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))
+            ((PartialPairing.prependPaired L' a₀).partialMomentum m
+              (PartialPairing.prependPairedParamEquiv L' a₀ qp) x.1))
+      (volume.prod volume) := by
+    rw [← MeasureTheory.Measure.volume_eq_prod]
+    exact ((PartialPairing.measurePreserving_prependPairedParamEquiv L' a₀).integrable_comp_emb
+      (PartialPairing.prependPairedParamEquiv L' a₀).measurableEmbedding).mpr
+      (integrable_fockPartialIntegrand hC (Fin.cons α₀ α)
+        (partialMomentumBound_euclidLaplace hm hy'_pos)
+        (PartialPairing.prependPaired L' a₀) x.1)
+  unfold fockPartialTerm
+  rw [PartialPairing.partialCross_prependPaired, pow_add, mul_comm (η ^ L'.partialCross),
+      ← (PartialPairing.measurePreserving_prependPairedParamEquiv L' a₀).integral_comp',
+      MeasureTheory.Measure.volume_eq_prod,
+      MeasureTheory.integral_prod _ h_int_pair]
+  have h_q_eval : ∀ q₀ : Fin 3 → ℝ,
+      (∫ p_int : L'.InternalChord → Fin 3 → ℝ,
+        fockPartialIntWeight m C (Fin.cons α₀ α) (PartialPairing.prependPaired L' a₀)
+            (PartialPairing.prependPairedParamEquiv L' a₀ (q₀, p_int)) *
+          euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))
+            ((PartialPairing.prependPaired L' a₀).partialMomentum m
+              (PartialPairing.prependPairedParamEquiv L' a₀ (q₀, p_int)) x.1)) =
+      (massShellWeight m C ![α₀, α (L'.unpaired a₀)] q₀ *
+        (Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) *
+        (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ)) *
+        ∫ p_int : L'.InternalChord → Fin 3 → ℝ,
+          fockPartialIntWeight m C α L' p_int *
+            euclidLaplace y (L'.partialMomentum m p_int (a₀.insertNth q₀ x.1)) := by
+    intro q₀
+    rw [← integral_const_mul]
+    refine integral_congr_ae (Filter.Eventually.of_forall fun p_int => ?_)
+    dsimp only
+    rw [fockPartialIntWeight_prependPaired, PartialPairing.partialMomentum_prependPaired,
+        euclidLaplace_cons_timeVec_partialMomentum]
+    have h_sum_e :
+        (∑ a : Fin (r + 1),
+          massShellEnergy m (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a)) =
+        massShellEnergy m q₀ + ∑ b : Fin r, massShellEnergy m (x.1 b) := by
+      rw [Fin.sum_univ_succAbove
+        (fun a => massShellEnergy m (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a)) a₀,
+        Fin.insertNth_apply_same]
+      congr 1
+      refine Finset.sum_congr rfl fun b _ => ?_
+      rw [Fin.insertNth_apply_succAbove]
+    have h_exp : (Real.exp ((massShellVec m q₀) 0 * ε) : ℂ) *
+        (Real.exp (-(2 * ε * ∑ a : Fin (r + 1),
+          massShellEnergy m (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a))) : ℂ) =
+        (Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) *
+          (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ) := by
+      rw [h_sum_e, ← Complex.ofReal_mul, ← Complex.ofReal_mul, ← Real.exp_add, ← Real.exp_add]
+      congr 2
+      simp [massShellVec]
+      ring
+    calc (massShellWeight m C ![α₀, α (L'.unpaired a₀)] q₀ *
+            fockPartialIntWeight m C α L' p_int) *
+          ((Real.exp ((massShellVec m q₀) 0 * ε) : ℂ) *
+            (Real.exp (-(2 * ε * ∑ a : Fin (r + 1),
+              massShellEnergy m (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a))) : ℂ) *
+            euclidLaplace y (L'.partialMomentum m p_int (a₀.insertNth q₀ x.1)))
+        = massShellWeight m C ![α₀, α (L'.unpaired a₀)] q₀ *
+            ((Real.exp ((massShellVec m q₀) 0 * ε) : ℂ) *
+              (Real.exp (-(2 * ε * ∑ a : Fin (r + 1),
+                massShellEnergy m (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a))) : ℂ)) *
+            (fockPartialIntWeight m C α L' p_int *
+              euclidLaplace y (L'.partialMomentum m p_int (a₀.insertNth q₀ x.1))) := by ring
+      _ = _ := by rw [h_exp]; ring
+  simp_rw [h_q_eval]
+  have h_w_prod : ∀ (q₀ : Fin 3 → ℝ) (s₀ : Fin M_mode.ν),
+      M_mode.w s₀ q₀ (α (L'.unpaired a₀)) *
+        (∏ b : Fin r, M_mode.w (x.2 b) (x.1 b)
+          ((Fin.cons (α := fun _ => ι) α₀ α)
+            ((PartialPairing.prependPaired L' a₀).unpaired b))) =
+      ∏ a : Fin (r + 1),
+        M_mode.w (a₀.insertNth (α := fun _ => Fin M_mode.ν) s₀ x.2 a)
+          (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a) (α (L'.unpaired a)) := by
+    intro q₀ s₀
+    rw [Fin.prod_univ_succAbove _ a₀, Fin.insertNth_apply_same, Fin.insertNth_apply_same]
+    congr 1
+    refine Finset.prod_congr rfl fun b _ => ?_
+    rw [Fin.insertNth_apply_succAbove, Fin.insertNth_apply_succAbove]
+    rfl
+  have h_int_s : ∀ s₀ : Fin M_mode.ν, Integrable
+      (fun q₀ : Fin 3 → ℝ =>
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          (η ^ L'.partialCross *
+            (∏ a : Fin (r + 1),
+              M_mode.w (a₀.insertNth (α := fun _ => Fin M_mode.ν) s₀ x.2 a)
+                (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a) (α (L'.unpaired a))) *
+            ∫ p_int : L'.InternalChord → Fin 3 → ℝ,
+              fockPartialIntWeight m C α L' p_int *
+                euclidLaplace y (L'.partialMomentum m p_int (a₀.insertNth q₀ x.1)))) volume := by
+    intro s₀
+    obtain ⟨B_L, _, hBL⟩ :=
+      norm_fockPartialTerm_euclidLaplace_le_const hm M_mode hC α hy L'
+    let C_c : ℝ := (∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M * B_L
+    have h_dom : Integrable
+        (fun q₀ : Fin 3 → ℝ => C_c * Real.exp (-(ε * massShellEnergy m q₀))) volume :=
+      (integrable_exp_neg_massShellEnergy hm hε).const_mul C_c
+    have h_ins_meas : Measurable (fun q₀ : Fin 3 → ℝ =>
+        (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1,
+          a₀.insertNth (α := fun _ => Fin M_mode.ν) s₀ x.2)) :=
+      (measurable_pi_lambda _ fun a => by
+        by_cases ha : a = a₀
+        · subst ha
+          simpa only [Fin.insertNth_apply_same] using measurable_id'
+        · rcases Fin.exists_succAbove_eq ha with ⟨b, rfl⟩
+          simpa only [Fin.insertNth_apply_succAbove] using measurable_const).prodMk measurable_const
+    have h_meas : Measurable (fun q₀ : Fin 3 → ℝ =>
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          fockPartialTerm M_mode α (euclidLaplace y) L'
+            (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1,
+              a₀.insertNth (α := fun _ => Fin M_mode.ν) s₀ x.2)) :=
+      (((Complex.continuous_ofReal.comp
+        (Real.continuous_exp.comp ((continuous_const.mul (continuous_massShellEnergy m)).neg))
+          ).measurable).mul (measurable_conjMode M_mode s₀ α₀)).mul
+        ((measurable_fockPartialTerm M_mode hC α
+          (partialMomentumBound_euclidLaplace hm hy) L').comp h_ins_meas)
+    refine h_dom.mono' h_meas.aestronglyMeasurable (Filter.Eventually.of_forall fun q₀ => ?_)
+    change ‖((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+        fockPartialTerm M_mode α (euclidLaplace y) L'
+          (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1,
+            a₀.insertNth (α := fun _ => Fin M_mode.ν) s₀ x.2)‖ ≤ _
+    rw [norm_mul, norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le]
+    have h_cm_nn : 0 ≤ (∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M :=
+      mul_nonneg (Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ => norm_nonneg _) M_mode.hM
+    calc Real.exp (-(ε * massShellEnergy m q₀)) * ‖conjMode M_mode s₀ q₀ α₀‖ *
+          ‖fockPartialTerm M_mode α (euclidLaplace y) L'
+            (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1,
+              a₀.insertNth (α := fun _ => Fin M_mode.ν) s₀ x.2)‖
+        ≤ Real.exp (-(ε * massShellEnergy m q₀)) *
+            ((∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M) * B_L :=
+          mul_le_mul
+            (mul_le_mul_of_nonneg_left (norm_conjMode_le M_mode s₀ q₀ α₀) (Real.exp_pos _).le)
+            (hBL _) (norm_nonneg _) (mul_nonneg (Real.exp_pos _).le h_cm_nn)
+      _ = C_c * Real.exp (-(ε * massShellEnergy m q₀)) := by dsimp [C_c]; ring
+  rw [← MeasureTheory.integral_finsetSum Finset.univ fun s₀ _ => h_int_s s₀]
+  have h_pull :
+      (η ^ (a₀ : ℕ) * η ^ L'.partialCross *
+        (∏ b : Fin r, M_mode.w (x.2 b) (x.1 b)
+          ((Fin.cons (α := fun _ => ι) α₀ α)
+            ((PartialPairing.prependPaired L' a₀).unpaired b))) *
+        ∫ q₀ : Fin 3 → ℝ,
+          (massShellWeight m C ![α₀, α (L'.unpaired a₀)] q₀ *
+            (Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) *
+            (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ)) *
+          ∫ p_int : L'.InternalChord → Fin 3 → ℝ,
+            fockPartialIntWeight m C α L' p_int *
+              euclidLaplace y (L'.partialMomentum m p_int (a₀.insertNth q₀ x.1))) =
+      η ^ (a₀ : ℕ) * (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ) *
+        ∫ q₀ : Fin 3 → ℝ,
+          ∑ s₀ : Fin M_mode.ν,
+            ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+              (η ^ L'.partialCross *
+                (∏ a : Fin (r + 1),
+                  M_mode.w (a₀.insertNth (α := fun _ => Fin M_mode.ν) s₀ x.2 a)
+                    (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a) (α (L'.unpaired a))) *
+                ∫ p_int : L'.InternalChord → Fin 3 → ℝ,
+                  fockPartialIntWeight m C α L' p_int *
+                    euclidLaplace y (L'.partialMomentum m p_int (a₀.insertNth q₀ x.1))) := by
+    rw [← integral_const_mul, ← integral_const_mul]
+    refine integral_congr_ae (Filter.Eventually.of_forall fun q₀ => ?_)
+    dsimp only
+    calc (η ^ (a₀ : ℕ) * η ^ L'.partialCross *
+            (∏ b : Fin r, M_mode.w (x.2 b) (x.1 b)
+              ((Fin.cons (α := fun _ => ι) α₀ α)
+                ((PartialPairing.prependPaired L' a₀).unpaired b)))) *
+          ((massShellWeight m C ![α₀, α (L'.unpaired a₀)] q₀ *
+            (Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) *
+            (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ)) *
+          ∫ p_int : L'.InternalChord → Fin 3 → ℝ,
+            fockPartialIntWeight m C α L' p_int *
+              euclidLaplace y (L'.partialMomentum m p_int (a₀.insertNth q₀ x.1)))
+        = ∑ s₀ : Fin M_mode.ν,
+            (η ^ (a₀ : ℕ) *
+              (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ)) *
+              (((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+                (η ^ L'.partialCross *
+                  (∏ a : Fin (r + 1),
+                    M_mode.w (a₀.insertNth (α := fun _ => Fin M_mode.ν) s₀ x.2 a)
+                      (a₀.insertNth (α := fun _ => Fin 3 → ℝ) q₀ x.1 a) (α (L'.unpaired a))) *
+                  ∫ p_int : L'.InternalChord → Fin 3 → ℝ,
+                    fockPartialIntWeight m C α L' p_int *
+                      euclidLaplace y (L'.partialMomentum m p_int (a₀.insertNth q₀ x.1)))) := by
+          rw [massShellWeight_eq_sum_conjMode_mul_w M_mode q₀ α₀ (α (L'.unpaired a₀)),
+              Finset.sum_mul, Finset.sum_mul, Finset.sum_mul, Finset.mul_sum]
+          refine Finset.sum_congr rfl fun s₀ _ => ?_
+          rw [← h_w_prod q₀ s₀]
+          ring
+      _ = _ := (Finset.mul_sum _ _ _).symm
+  exact h_pull
+
+noncomputable def fockCreateOp {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (α₀ : ι) (ε : ℝ)
+    (G : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ)
+    (r : ℕ) (x : FockSectorDom M_mode.ν (r + 1)) : ℂ :=
+  (((Real.sqrt (r + 1 : ℝ))⁻¹ : ℝ) : ℂ) *
+    ∑ p : Fin (r + 1),
+      η ^ (p : ℕ) *
+        ((Real.exp (-(ε * massShellEnergy m (x.1 p))) : ℂ) * M_mode.w (x.2 p) (x.1 p) α₀) *
+        (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b)))) : ℂ) *
+        G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)
+
+noncomputable def fockAnnihOp {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (α₀ : ι) (ε : ℝ)
+    (G : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ)
+    (r : ℕ) (x : FockSectorDom M_mode.ν r) : ℂ :=
+  (Real.sqrt (r + 1 : ℝ) : ℂ) *
+    (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ) *
+    ∑ s₀ : Fin M_mode.ν,
+      ∫ q₀ : Fin 3 → ℝ,
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          G (r + 1) (Fin.cons q₀ x.1, Fin.cons s₀ x.2)
+
+lemma sqrt_factorial_succ_inv_eq (r : ℕ) :
+    (((r + 1).factorial : ℝ).sqrt⁻¹ : ℝ) =
+      (Real.sqrt (r + 1 : ℝ))⁻¹ * ((r.factorial : ℝ).sqrt)⁻¹ := by
+  rw [Nat.factorial_succ, Nat.cast_mul, Nat.cast_add, Nat.cast_one,
+      Real.sqrt_mul (by positivity), mul_inv]
+
+lemma sqrt_factorial_inv_eq_mul_succ (r : ℕ) :
+    ((r.factorial : ℝ).sqrt⁻¹ : ℝ) =
+      Real.sqrt (r + 1 : ℝ) * (((r + 1).factorial : ℝ).sqrt)⁻¹ := by
+  rw [sqrt_factorial_succ_inv_eq, ← mul_assoc,
+      mul_inv_cancel₀ (Real.sqrt_ne_zero'.mpr (by positivity)), one_mul]
+
+lemma symmSector_prependUnpaired_sum_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C)
+    {j r : ℕ} (α₀ : ι) (α : Fin j → ι) (ε : ℝ) (y : Fin j → Fin 4 → ℝ)
+    (x : FockSectorDom M_mode.ν (r + 1)) :
+    ((((r + 1).factorial : ℝ).sqrt⁻¹ : ℝ) : ℂ) *
+      (∑ π : Equiv.Perm (Fin (r + 1)), η ^ permInversions π *
+        ∑ L : PartialPairing j r,
+          fockPartialTerm M_mode (Fin.cons α₀ α)
+            (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+            (PartialPairing.prependUnpaired L)
+            (fockSectorPermEquiv M_mode.ν (r + 1) π x)) =
+    fockCreateOp M_mode α₀ ε
+      (fun r' => symmSector M_mode.ν r' η (fockRawSector M_mode r' α (euclidLaplace y)))
+      r x := by
+  rw [sqrt_factorial_succ_inv_eq r, Complex.ofReal_mul, mul_assoc]
+  unfold fockCreateOp
+  congr 1
+  rw [← Equiv.sum_comp (createPermEquiv r), Fintype.sum_prod_type, Finset.mul_sum]
+  refine Finset.sum_congr rfl fun p _ => ?_
+  have h_each_σ : ∀ σ : Equiv.Perm (Fin r),
+      η ^ permInversions (createPermEquiv r (p, σ)) *
+        (∑ L : PartialPairing j r,
+          fockPartialTerm M_mode (Fin.cons α₀ α)
+            (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+            (PartialPairing.prependUnpaired L)
+            (fockSectorPermEquiv M_mode.ν (r + 1) (createPermEquiv r (p, σ)) x)) =
+      (η ^ (p : ℕ) *
+        ((Real.exp (-(ε * massShellEnergy m (x.1 p))) : ℂ) * M_mode.w (x.2 p) (x.1 p) α₀) *
+        (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b)))) : ℂ)) *
+        (η ^ permInversions σ *
+          fockRawSector M_mode r α (euclidLaplace y)
+            (fockSectorPermEquiv M_mode.ν r σ (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove))) := by
+    intro σ
+    rw [eta_pow_permInversions_createPermEquiv M_mode.hη p σ]
+    have h_sum_e :
+        (∑ b : Fin r, massShellEnergy m
+          ((fockSectorPermEquiv M_mode.ν (r + 1) (createPermEquiv r (p, σ)) x).1 b.succ)) =
+        ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b)) := by
+      have h_comp : ∀ b : Fin r,
+          (fockSectorPermEquiv M_mode.ν (r + 1) (createPermEquiv r (p, σ)) x).1 b.succ =
+            x.1 (p.succAbove (σ b)) := by
+        intro b
+        simp
+      simp_rw [h_comp]
+      exact Equiv.sum_comp σ fun b => massShellEnergy m (x.1 (p.succAbove b))
+    have h0_k : (fockSectorPermEquiv M_mode.ν (r + 1) (createPermEquiv r (p, σ)) x).1 0 =
+        x.1 p := by simp
+    have h0_s : (fockSectorPermEquiv M_mode.ν (r + 1) (createPermEquiv r (p, σ)) x).2 0 =
+        x.2 p := by simp
+    have h_tail :
+        ((fockSectorPermEquiv M_mode.ν (r + 1) (createPermEquiv r (p, σ)) x).1 ∘ Fin.succ,
+          (fockSectorPermEquiv M_mode.ν (r + 1) (createPermEquiv r (p, σ)) x).2 ∘ Fin.succ) =
+        fockSectorPermEquiv M_mode.ν r σ (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove) := by
+      ext b <;> simp
+    have h_L : ∀ L : PartialPairing j r,
+        fockPartialTerm M_mode (Fin.cons α₀ α)
+          (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+          (PartialPairing.prependUnpaired L)
+          (fockSectorPermEquiv M_mode.ν (r + 1) (createPermEquiv r (p, σ)) x) =
+        (((Real.exp (-(ε * massShellEnergy m (x.1 p))) : ℂ) * M_mode.w (x.2 p) (x.1 p) α₀) *
+          (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b)))) : ℂ)) *
+          fockPartialTerm M_mode α (euclidLaplace y) L
+            (fockSectorPermEquiv M_mode.ν r σ (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)) := by
+      intro L
+      rw [fockPartialTerm_prependUnpaired_eq, h0_k, h0_s, h_sum_e, h_tail]
+    simp_rw [h_L]
+    rw [← Finset.mul_sum]
+    unfold fockRawSector
+    ring
+  simp_rw [h_each_σ, ← Finset.mul_sum]
+  unfold symmSector
+  ring
+
+lemma measurable_finCons_left {r : ℕ} (v : Fin r → Fin 3 → ℝ) :
+    Measurable (fun q₀ : Fin 3 → ℝ => (Fin.cons q₀ v : Fin (r + 1) → Fin 3 → ℝ)) := by
+  refine measurable_pi_lambda _ fun a => ?_
+  refine Fin.cases ?_ (fun j => ?_) a
+  · simpa only [Fin.cons_zero] using measurable_id'
+  · simpa only [Fin.cons_succ] using measurable_const
+
+lemma symmSector_prependPaired_sum_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    {j r : ℕ} (α₀ : ι) (α : Fin j → ι) {ε : ℝ} (hε : 0 < ε)
+    {y : Fin j → Fin 4 → ℝ} (hy : y ∈ posOrderedEuclidN j)
+    (x : FockSectorDom M_mode.ν r) :
+    (((r.factorial : ℝ).sqrt⁻¹ : ℝ) : ℂ) *
+      (∑ σ : Equiv.Perm (Fin r), η ^ permInversions σ *
+        ∑ L' : PartialPairing j (r + 1), ∑ a₀ : Fin (r + 1),
+          fockPartialTerm M_mode (Fin.cons α₀ α)
+            (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+            (PartialPairing.prependPaired L' a₀)
+            (fockSectorPermEquiv M_mode.ν r σ x)) =
+    fockAnnihOp M_mode α₀ ε
+      (fun r' => symmSector M_mode.ν r' η (fockRawSector M_mode r' α (euclidLaplace y)))
+      r x := by
+  have h_int_πL : ∀ (s₀ : Fin M_mode.ν) (π : Equiv.Perm (Fin (r + 1)))
+      (L' : PartialPairing j (r + 1)),
+      Integrable (fun q₀ : Fin 3 → ℝ =>
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          (η ^ permInversions π *
+            fockPartialTerm M_mode α (euclidLaplace y) L'
+              (fockSectorPermEquiv M_mode.ν (r + 1) π
+                (Fin.cons q₀ x.1, Fin.cons s₀ x.2)))) volume := by
+    intro s₀ π L'
+    obtain ⟨B_L, _, hBL⟩ :=
+      norm_fockPartialTerm_euclidLaplace_le_const hm M_mode hC α hy L'
+    let C_c : ℝ := (∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M * B_L
+    have h_dom : Integrable
+        (fun q₀ : Fin 3 → ℝ => C_c * Real.exp (-(ε * massShellEnergy m q₀))) volume :=
+      (integrable_exp_neg_massShellEnergy hm hε).const_mul C_c
+    have h_cons_meas : Measurable
+        (fun q₀ : Fin 3 → ℝ =>
+          ((Fin.cons q₀ x.1 : Fin (r + 1) → Fin 3 → ℝ),
+            (Fin.cons s₀ x.2 : Fin (r + 1) → Fin M_mode.ν))) :=
+      (measurable_finCons_left x.1).prodMk measurable_const
+    have h_meas : Measurable (fun q₀ : Fin 3 → ℝ =>
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          (η ^ permInversions π *
+            fockPartialTerm M_mode α (euclidLaplace y) L'
+              (fockSectorPermEquiv M_mode.ν (r + 1) π
+                (Fin.cons q₀ x.1, Fin.cons s₀ x.2)))) :=
+      (((Complex.continuous_ofReal.comp
+        (Real.continuous_exp.comp ((continuous_const.mul (continuous_massShellEnergy m)).neg))
+          ).measurable).mul (measurable_conjMode M_mode s₀ α₀)).mul
+        (measurable_const.mul
+          ((measurable_fockPartialTerm M_mode hC α
+            (partialMomentumBound_euclidLaplace hm hy) L').comp
+            ((fockSectorPermEquiv M_mode.ν (r + 1) π).measurable.comp h_cons_meas)))
+    refine h_dom.mono' h_meas.aestronglyMeasurable (Filter.Eventually.of_forall fun q₀ => ?_)
+    rw [norm_mul, norm_mul, norm_mul, norm_eta_pow M_mode.hη, one_mul,
+        Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le]
+    have h_cm_nn : 0 ≤ (∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M :=
+      mul_nonneg (Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ => norm_nonneg _) M_mode.hM
+    calc Real.exp (-(ε * massShellEnergy m q₀)) * ‖conjMode M_mode s₀ q₀ α₀‖ *
+          ‖fockPartialTerm M_mode α (euclidLaplace y) L'
+            (fockSectorPermEquiv M_mode.ν (r + 1) π (Fin.cons q₀ x.1, Fin.cons s₀ x.2))‖
+        ≤ Real.exp (-(ε * massShellEnergy m q₀)) *
+            ((∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M) * B_L :=
+          mul_le_mul
+            (mul_le_mul_of_nonneg_left (norm_conjMode_le M_mode s₀ q₀ α₀) (Real.exp_pos _).le)
+            (hBL _) (norm_nonneg _) (mul_nonneg (Real.exp_pos _).le h_cm_nn)
+      _ = C_c * Real.exp (-(ε * massShellEnergy m q₀)) := by dsimp [C_c]; ring
+  have h_each : ∀ (σ : Equiv.Perm (Fin r)) (L' : PartialPairing j (r + 1))
+      (a₀ : Fin (r + 1)),
+      η ^ permInversions σ *
+        fockPartialTerm M_mode (Fin.cons α₀ α)
+          (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+          (PartialPairing.prependPaired L' a₀)
+          (fockSectorPermEquiv M_mode.ν r σ x) =
+      (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ) *
+        ∑ s₀ : Fin M_mode.ν,
+          ∫ q₀ : Fin 3 → ℝ,
+            ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+              (η ^ permInversions (annihPermEquiv r (a₀, σ)) *
+                fockPartialTerm M_mode α (euclidLaplace y) L'
+                  (fockSectorPermEquiv M_mode.ν (r + 1) (annihPermEquiv r (a₀, σ))
+                    (Fin.cons q₀ x.1, Fin.cons s₀ x.2))) := by
+    intro σ L' a₀
+    rw [fockPartialTerm_prependPaired_eq hm M_mode hC α₀ α hε hy L' a₀]
+    have h_sum_e :
+        (∑ b : Fin r, massShellEnergy m ((fockSectorPermEquiv M_mode.ν r σ x).1 b)) =
+        ∑ b : Fin r, massShellEnergy m (x.1 b) :=
+      Equiv.sum_comp σ fun b => massShellEnergy m (x.1 b)
+    rw [h_sum_e]
+    dsimp only [fockSectorPermEquiv_apply]
+    have h_eta := (eta_pow_permInversions_annihPermEquiv M_mode.hη a₀ σ).symm
+    have h_ins : ∀ (q₀ : Fin 3 → ℝ) (s₀ : Fin M_mode.ν),
+        (a₀.insertNth q₀ (x.1 ∘ σ), a₀.insertNth s₀ (x.2 ∘ σ)) =
+          fockSectorPermEquiv M_mode.ν (r + 1) (annihPermEquiv r (a₀, σ))
+            (Fin.cons q₀ x.1, Fin.cons s₀ x.2) := by
+      intro q₀ s₀
+      exact Prod.ext (cons_comp_annihPermEquiv q₀ x.1 a₀ σ).symm
+        (cons_comp_annihPermEquiv s₀ x.2 a₀ σ).symm
+    let e_damp : ℂ := (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ)
+    have h_s_eq :
+        (η ^ permInversions σ *
+          (η ^ (a₀ : ℕ) * e_damp *
+            ∑ s₀ : Fin M_mode.ν,
+              ∫ q₀ : Fin 3 → ℝ,
+                ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+                  fockPartialTerm M_mode α (euclidLaplace y) L'
+                    (a₀.insertNth q₀ (x.1 ∘ σ), a₀.insertNth s₀ (x.2 ∘ σ)))) =
+        e_damp *
+          ∑ s₀ : Fin M_mode.ν,
+            (η ^ permInversions (annihPermEquiv r (a₀, σ))) *
+              ∫ q₀ : Fin 3 → ℝ,
+                ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+                  fockPartialTerm M_mode α (euclidLaplace y) L'
+                    (fockSectorPermEquiv M_mode.ν (r + 1) (annihPermEquiv r (a₀, σ))
+                      (Fin.cons q₀ x.1, Fin.cons s₀ x.2)) := by
+      have h_mul_eta : η ^ permInversions σ * η ^ (a₀ : ℕ) =
+          η ^ permInversions (annihPermEquiv r (a₀, σ)) := by
+        rw [mul_comm, h_eta]
+      calc _ = e_damp *
+              ((η ^ permInversions σ * η ^ (a₀ : ℕ)) *
+                ∑ s₀ : Fin M_mode.ν,
+                  ∫ q₀ : Fin 3 → ℝ,
+                    ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+                      fockPartialTerm M_mode α (euclidLaplace y) L'
+                        (a₀.insertNth q₀ (x.1 ∘ σ), a₀.insertNth s₀ (x.2 ∘ σ))) := by ring
+        _ = _ := by
+            rw [h_mul_eta, Finset.mul_sum]
+            refine congrArg (e_damp * ·) (Finset.sum_congr rfl fun s₀ _ => ?_)
+            refine congrArg (η ^ permInversions (annihPermEquiv r (a₀, σ)) * ·) ?_
+            refine integral_congr_ae (Filter.Eventually.of_forall fun q₀ => ?_)
+            dsimp only
+            rw [h_ins q₀ s₀]
+    change η ^ permInversions σ *
+        (η ^ (a₀ : ℕ) * e_damp *
+          ∑ s₀ : Fin M_mode.ν,
+            ∫ q₀ : Fin 3 → ℝ,
+              ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+                fockPartialTerm M_mode α (euclidLaplace y) L'
+                  (a₀.insertNth q₀ (x.1 ∘ σ), a₀.insertNth s₀ (x.2 ∘ σ))) = _
+    rw [h_s_eq]
+    refine congrArg (e_damp * ·) (Finset.sum_congr rfl fun s₀ _ => ?_)
+    rw [← integral_const_mul]
+    refine integral_congr_ae (Filter.Eventually.of_forall fun q₀ => ?_)
+    dsimp only [fockSectorPermEquiv_apply]
+    ring
+  simp_rw [Finset.mul_sum, h_each, ← Finset.mul_sum]
+  rw [sqrt_factorial_inv_eq_mul_succ r, Complex.ofReal_mul]
+  unfold fockAnnihOp
+  have h_sum_int_π : ∀ (s₀ : Fin M_mode.ν) (π : Equiv.Perm (Fin (r + 1))),
+      (∑ L' : PartialPairing j (r + 1),
+        ∫ q₀ : Fin 3 → ℝ,
+          ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+            (η ^ permInversions π *
+              fockPartialTerm M_mode α (euclidLaplace y) L'
+                (fockSectorPermEquiv M_mode.ν (r + 1) π
+                  (Fin.cons q₀ x.1, Fin.cons s₀ x.2)))) =
+      ∫ q₀ : Fin 3 → ℝ,
+        ∑ L' : PartialPairing j (r + 1),
+          ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+            (η ^ permInversions π *
+              fockPartialTerm M_mode α (euclidLaplace y) L'
+                (fockSectorPermEquiv M_mode.ν (r + 1) π
+                  (Fin.cons q₀ x.1, Fin.cons s₀ x.2))) :=
+    fun s₀ π => (MeasureTheory.integral_finsetSum Finset.univ fun L' _ => h_int_πL s₀ π L').symm
+  have h_reord :
+      (∑ σ : Equiv.Perm (Fin r), ∑ L' : PartialPairing j (r + 1), ∑ a₀ : Fin (r + 1),
+        ∑ s₀ : Fin M_mode.ν,
+          ∫ q₀ : Fin 3 → ℝ,
+            ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+              (η ^ permInversions (annihPermEquiv r (a₀, σ)) *
+                fockPartialTerm M_mode α (euclidLaplace y) L'
+                  (fockSectorPermEquiv M_mode.ν (r + 1) (annihPermEquiv r (a₀, σ))
+                    (Fin.cons q₀ x.1, Fin.cons s₀ x.2)))) =
+      ∑ s₀ : Fin M_mode.ν,
+        ∫ q₀ : Fin 3 → ℝ,
+          ∑ π : Equiv.Perm (Fin (r + 1)), ∑ L' : PartialPairing j (r + 1),
+            ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+              (η ^ permInversions π *
+                fockPartialTerm M_mode α (euclidLaplace y) L'
+                  (fockSectorPermEquiv M_mode.ν (r + 1) π
+                    (Fin.cons q₀ x.1, Fin.cons s₀ x.2))) := by
+    conv_lhs =>
+      arg 2; ext σ; rw [Finset.sum_comm]
+      arg 2; ext a₀; rw [Finset.sum_comm]
+    rw [Finset.sum_comm]
+    conv_lhs => arg 2; ext a₀; rw [Finset.sum_comm]
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl fun s₀ _ => ?_
+    rw [← Fintype.sum_prod_type (f := fun ps : Fin (r + 1) × Equiv.Perm (Fin r) =>
+      ∑ L' : PartialPairing j (r + 1),
+        ∫ q₀ : Fin 3 → ℝ,
+          ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+            (η ^ permInversions (annihPermEquiv r ps) *
+              fockPartialTerm M_mode α (euclidLaplace y) L'
+                (fockSectorPermEquiv M_mode.ν (r + 1) (annihPermEquiv r ps)
+                  (Fin.cons q₀ x.1, Fin.cons s₀ x.2)))),
+      Equiv.sum_comp (annihPermEquiv r) (fun π =>
+        ∑ L' : PartialPairing j (r + 1),
+          ∫ q₀ : Fin 3 → ℝ,
+            ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+              (η ^ permInversions π *
+                fockPartialTerm M_mode α (euclidLaplace y) L'
+                  (fockSectorPermEquiv M_mode.ν (r + 1) π
+                    (Fin.cons q₀ x.1, Fin.cons s₀ x.2))))]
+    simp_rw [h_sum_int_π s₀]
+    exact (MeasureTheory.integral_finsetSum Finset.univ fun π _ =>
+      integrable_finsetSum Finset.univ fun L' _ => h_int_πL s₀ π L').symm
+  rw [h_reord]
+  have h_pull_f :
+      (((Real.sqrt (r + 1 : ℝ) : ℂ) *
+        ((((r + 1).factorial : ℝ).sqrt⁻¹ : ℝ) : ℂ)) *
+        ((Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ) *
+          ∑ s₀ : Fin M_mode.ν,
+            ∫ q₀ : Fin 3 → ℝ,
+              ∑ π : Equiv.Perm (Fin (r + 1)), ∑ L' : PartialPairing j (r + 1),
+                ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+                  (η ^ permInversions π *
+                    fockPartialTerm M_mode α (euclidLaplace y) L'
+                      (fockSectorPermEquiv M_mode.ν (r + 1) π
+                        (Fin.cons q₀ x.1, Fin.cons s₀ x.2))))) =
+      (Real.sqrt (r + 1 : ℝ) : ℂ) *
+        (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ) *
+        ∑ s₀ : Fin M_mode.ν,
+          ∫ q₀ : Fin 3 → ℝ,
+            ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+              symmSector M_mode.ν (r + 1) η
+                (fockRawSector M_mode (r + 1) α (euclidLaplace y))
+                (Fin.cons q₀ x.1, Fin.cons s₀ x.2) := by
+    have h_s : ∀ s₀ : Fin M_mode.ν,
+        ((((r + 1).factorial : ℝ).sqrt⁻¹ : ℝ) : ℂ) *
+          (∫ q₀ : Fin 3 → ℝ,
+            ∑ π : Equiv.Perm (Fin (r + 1)), ∑ L' : PartialPairing j (r + 1),
+              ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+                (η ^ permInversions π *
+                  fockPartialTerm M_mode α (euclidLaplace y) L'
+                    (fockSectorPermEquiv M_mode.ν (r + 1) π
+                      (Fin.cons q₀ x.1, Fin.cons s₀ x.2)))) =
+        ∫ q₀ : Fin 3 → ℝ,
+          ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+            symmSector M_mode.ν (r + 1) η
+              (fockRawSector M_mode (r + 1) α (euclidLaplace y))
+              (Fin.cons q₀ x.1, Fin.cons s₀ x.2) := by
+      intro s₀
+      rw [← integral_const_mul]
+      refine integral_congr_ae (Filter.Eventually.of_forall fun q₀ => ?_)
+      dsimp only [symmSector, fockRawSector]
+      simp_rw [← Finset.mul_sum]
+      ring
+    calc _ = (Real.sqrt (r + 1 : ℝ) : ℂ) *
+            (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ) *
+            ∑ s₀ : Fin M_mode.ν,
+              ((((r + 1).factorial : ℝ).sqrt⁻¹ : ℝ) : ℂ) *
+                ∫ q₀ : Fin 3 → ℝ,
+                  ∑ π : Equiv.Perm (Fin (r + 1)), ∑ L' : PartialPairing j (r + 1),
+                    ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+                      (η ^ permInversions π *
+                        fockPartialTerm M_mode α (euclidLaplace y) L'
+                          (fockSectorPermEquiv M_mode.ν (r + 1) π
+                            (Fin.cons q₀ x.1, Fin.cons s₀ x.2))) := by
+            rw [← Finset.mul_sum]
+            ring
+      _ = _ := by
+          refine congrArg (_ * ·) (Finset.sum_congr rfl fun s₀ _ => h_s s₀)
+  exact h_pull_f
+
+lemma symmSector_prependShift_zero_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    {j : ℕ} (α₀ : ι) (α : Fin j → ι) {ε : ℝ} (hε : 0 < ε)
+    {y : Fin j → Fin 4 → ℝ} (hy : y ∈ posOrderedEuclidN j)
+    (x : FockSectorDom M_mode.ν 0) :
+    symmSector M_mode.ν 0 η
+        (fockRawSector M_mode 0 (Fin.cons α₀ α)
+          (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))))
+        x =
+      fockAnnihOp M_mode α₀ ε
+        (fun r' => symmSector M_mode.ν r' η (fockRawSector M_mode r' α (euclidLaplace y)))
+        0 x := by
+  have h_raw : ∀ z : FockSectorDom M_mode.ν 0,
+      fockRawSector M_mode 0 (Fin.cons α₀ α)
+          (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))) z =
+        ∑ L' : PartialPairing j 1, ∑ a₀ : Fin 1,
+          fockPartialTerm M_mode (Fin.cons α₀ α)
+            (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+            (PartialPairing.prependPaired L' a₀) z := by
+    intro z
+    unfold fockRawSector
+    rw [← Equiv.sum_comp (PartialPairing.partialPairingSuccZeroEquiv j), Fintype.sum_prod_type]
+    rfl
+  rw [← symmSector_prependPaired_sum_eq hm M_mode hC α₀ α hε hy x]
+  unfold symmSector
+  congr 1
+  refine Finset.sum_congr rfl fun σ _ => ?_
+  rw [h_raw]
+
+lemma symmSector_prependShift_succ_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    {j r : ℕ} (α₀ : ι) (α : Fin j → ι) {ε : ℝ} (hε : 0 < ε)
+    {y : Fin j → Fin 4 → ℝ} (hy : y ∈ posOrderedEuclidN j)
+    (x : FockSectorDom M_mode.ν (r + 1)) :
+    symmSector M_mode.ν (r + 1) η
+        (fockRawSector M_mode (r + 1) (Fin.cons α₀ α)
+          (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))))
+        x =
+      fockCreateOp M_mode α₀ ε
+        (fun r' => symmSector M_mode.ν r' η (fockRawSector M_mode r' α (euclidLaplace y)))
+        r x +
+      fockAnnihOp M_mode α₀ ε
+        (fun r' => symmSector M_mode.ν r' η (fockRawSector M_mode r' α (euclidLaplace y)))
+        (r + 1) x := by
+  have h_raw : ∀ z : FockSectorDom M_mode.ν (r + 1),
+      fockRawSector M_mode (r + 1) (Fin.cons α₀ α)
+          (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε)))) z =
+        (∑ L : PartialPairing j r,
+          fockPartialTerm M_mode (Fin.cons α₀ α)
+            (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+            (PartialPairing.prependUnpaired L) z) +
+        (∑ L' : PartialPairing j (r + 2), ∑ a₀ : Fin (r + 2),
+          fockPartialTerm M_mode (Fin.cons α₀ α)
+            (euclidLaplace (Fin.cons (euclidTimeVec ε) (fun i => y i + euclidTimeVec (2 * ε))))
+            (PartialPairing.prependPaired L' a₀) z) := by
+    intro z
+    unfold fockRawSector
+    rw [← Equiv.sum_comp (PartialPairing.partialPairingSuccSuccEquiv j r),
+        Fintype.sum_sum_type, Fintype.sum_prod_type]
+    rfl
+  rw [← symmSector_prependUnpaired_sum_eq M_mode α₀ α ε y x,
+      ← symmSector_prependPaired_sum_eq hm M_mode hC α₀ α hε hy x,
+      ← mul_add]
+  unfold symmSector
+  congr 1
+  rw [← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun π _ => ?_
+  rw [h_raw, mul_add]
+
+lemma liftSectorToFock_zero (ν r : ℕ) :
+    liftSectorToFock ν r 0 measurable_const MemLp.zero = 0 := by
+  rw [Lp.ext_iff]
+  filter_upwards [(memLp_sectorToOmega (ν := ν) (r := r) measurable_const MemLp.zero).coeFn_toLp,
+    Lp.coeFn_zero ℂ 2 (fockMeasure ν)] with a ha h0
+  unfold liftSectorToFock
+  exact ha.trans (by
+    rw [h0]
+    rcases a with ⟨r', x⟩
+    by_cases hr : r' = r <;> · simp [sectorToOmega, hr]; try rfl)
+
+lemma liftSectorToFock_add {ν r : ℕ}
+    {g₁ g₂ : FockSectorDom ν r → ℂ}
+    (hg₁_m : Measurable g₁) (hg₁ : MemLp g₁ 2 (fockSectorMeasure ν r))
+    (hg₂_m : Measurable g₂) (hg₂ : MemLp g₂ 2 (fockSectorMeasure ν r)) :
+    liftSectorToFock ν r (g₁ + g₂) (hg₁_m.add hg₂_m) (hg₁.add hg₂) =
+      liftSectorToFock ν r g₁ hg₁_m hg₁ + liftSectorToFock ν r g₂ hg₂_m hg₂ := by
+  rw [Lp.ext_iff]
+  filter_upwards [(memLp_sectorToOmega (hg₁_m.add hg₂_m) (hg₁.add hg₂)).coeFn_toLp,
+    Lp.coeFn_add (liftSectorToFock ν r g₁ hg₁_m hg₁) (liftSectorToFock ν r g₂ hg₂_m hg₂),
+    (memLp_sectorToOmega hg₁_m hg₁).coeFn_toLp,
+    (memLp_sectorToOmega hg₂_m hg₂).coeFn_toLp] with a ha h_add ha₁ ha₂
+  unfold liftSectorToFock at h_add ⊢
+  rw [ha, h_add, Pi.add_apply, ha₁, ha₂]
+  rcases a with ⟨r', x⟩
+  by_cases hr : r' = r <;> simp [sectorToOmega, hr]
+
+lemma liftSectorToFock_smul {ν r : ℕ} (c : ℂ)
+    {g : FockSectorDom ν r → ℂ}
+    (hg_m : Measurable g) (hg : MemLp g 2 (fockSectorMeasure ν r)) :
+    liftSectorToFock ν r ((fun _ => c) * g) (measurable_const.mul hg_m) (hg.const_mul c) =
+      c • liftSectorToFock ν r g hg_m hg := by
+  rw [Lp.ext_iff]
+  filter_upwards [(memLp_sectorToOmega (measurable_const.mul hg_m) (hg.const_mul c)).coeFn_toLp,
+    Lp.coeFn_smul c (liftSectorToFock ν r g hg_m hg),
+    (memLp_sectorToOmega hg_m hg).coeFn_toLp] with a ha h_sm ha₁
+  unfold liftSectorToFock at h_sm ⊢
+  rw [ha, h_sm, Pi.smul_apply, smul_eq_mul, ha₁]
+  rcases a with ⟨r', x⟩
+  by_cases hr : r' = r <;> simp [sectorToOmega, hr]
+
+lemma liftSectorToFock_congr {ν r : ℕ}
+    {g₁ g₂ : FockSectorDom ν r → ℂ}
+    (hg₁_m : Measurable g₁) (hg₁ : MemLp g₁ 2 (fockSectorMeasure ν r))
+    (hg₂_m : Measurable g₂) (hg₂ : MemLp g₂ 2 (fockSectorMeasure ν r))
+    (h_eq : ∀ x, g₁ x = g₂ x) :
+    liftSectorToFock ν r g₁ hg₁_m hg₁ = liftSectorToFock ν r g₂ hg₂_m hg₂ := by
+  unfold liftSectorToFock
+  refine MeasureTheory.MemLp.toLp_congr _ _ (Filter.Eventually.of_forall fun a => ?_)
+  rcases a with ⟨r', x⟩
+  by_cases hr : r' = r <;> simp [sectorToOmega, hr, h_eq]
+
+lemma norm_sq_sum_liftSectorToFock {ν M : ℕ}
+    (G : ∀ r : ℕ, FockSectorDom ν r → ℂ)
+    (hG_m : ∀ r, Measurable (G r))
+    (hG_lp : ∀ r, MemLp (G r) 2 (fockSectorMeasure ν r)) :
+    ‖∑ r ∈ Finset.range M, liftSectorToFock ν r (G r) (hG_m r) (hG_lp r)‖ ^ 2 =
+      ∑ r ∈ Finset.range M,
+        ∫ x : FockSectorDom ν r, ‖G r x‖ ^ 2 ∂(fockSectorMeasure ν r) := by
+  have h_diag : ∀ r₁ ∈ Finset.range M,
+      ⟪liftSectorToFock ν r₁ (G r₁) (hG_m r₁) (hG_lp r₁),
+        ∑ r₂ ∈ Finset.range M, liftSectorToFock ν r₂ (G r₂) (hG_m r₂) (hG_lp r₂)⟫_ℂ =
+      (((∫ x : FockSectorDom ν r₁, ‖G r₁ x‖ ^ 2 ∂(fockSectorMeasure ν r₁) : ℝ) : ℂ)) := by
+    intro r₁ hr₁
+    rw [inner_sum (𝕜 := ℂ), Finset.sum_eq_single r₁]
+    · rw [inner_liftSectorToFock_eq (hG_m r₁) (hG_lp r₁) (hG_m r₁) (hG_lp r₁)]
+      have h_int_re : Integrable
+          (fun x : FockSectorDom ν r₁ => ‖G r₁ x‖ ^ 2) (fockSectorMeasure ν r₁) :=
+        (memLp_two_iff_integrable_sq_norm (hG_m r₁).aestronglyMeasurable).mp (hG_lp r₁)
+      have h_ofR :
+          (∫ x : FockSectorDom ν r₁, ((‖G r₁ x‖ ^ 2 : ℝ) : ℂ) ∂(fockSectorMeasure ν r₁)) =
+            (((∫ x : FockSectorDom ν r₁, ‖G r₁ x‖ ^ 2 ∂(fockSectorMeasure ν r₁) : ℝ) : ℂ)) :=
+        integral_ofReal
+      rw [← h_ofR]
+      refine integral_congr_ae (Filter.Eventually.of_forall fun x => ?_)
+      dsimp only
+      rw [Complex.star_def, mul_comm, Complex.mul_conj, Complex.normSq_eq_norm_sq]
+    · intro r₂ _ hne
+      exact inner_liftSectorToFock_ne hne.symm (hG_m r₁) (hG_lp r₁) (hG_m r₂) (hG_lp r₂)
+    · intro hnot
+      exact False.elim (hnot hr₁)
+  apply Complex.ofReal_injective
+  have h_self :
+      (((‖∑ r ∈ Finset.range M, liftSectorToFock ν r (G r) (hG_m r) (hG_lp r)‖ ^ 2 : ℝ) : ℂ)) =
+        ⟪∑ r ∈ Finset.range M, liftSectorToFock ν r (G r) (hG_m r) (hG_lp r),
+          ∑ r ∈ Finset.range M, liftSectorToFock ν r (G r) (hG_m r) (hG_lp r)⟫_ℂ := by
+    simp
+  rw [h_self, sum_inner (𝕜 := ℂ), Finset.sum_congr rfl h_diag, Complex.ofReal_sum]
+
+noncomputable def fockConfigSector {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (A : OSConfig ι)
+    (r : ℕ) (x : FockSectorDom M_mode.ν r) : ℂ :=
+  symmSector M_mode.ν r η (fockRawSector M_mode r A.2.1 (euclidLaplace A.2.2.val)) x
+
+lemma fockConfigSector_eq_zero_of_lt {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (A : OSConfig ι)
+    {r : ℕ} (hlt : A.1 < r) (x : FockSectorDom M_mode.ν r) :
+    fockConfigSector M_mode A r x = 0 := by
+  haveI : IsEmpty (PartialPairing A.1 r) := PartialPairing.isEmpty_of_lt hlt
+  unfold fockConfigSector symmSector fockRawSector
+  simp
+
+lemma measurable_fockConfigSector {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (A : OSConfig ι) (r : ℕ) :
+    Measurable (fockConfigSector M_mode A r) :=
+  measurable_symmSector η
+    (measurable_fockRawSector M_mode hC r A.2.1 (partialMomentumBound_euclidLaplace hm A.2.2.2))
+
+lemma memLp_fockConfigSector {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (A : OSConfig ι) (r : ℕ) :
+    MemLp (fockConfigSector M_mode A r) 2 (fockSectorMeasure M_mode.ν r) :=
+  memLp_symmSector η
+    (memLp_fockRawSector M_mode hC r A.2.1 (partialMomentumBound_euclidLaplace hm A.2.2.2))
+
+noncomputable def fockSumSector {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι)
+    (r : ℕ) (x : FockSectorDom M_mode.ν r) : ℂ :=
+  ∑ a ∈ S_fin, c a * fockConfigSector M_mode (cfg a) r x
+
+lemma measurable_fockSumSector {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι) (r : ℕ) :
+    Measurable (fockSumSector M_mode S_fin c cfg r) :=
+  Finset.measurable_sum S_fin fun a _ =>
+    measurable_const.mul (measurable_fockConfigSector hm M_mode hC (cfg a) r)
+
+lemma memLp_fockSumSector {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι) (r : ℕ) :
+    MemLp (fockSumSector M_mode S_fin c cfg r) 2 (fockSectorMeasure M_mode.ν r) :=
+  memLp_finsetSum S_fin fun a _ =>
+    (memLp_fockConfigSector hm M_mode hC (cfg a) r).const_mul (c a)
+
+lemma fockSumSector_eq_zero_of_lt {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι)
+    {r : ℕ} (hlt : ∀ a ∈ S_fin, (cfg a).1 < r) (x : FockSectorDom M_mode.ν r) :
+    fockSumSector M_mode S_fin c cfg r x = 0 := by
+  unfold fockSumSector
+  exact Finset.sum_eq_zero fun a ha => by
+    rw [fockConfigSector_eq_zero_of_lt M_mode (cfg a) (hlt a ha), mul_zero]
+
+lemma sum_fockOSMap_eq_sum_liftSectorToFock {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι)
+    {N : ℕ} (hN : ∀ a ∈ S_fin, (cfg a).1 ≤ N) :
+    (∑ a ∈ S_fin, c a • fockOSMap hm M_mode hC (cfg a)) =
+      ∑ r ∈ Finset.range (N + 1),
+        liftSectorToFock M_mode.ν r
+          (fockSumSector M_mode S_fin c cfg r)
+          (measurable_fockSumSector hm M_mode hC S_fin c cfg r)
+          (memLp_fockSumSector hm M_mode hC S_fin c cfg r) := by
+  classical
+  have h_single : ∀ A : OSConfig ι, A.1 ≤ N →
+      fockOSMap hm M_mode hC A =
+        ∑ r ∈ Finset.range (N + 1),
+          liftSectorToFock M_mode.ν r
+            (fockConfigSector M_mode A r)
+            (measurable_fockConfigSector hm M_mode hC A r)
+            (memLp_fockConfigSector hm M_mode hC A r) := by
+    intro A hA
+    unfold fockOSMap fockMomentumVec
+    refine Finset.sum_subset (Finset.range_mono (Nat.succ_le_succ hA)) fun r _ hr_not => ?_
+    have hlt : A.1 < r := by
+      rw [Finset.mem_range] at hr_not
+      omega
+    change liftSectorToFock M_mode.ν r (fockConfigSector M_mode A r)
+      (measurable_fockConfigSector hm M_mode hC A r)
+      (memLp_fockConfigSector hm M_mode hC A r) = 0
+    exact (liftSectorToFock_congr (g₂ := 0) _ _
+      measurable_const MemLp.zero
+      (fockConfigSector_eq_zero_of_lt M_mode A hlt)).trans
+      (liftSectorToFock_zero M_mode.ν r)
+  have h_lift_sum : ∀ r : ℕ,
+      liftSectorToFock M_mode.ν r
+        (fockSumSector M_mode S_fin c cfg r)
+        (measurable_fockSumSector hm M_mode hC S_fin c cfg r)
+        (memLp_fockSumSector hm M_mode hC S_fin c cfg r) =
+      ∑ a ∈ S_fin, c a •
+        liftSectorToFock M_mode.ν r
+          (fockConfigSector M_mode (cfg a) r)
+          (measurable_fockConfigSector hm M_mode hC (cfg a) r)
+          (memLp_fockConfigSector hm M_mode hC (cfg a) r) := by
+    intro r
+    clear h_single hN
+    induction S_fin using Finset.induction_on with
+    | empty =>
+      rw [Finset.sum_empty]
+      exact (liftSectorToFock_congr (g₂ := 0) _ _
+        measurable_const MemLp.zero
+        (fun _ => Finset.sum_empty)).trans (liftSectorToFock_zero M_mode.ν r)
+    | @insert a₀ s ha₀ ih =>
+      rw [Finset.sum_insert ha₀, ← ih]
+      have hm1 : Measurable
+          ((fun _ : FockSectorDom M_mode.ν r => c a₀) *
+            fockConfigSector M_mode (cfg a₀) r) :=
+        measurable_const.mul (measurable_fockConfigSector hm M_mode hC (cfg a₀) r)
+      have hlp1 : MemLp
+          ((fun _ : FockSectorDom M_mode.ν r => c a₀) *
+            fockConfigSector M_mode (cfg a₀) r) 2 (fockSectorMeasure M_mode.ν r) :=
+        (memLp_fockConfigSector hm M_mode hC (cfg a₀) r).const_mul (c a₀)
+      have h_eq : ∀ x, fockSumSector M_mode (insert a₀ s) c cfg r x =
+          (((fun _ : FockSectorDom M_mode.ν r => c a₀) *
+            fockConfigSector M_mode (cfg a₀) r) +
+            fockSumSector M_mode s c cfg r) x := fun x => Finset.sum_insert ha₀
+      rw [liftSectorToFock_congr _ _
+          (hm1.add (measurable_fockSumSector hm M_mode hC s c cfg r))
+          (hlp1.add (memLp_fockSumSector hm M_mode hC s c cfg r)) h_eq,
+          liftSectorToFock_add hm1 hlp1
+            (measurable_fockSumSector hm M_mode hC s c cfg r)
+            (memLp_fockSumSector hm M_mode hC s c cfg r),
+          liftSectorToFock_smul (c a₀)
+            (measurable_fockConfigSector hm M_mode hC (cfg a₀) r)
+            (memLp_fockConfigSector hm M_mode hC (cfg a₀) r)]
+  have h_each : ∀ a ∈ S_fin,
+      c a • fockOSMap hm M_mode hC (cfg a) =
+        ∑ r ∈ Finset.range (N + 1),
+          c a • liftSectorToFock M_mode.ν r
+            (fockConfigSector M_mode (cfg a) r)
+            (measurable_fockConfigSector hm M_mode hC (cfg a) r)
+            (memLp_fockConfigSector hm M_mode hC (cfg a) r) := by
+    intro a ha
+    rw [h_single (cfg a) (hN a ha), Finset.smul_sum]
+  rw [Finset.sum_congr rfl h_each, Finset.sum_comm]
+  exact Finset.sum_congr rfl fun r _ => (h_lift_sum r).symm
+
+lemma finset_sq_sum_le_card_mul_sum_sq {α_t : Type*} (s : Finset α_t) (f : α_t → ℝ) :
+    (∑ i ∈ s, f i) ^ 2 ≤ (s.card : ℝ) * ∑ i ∈ s, f i ^ 2 := by
+  have h_nn : 0 ≤ ∑ i ∈ s, ∑ j ∈ s, (f i - f j) ^ 2 :=
+    Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ => sq_nonneg _
+  have h_exp : (∑ i ∈ s, ∑ j ∈ s, (f i - f j) ^ 2) =
+      2 * ((s.card : ℝ) * ∑ i ∈ s, f i ^ 2 - (∑ i ∈ s, f i) ^ 2) := by
+    have h_pt : ∀ i ∈ s, (∑ j ∈ s, (f i - f j) ^ 2) =
+        (s.card : ℝ) * f i ^ 2 - 2 * f i * (∑ j ∈ s, f j) + ∑ j ∈ s, f j ^ 2 := by
+      intro i _
+      have h_ij : ∀ j : α_t, (f i - f j) ^ 2 = f i ^ 2 - 2 * f i * f j + f j ^ 2 :=
+        fun _ => by ring
+      simp_rw [h_ij]
+      rw [Finset.sum_add_distrib, Finset.sum_sub_distrib, Finset.sum_const, nsmul_eq_mul,
+          ← Finset.mul_sum]
+    rw [Finset.sum_congr rfl h_pt, Finset.sum_add_distrib, Finset.sum_sub_distrib,
+        ← Finset.mul_sum, ← Finset.sum_mul, ← Finset.mul_sum, Finset.sum_const, nsmul_eq_mul]
+    ring
+  linarith
+
+lemma sq_integral_mul_le_of_nonneg {Ω : Type*} [MeasurableSpace Ω] {μ : Measure Ω}
+    {u v : Ω → ℝ} (hu_m : Measurable u) (hv_m : Measurable v)
+    (hu_nn : ∀ a, 0 ≤ u a) (hv_nn : ∀ a, 0 ≤ v a)
+    (hu_sq : Integrable (fun a => u a ^ 2) μ)
+    (hv_sq : Integrable (fun a => v a ^ 2) μ) :
+    (∫ a, u a * v a ∂μ) ^ 2 ≤ (∫ a, u a ^ 2 ∂μ) * (∫ a, v a ^ 2 ∂μ) := by
+  have hu_lp : MemLp u 2 μ :=
+    (memLp_two_iff_integrable_sq_norm hu_m.aestronglyMeasurable).mpr
+      (hu_sq.congr (Filter.Eventually.of_forall fun a => by
+        dsimp only
+        rw [Real.norm_of_nonneg (hu_nn a)]))
+  have hv_lp : MemLp v 2 μ :=
+    (memLp_two_iff_integrable_sq_norm hv_m.aestronglyMeasurable).mpr
+      (hv_sq.congr (Filter.Eventually.of_forall fun a => by
+        dsimp only
+        rw [Real.norm_of_nonneg (hv_nn a)]))
+  let x' : Lp ℝ 2 μ := hu_lp.toLp u
+  let y' : Lp ℝ 2 μ := hv_lp.toLp v
+  have h_xy : (∫ a, u a * v a ∂μ) = ⟪x', y'⟫_ℝ := by
+    rw [L2.inner_def]
+    refine integral_congr_ae ?_
+    filter_upwards [hu_lp.coeFn_toLp, hv_lp.coeFn_toLp] with a hxa hya
+    dsimp [x', y']
+    rw [hxa, hya, conj_trivial, mul_comm]
+  have h_xx : (∫ a, u a ^ 2 ∂μ) = ‖x'‖ ^ 2 := by
+    rw [← real_inner_self_eq_norm_sq, L2.inner_def]
+    refine integral_congr_ae ?_
+    filter_upwards [hu_lp.coeFn_toLp] with a hxa
+    dsimp [x']
+    rw [hxa, conj_trivial, sq]
+  have h_yy : (∫ a, v a ^ 2 ∂μ) = ‖y'‖ ^ 2 := by
+    rw [← real_inner_self_eq_norm_sq, L2.inner_def]
+    refine integral_congr_ae ?_
+    filter_upwards [hv_lp.coeFn_toLp] with a hya
+    dsimp [y']
+    rw [hya, conj_trivial, sq]
+  have h_int_nn : 0 ≤ ∫ a, u a * v a ∂μ :=
+    integral_nonneg fun a => mul_nonneg (hu_nn a) (hv_nn a)
+  have h_cs : ∫ a, u a * v a ∂μ ≤ ‖x'‖ * ‖y'‖ := by
+    rw [h_xy]
+    exact real_inner_le_norm x' y'
+  calc (∫ a, u a * v a ∂μ) ^ 2
+      ≤ (‖x'‖ * ‖y'‖) ^ 2 := pow_le_pow_left₀ h_int_nn h_cs 2
+    _ = ‖x'‖ ^ 2 * ‖y'‖ ^ 2 := mul_pow _ _ 2
+    _ = (∫ a, u a ^ 2 ∂μ) * (∫ a, v a ^ 2 ∂μ) := by rw [h_xx, h_yy]
+
+lemma integrable_fockSectorMeasure_iff_forall_spin {ν r : ℕ}
+    {h : FockSectorDom ν r → ℝ} (hh_m : Measurable h) :
+    Integrable h (fockSectorMeasure ν r) ↔
+      ∀ s : Fin r → Fin ν, Integrable (fun k : Fin r → Fin 3 → ℝ => h (k, s)) volume := by
+  have h_lint : (∫⁻ x : FockSectorDom ν r, ‖h x‖ₑ ∂(fockSectorMeasure ν r)) =
+      ∑ s : Fin r → Fin ν, ∫⁻ k : Fin r → Fin 3 → ℝ, ‖h (k, s)‖ₑ ∂volume := by
+    unfold fockSectorMeasure
+    rw [lintegral_prod_symm _ hh_m.enorm.aemeasurable, lintegral_fintype]
+    simp
+  constructor
+  · intro hh s
+    refine ⟨(hh_m.comp (measurable_id.prodMk measurable_const)).aestronglyMeasurable, ?_⟩
+    have h_fin := hh.hasFiniteIntegral
+    unfold HasFiniteIntegral at h_fin ⊢
+    rw [h_lint, ENNReal.sum_lt_top] at h_fin
+    exact h_fin s (Finset.mem_univ s)
+  · intro hs
+    refine ⟨hh_m.aestronglyMeasurable, ?_⟩
+    unfold HasFiniteIntegral
+    rw [h_lint, ENNReal.sum_lt_top]
+    intro s _
+    exact (hs s).hasFiniteIntegral
+
+lemma integral_fockSectorMeasure_eq_sum_spin {ν r : ℕ}
+    {h : FockSectorDom ν r → ℝ} (hh : Integrable h (fockSectorMeasure ν r)) :
+    (∫ x : FockSectorDom ν r, h x ∂(fockSectorMeasure ν r)) =
+      ∑ s : Fin r → Fin ν, ∫ k : Fin r → Fin 3 → ℝ, h (k, s) ∂volume := by
+  unfold fockSectorMeasure at hh ⊢
+  rw [integral_prod_symm _ hh, integral_fintype_count]
+
+lemma sq_exp_neg_two_mul_sum_massShellEnergy_le {m : ℝ} (hm : 0 < m)
+    {ε : ℝ} (hε : 0 < ε) {r : ℕ} (k : Fin r → Fin 3 → ℝ) :
+    (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (k b)))) ^ 2 ≤
+      Real.exp (-(4 * ε * (r : ℝ) * m)) := by
+  have h_sum : (r : ℝ) * m ≤ ∑ b : Fin r, massShellEnergy m (k b) := by
+    calc (r : ℝ) * m = ∑ _b : Fin r, m := by
+          rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+      _ ≤ ∑ b : Fin r, massShellEnergy m (k b) :=
+          Finset.sum_le_sum fun b _ => massShellEnergy_ge_mass hm (k b)
+  rw [sq, ← Real.exp_add]
+  exact Real.exp_le_exp.mpr (by nlinarith)
+
+noncomputable def conjModeBound {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) : ℝ :=
+  (∑ α₁ : ι, ∑ c : ι, ‖S.C α₁ c‖) * M_mode.M
+
+lemma conjModeBound_nonneg {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) :
+    0 ≤ conjModeBound M_mode :=
+  mul_nonneg (Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ => norm_nonneg _) M_mode.hM
+
+noncomputable def uCreate {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (ε : ℝ)
+    (G : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ)
+    (r : ℕ) (x : FockSectorDom M_mode.ν (r + 1)) : ℝ :=
+  M_mode.M ^ 2 * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+    ∑ p : Fin (r + 1),
+      Real.exp (-(2 * ε * massShellEnergy m (x.1 p))) *
+        ‖G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)‖ ^ 2
+
+lemma norm_sq_fockCreateOp_le_uCreate {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (α₀ : ι) {ε : ℝ} (hε : 0 < ε)
+    (G : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ)
+    (r : ℕ) (x : FockSectorDom M_mode.ν (r + 1)) :
+    ‖fockCreateOp M_mode α₀ ε G r x‖ ^ 2 ≤ uCreate M_mode ε G r x := by
+  unfold fockCreateOp uCreate
+  have hr_pos : (0 : ℝ) < (r : ℝ) + 1 := by positivity
+  have h_pref_sq : ‖(((Real.sqrt (r + 1 : ℝ))⁻¹ : ℝ) : ℂ)‖ ^ 2 = ((r : ℝ) + 1)⁻¹ := by
+    rw [Complex.norm_real, Real.norm_of_nonneg (by positivity), inv_pow,
+        Real.sq_sqrt hr_pos.le]
+  rw [norm_mul, mul_pow, h_pref_sq]
+  let term : Fin (r + 1) → ℂ := fun p =>
+    η ^ (p : ℕ) *
+      ((Real.exp (-(ε * massShellEnergy m (x.1 p))) : ℂ) * M_mode.w (x.2 p) (x.1 p) α₀) *
+      (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b)))) : ℂ) *
+      G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)
+  have h_sum_sq : ‖∑ p : Fin (r + 1), term p‖ ^ 2 ≤
+      ((r : ℝ) + 1) * ∑ p : Fin (r + 1), ‖term p‖ ^ 2 := by
+    have h_tri := pow_le_pow_left₀ (norm_nonneg _) (norm_sum_le Finset.univ term) 2
+    have h_cs := finset_sq_sum_le_card_mul_sum_sq Finset.univ (fun p => ‖term p‖)
+    rw [Finset.card_univ, Fintype.card_fin, Nat.cast_add, Nat.cast_one] at h_cs
+    exact h_tri.trans h_cs
+  have h_each : ∀ p : Fin (r + 1),
+      ‖term p‖ ^ 2 ≤
+        M_mode.M ^ 2 * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+          (Real.exp (-(2 * ε * massShellEnergy m (x.1 p))) *
+            ‖G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)‖ ^ 2) := by
+    intro p
+    dsimp [term]
+    rw [norm_mul, norm_mul, norm_mul, norm_mul, norm_eta_pow M_mode.hη, one_mul,
+        Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le,
+        Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le]
+    have hw_sq : ‖M_mode.w (x.2 p) (x.1 p) α₀‖ ^ 2 ≤ M_mode.M ^ 2 :=
+      pow_le_pow_left₀ (norm_nonneg _) (M_mode.norm_w_le (x.2 p) (x.1 p) α₀) 2
+    have he₁_sq : (Real.exp (-(ε * massShellEnergy m (x.1 p)))) ^ 2 =
+        Real.exp (-(2 * ε * massShellEnergy m (x.1 p))) := by
+      rw [sq, ← Real.exp_add]
+      congr 1
+      ring
+    have he₂_sq := sq_exp_neg_two_mul_sum_massShellEnergy_le hm hε (x.1 ∘ p.succAbove)
+    calc (Real.exp (-(ε * massShellEnergy m (x.1 p))) * ‖M_mode.w (x.2 p) (x.1 p) α₀‖ *
+            Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b)))) *
+            ‖G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)‖) ^ 2
+        = (Real.exp (-(ε * massShellEnergy m (x.1 p)))) ^ 2 *
+            ‖M_mode.w (x.2 p) (x.1 p) α₀‖ ^ 2 *
+            (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b))))) ^ 2 *
+            ‖G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)‖ ^ 2 := by ring
+      _ ≤ Real.exp (-(2 * ε * massShellEnergy m (x.1 p))) * M_mode.M ^ 2 *
+            Real.exp (-(4 * ε * (r : ℝ) * m)) *
+            ‖G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)‖ ^ 2 := by
+          rw [he₁_sq]
+          refine mul_le_mul_of_nonneg_right ?_ (sq_nonneg _)
+          exact mul_le_mul
+            (mul_le_mul_of_nonneg_left hw_sq (Real.exp_pos _).le)
+            he₂_sq (sq_nonneg _) (by positivity)
+      _ = M_mode.M ^ 2 * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+            (Real.exp (-(2 * ε * massShellEnergy m (x.1 p))) *
+              ‖G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)‖ ^ 2) := by ring
+  calc ((r : ℝ) + 1)⁻¹ * ‖∑ p : Fin (r + 1), term p‖ ^ 2
+      ≤ ((r : ℝ) + 1)⁻¹ * (((r : ℝ) + 1) * ∑ p : Fin (r + 1), ‖term p‖ ^ 2) :=
+        mul_le_mul_of_nonneg_left h_sum_sq (by positivity)
+    _ = ∑ p : Fin (r + 1), ‖term p‖ ^ 2 := inv_mul_cancel_left₀ hr_pos.ne' _
+    _ ≤ ∑ p : Fin (r + 1),
+          M_mode.M ^ 2 * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+            (Real.exp (-(2 * ε * massShellEnergy m (x.1 p))) *
+              ‖G r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)‖ ^ 2) :=
+        Finset.sum_le_sum fun p _ => h_each p
+    _ = _ := (Finset.mul_sum _ _ _).symm
+
+lemma integrable_and_sum_spin_uCreate {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) {ε : ℝ} (hε : 0 < ε)
+    (G : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ) (r : ℕ)
+    (hG_m : Measurable (G r)) (hG_lp : MemLp (G r) 2 (fockSectorMeasure M_mode.ν r)) :
+    (∀ s : Fin (r + 1) → Fin M_mode.ν,
+      Integrable (fun k : Fin (r + 1) → Fin 3 → ℝ => uCreate M_mode ε G r (k, s)) volume) ∧
+    (∑ s : Fin (r + 1) → Fin M_mode.ν,
+      ∫ k : Fin (r + 1) → Fin 3 → ℝ, uCreate M_mode ε G r (k, s)) =
+      ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+        ((M_mode.ν : ℝ) * M_mode.M ^ 2 *
+          ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+        ∫ y : FockSectorDom M_mode.ν r, ‖G r y‖ ^ 2 ∂(fockSectorMeasure M_mode.ν r) := by
+  have hG_sq_int : Integrable
+      (fun y : FockSectorDom M_mode.ν r => ‖G r y‖ ^ 2) (fockSectorMeasure M_mode.ν r) :=
+    (memLp_two_iff_integrable_sq_norm hG_m.aestronglyMeasurable).mp hG_lp
+  have hG_sq_m : Measurable (fun y : FockSectorDom M_mode.ν r => ‖G r y‖ ^ 2) :=
+    (hG_m.norm).pow_const 2
+  have hG_spin : ∀ s' : Fin r → Fin M_mode.ν,
+      Integrable (fun k' : Fin r → Fin 3 → ℝ => ‖G r (k', s')‖ ^ 2) volume :=
+    (integrable_fockSectorMeasure_iff_forall_spin hG_sq_m).mp hG_sq_int
+  have h_exp_int : Integrable
+      (fun q₀ : Fin 3 → ℝ => Real.exp (-(2 * ε * massShellEnergy m q₀))) volume :=
+    integrable_exp_neg_massShellEnergy hm (mul_pos two_pos hε)
+  have h_p_int : ∀ (p : Fin (r + 1)) (s : Fin (r + 1) → Fin M_mode.ν),
+      Integrable (fun k : Fin (r + 1) → Fin 3 → ℝ =>
+        Real.exp (-(2 * ε * massShellEnergy m (k p))) *
+          ‖G r (k ∘ p.succAbove, s ∘ p.succAbove)‖ ^ 2) volume := by
+    intro p s
+    let mp := (volume_preserving_piFinSuccAbove (fun _ : Fin (r + 1) => Fin 3 → ℝ) p).symm
+    let e := (MeasurableEquiv.piFinSuccAbove (fun _ : Fin (r + 1) => Fin 3 → ℝ) p).symm
+    refine (mp.integrable_comp_emb e.measurableEmbedding).mp ?_
+    have h_eq : ((fun k : Fin (r + 1) → Fin 3 → ℝ =>
+        Real.exp (-(2 * ε * massShellEnergy m (k p))) *
+          ‖G r (k ∘ p.succAbove, s ∘ p.succAbove)‖ ^ 2) ∘ ⇑e) =
+        fun qk : (Fin 3 → ℝ) × (Fin r → Fin 3 → ℝ) =>
+          Real.exp (-(2 * ε * massShellEnergy m qk.1)) *
+            ‖G r (qk.2, s ∘ p.succAbove)‖ ^ 2 := by
+      ext ⟨q₀, k'⟩
+      dsimp only [Function.comp_apply]
+      have h1 : e (q₀, k') p = q₀ := by simp [e]
+      have h2 : e (q₀, k') ∘ p.succAbove = k' := by ext b; simp [e]
+      rw [h1, h2]
+    change Integrable (((fun k : Fin (r + 1) → Fin 3 → ℝ =>
+      Real.exp (-(2 * ε * massShellEnergy m (k p))) *
+        ‖G r (k ∘ p.succAbove, s ∘ p.succAbove)‖ ^ 2) ∘ ⇑e)) (volume.prod volume)
+    rw [h_eq]
+    exact h_exp_int.smul_prod (hG_spin (s ∘ p.succAbove))
+  have h_p_val : ∀ (p : Fin (r + 1)) (s : Fin (r + 1) → Fin M_mode.ν),
+      (∫ k : Fin (r + 1) → Fin 3 → ℝ,
+        Real.exp (-(2 * ε * massShellEnergy m (k p))) *
+          ‖G r (k ∘ p.succAbove, s ∘ p.succAbove)‖ ^ 2) =
+      (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+        ∫ k' : Fin r → Fin 3 → ℝ, ‖G r (k', s ∘ p.succAbove)‖ ^ 2 := by
+    intro p s
+    let mp := (volume_preserving_piFinSuccAbove (fun _ : Fin (r + 1) => Fin 3 → ℝ) p).symm
+    let e := (MeasurableEquiv.piFinSuccAbove (fun _ : Fin (r + 1) => Fin 3 → ℝ) p).symm
+    rw [← mp.integral_comp']
+    have h_eq : (fun qk : (Fin 3 → ℝ) × (Fin r → Fin 3 → ℝ) =>
+        Real.exp (-(2 * ε * massShellEnergy m (e qk p))) *
+          ‖G r (e qk ∘ p.succAbove, s ∘ p.succAbove)‖ ^ 2) =
+        fun qk => Real.exp (-(2 * ε * massShellEnergy m qk.1)) *
+          ‖G r (qk.2, s ∘ p.succAbove)‖ ^ 2 := by
+      ext ⟨q₀, k'⟩
+      have h1 : e (q₀, k') p = q₀ := by simp [e]
+      have h2 : e (q₀, k') ∘ p.succAbove = k' := by ext b; simp [e]
+      rw [h1, h2]
+    rw [h_eq, MeasureTheory.Measure.volume_eq_prod,
+        MeasureTheory.integral_prod
+          (fun qk : (Fin 3 → ℝ) × (Fin r → Fin 3 → ℝ) =>
+            Real.exp (-(2 * ε * massShellEnergy m qk.1)) *
+              ‖G r (qk.2, s ∘ p.succAbove)‖ ^ 2)
+          (h_exp_int.smul_prod (hG_spin (s ∘ p.succAbove)))]
+    simp_rw [integral_const_mul]
+    rw [integral_mul_const]
+  refine ⟨fun s => ?_, ?_⟩
+  · unfold uCreate
+    exact (integrable_finsetSum Finset.univ fun p _ => h_p_int p s).const_mul _
+  · have h_each_s : ∀ s : Fin (r + 1) → Fin M_mode.ν,
+        (∫ k : Fin (r + 1) → Fin 3 → ℝ, uCreate M_mode ε G r (k, s)) =
+          M_mode.M ^ 2 * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+            ∑ p : Fin (r + 1),
+              (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+                ∫ k' : Fin r → Fin 3 → ℝ, ‖G r (k', s ∘ p.succAbove)‖ ^ 2 := by
+      intro s
+      unfold uCreate
+      rw [integral_const_mul, MeasureTheory.integral_finsetSum Finset.univ fun p _ => h_p_int p s]
+      refine congrArg (_ * ·) (Finset.sum_congr rfl fun p _ => h_p_val p s)
+    simp_rw [h_each_s]
+    rw [← Finset.mul_sum, Finset.sum_comm]
+    have h_each_p : ∀ p : Fin (r + 1),
+        (∑ s : Fin (r + 1) → Fin M_mode.ν,
+          (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+            ∫ k' : Fin r → Fin 3 → ℝ, ‖G r (k', s ∘ p.succAbove)‖ ^ 2) =
+        (M_mode.ν : ℝ) *
+          (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+          ∫ y : FockSectorDom M_mode.ν r, ‖G r y‖ ^ 2 ∂(fockSectorMeasure M_mode.ν r) := by
+      intro p
+      let es := (MeasurableEquiv.piFinSuccAbove
+        (fun _ : Fin (r + 1) => Fin M_mode.ν) p).toEquiv.symm
+      rw [← Equiv.sum_comp es, Fintype.sum_prod_type]
+      have h_es : ∀ (s₀ : Fin M_mode.ν) (s' : Fin r → Fin M_mode.ν),
+          es (s₀, s') ∘ p.succAbove = s' := by
+        intro s₀ s'
+        ext b
+        simp [es]
+      simp_rw [h_es]
+      rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
+          ← Finset.mul_sum, ← integral_fockSectorMeasure_eq_sum_spin hG_sq_int]
+      ring
+    simp_rw [h_each_p]
+    rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
+        Nat.cast_add, Nat.cast_one]
+    ring
+
+noncomputable def uAnnih {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (ε : ℝ)
+    (G : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ)
+    (r : ℕ) (x : FockSectorDom M_mode.ν r) : ℝ :=
+  ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+    ((M_mode.ν : ℝ) * conjModeBound M_mode ^ 2 *
+      ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+    ∑ s₀ : Fin M_mode.ν,
+      ∫ q₀ : Fin 3 → ℝ, ‖G (r + 1) (Fin.cons q₀ x.1, Fin.cons s₀ x.2)‖ ^ 2
+
+lemma integrable_and_ae_le_uAnnih {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (α₀ : ι) {ε : ℝ} (hε : 0 < ε)
+    (G : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ) (r : ℕ)
+    (hG_m : Measurable (G (r + 1)))
+    (hG_lp : MemLp (G (r + 1)) 2 (fockSectorMeasure M_mode.ν (r + 1))) :
+    (∀ s : Fin r → Fin M_mode.ν,
+      Integrable (fun k : Fin r → Fin 3 → ℝ => uAnnih M_mode ε G r (k, s)) volume) ∧
+    (∀ s : Fin r → Fin M_mode.ν, ∀ᵐ k : Fin r → Fin 3 → ℝ ∂volume,
+      ‖fockAnnihOp M_mode α₀ ε G r (k, s)‖ ^ 2 ≤ uAnnih M_mode ε G r (k, s)) ∧
+    (∑ s : Fin r → Fin M_mode.ν,
+      ∫ k : Fin r → Fin 3 → ℝ, uAnnih M_mode ε G r (k, s)) =
+      ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+        ((M_mode.ν : ℝ) * conjModeBound M_mode ^ 2 *
+          ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+        ∫ y : FockSectorDom M_mode.ν (r + 1),
+          ‖G (r + 1) y‖ ^ 2 ∂(fockSectorMeasure M_mode.ν (r + 1)) := by
+  have hG_sq_int : Integrable
+      (fun y : FockSectorDom M_mode.ν (r + 1) => ‖G (r + 1) y‖ ^ 2)
+      (fockSectorMeasure M_mode.ν (r + 1)) :=
+    (memLp_two_iff_integrable_sq_norm hG_m.aestronglyMeasurable).mp hG_lp
+  have hG_sq_m : Measurable (fun y : FockSectorDom M_mode.ν (r + 1) => ‖G (r + 1) y‖ ^ 2) :=
+    (hG_m.norm).pow_const 2
+  have hG_spin : ∀ s_ext : Fin (r + 1) → Fin M_mode.ν,
+      Integrable (fun k_ext : Fin (r + 1) → Fin 3 → ℝ =>
+        ‖G (r + 1) (k_ext, s_ext)‖ ^ 2) volume :=
+    (integrable_fockSectorMeasure_iff_forall_spin hG_sq_m).mp hG_sq_int
+  let mp₀ := (volume_preserving_piFinSuccAbove (fun _ : Fin (r + 1) => Fin 3 → ℝ) 0).symm
+  let e₀ := (MeasurableEquiv.piFinSuccAbove (fun _ : Fin (r + 1) => Fin 3 → ℝ) 0).symm
+  have he₀ : ∀ (q₀ : Fin 3 → ℝ) (k : Fin r → Fin 3 → ℝ), e₀ (q₀, k) = Fin.cons q₀ k := by
+    intro q₀ k
+    ext i
+    refine Fin.cases ?_ ?_ i <;> simp [e₀]
+  have h_prod : ∀ (s₀ : Fin M_mode.ν) (s : Fin r → Fin M_mode.ν),
+      Integrable (fun qk : (Fin 3 → ℝ) × (Fin r → Fin 3 → ℝ) =>
+        ‖G (r + 1) (Fin.cons qk.1 qk.2, Fin.cons s₀ s)‖ ^ 2) (volume.prod volume) := by
+    intro s₀ s
+    have hp := (mp₀.integrable_comp_emb e₀.measurableEmbedding).mpr (hG_spin (Fin.cons s₀ s))
+    refine hp.congr (Filter.Eventually.of_forall fun ⟨q₀, k⟩ => ?_)
+    change ‖G (r + 1) (e₀ (q₀, k), Fin.cons s₀ s)‖ ^ 2 =
+      ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖ ^ 2
+    rw [he₀]
+  have h_right : ∀ (s₀ : Fin M_mode.ν) (s : Fin r → Fin M_mode.ν),
+      Integrable (fun k : Fin r → Fin 3 → ℝ =>
+        ∫ q₀ : Fin 3 → ℝ, ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖ ^ 2) volume :=
+    fun s₀ s => (h_prod s₀ s).integral_prod_right
+  have h_exp2 : Integrable
+      (fun q₀ : Fin 3 → ℝ => Real.exp (-(2 * ε * massShellEnergy m q₀))) volume :=
+    integrable_exp_neg_massShellEnergy hm (mul_pos two_pos hε)
+  refine ⟨fun s => ?_, fun s => ?_, ?_⟩
+  · unfold uAnnih
+    exact (integrable_finsetSum Finset.univ fun s₀ _ => h_right s₀ s).const_mul _
+  · have h_ae : ∀ᵐ k : Fin r → Fin 3 → ℝ ∂volume, ∀ s₀ : Fin M_mode.ν,
+        Integrable (fun q₀ : Fin 3 → ℝ =>
+          ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖ ^ 2) volume :=
+      Filter.eventually_all.mpr fun s₀ =>
+        ((integrable_prod_iff' (h_prod s₀ s).1).mp (h_prod s₀ s)).1
+    filter_upwards [h_ae] with k hk
+    unfold fockAnnihOp uAnnih
+    have hr_nn : (0 : ℝ) ≤ (r : ℝ) + 1 := by positivity
+    have h_sqrt_sq : ‖(Real.sqrt (r + 1 : ℝ) : ℂ)‖ ^ 2 = (r : ℝ) + 1 := by
+      rw [Complex.norm_real, Real.norm_of_nonneg (Real.sqrt_nonneg _), Real.sq_sqrt hr_nn]
+    have h_damp_sq :
+        ‖(Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (k b))) : ℂ)‖ ^ 2 ≤
+          Real.exp (-(4 * ε * (r : ℝ) * m)) := by
+      rw [Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le]
+      exact sq_exp_neg_two_mul_sum_massShellEnergy_le hm hε k
+    let I_s : Fin M_mode.ν → ℂ := fun s₀ =>
+      ∫ q₀ : Fin 3 → ℝ,
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)
+    have h_I_sq : ∀ s₀ : Fin M_mode.ν,
+        ‖I_s s₀‖ ^ 2 ≤
+          (conjModeBound M_mode ^ 2 *
+            ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+            ∫ q₀ : Fin 3 → ℝ, ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖ ^ 2 := by
+      intro s₀
+      let u : (Fin 3 → ℝ) → ℝ := fun q₀ =>
+        conjModeBound M_mode * Real.exp (-(ε * massShellEnergy m q₀))
+      let v : (Fin 3 → ℝ) → ℝ := fun q₀ =>
+        ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖
+      have hu_m : Measurable u :=
+        measurable_const.mul
+          (Real.continuous_exp.comp
+            ((continuous_const.mul (continuous_massShellEnergy m)).neg)).measurable
+      have h_cons_m : Measurable
+          (fun q₀ : Fin 3 → ℝ =>
+            ((Fin.cons q₀ k : Fin (r + 1) → Fin 3 → ℝ),
+              (Fin.cons s₀ s : Fin (r + 1) → Fin M_mode.ν))) :=
+        (measurable_finCons_left k).prodMk measurable_const
+      have hv_m : Measurable v := (hG_m.comp h_cons_m).norm
+      have hu_sq_eq : (fun q₀ : Fin 3 → ℝ => u q₀ ^ 2) =
+          fun q₀ => conjModeBound M_mode ^ 2 * Real.exp (-(2 * ε * massShellEnergy m q₀)) := by
+        ext q₀
+        dsimp [u]
+        rw [mul_pow, sq (Real.exp _), ← Real.exp_add]
+        ring_nf
+      have hu_sq : Integrable (fun q₀ => u q₀ ^ 2) volume := by
+        rw [hu_sq_eq]
+        exact h_exp2.const_mul _
+      have hv_sq : Integrable (fun q₀ => v q₀ ^ 2) volume := hk s₀
+      have huv_int : Integrable (fun q₀ => u q₀ * v q₀) volume := by
+        refine (hu_sq.add hv_sq).mono' (hu_m.mul hv_m).aestronglyMeasurable
+          (Filter.Eventually.of_forall fun q₀ => ?_)
+        have hu0 : 0 ≤ u q₀ := mul_nonneg (conjModeBound_nonneg M_mode) (Real.exp_pos _).le
+        have hv0 : 0 ≤ v q₀ := norm_nonneg _
+        rw [Real.norm_of_nonneg (mul_nonneg hu0 hv0)]
+        change u q₀ * v q₀ ≤ u q₀ ^ 2 + v q₀ ^ 2
+        nlinarith [sq_nonneg (u q₀ - v q₀), mul_nonneg hu0 hv0]
+      have h_norm_le : ‖I_s s₀‖ ≤ ∫ q₀ : Fin 3 → ℝ, u q₀ * v q₀ := by
+        refine (norm_integral_le_integral_norm _).trans ?_
+        refine integral_mono_of_nonneg (Filter.Eventually.of_forall fun _ => norm_nonneg _)
+          huv_int (Filter.Eventually.of_forall fun q₀ => ?_)
+        dsimp only [u, v]
+        rw [norm_mul, norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le]
+        refine mul_le_mul_of_nonneg_right ?_ (norm_nonneg _)
+        calc Real.exp (-(ε * massShellEnergy m q₀)) * ‖conjMode M_mode s₀ q₀ α₀‖
+            ≤ Real.exp (-(ε * massShellEnergy m q₀)) * conjModeBound M_mode :=
+              mul_le_mul_of_nonneg_left (norm_conjMode_le M_mode s₀ q₀ α₀) (Real.exp_pos _).le
+          _ = conjModeBound M_mode * Real.exp (-(ε * massShellEnergy m q₀)) := mul_comm _ _
+      calc ‖I_s s₀‖ ^ 2
+          ≤ (∫ q₀ : Fin 3 → ℝ, u q₀ * v q₀) ^ 2 :=
+            pow_le_pow_left₀ (norm_nonneg _) h_norm_le 2
+        _ ≤ (∫ q₀ : Fin 3 → ℝ, u q₀ ^ 2) * ∫ q₀ : Fin 3 → ℝ, v q₀ ^ 2 :=
+            sq_integral_mul_le_of_nonneg hu_m hv_m
+              (fun _ => mul_nonneg (conjModeBound_nonneg M_mode) (Real.exp_pos _).le)
+              (fun _ => norm_nonneg _) hu_sq hv_sq
+        _ = (conjModeBound M_mode ^ 2 *
+              ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+              ∫ q₀ : Fin 3 → ℝ, ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖ ^ 2 := by
+            rw [hu_sq_eq, integral_const_mul]
+    have h_sum_I : ‖∑ s₀ : Fin M_mode.ν, I_s s₀‖ ^ 2 ≤
+        (M_mode.ν : ℝ) * ∑ s₀ : Fin M_mode.ν, ‖I_s s₀‖ ^ 2 := by
+      have h_tri := pow_le_pow_left₀ (norm_nonneg _) (norm_sum_le Finset.univ I_s) 2
+      have h_cs := finset_sq_sum_le_card_mul_sum_sq Finset.univ (fun s₀ => ‖I_s s₀‖)
+      rw [Finset.card_univ, Fintype.card_fin] at h_cs
+      exact h_tri.trans h_cs
+    rw [norm_mul, norm_mul, mul_pow, mul_pow, h_sqrt_sq]
+    calc ((r : ℝ) + 1) *
+          ‖(Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (k b))) : ℂ)‖ ^ 2 *
+          ‖∑ s₀ : Fin M_mode.ν, I_s s₀‖ ^ 2
+        ≤ ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+            ((M_mode.ν : ℝ) * ∑ s₀ : Fin M_mode.ν, ‖I_s s₀‖ ^ 2) := by
+          exact mul_le_mul
+            (mul_le_mul_of_nonneg_left h_damp_sq hr_nn)
+            h_sum_I (sq_nonneg _) (by positivity)
+      _ ≤ ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+            ((M_mode.ν : ℝ) *
+              ∑ s₀ : Fin M_mode.ν,
+                (conjModeBound M_mode ^ 2 *
+                  ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) *
+                  ∫ q₀ : Fin 3 → ℝ, ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖ ^ 2) := by
+          refine mul_le_mul_of_nonneg_left ?_ (by positivity)
+          exact mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun s₀ _ => h_I_sq s₀) (by positivity)
+      _ = _ := by
+          rw [← Finset.mul_sum]
+          ring
+  · let pref_a : ℝ := ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+      ((M_mode.ν : ℝ) * conjModeBound M_mode ^ 2 *
+        ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀)))
+    have h_each_s : ∀ s : Fin r → Fin M_mode.ν,
+        (∫ k : Fin r → Fin 3 → ℝ, uAnnih M_mode ε G r (k, s)) =
+          pref_a *
+            ∑ s₀ : Fin M_mode.ν,
+              ∫ k_ext : Fin (r + 1) → Fin 3 → ℝ,
+                ‖G (r + 1) (k_ext, Fin.cons s₀ s)‖ ^ 2 := by
+      intro s
+      unfold uAnnih
+      change (∫ k : Fin r → Fin 3 → ℝ,
+        pref_a * ∑ s₀ : Fin M_mode.ν,
+          ∫ q₀ : Fin 3 → ℝ, ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖ ^ 2) = _
+      rw [integral_const_mul,
+          MeasureTheory.integral_finsetSum Finset.univ fun s₀ _ => h_right s₀ s]
+      refine congrArg (pref_a * ·) (Finset.sum_congr rfl fun s₀ _ => ?_)
+      rw [← integral_prod_symm _ (h_prod s₀ s), ← mp₀.integral_comp']
+      refine integral_congr_ae (Filter.Eventually.of_forall fun ⟨q₀, k⟩ => ?_)
+      change ‖G (r + 1) (Fin.cons q₀ k, Fin.cons s₀ s)‖ ^ 2 =
+        ‖G (r + 1) (e₀ (q₀, k), Fin.cons s₀ s)‖ ^ 2
+      rw [he₀]
+    simp_rw [h_each_s, ← Finset.mul_sum]
+    refine congrArg (pref_a * ·) ?_
+    rw [Finset.sum_comm]
+    let es₀ := (MeasurableEquiv.piFinSuccAbove
+      (fun _ : Fin (r + 1) => Fin M_mode.ν) 0).toEquiv.symm
+    have h_es₀ : ∀ (s₀ : Fin M_mode.ν) (s : Fin r → Fin M_mode.ν),
+        Fin.cons s₀ s = es₀ (s₀, s) := by
+      intro s₀ s
+      ext i
+      refine Fin.cases ?_ ?_ i <;>
+        simp [es₀]
+    simp_rw [h_es₀]
+    rw [← Fintype.sum_prod_type (f := fun ps : Fin M_mode.ν × (Fin r → Fin M_mode.ν) =>
+      ∫ k_ext : Fin (r + 1) → Fin 3 → ℝ, ‖G (r + 1) (k_ext, es₀ ps)‖ ^ 2),
+      Equiv.sum_comp es₀ (fun s_ext =>
+        ∫ k_ext : Fin (r + 1) → Fin 3 → ℝ, ‖G (r + 1) (k_ext, s_ext)‖ ^ 2),
+      ← integral_fockSectorMeasure_eq_sum_spin hG_sq_int]
+
+noncomputable def prependShiftConfig {ι : Type*} (α₀ : ι) (ε : ℝ) (hε : 0 < ε)
+    (A : OSConfig ι) : OSConfig ι :=
+  osFieldPrependConfig α₀ (euclidTimeVec ε + euclidSpatialVec 0)
+    (time_pos_euclidTimeVec_add_spatial hε 0) (osConfigTimeShift ε hε.le A)
+
+lemma osPrependShiftLM_zero_osBasisPre {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    (D : OSReflectionPositiveData R_rep S) (α₀ : ι) (ε : ℝ) (hε : 0 < ε)
+    (A : OSConfig ι) :
+    osPrependShiftLM D α₀ 0 ε hε (osBasisPre D A) =
+      osBasisPre D (prependShiftConfig α₀ ε hε A) := by
+  unfold osPrependShiftLM osTimeShiftLM osFieldPrependLM prependShiftConfig
+  rw [LinearMap.comp_apply, osLiftConfigMap_osBasisPre, osLiftConfigMap_osBasisPre]
+
+lemma prependShiftConfig_val {ι : Type*} (α₀ : ι) (ε : ℝ) (hε : 0 < ε)
+    (A : OSConfig ι) :
+    (prependShiftConfig α₀ ε hε A).2.2.val =
+      Fin.cons (euclidTimeVec ε) (fun i => A.2.2.val i + euclidTimeVec (2 * ε)) := by
+  have hx₀ : euclidTimeVec ε + euclidSpatialVec 0 = euclidTimeVec ε := by
+    rw [euclidSpatialVec_zero, add_zero]
+  change osPrependPoint A.1 (euclidTimeVec ε + euclidSpatialVec 0)
+    (fun i => A.2.2.val i + euclidTimeVec ε) = _
+  rw [hx₀]
+  ext i μ
+  refine Fin.cases ?_ (fun j => ?_) i
+  · rfl
+  · simp only [osPrependPoint, Fin.cons_succ, Pi.add_apply, euclidTimeVec]
+    split_ifs <;> ring
+
+lemma integrable_annih_fockConfigSector {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (α₀ : ι) {ε : ℝ} (hε : 0 < ε) (A : OSConfig ι) (r : ℕ)
+    (x : FockSectorDom M_mode.ν r) (s₀ : Fin M_mode.ν) :
+    Integrable (fun q₀ : Fin 3 → ℝ =>
+      ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+        fockConfigSector M_mode A (r + 1) (Fin.cons q₀ x.1, Fin.cons s₀ x.2)) volume := by
+  have h_πL : ∀ (π : Equiv.Perm (Fin (r + 1))) (L' : PartialPairing A.1 (r + 1)),
+      Integrable (fun q₀ : Fin 3 → ℝ =>
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          (η ^ permInversions π *
+            fockPartialTerm M_mode A.2.1 (euclidLaplace A.2.2.val) L'
+              (fockSectorPermEquiv M_mode.ν (r + 1) π
+                (Fin.cons q₀ x.1, Fin.cons s₀ x.2)))) volume := by
+    intro π L'
+    obtain ⟨B_L, _, hBL⟩ :=
+      norm_fockPartialTerm_euclidLaplace_le_const hm M_mode hC A.2.1 A.2.2.2 L'
+    let C_c : ℝ := conjModeBound M_mode * B_L
+    have h_dom : Integrable
+        (fun q₀ : Fin 3 → ℝ => C_c * Real.exp (-(ε * massShellEnergy m q₀))) volume :=
+      (integrable_exp_neg_massShellEnergy hm hε).const_mul C_c
+    have h_cons_meas : Measurable
+        (fun q₀ : Fin 3 → ℝ =>
+          ((Fin.cons q₀ x.1 : Fin (r + 1) → Fin 3 → ℝ),
+            (Fin.cons s₀ x.2 : Fin (r + 1) → Fin M_mode.ν))) :=
+      (measurable_finCons_left x.1).prodMk measurable_const
+    have h_meas : Measurable (fun q₀ : Fin 3 → ℝ =>
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          (η ^ permInversions π *
+            fockPartialTerm M_mode A.2.1 (euclidLaplace A.2.2.val) L'
+              (fockSectorPermEquiv M_mode.ν (r + 1) π
+                (Fin.cons q₀ x.1, Fin.cons s₀ x.2)))) :=
+      (((Complex.continuous_ofReal.comp
+        (Real.continuous_exp.comp ((continuous_const.mul (continuous_massShellEnergy m)).neg))
+          ).measurable).mul (measurable_conjMode M_mode s₀ α₀)).mul
+        (measurable_const.mul
+          ((measurable_fockPartialTerm M_mode hC A.2.1
+            (partialMomentumBound_euclidLaplace hm A.2.2.2) L').comp
+            ((fockSectorPermEquiv M_mode.ν (r + 1) π).measurable.comp h_cons_meas)))
+    refine h_dom.mono' h_meas.aestronglyMeasurable (Filter.Eventually.of_forall fun q₀ => ?_)
+    rw [norm_mul, norm_mul, norm_mul, norm_eta_pow M_mode.hη, one_mul,
+        Complex.norm_real, Real.norm_of_nonneg (Real.exp_pos _).le]
+    calc Real.exp (-(ε * massShellEnergy m q₀)) * ‖conjMode M_mode s₀ q₀ α₀‖ *
+          ‖fockPartialTerm M_mode A.2.1 (euclidLaplace A.2.2.val) L'
+            (fockSectorPermEquiv M_mode.ν (r + 1) π (Fin.cons q₀ x.1, Fin.cons s₀ x.2))‖
+        ≤ Real.exp (-(ε * massShellEnergy m q₀)) * conjModeBound M_mode * B_L :=
+          mul_le_mul
+            (mul_le_mul_of_nonneg_left (norm_conjMode_le M_mode s₀ q₀ α₀) (Real.exp_pos _).le)
+            (hBL _) (norm_nonneg _)
+            (mul_nonneg (Real.exp_pos _).le (conjModeBound_nonneg M_mode))
+      _ = C_c * Real.exp (-(ε * massShellEnergy m q₀)) := by dsimp [C_c]; ring
+  have h_eq : (fun q₀ : Fin 3 → ℝ =>
+      ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+        fockConfigSector M_mode A (r + 1) (Fin.cons q₀ x.1, Fin.cons s₀ x.2)) =
+      fun q₀ =>
+        ((((r + 1).factorial : ℝ).sqrt⁻¹ : ℝ) : ℂ) *
+          ∑ π : Equiv.Perm (Fin (r + 1)), ∑ L' : PartialPairing A.1 (r + 1),
+            ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+              (η ^ permInversions π *
+                fockPartialTerm M_mode A.2.1 (euclidLaplace A.2.2.val) L'
+                  (fockSectorPermEquiv M_mode.ν (r + 1) π
+                    (Fin.cons q₀ x.1, Fin.cons s₀ x.2))) := by
+    ext q₀
+    unfold fockConfigSector symmSector fockRawSector
+    simp_rw [← Finset.mul_sum]
+    ring
+  rw [h_eq]
+  exact (integrable_finsetSum Finset.univ fun π _ =>
+    integrable_finsetSum Finset.univ fun L' _ => h_πL π L').const_mul _
+
+lemma sum_fockCreateOp_fockConfigSector_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (α₀ : ι) (ε : ℝ)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι)
+    (r : ℕ) (x : FockSectorDom M_mode.ν (r + 1)) :
+    (∑ a ∈ S_fin, c a *
+      fockCreateOp M_mode α₀ ε (fockConfigSector M_mode (cfg a)) r x) =
+      fockCreateOp M_mode α₀ ε (fockSumSector M_mode S_fin c cfg) r x := by
+  unfold fockCreateOp fockSumSector
+  have h_pt : ∀ a ∈ S_fin,
+      c a * ((((Real.sqrt (r + 1 : ℝ))⁻¹ : ℝ) : ℂ) *
+        ∑ p : Fin (r + 1),
+          η ^ (p : ℕ) *
+            ((Real.exp (-(ε * massShellEnergy m (x.1 p))) : ℂ) * M_mode.w (x.2 p) (x.1 p) α₀) *
+            (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b)))) : ℂ) *
+            fockConfigSector M_mode (cfg a) r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)) =
+      (((Real.sqrt (r + 1 : ℝ))⁻¹ : ℝ) : ℂ) *
+        ∑ p : Fin (r + 1),
+          (η ^ (p : ℕ) *
+            ((Real.exp (-(ε * massShellEnergy m (x.1 p))) : ℂ) * M_mode.w (x.2 p) (x.1 p) α₀) *
+            (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 (p.succAbove b)))) : ℂ)) *
+            (c a * fockConfigSector M_mode (cfg a) r (x.1 ∘ p.succAbove, x.2 ∘ p.succAbove)) := by
+    intro a _
+    rw [← mul_assoc, mul_comm (c a), mul_assoc, Finset.mul_sum]
+    refine congrArg (_ * ·) (Finset.sum_congr rfl fun p _ => ?_)
+    ring
+  rw [Finset.sum_congr rfl h_pt, ← Finset.mul_sum, Finset.sum_comm]
+  refine congrArg (_ * ·) (Finset.sum_congr rfl fun p _ => ?_)
+  rw [← Finset.mul_sum]
+
+lemma sum_fockAnnihOp_fockConfigSector_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (α₀ : ι) {ε : ℝ} (hε : 0 < ε)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι)
+    (r : ℕ) (x : FockSectorDom M_mode.ν r) :
+    (∑ a ∈ S_fin, c a *
+      fockAnnihOp M_mode α₀ ε (fockConfigSector M_mode (cfg a)) r x) =
+      fockAnnihOp M_mode α₀ ε (fockSumSector M_mode S_fin c cfg) r x := by
+  unfold fockAnnihOp fockSumSector
+  let pref : ℂ :=
+    (Real.sqrt (r + 1 : ℝ) : ℂ) *
+      (Real.exp (-(2 * ε * ∑ b : Fin r, massShellEnergy m (x.1 b))) : ℂ)
+  change (∑ a ∈ S_fin, c a *
+    (pref * ∑ s₀ : Fin M_mode.ν,
+      ∫ q₀ : Fin 3 → ℝ,
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          fockConfigSector M_mode (cfg a) (r + 1) (Fin.cons q₀ x.1, Fin.cons s₀ x.2))) =
+    pref * ∑ s₀ : Fin M_mode.ν,
+      ∫ q₀ : Fin 3 → ℝ,
+        ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+          ∑ a ∈ S_fin, c a *
+            fockConfigSector M_mode (cfg a) (r + 1) (Fin.cons q₀ x.1, Fin.cons s₀ x.2)
+  have h_pt : ∀ a ∈ S_fin,
+      c a * (pref * ∑ s₀ : Fin M_mode.ν,
+        ∫ q₀ : Fin 3 → ℝ,
+          ((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+            fockConfigSector M_mode (cfg a) (r + 1) (Fin.cons q₀ x.1, Fin.cons s₀ x.2)) =
+      pref * ∑ s₀ : Fin M_mode.ν,
+        ∫ q₀ : Fin 3 → ℝ,
+          c a * (((Real.exp (-(ε * massShellEnergy m q₀)) : ℂ) * conjMode M_mode s₀ q₀ α₀) *
+            fockConfigSector M_mode (cfg a) (r + 1) (Fin.cons q₀ x.1, Fin.cons s₀ x.2)) := by
+    intro a _
+    rw [← mul_assoc, mul_comm (c a), mul_assoc, Finset.mul_sum]
+    refine congrArg (pref * ·) (Finset.sum_congr rfl fun s₀ _ => ?_)
+    rw [← integral_const_mul]
+  rw [Finset.sum_congr rfl h_pt, ← Finset.mul_sum, Finset.sum_comm]
+  refine congrArg (pref * ·) (Finset.sum_congr rfl fun s₀ _ => ?_)
+  rw [← MeasureTheory.integral_finsetSum S_fin fun a _ =>
+    (integrable_annih_fockConfigSector hm M_mode hC α₀ hε (cfg a) r x s₀).const_mul (c a)]
+  refine integral_congr_ae (Filter.Eventually.of_forall fun q₀ => ?_)
+  dsimp only
+  rw [Finset.mul_sum]
+  exact Finset.sum_congr rfl fun a _ => by ring
+
+lemma fockSumSector_prependShiftConfig_zero_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (α₀ : ι) {ε : ℝ} (hε : 0 < ε)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι)
+    (x : FockSectorDom M_mode.ν 0) :
+    fockSumSector M_mode S_fin c (fun a => prependShiftConfig α₀ ε hε (cfg a)) 0 x =
+      fockAnnihOp M_mode α₀ ε (fockSumSector M_mode S_fin c cfg) 0 x := by
+  rw [← sum_fockAnnihOp_fockConfigSector_eq hm M_mode hC α₀ hε S_fin c cfg 0 x]
+  unfold fockSumSector
+  refine Finset.sum_congr rfl fun a _ => ?_
+  congr 1
+  unfold fockConfigSector
+  rw [prependShiftConfig_val α₀ ε hε (cfg a)]
+  exact symmSector_prependShift_zero_eq hm M_mode hC α₀ (cfg a).2.1 hε (cfg a).2.2.2 x
+
+lemma fockSumSector_prependShiftConfig_succ_eq {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (α₀ : ι) {ε : ℝ} (hε : 0 < ε)
+    {κ : Type*} (S_fin : Finset κ) (c : κ → ℂ) (cfg : κ → OSConfig ι)
+    (r : ℕ) (x : FockSectorDom M_mode.ν (r + 1)) :
+    fockSumSector M_mode S_fin c (fun a => prependShiftConfig α₀ ε hε (cfg a)) (r + 1) x =
+      fockCreateOp M_mode α₀ ε (fockSumSector M_mode S_fin c cfg) r x +
+        fockAnnihOp M_mode α₀ ε (fockSumSector M_mode S_fin c cfg) (r + 1) x := by
+  rw [← sum_fockCreateOp_fockConfigSector_eq M_mode α₀ ε S_fin c cfg r x,
+      ← sum_fockAnnihOp_fockConfigSector_eq hm M_mode hC α₀ hε S_fin c cfg (r + 1) x,
+      ← Finset.sum_add_distrib]
+  unfold fockSumSector
+  refine Finset.sum_congr rfl fun a _ => ?_
+  rw [← mul_add]
+  congr 1
+  unfold fockConfigSector
+  rw [prependShiftConfig_val α₀ ε hε (cfg a)]
+  exact symmSector_prependShift_succ_eq hm M_mode hC α₀ (cfg a).2.1 hε (cfg a).2.2.2 x
+
+lemma integral_exp_neg_two_mul_massShellEnergy_le {m : ℝ} (hm : 0 < m)
+    {ε : ℝ} (hε : 0 < ε) :
+    (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) ≤
+      (24 * (1 / m + 1) ^ 4 * ∫ p : Fin 3 → ℝ, ((1 + ‖p‖) ^ 4)⁻¹) *
+        (1 + ε⁻¹) ^ 4 := by
+  let c : ℝ := 2 * ε
+  have hc : 0 < c := by positivity
+  let K : ℝ := (1 / m + 1) / c
+  have hK_nn : 0 ≤ K := by positivity
+  have hc_inv : c⁻¹ ≤ 1 + ε⁻¹ := by
+    have h1 : (2 * ε)⁻¹ ≤ ε⁻¹ := inv_anti₀ hε (by linarith)
+    have h2 : 0 ≤ ε⁻¹ := inv_nonneg.mpr hε.le
+    dsimp [c]
+    linarith
+  have hK_pow : K ^ 4 ≤ (1 / m + 1) ^ 4 * (1 + ε⁻¹) ^ 4 := by
+    dsimp [K]
+    rw [div_eq_mul_inv, mul_pow]
+    exact mul_le_mul_of_nonneg_left
+      (pow_le_pow_left₀ (inv_nonneg.mpr hc.le) hc_inv 4) (by positivity)
+  have h_pt : ∀ p : Fin 3 → ℝ,
+      Real.exp (-(2 * ε * massShellEnergy m p)) ≤
+        (24 * ((1 / m + 1) ^ 4 * (1 + ε⁻¹) ^ 4)) * ((1 + ‖p‖) ^ 4)⁻¹ := by
+    intro p
+    have hω_pos : 0 < massShellEnergy m p := massShellEnergy_pos hm p
+    have hcω_nn : 0 ≤ c * massShellEnergy m p := mul_nonneg hc.le hω_pos.le
+    have h_lin : 1 + ‖p‖ ≤ K * (c * massShellEnergy m p) := by
+      have h1 := one_add_norm_le_scale_massShellEnergy hm p
+      have hK_eq : K * (c * massShellEnergy m p) =
+          (1 / m + 1) * massShellEnergy m p := by
+        dsimp [K]
+        field_simp [hc.ne']
+      linarith
+    have h_pow : (1 + ‖p‖) ^ 4 ≤ K ^ 4 * (c * massShellEnergy m p) ^ 4 :=
+      (pow_le_pow_left₀ (by positivity) h_lin 4).trans_eq (mul_pow _ _ 4)
+    have h_exp_fac :
+        (c * massShellEnergy m p) ^ 4 / (24 : ℝ) ≤
+          Real.exp (c * massShellEnergy m p) := by
+      simpa [Nat.factorial] using
+        Real.pow_div_factorial_le_exp (c * massShellEnergy m p) hcω_nn 4
+    have h_prod :
+        (1 + ‖p‖) ^ 4 * Real.exp (-(c * massShellEnergy m p)) ≤ 24 * K ^ 4 := by
+      calc (1 + ‖p‖) ^ 4 * Real.exp (-(c * massShellEnergy m p))
+          ≤ (K ^ 4 * (c * massShellEnergy m p) ^ 4) *
+              Real.exp (-(c * massShellEnergy m p)) :=
+            mul_le_mul_of_nonneg_right h_pow (Real.exp_pos _).le
+        _ = (24 * K ^ 4) * (((c * massShellEnergy m p) ^ 4 / 24) *
+              Real.exp (-(c * massShellEnergy m p))) := by ring
+        _ ≤ (24 * K ^ 4) *
+              (Real.exp (c * massShellEnergy m p) *
+                Real.exp (-(c * massShellEnergy m p))) :=
+            mul_le_mul_of_nonneg_left
+              (mul_le_mul_of_nonneg_right h_exp_fac (Real.exp_pos _).le) (by positivity)
+        _ = 24 * K ^ 4 := by
+            rw [← Real.exp_add, add_neg_cancel, Real.exp_zero, mul_one]
+    have h_pos4 : 0 < (1 + ‖p‖) ^ 4 := by positivity
+    have h_le_K : Real.exp (-(c * massShellEnergy m p)) ≤
+        (24 * K ^ 4) * ((1 + ‖p‖) ^ 4)⁻¹ :=
+      (le_mul_inv_iff₀' h_pos4).mpr h_prod
+    exact h_le_K.trans (mul_le_mul_of_nonneg_right
+      (mul_le_mul_of_nonneg_left hK_pow (by positivity)) (by positivity))
+  calc (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀)))
+      ≤ ∫ p : Fin 3 → ℝ,
+          (24 * ((1 / m + 1) ^ 4 * (1 + ε⁻¹) ^ 4)) * ((1 + ‖p‖) ^ 4)⁻¹ :=
+        integral_mono_of_nonneg (Filter.Eventually.of_forall fun _ => (Real.exp_pos _).le)
+          (integrable_massShellDecay.const_mul _) (Filter.Eventually.of_forall h_pt)
+    _ = (24 * (1 / m + 1) ^ 4 * ∫ p : Fin 3 → ℝ, ((1 + ‖p‖) ^ 4)⁻¹) *
+          (1 + ε⁻¹) ^ 4 := by
+        rw [integral_const_mul]
+        ring
+
+lemma succ_mul_exp_neg_four_le {m : ℝ} (hm : 0 < m) {ε : ℝ} (hε : 0 < ε) (r : ℕ) :
+    ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) ≤
+      (1 + (4 * m)⁻¹) * (1 + ε⁻¹) := by
+  let u : ℝ := 4 * ε * (r : ℝ) * m
+  have hu_nn : 0 ≤ u := by positivity
+  have h_u_le : u ≤ Real.exp u := by linarith [Real.add_one_le_exp u]
+  have h_prod : u * Real.exp (-u) ≤ 1 := by
+    calc u * Real.exp (-u)
+        ≤ Real.exp u * Real.exp (-u) :=
+          mul_le_mul_of_nonneg_right h_u_le (Real.exp_pos _).le
+      _ = 1 := by rw [← Real.exp_add, add_neg_cancel, Real.exp_zero]
+  have h4εm : 0 < 4 * m * ε := by positivity
+  have hr_le : (r : ℝ) * Real.exp (-u) ≤ (4 * m)⁻¹ * ε⁻¹ := by
+    have h_mul : (4 * m * ε) * ((r : ℝ) * Real.exp (-u)) ≤
+        (4 * m * ε) * ((4 * m)⁻¹ * ε⁻¹) := by
+      have h_rhs : (4 * m * ε) * ((4 * m)⁻¹ * ε⁻¹) = 1 := by
+        field_simp [hm.ne', hε.ne']
+      have h_lhs : (4 * m * ε) * ((r : ℝ) * Real.exp (-u)) = u * Real.exp (-u) := by
+        dsimp [u]
+        ring
+      rw [h_lhs, h_rhs]
+      exact h_prod
+    exact le_of_mul_le_mul_left h_mul h4εm
+  have h1_le : Real.exp (-u) ≤ 1 := Real.exp_le_one_iff.mpr (by linarith)
+  have h_inv_m : 0 ≤ (4 * m)⁻¹ := inv_nonneg.mpr (by positivity)
+  have h_inv_ε : 0 ≤ ε⁻¹ := inv_nonneg.mpr hε.le
+  calc ((r : ℝ) + 1) * Real.exp (-u)
+      = (r : ℝ) * Real.exp (-u) + Real.exp (-u) := add_one_mul _ _
+    _ ≤ (4 * m)⁻¹ * ε⁻¹ + 1 := add_le_add hr_le h1_le
+    _ ≤ (1 + (4 * m)⁻¹) * (1 + ε⁻¹) := by nlinarith
+
+lemma sum_range_le_four_mul_of_rec {N : ℕ} {J J' : ℕ → ℝ} {C_op : ℝ}
+    (hCop : 0 ≤ C_op) (hJ_nn : ∀ r, 0 ≤ J r)
+    (hJ_gt : ∀ s, N < s → J s = 0)
+    (hJ'_zero : J' 0 ≤ 2 * C_op * J 1)
+    (hJ'_succ : ∀ r, J' (r + 1) ≤ 2 * C_op * J r + 2 * C_op * J (r + 2)) :
+    (∑ r ∈ Finset.range (N + 2), J' r) ≤ 4 * C_op * ∑ r ∈ Finset.range (N + 1), J r := by
+  have hJ_N1 : J (N + 1) = 0 := hJ_gt (N + 1) (Nat.lt_succ_self N)
+  have hJ_N2 : J (N + 2) = 0 := hJ_gt (N + 2) (by omega)
+  have h_tail_sum :
+      J 1 + (∑ r ∈ Finset.range (N + 1), J (r + 2)) ≤ ∑ r ∈ Finset.range (N + 1), J r := by
+    have hs1 : J 1 + (∑ r ∈ Finset.range (N + 1), J (r + 2)) =
+        ∑ r ∈ Finset.range (N + 2), J (r + 1) := by
+      rw [Finset.sum_range_succ' (fun r => J (r + 1)) (N + 1), add_comm]
+    have hs2 : (∑ r ∈ Finset.range (N + 2), J (r + 1)) + J 0 =
+        ∑ r ∈ Finset.range (N + 3), J r :=
+      (Finset.sum_range_succ' J (N + 2)).symm
+    have hs3 : (∑ r ∈ Finset.range (N + 3), J r) = ∑ r ∈ Finset.range (N + 1), J r := by
+      rw [Finset.sum_range_succ J (N + 2), Finset.sum_range_succ J (N + 1), hJ_N1, hJ_N2,
+          add_zero, add_zero]
+    linarith [hJ_nn 0]
+  rw [Finset.sum_range_succ' J' (N + 1)]
+  have h_rec_sum : (∑ r ∈ Finset.range (N + 1), J' (r + 1)) ≤
+      (2 * C_op) * (∑ r ∈ Finset.range (N + 1), J r) +
+        (2 * C_op) * ∑ r ∈ Finset.range (N + 1), J (r + 2) := by
+    calc (∑ r ∈ Finset.range (N + 1), J' (r + 1))
+        ≤ ∑ r ∈ Finset.range (N + 1), (2 * C_op * J r + 2 * C_op * J (r + 2)) :=
+          Finset.sum_le_sum fun r _ => hJ'_succ r
+      _ = (2 * C_op) * (∑ r ∈ Finset.range (N + 1), J r) +
+            (2 * C_op) * ∑ r ∈ Finset.range (N + 1), J (r + 2) := by
+          rw [Finset.sum_add_distrib, ← Finset.mul_sum, ← Finset.mul_sum]
+  have h_mul_tail :
+      (2 * C_op) * (J 1 + ∑ r ∈ Finset.range (N + 1), J (r + 2)) ≤
+        (2 * C_op) * ∑ r ∈ Finset.range (N + 1), J r :=
+    mul_le_mul_of_nonneg_left h_tail_sum (mul_nonneg zero_le_two hCop)
+  linarith
+
+lemma exists_wickMassShell_damped_const {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) :
+    ∃ C₀ : ℝ, 0 ≤ C₀ ∧
+      ∀ {ε : ℝ}, 0 < ε →
+        ∃ C_op : ℝ, 0 ≤ C_op ∧
+          C₀ ^ 2 * ((1 + ε⁻¹) ^ 3) ^ 2 = 4 * C_op ∧
+          (∀ r : ℕ,
+            ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+              ((M_mode.ν : ℝ) * M_mode.M ^ 2 *
+                ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) ≤ C_op) ∧
+          (∀ r : ℕ,
+            ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+              ((M_mode.ν : ℝ) * conjModeBound M_mode ^ 2 *
+                ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) ≤ C_op) := by
+  obtain ⟨B_mode, hB_nn, hM_sq, hconj_sq⟩ :
+      ∃ B_mode : ℝ, 0 ≤ B_mode ∧ M_mode.M ^ 2 ≤ B_mode ^ 2 ∧
+        conjModeBound M_mode ^ 2 ≤ B_mode ^ 2 :=
+    ⟨max M_mode.M (conjModeBound M_mode), le_trans M_mode.hM (le_max_left _ _),
+      pow_le_pow_left₀ M_mode.hM (le_max_left _ _) 2,
+      pow_le_pow_left₀ (conjModeBound_nonneg M_mode) (le_max_right _ _) 2⟩
+  obtain ⟨C_I, hCI_nn, hI_le⟩ :
+      ∃ C_I : ℝ, 0 ≤ C_I ∧ ∀ {ε : ℝ}, 0 < ε →
+        (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) ≤
+          C_I * (1 + ε⁻¹) ^ 4 :=
+    ⟨24 * (1 / m + 1) ^ 4 * ∫ p : Fin 3 → ℝ, ((1 + ‖p‖) ^ 4)⁻¹,
+      mul_nonneg (by positivity) (integral_nonneg fun _ => by positivity),
+      fun hε => integral_exp_neg_two_mul_massShellEnergy_le hm hε⟩
+  obtain ⟨C_r, hCr_nn, hr_le⟩ :
+      ∃ C_r : ℝ, 0 ≤ C_r ∧ ∀ {ε : ℝ}, 0 < ε → ∀ r : ℕ,
+        ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) ≤ C_r * (1 + ε⁻¹) :=
+    ⟨1 + (4 * m)⁻¹, by positivity, fun hε r => succ_mul_exp_neg_four_le hm hε r⟩
+  let C_base : ℝ := C_r * ((M_mode.ν : ℝ) * B_mode ^ 2 * C_I)
+  have hCb_nn : 0 ≤ C_base := by positivity
+  refine ⟨Real.sqrt (4 * C_base), Real.sqrt_nonneg _, fun {ε} hε => ?_⟩
+  refine ⟨C_base * (1 + ε⁻¹) ^ 6, by positivity, ?_, ?_, ?_⟩
+  · rw [Real.sq_sqrt (mul_nonneg (by positivity) hCb_nn), ← pow_mul]
+    ring
+  · intro r
+    have hI_nn : 0 ≤ ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀)) :=
+      integral_nonneg fun _ => (Real.exp_pos _).le
+    have h1_ge : 1 ≤ 1 + ε⁻¹ := by linarith [inv_nonneg.mpr hε.le]
+    have h_pow56 : (1 + ε⁻¹) ^ 5 ≤ (1 + ε⁻¹) ^ 6 := pow_le_pow_right₀ h1_ge (by decide)
+    have h_mid : (M_mode.ν : ℝ) * M_mode.M ^ 2 *
+        (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) ≤
+        (M_mode.ν : ℝ) * B_mode ^ 2 * (C_I * (1 + ε⁻¹) ^ 4) :=
+      mul_le_mul (mul_le_mul_of_nonneg_left hM_sq (Nat.cast_nonneg _))
+        (hI_le hε) hI_nn (by positivity)
+    calc ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+          ((M_mode.ν : ℝ) * M_mode.M ^ 2 *
+            ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀)))
+        ≤ (C_r * (1 + ε⁻¹)) *
+            ((M_mode.ν : ℝ) * B_mode ^ 2 * (C_I * (1 + ε⁻¹) ^ 4)) :=
+          mul_le_mul (hr_le hε r) h_mid (by positivity) (by positivity)
+      _ = C_base * (1 + ε⁻¹) ^ 5 := by dsimp [C_base]; ring
+      _ ≤ C_base * (1 + ε⁻¹) ^ 6 := mul_le_mul_of_nonneg_left h_pow56 hCb_nn
+  · intro r
+    have hI_nn : 0 ≤ ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀)) :=
+      integral_nonneg fun _ => (Real.exp_pos _).le
+    have h1_ge : 1 ≤ 1 + ε⁻¹ := by linarith [inv_nonneg.mpr hε.le]
+    have h_pow56 : (1 + ε⁻¹) ^ 5 ≤ (1 + ε⁻¹) ^ 6 := pow_le_pow_right₀ h1_ge (by decide)
+    have h_mid : (M_mode.ν : ℝ) * conjModeBound M_mode ^ 2 *
+        (∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀))) ≤
+        (M_mode.ν : ℝ) * B_mode ^ 2 * (C_I * (1 + ε⁻¹) ^ 4) :=
+      mul_le_mul (mul_le_mul_of_nonneg_left hconj_sq (Nat.cast_nonneg _))
+        (hI_le hε) hI_nn (by positivity)
+    calc ((r : ℝ) + 1) * Real.exp (-(4 * ε * (r : ℝ) * m)) *
+          ((M_mode.ν : ℝ) * conjModeBound M_mode ^ 2 *
+            ∫ q₀ : Fin 3 → ℝ, Real.exp (-(2 * ε * massShellEnergy m q₀)))
+        ≤ (C_r * (1 + ε⁻¹)) *
+            ((M_mode.ν : ℝ) * B_mode ^ 2 * (C_I * (1 + ε⁻¹) ^ 4)) :=
+          mul_le_mul (hr_le hε r) h_mid (by positivity) (by positivity)
+      _ = C_base * (1 + ε⁻¹) ^ 5 := by dsimp [C_base]; ring
+      _ ≤ C_base * (1 + ε⁻¹) ^ 6 := mul_le_mul_of_nonneg_left h_pow56 hCb_nn
+
+theorem wickMassShellOSDampedFieldBounded_of_eq_on_orderedEuclidN
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (C α q) = ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * C (β ∘ Fin.rev) q)
+    (D : OSReflectionPositiveData R_rep S)
+    (htrans : OSTranslationInvariant D.𝒮)
+    (hD : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → D.𝒮 n α x = wickMassShellS m hm η C hC n α x) :
+    OSDampedFieldBounded D := by
+  refine osDampedFieldBounded_of_zero D htrans ?_
+  obtain ⟨C₀, hC₀_nn, hC₀_spec⟩ := exists_wickMassShell_damped_const hm M_mode
+  refine ⟨C₀, 3, hC₀_nn, fun α₀ ε hε Ψ => ?_⟩
+  obtain ⟨C_op, hCop_nn, hC₀_sq, h_pref_M, h_pref_conj⟩ := hC₀_spec hε
+  have h_ker : ∀ A B : OSConfig ι,
+      ⟪fockOSMap hm M_mode hC A, fockOSMap hm M_mode hC B⟫_ℂ = osKernel S D.𝒮 A B := by
+    intro A B
+    rw [osKernel_congr_of_eq_on_orderedEuclidN S hD A B]
+    exact inner_fockOSMap_eq_osKernel hm M_mode hC hC_herm A B
+  obtain ⟨S_fin, c, hΨ_exp⟩ :
+      ∃ (S_fin : Finset (OSConfig ι)) (c : OSConfig ι → ℂ),
+        Ψ = ∑ A ∈ S_fin, c A • osBasisPre D A :=
+    ⟨Ψ.toFinsupp.support, Ψ.toFinsupp, by
+      conv_lhs => rw [osPreHilbert_eq_finsupp_sum_osBasisPre D Ψ]
+      rfl⟩
+  obtain ⟨N, hN⟩ : ∃ N : ℕ, ∀ A ∈ S_fin, A.1 ≤ N :=
+    ⟨S_fin.sup fun A => A.1, fun A hA => Finset.le_sup (f := fun B => B.1) hA⟩
+  have hN' : ∀ A ∈ S_fin, (prependShiftConfig α₀ ε hε A).1 ≤ N + 1 :=
+    fun A hA => Nat.succ_le_succ (hN A hA)
+  have h_map_Ψ :
+      wavepacketOSPreLM D (fockOSMap hm M_mode hC) Ψ =
+        ∑ A ∈ S_fin, c A • fockOSMap hm M_mode hC (id A) := by
+    conv_lhs => rw [hΨ_exp]
+    rw [map_sum]
+    refine Finset.sum_congr rfl fun A _ => ?_
+    rw [LinearMap.map_smul, wavepacketOSPreLM_osBasisPre]
+    rfl
+  have h_map_Ψ' :
+      wavepacketOSPreLM D (fockOSMap hm M_mode hC) (osPrependShiftLM D α₀ 0 ε hε Ψ) =
+        ∑ A ∈ S_fin, c A • fockOSMap hm M_mode hC (prependShiftConfig α₀ ε hε A) := by
+    conv_lhs => rw [hΨ_exp]
+    rw [map_sum, map_sum]
+    refine Finset.sum_congr rfl fun A _ => ?_
+    rw [LinearMap.map_smul, LinearMap.map_smul,
+        osPrependShiftLM_zero_osBasisPre, wavepacketOSPreLM_osBasisPre]
+  let G : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ := fockSumSector M_mode S_fin c id
+  let G' : ∀ r : ℕ, FockSectorDom M_mode.ν r → ℂ :=
+    fockSumSector M_mode S_fin c (prependShiftConfig α₀ ε hε)
+  obtain ⟨J, hJ_def⟩ :
+      ∃ J : ℕ → ℝ, ∀ r, J r =
+        ∫ x : FockSectorDom M_mode.ν r, ‖G r x‖ ^ 2 ∂(fockSectorMeasure M_mode.ν r) :=
+    ⟨fun r => ∫ x, ‖G r x‖ ^ 2 ∂(fockSectorMeasure M_mode.ν r), fun _ => rfl⟩
+  obtain ⟨J', hJ'_def⟩ :
+      ∃ J' : ℕ → ℝ, ∀ r, J' r =
+        ∫ x : FockSectorDom M_mode.ν r, ‖G' r x‖ ^ 2 ∂(fockSectorMeasure M_mode.ν r) :=
+    ⟨fun r => ∫ x, ‖G' r x‖ ^ 2 ∂(fockSectorMeasure M_mode.ν r), fun _ => rfl⟩
+  have hJ_nn : ∀ r : ℕ, 0 ≤ J r := fun r => by
+    rw [hJ_def r]
+    exact integral_nonneg fun _ => sq_nonneg _
+  have hΨ_norm_sq : ‖Ψ‖ ^ 2 = ∑ r ∈ Finset.range (N + 1), J r := by
+    rw [← norm_wavepacketOSPreLM D (fockOSMap hm M_mode hC) h_ker Ψ, h_map_Ψ,
+        sum_fockOSMap_eq_sum_liftSectorToFock hm M_mode hC S_fin c id hN,
+        norm_sq_sum_liftSectorToFock G
+          (measurable_fockSumSector hm M_mode hC S_fin c id)
+          (memLp_fockSumSector hm M_mode hC S_fin c id)]
+    exact Finset.sum_congr rfl fun r _ => (hJ_def r).symm
+  have hΨ'_norm_sq :
+      ‖osPrependShiftLM D α₀ 0 ε hε Ψ‖ ^ 2 = ∑ r ∈ Finset.range (N + 2), J' r := by
+    rw [← norm_wavepacketOSPreLM D (fockOSMap hm M_mode hC) h_ker
+          (osPrependShiftLM D α₀ 0 ε hε Ψ), h_map_Ψ',
+        sum_fockOSMap_eq_sum_liftSectorToFock hm M_mode hC S_fin c
+          (prependShiftConfig α₀ ε hε) hN',
+        norm_sq_sum_liftSectorToFock G'
+          (measurable_fockSumSector hm M_mode hC S_fin c (prependShiftConfig α₀ ε hε))
+          (memLp_fockSumSector hm M_mode hC S_fin c (prependShiftConfig α₀ ε hε))]
+    exact Finset.sum_congr rfl fun r _ => (hJ'_def r).symm
+  have hG'_int_spin : ∀ (r : ℕ) (s : Fin r → Fin M_mode.ν),
+      Integrable (fun k : Fin r → Fin 3 → ℝ => ‖G' r (k, s)‖ ^ 2) volume := by
+    intro r
+    have h_m := ((measurable_fockSumSector hm M_mode hC S_fin c
+      (prependShiftConfig α₀ ε hε) r).norm).pow_const 2
+    have h_int := (memLp_two_iff_integrable_sq_norm
+      (measurable_fockSumSector hm M_mode hC S_fin c
+        (prependShiftConfig α₀ ε hε) r).aestronglyMeasurable).mp
+      (memLp_fockSumSector hm M_mode hC S_fin c (prependShiftConfig α₀ ε hε) r)
+    exact (integrable_fockSectorMeasure_iff_forall_spin h_m).mp h_int
+  have hG'_sum_spin : ∀ r : ℕ,
+      J' r = ∑ s : Fin r → Fin M_mode.ν, ∫ k : Fin r → Fin 3 → ℝ, ‖G' r (k, s)‖ ^ 2 := by
+    intro r
+    rw [hJ'_def r]
+    exact integral_fockSectorMeasure_eq_sum_spin
+      ((memLp_two_iff_integrable_sq_norm
+        (measurable_fockSumSector hm M_mode hC S_fin c
+          (prependShiftConfig α₀ ε hε) r).aestronglyMeasurable).mp
+        (memLp_fockSumSector hm M_mode hC S_fin c (prependShiftConfig α₀ ε hε) r))
+  have hJ'_zero : J' 0 ≤ 2 * C_op * J 1 := by
+    obtain ⟨huA_int, huA_ae, huA_sum⟩ := integrable_and_ae_le_uAnnih hm M_mode α₀ hε G 0
+      (measurable_fockSumSector hm M_mode hC S_fin c id 1)
+      (memLp_fockSumSector hm M_mode hC S_fin c id 1)
+    have h_le_sum : J' 0 ≤
+        ∑ s : Fin 0 → Fin M_mode.ν, ∫ k : Fin 0 → Fin 3 → ℝ, uAnnih M_mode ε G 0 (k, s) := by
+      rw [hG'_sum_spin 0]
+      refine Finset.sum_le_sum fun s _ =>
+        integral_mono_ae (hG'_int_spin 0 s) (huA_int s) ?_
+      filter_upwards [huA_ae s] with k hk
+      have h_eq0 := fockSumSector_prependShiftConfig_zero_eq hm M_mode hC α₀ hε S_fin c id (k, s)
+      dsimp only [id_eq] at h_eq0
+      change ‖fockSumSector M_mode S_fin c (prependShiftConfig α₀ ε hε) 0 (k, s)‖ ^ 2 ≤ _
+      rwa [h_eq0]
+    rw [huA_sum, ← hJ_def 1] at h_le_sum
+    have h1 : J' 0 ≤ C_op * J 1 :=
+      h_le_sum.trans (mul_le_mul_of_nonneg_right (h_pref_conj 0) (hJ_nn 1))
+    linarith [mul_nonneg hCop_nn (hJ_nn 1)]
+  have hJ'_succ : ∀ r : ℕ, J' (r + 1) ≤ 2 * C_op * J r + 2 * C_op * J (r + 2) := by
+    intro r
+    obtain ⟨huC_int, huC_sum⟩ := integrable_and_sum_spin_uCreate hm M_mode hε G r
+      (measurable_fockSumSector hm M_mode hC S_fin c id r)
+      (memLp_fockSumSector hm M_mode hC S_fin c id r)
+    obtain ⟨huA_int, huA_ae, huA_sum⟩ := integrable_and_ae_le_uAnnih hm M_mode α₀ hε G (r + 1)
+      (measurable_fockSumSector hm M_mode hC S_fin c id (r + 2))
+      (memLp_fockSumSector hm M_mode hC S_fin c id (r + 2))
+    have h_le_sum : J' (r + 1) ≤
+        2 * (∑ s : Fin (r + 1) → Fin M_mode.ν,
+          ∫ k : Fin (r + 1) → Fin 3 → ℝ, uCreate M_mode ε G r (k, s)) +
+        2 * (∑ s : Fin (r + 1) → Fin M_mode.ν,
+          ∫ k : Fin (r + 1) → Fin 3 → ℝ, uAnnih M_mode ε G (r + 1) (k, s)) := by
+      rw [hG'_sum_spin (r + 1), Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib]
+      refine Finset.sum_le_sum fun s _ => ?_
+      rw [← integral_const_mul, ← integral_const_mul,
+          ← integral_add ((huC_int s).const_mul 2) ((huA_int s).const_mul 2)]
+      refine integral_mono_ae (hG'_int_spin (r + 1) s)
+        (((huC_int s).const_mul 2).add ((huA_int s).const_mul 2)) ?_
+      filter_upwards [huA_ae s] with k hk
+      have h_eqs := fockSumSector_prependShiftConfig_succ_eq hm M_mode hC α₀ hε S_fin c id r (k, s)
+      dsimp only [id_eq] at h_eqs
+      change ‖fockSumSector M_mode S_fin c (prependShiftConfig α₀ ε hε) (r + 1) (k, s)‖ ^ 2 ≤ _
+      rw [h_eqs]
+      have h_tri := norm_add_le
+        (fockCreateOp M_mode α₀ ε G r (k, s))
+        (fockAnnihOp M_mode α₀ ε G (r + 1) (k, s))
+      have h_sq2 : ‖fockCreateOp M_mode α₀ ε G r (k, s) +
+          fockAnnihOp M_mode α₀ ε G (r + 1) (k, s)‖ ^ 2 ≤
+          2 * ‖fockCreateOp M_mode α₀ ε G r (k, s)‖ ^ 2 +
+            2 * ‖fockAnnihOp M_mode α₀ ε G (r + 1) (k, s)‖ ^ 2 := by
+        have h_ab := pow_le_pow_left₀ (norm_nonneg _) h_tri 2
+        nlinarith [sq_nonneg (‖fockCreateOp M_mode α₀ ε G r (k, s)‖ -
+          ‖fockAnnihOp M_mode α₀ ε G (r + 1) (k, s)‖)]
+      have hc_le := norm_sq_fockCreateOp_le_uCreate hm M_mode α₀ hε G r (k, s)
+      linarith
+    rw [huC_sum, huA_sum, ← hJ_def r, ← hJ_def (r + 2)] at h_le_sum
+    have h_c_bd := mul_le_mul_of_nonneg_left
+      (mul_le_mul_of_nonneg_right (h_pref_M r) (hJ_nn r)) zero_le_two
+    have h_a_bd := mul_le_mul_of_nonneg_left
+      (mul_le_mul_of_nonneg_right (h_pref_conj (r + 1)) (hJ_nn (r + 2))) zero_le_two
+    linarith
+  have hJ_gt : ∀ s : ℕ, N < s → J s = 0 := by
+    intro s hs
+    rw [hJ_def s]
+    have h_zero : ∀ x : FockSectorDom M_mode.ν s, ‖G s x‖ ^ 2 = 0 := by
+      intro x
+      dsimp only [G]
+      rw [fockSumSector_eq_zero_of_lt M_mode S_fin c id (fun A hA => lt_of_le_of_lt (hN A hA) hs)]
+      simp
+    simp_rw [h_zero]
+    simp
+  have h_sum_J' := sum_range_le_four_mul_of_rec hCop_nn hJ_nn hJ_gt hJ'_zero hJ'_succ
+  have h_sq_goal :
+      ‖osPrependShiftLM D α₀ 0 ε hε Ψ‖ ^ 2 ≤ (C₀ * (1 + ε⁻¹) ^ 3 * ‖Ψ‖) ^ 2 := by
+    rw [hΨ'_norm_sq]
+    have h_rhs_eq : (C₀ * (1 + ε⁻¹) ^ 3 * ‖Ψ‖) ^ 2 =
+        4 * C_op * ∑ r ∈ Finset.range (N + 1), J r := by
+      calc (C₀ * (1 + ε⁻¹) ^ 3 * ‖Ψ‖) ^ 2
+          = C₀ ^ 2 * ((1 + ε⁻¹) ^ 3) ^ 2 * ‖Ψ‖ ^ 2 := by ring
+        _ = 4 * C_op * ∑ r ∈ Finset.range (N + 1), J r := by
+            rw [hC₀_sq, hΨ_norm_sq]
+    rw [h_rhs_eq]
+    exact h_sum_J'
+  have h_rhs_nn : 0 ≤ C₀ * (1 + ε⁻¹) ^ 3 * ‖Ψ‖ := by positivity
+  have h_lhs_nn : 0 ≤ ‖osPrependShiftLM D α₀ 0 ε hε Ψ‖ := norm_nonneg _
+  nlinarith
+
+theorem wickMassShellOSDampedFieldBounded {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (R_rep : HolomorphicLorentzRep ι) (S : StarStructure R_rep)
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (hC_cov : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, R_rep.rep A (α i) (β i)) * C β q)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (C α q) = ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * C (β ∘ Fin.rev) q)
+    (hC_pct : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α q = η * ∑ β : Fin 2 → ι,
+        (∏ i : Fin 2, R_rep.σ (-1, 1) (α i) (β i)) * C (β ∘ Fin.rev) q) :
+    OSDampedFieldBounded
+      (wickMassShellOSAxioms R_rep S hm M_mode hC hC_cov hC_herm hC_pct).toReflectionPositiveData :=
+  wickMassShellOSDampedFieldBounded_of_eq_on_orderedEuclidN hm M_mode hC hC_herm
+    (wickMassShellOSAxioms R_rep S hm M_mode hC hC_cov hC_herm hC_pct).toReflectionPositiveData
+    (wickMassShellOSAxioms R_rep S hm M_mode hC hC_cov hC_herm hC_pct).os1_translation
+    (fun _ _ _ _ => rfl)
+
+theorem wickMassShellFullOSDampedFieldBounded {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (R_rep : HolomorphicLorentzRep ι) (S : StarStructure R_rep)
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (hC_cov : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, R_rep.rep A (α i) (β i)) * C β q)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (C α q) = ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * C (β ∘ Fin.rev) q)
+    (hC_pct : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α q = η * ∑ β : Fin 2 → ι,
+        (∏ i : Fin 2, R_rep.σ (-1, 1) (α i) (β i)) * C (β ∘ Fin.rev) q) :
+    OSDampedFieldBounded
+      (wickMassShellFullEuclidOSAxioms R_rep S hm M_mode hC
+        hC_cov hC_herm hC_pct).toOSAxioms.toReflectionPositiveData :=
+  wickMassShellOSDampedFieldBounded_of_eq_on_orderedEuclidN hm M_mode hC hC_herm
+    (wickMassShellFullEuclidOSAxioms R_rep S hm M_mode hC
+      hC_cov hC_herm hC_pct).toOSAxioms.toReflectionPositiveData
+    (wickMassShellFullEuclidOSAxioms R_rep S hm M_mode hC
+      hC_cov hC_herm hC_pct).toOSAxioms.os1_translation
+    (fun n α _x hx =>
+      wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN R_rep hm η hC hC_cov n α hx)
+
+theorem freeKGOSDampedFieldBounded {m : ℝ} (hm : 0 < m) :
+    OSDampedFieldBounded (freeKGOSAxioms hm).toReflectionPositiveData :=
+  wickMassShellOSDampedFieldBounded trivialRep trivialStarStructure hm
+    (kgModeData hm) (massiveKGCoeff_data hm)
+    (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    (fun _ _ => by simp [massiveKGCoeff, trivialStarStructure])
+    (fun _ _ => by simp [massiveKGCoeff, trivialRep])
+
+theorem freeKGFullOSDampedFieldBounded {m : ℝ} (hm : 0 < m) :
+    OSDampedFieldBounded (freeKGFullEuclidOSAxioms hm).toOSAxioms.toReflectionPositiveData :=
+  wickMassShellFullOSDampedFieldBounded trivialRep trivialStarStructure hm
+    (kgModeData hm) (massiveKGCoeff_data hm)
+    (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    (fun _ _ => by simp [massiveKGCoeff, trivialStarStructure])
+    (fun _ _ => by simp [massiveKGCoeff, trivialRep])
+
+theorem freeDiracOSDampedFieldBounded {m : ℝ} (hm : 0 < m) :
+    OSDampedFieldBounded (freeDiracOSAxioms hm).toReflectionPositiveData :=
+  wickMassShellOSDampedFieldBounded diracRep diracStarStructure hm
+    (diracModeData hm) (diracMassShellCoeff_data hm)
+    (diracMassShellCoeff_lorentz m) (diracMassShellCoeff_herm m) (diracMassShellCoeff_pct m)
+
+theorem freeDiracFullOSDampedFieldBounded {m : ℝ} (hm : 0 < m) :
+    OSDampedFieldBounded (freeDiracFullEuclidOSAxioms hm).toOSAxioms.toReflectionPositiveData :=
+  wickMassShellFullOSDampedFieldBounded diracRep diracStarStructure hm
+    (diracModeData hm) (diracMassShellCoeff_data hm)
+    (diracMassShellCoeff_lorentz m) (diracMassShellCoeff_herm m) (diracMassShellCoeff_pct m)
+
+theorem wickMassShell_osReconstructedWightmanFamily_eq
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (hC : MassShellCoeffData m C)
+    (hC_cov : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, R_rep.rep A (α i) (β i)) * C β q)
+    {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R_rep S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (hD : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = wickMassShellS m hm η C hC n α x) :
+    osReconstructedWightmanFamily hOS hcluster hdamped = wickMassShellW m η C hC := by
+  let T₁ := osReconstructedTubeExtensionData hOS hcluster hdamped
+  let T₂ := wickMassShellOSTubeExtensionData R_rep hm η hC hC_cov
+  rw [← osReconstructedTubeExtensionData_W_eq hOS hcluster hdamped,
+      ← wickMassShellOSTubeExtensionData_W R_rep hm η hC hC_cov]
+  refine wightman_eq_of_tubeExtension_eq T₁.E T₂.E fun n α z hz => ?_
+  have hx₀ : euclidOrderedBasePoint n ∈ orderedEuclidN n :=
+    euclidOrderedBasePoint_mem_orderedEuclidN n
+  have h_ev : ∀ᶠ x in 𝓝 (euclidOrderedBasePoint n),
+      T₁.E.H n α (wickEmbedN n x) = T₂.E.H n α (wickEmbedN n x) := by
+    filter_upwards [(isOpen_orderedEuclidN n).mem_nhds hx₀] with x hx
+    rw [OSTubeExtensionData.E_H, OSTubeExtensionData.E_H,
+        ← T₁.schwinger_eq n α x hx, hD n α x hx, T₂.schwinger_eq n α x hx]
+  exact analyticOn_forward_tube_eq_of_eventuallyEq_wickEmbedN n
+    (T₁.E.analytic n α) (T₂.E.analytic n α) hx₀ h_ev hz
+
+theorem freeKG_osReconstructedWightmanFamily_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily (freeKGOSAxioms hm) (freeKGOSTimeCluster hm)
+      (freeKGOSDampedFieldBounded hm) = freeKGW m hm :=
+  wickMassShell_osReconstructedWightmanFamily_eq hm (massiveKGCoeff_data hm)
+    (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    (freeKGOSAxioms hm) (freeKGOSTimeCluster hm) (freeKGOSDampedFieldBounded hm)
+    (fun _ _ _ _ => rfl)
+
+theorem freeKGFull_osReconstructedWightmanFamily_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily (freeKGFullEuclidOSAxioms hm).toOSAxioms
+      (freeKGFullOSTimeCluster hm) (freeKGFullOSDampedFieldBounded hm) = freeKGW m hm :=
+  wickMassShell_osReconstructedWightmanFamily_eq hm (massiveKGCoeff_data hm)
+    (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    (freeKGFullEuclidOSAxioms hm).toOSAxioms (freeKGFullOSTimeCluster hm)
+    (freeKGFullOSDampedFieldBounded hm)
+    (fun n α _x hx => freeKGFullS_eq_freeKGS_on_orderedEuclidN hm n α hx)
+
+theorem freeDirac_osReconstructedWightmanFamily_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm)
+      (freeDiracOSDampedFieldBounded hm) = freeDiracW m hm :=
+  wickMassShell_osReconstructedWightmanFamily_eq hm (diracMassShellCoeff_data hm)
+    (diracMassShellCoeff_lorentz m)
+    (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm) (freeDiracOSDampedFieldBounded hm)
+    (fun _ _ _ _ => rfl)
+
+theorem freeDiracFull_osReconstructedWightmanFamily_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily (freeDiracFullEuclidOSAxioms hm).toOSAxioms
+      (freeDiracFullOSTimeCluster hm) (freeDiracFullOSDampedFieldBounded hm) =
+      freeDiracW m hm :=
+  wickMassShell_osReconstructedWightmanFamily_eq hm (diracMassShellCoeff_data hm)
+    (diracMassShellCoeff_lorentz m)
+    (freeDiracFullEuclidOSAxioms hm).toOSAxioms (freeDiracFullOSTimeCluster hm)
+    (freeDiracFullOSDampedFieldBounded hm)
+    (fun n α _x hx => freeDiracFullS_eq_freeDiracS_on_orderedEuclidN hm n α hx)
+
+theorem freeKG_pure_os_full_reconstruction {m : ℝ} (hm : 0 < m) :
+    let hOS := freeKGOSAxioms hm
+    let hcluster := freeKGOSTimeCluster hm
+    let hdamped := freeKGOSDampedFieldBounded hm
+    let hnorm := freeKGOSVacuumNormalized hm
+    let T := osReconstructedTubeExtensionData hOS hcluster hdamped
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = freeKGW m hm ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → freeKGS m hm n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare trivialRep P.poincare) a (U Ψ)) ∧
+    FullEuclidOSAxioms trivialRep trivialStarStructure 1 P.permutedSchwinger ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → P.permutedSchwinger n α x = freeKGS m hm n α x) := by
+  have hsyn := os_full_wightman_reconstruction (freeKGOSAxioms hm)
+    (freeKGOSTimeCluster hm) (freeKGOSDampedFieldBounded hm) (freeKGOSVacuumNormalized hm)
+  have hW : osReconstructedWightmanFamily (freeKGOSAxioms hm)
+      (freeKGOSTimeCluster hm) (freeKGOSDampedFieldBounded hm) = freeKGW m hm :=
+    freeKG_osReconstructedWightmanFamily_eq hm
+  have hloc : LocalCommutativity 1
+      (osReconstructedWightmanFamily (freeKGOSAxioms hm)
+        (freeKGOSTimeCluster hm) (freeKGOSDampedFieldBounded hm)) := by
+    rw [hW]
+    exact freeKG_localCommutativity hm
+  rcases hsyn with ⟨hG, hschw, hvac, htr, _, hfull⟩
+  rcases hfull (Or.inl rfl) hloc with ⟨hFE, hperm⟩
+  exact ⟨hG.trans hW, hschw, hvac, htr, hFE, hperm⟩
+
+theorem freeDirac_pure_os_full_reconstruction {m : ℝ} (hm : 0 < m) :
+    let hOS := freeDiracOSAxioms hm
+    let hcluster := freeDiracOSTimeCluster hm
+    let hdamped := freeDiracOSDampedFieldBounded hm
+    let hnorm := freeDiracOSVacuumNormalized hm
+    let T := osReconstructedTubeExtensionData hOS hcluster hdamped
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = freeDiracW m hm ∧
+    (∀ (n : ℕ) (α : Fin n → Fin 2 ⊕ Fin 2) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → freeDiracS m hm n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare diracRep P.poincare) a (U Ψ)) ∧
+    FullEuclidOSAxioms diracRep diracStarStructure (-1) P.permutedSchwinger ∧
+    (∀ (n : ℕ) (α : Fin n → Fin 2 ⊕ Fin 2) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → P.permutedSchwinger n α x = freeDiracS m hm n α x) := by
+  have hsyn := os_full_wightman_reconstruction (freeDiracOSAxioms hm)
+    (freeDiracOSTimeCluster hm) (freeDiracOSDampedFieldBounded hm)
+    (freeDiracOSVacuumNormalized hm)
+  have hW : osReconstructedWightmanFamily (freeDiracOSAxioms hm)
+      (freeDiracOSTimeCluster hm) (freeDiracOSDampedFieldBounded hm) = freeDiracW m hm :=
+    freeDirac_osReconstructedWightmanFamily_eq hm
+  have hloc : LocalCommutativity (-1)
+      (osReconstructedWightmanFamily (freeDiracOSAxioms hm)
+        (freeDiracOSTimeCluster hm) (freeDiracOSDampedFieldBounded hm)) := by
+    rw [hW]
+    exact freeDirac_localCommutativity hm
+  rcases hsyn with ⟨hG, hschw, hvac, htr, _, hfull⟩
+  rcases hfull (Or.inr rfl) hloc with ⟨hFE, hperm⟩
+  exact ⟨hG.trans hW, hschw, hvac, htr, hFE, hperm⟩
+
 theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     FullEuclidOSAxioms trivialRep trivialStarStructure 1 (freeKGFullS m hm) ∧
     OSAxioms trivialRep trivialStarStructure 1 (freeKGS m hm) ∧
@@ -5694,6 +9321,13 @@ theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     (∀ {n : ℕ}, n ≤ 2 →
       osTwoPointWightmanFamily (freeKGOSAxioms hm) (freeKGOSTimeCluster hm)
         (freeKGS_positiveTimeTwoPointPowerBound hm) n = freeKGW m hm n) ∧
+    OSDampedFieldBounded (freeKGOSAxioms hm).toReflectionPositiveData ∧
+    OSDampedFieldBounded
+      (freeKGFullEuclidOSAxioms hm).toOSAxioms.toReflectionPositiveData ∧
+    osReconstructedWightmanFamily (freeKGOSAxioms hm) (freeKGOSTimeCluster hm)
+      (freeKGOSDampedFieldBounded hm) = freeKGW m hm ∧
+    osReconstructedWightmanFamily (freeKGFullEuclidOSAxioms hm).toOSAxioms
+      (freeKGFullOSTimeCluster hm) (freeKGFullOSDampedFieldBounded hm) = freeKGW m hm ∧
     Positivity trivialStarStructure (freeKGW m hm) ∧
     PoincareCovariant trivialRep (freeKGW m hm) ∧
     ForwardConeSpectrumCondition (freeKGW m hm) ∧
@@ -5726,6 +9360,10 @@ theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     freeKGOSTubeExtensionData_W hm,
     freeKGFullOSTubeExtensionData_W hm,
     fun hn => freeKG_two_point_os_eq_freeKGW hm hn,
+    freeKGOSDampedFieldBounded hm,
+    freeKGFullOSDampedFieldBounded hm,
+    freeKG_osReconstructedWightmanFamily_eq hm,
+    freeKGFull_osReconstructedWightmanFamily_eq hm,
     freeKGPositivity hm,
     freeKGPoincareCovariant hm,
     freeKG_forwardConeSpectrumCondition hm,
@@ -5769,6 +9407,14 @@ theorem freeDirac_grand_master {m : ℝ} (hm : 0 < m) :
     (∀ {n : ℕ}, n ≤ 2 →
       osTwoPointWightmanFamily (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm)
         (freeDiracS_positiveTimeTwoPointPowerBound hm) n = freeDiracW m hm n) ∧
+    OSDampedFieldBounded (freeDiracOSAxioms hm).toReflectionPositiveData ∧
+    OSDampedFieldBounded
+      (freeDiracFullEuclidOSAxioms hm).toOSAxioms.toReflectionPositiveData ∧
+    osReconstructedWightmanFamily (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm)
+      (freeDiracOSDampedFieldBounded hm) = freeDiracW m hm ∧
+    osReconstructedWightmanFamily (freeDiracFullEuclidOSAxioms hm).toOSAxioms
+      (freeDiracFullOSTimeCluster hm) (freeDiracFullOSDampedFieldBounded hm) =
+      freeDiracW m hm ∧
     Positivity diracStarStructure (freeDiracW m hm) ∧
     PoincareCovariant diracRep (freeDiracW m hm) ∧
     ForwardConeSpectrumCondition (freeDiracW m hm) ∧
@@ -5801,6 +9447,10 @@ theorem freeDirac_grand_master {m : ℝ} (hm : 0 < m) :
     freeDiracOSTubeExtensionData_W hm,
     freeDiracFullOSTubeExtensionData_W hm,
     fun hn => freeDirac_two_point_os_eq_freeDiracW hm hn,
+    freeDiracOSDampedFieldBounded hm,
+    freeDiracFullOSDampedFieldBounded hm,
+    freeDirac_osReconstructedWightmanFamily_eq hm,
+    freeDiracFull_osReconstructedWightmanFamily_eq hm,
     freeDiracPositivity hm,
     freeDiracPoincareCovariant hm,
     freeDirac_forwardConeSpectrumCondition hm,

@@ -5,10 +5,10 @@ A machine-checked Lean 4 formalization of **4-dimensional relativistic axiomatic
 Starting from real and complex Minkowski geometry, the spinor double cover $SL(2,\mathbb{C}) \times SL(2,\mathbb{C}) \to SO^+(1,3;\mathbb{C})$, several complex variables, and Schwartz tempered distributions, this library develops:
 
 1. **Complex Lorentz Geometry & Jost's Theorem**: Real and complex Lorentz groups, polar/Cartan/Jordan decompositions, path-connectedness of forward-tube stabilizer orbits, and the equivalence between real Jost configurations and real points of the extended tube ($n > 1$).
-2. **UV-Cutoff-Free Cone Vladimirov Boundary Values, General $n$-Dimensional Edge-of-the-Wedge & Locality**: Construction of forward-tube holomorphic extensions (`coneVladimirovTubeExtension`) for arbitrary Poincaré-covariant tempered Wightman families satisfying the relativistic forward-cone `SpectrumCondition`—with no ultraviolet momentum cutoff—together with general $n$-dimensional analytic (`orthant_eow_extension`, `eow_all_dim`) and polynomial-growth tempered distributional (`local_eow_of_tempered_boundary`) Edge-of-the-Wedge theorems, $4n$-dimensional Jost-window holomorphic continuation (`coneVladimirov_jost_eow_extension`), and the derivation of Jost `WeakLocality` from adjacent spacelike `LocalCommutativity`.
+2. **UV-Cutoff-Free Cone Vladimirov Boundary Values, General $n$-Dimensional Edge-of-the-Wedge, Malgrange–Zerner Flat-Tube Analyticity & Locality**: Construction of forward-tube holomorphic extensions (`coneVladimirovTubeExtension`) for arbitrary Poincaré-covariant tempered Wightman families satisfying the relativistic forward-cone `SpectrumCondition`—with no ultraviolet momentum cutoff—together with general $N$-dimensional Osgood and Malgrange–Zerner flattened-tube / local cross analyticity theorems (`osgood_nd`, `malgrange_zerner_flat_tube`, `malgrange_zerner_local_cross`), general $n$-dimensional analytic (`orthant_eow_extension`, `eow_all_dim`) and polynomial-growth tempered distributional (`local_eow_of_tempered_boundary`) Edge-of-the-Wedge theorems, $4n$-dimensional Jost-window holomorphic continuation (`coneVladimirov_jost_eow_extension`), and the derivation of Jost `WeakLocality` from adjacent spacelike `LocalCommutativity`.
 3. **General Spinor Bargmann–Hall–Wightman (BHW), Relativistic PCT & Unconditional Spin–Statistics**: Single-valued analytic continuation from the forward tube $\mathcal{T}_n$ to the extended tube $\mathcal{T}'_n$ for arbitrary finite-dimensional polynomial representations of $SL(2,\mathbb{C}) \times SL(2,\mathbb{C})$, equivalence of forward-tube PCT symmetry and Jost weak locality (`tubePCT_iff_weakLocality`), the full distributional relativistic PCT theorem (`wightman_pct_of_spectrumCondition`), and the **unconditional general-spin Spin–Statistics theorem** (`spin_statistics_of_spectrumCondition`, `WightmanAxioms.spin_statistics`) proving $\eta = \varepsilon$ for arbitrary `(R, S)` with $2\pi$-rotation spin parity $\varepsilon \in \{\pm 1\}$ (including off-diagonal $C = \gamma^0$ Dirac bispinors and general $(m_1/2, m_2/2) \oplus (m_2/2, m_1/2)$ spinor-tensors).
-4. **Osterwalder–Schrader (OS) Canonical Functional Calculus, Constructive OS $\to$ Wightman Reconstruction, Canonical Hilbert Unitary Equivalence & Full Non-Coincident Euclidean Gluing**: Construction of the OS GNS Hilbert space from reflection positivity on time-ordered Euclidean configurations, **canonical spectral functional calculus construction of `OSHolomorphicSemigroup` and its weak holomorphicity directly from `OSAxioms`** (`canonicalOSHolomorphicSemigroup`, `isWeaklyHolomorphic_canonicalOSHolomorphicSemigroup`, eliminating exogenous `spec`), **canonical Euclidean Laplace wavepacket unitary equivalence $\mathcal{H}_{\mathrm{OS}} \simeq_{\mathbb{C}} \mathcal{H}_W$ intertwining spacetime translations and transporting cluster/unique-vacuum properties** (`osToWightmanLinearIsometryEquiv`, `toGeneralWightmanAxiomsWithUniqueVacuum`, eliminating exogenous `Φ`), **Vladimirov tempered boundary-value construction and constructive OS $\to$ Wightman `Positivity` from `OSTubeExtensionData`** (`vladimirovFromTubeWightmanFamily`, `positivity_of_osAxioms_and_tube`, `os_to_wightman_full_synthesis`, eliminating exogenous spectral measures `F` and exogenous Wightman `Positivity`), **pure-Euclidean 2-point OS $\to$ Wightman reconstruction directly from `OSAxioms` + `OSTimeClusterDecomposition` + `OSPositiveTimeTwoPointPowerBound`** (`os_two_point_wightman_reconstruction`), **unconditional promotion of `LocalCommutativity` to `FullEuclidOSAxioms`** (`euclidExtendedTubePermLocality_of_localCommutativity`, `ForwardConeOSReconstructedWightman.toFullEuclidOSAxioms`), unconditional Spin–Statistics (`osAxioms_spin_statistics`, `fullEuclidOSAxioms_spin_statistics`), and unconditional uniqueness (`fullEuclid_eq_of_eq_on_orderedEuclidN`, `wightman_unique_unconditional`).
-5. **Constructive 4D Massive ($m > 0$) Free Klein–Gordon & Spin-1/2 Dirac QFT**: All $n$-point bosonic and fermionic Wick combinatorics (including partial-pairing and adjacent-swap crossing parity), explicit mass-shell tempered Wightman distributions satisfying adjacent spacelike `LocalCommutativity`, `PermSpacelikeLocality`, and `WeakLocality`, forward-tube polynomial growth `OSTubeGrowthBound` (`N = 2n`) and concrete `OSTubeExtensionData` instances (`freeKGOSTubeExtensionData`, `freeDiracOSTubeExtensionData`, `freeKGFullOSTubeExtensionData`, `freeDiracFullOSTubeExtensionData`), pure-Euclidean 2-point OS reconstruction agreement (`freeKG_two_point_os_eq_freeKGW`, `freeDirac_two_point_os_eq_freeDiracW`), full non-coincident Euclidean Schwinger functions `freeKGFullS` and `freeDiracFullS` inhabiting `FullEuclidOSAxioms` across $\mathbb{R}^{4n}_{\neq}$, symmetric and antisymmetric $L^2$ Fock space representations proving all $n$-point Wightman positivity and OS reflection positivity, sharp mass-gap exponential time clustering $\mathcal{O}(e^{-m\tau})$, and Lorentz cluster decomposition along every nonzero spacetime direction $a \neq 0$ (`WightmanAxiomsWithUniqueVacuum`).
+4. **Pure-Euclidean All $n$-Point Osterwalder–Schrader (OS) Reconstruction, Canonical Functional Calculus, Canonical Hilbert Unitary Equivalence & Full Non-Coincident Euclidean Gluing**: Construction of the OS GNS Hilbert space from reflection positivity on time-ordered Euclidean configurations, **canonical spectral functional calculus construction of `OSHolomorphicSemigroup` and its weak holomorphicity directly from `OSAxioms`** (`canonicalOSHolomorphicSemigroup`, `isWeaklyHolomorphic_canonicalOSHolomorphicSemigroup`, eliminating exogenous `spec`), **multi-time semigroup analytic continuation on $(\mathbb{C}_+)^{n-1} \times \mathbb{R}^{3n}$ and pure-Euclidean all $n$-point OS $\to$ Wightman full reconstruction directly from `OSAxioms` + `OSTimeClusterDecomposition` + `OSDampedFieldBounded`** (`osMultiTimeH`, `osReconstructedWightmanFamily`, `osReconstructed_poincareCovariant`, `osReconstructed_spectrumCondition`, `osReconstructedTubeExtensionData`, `os_full_wightman_reconstruction`, eliminating exogenous `OSTubeExtensionData`, exogenous spectral measures `F`, exogenous wavepacket maps `Φ`, and exogenous Wightman `Positivity` across all $n \in \mathbb{N}$), **canonical Euclidean Laplace wavepacket unitary equivalence $\mathcal{H}_{\mathrm{OS}} \simeq_{\mathbb{C}} \mathcal{H}_W$ intertwining spacetime translations and transporting cluster/unique-vacuum properties** (`osToWightmanLinearIsometryEquiv`, `toGeneralWightmanAxiomsWithUniqueVacuum`), **pure-Euclidean 2-point OS $\to$ Wightman reconstruction** (`os_two_point_wightman_reconstruction`), **unconditional promotion of `LocalCommutativity` to `FullEuclidOSAxioms`** (`euclidExtendedTubePermLocality_of_localCommutativity`, `ForwardConeOSReconstructedWightman.toFullEuclidOSAxioms`), unconditional Spin–Statistics (`osAxioms_spin_statistics`, `fullEuclidOSAxioms_spin_statistics`), and unconditional uniqueness (`fullEuclid_eq_of_eq_on_orderedEuclidN`, `wightman_unique_unconditional`).
+5. **Constructive 4D Massive ($m > 0$) Free Klein–Gordon & Spin-1/2 Dirac QFT**: All $n$-point bosonic and fermionic Wick combinatorics (including partial-pairing and adjacent-swap crossing parity), explicit mass-shell tempered Wightman distributions satisfying adjacent spacelike `LocalCommutativity`, `PermSpacelikeLocality`, and `WeakLocality`, **Fock damped field operator boundedness `OSDampedFieldBounded` (`K = 3`) and pure-Euclidean all $n$-point OS reconstruction agreement (`freeKGOSDampedFieldBounded`, `freeDiracOSDampedFieldBounded`, `freeKG_osReconstructedWightmanFamily_eq`, `freeDirac_osReconstructedWightmanFamily_eq`, `freeKG_pure_os_full_reconstruction`, `freeDirac_pure_os_full_reconstruction`)**, forward-tube polynomial growth `OSTubeGrowthBound` (`N = 2n`) and concrete `OSTubeExtensionData` instances, pure-Euclidean 2-point OS reconstruction agreement (`freeKG_two_point_os_eq_freeKGW`, `freeDirac_two_point_os_eq_freeDiracW`), full non-coincident Euclidean Schwinger functions `freeKGFullS` and `freeDiracFullS` inhabiting `FullEuclidOSAxioms` across $\mathbb{R}^{4n}_{\neq}$, symmetric and antisymmetric $L^2$ Fock space representations proving all $n$-point Wightman positivity and OS reflection positivity, sharp mass-gap exponential time clustering $\mathcal{O}(e^{-m\tau})$, and Lorentz cluster decomposition along every nonzero spacetime direction $a \neq 0$ (`WightmanAxiomsWithUniqueVacuum`).
 
 ---
 
@@ -33,8 +33,8 @@ Formalizing infinite-dimensional functional analysis and axiomatic QFT carries w
 | :--- | :---: | :--- |
 | **Lean 4 / Mathlib Toolchain** | `v4.32.2` | `leanprover/lean4:v4.32.2` with `mathlib` `v4.32.2` |
 | **QFT & Analysis Modules** | **22 files** | Located in `src/` (see [Section 2](#2-architecture--module-dependency-graph)) |
-| **Total Lines of Lean 4** | **118,124 lines** | Comment-free, linter-clean (`weak.linter.mathlibStandardSet = true`) |
-| **Top-Level Declarations** | **7,043** | `2,020` `theorem`, `3,643` `lemma`, `1,254` `def`, `34` `abbrev`, `31` `structure`, `56` `instance`, `5` `inductive` |
+| **Total Lines of Lean 4** | **134,024 lines** | Comment-free, linter-clean (`weak.linter.mathlibStandardSet = true`) |
+| **Top-Level Declarations** | **7,443** | `2,099` `theorem`, `3,869` `lemma`, `1,349` `def`, `34` `abbrev`, `31` `structure`, `56` `instance`, `5` `inductive` |
 | **`sorry` / `admit` / Custom `axiom`** | **0** | Mechanically checked by the Lean 4 kernel (reproducible via `#print axioms` in [Section 8](#8-build-instructions-axiom-verification--literature-cross-reference)) |
 | **`unsafe` / `opaque` / Metaprogramming Bypasses** | **0** | Purely logical definitions and proofs; independently verifiable in a fresh `lake build` |
 | **Permitted Kernel Axioms** | **Standard 3 only** | Every audited theorem depends exclusively on `[propext, Classical.choice, Quot.sound]` |
@@ -67,8 +67,8 @@ flowchart TD
     Polar["PolarDecomposition.lean (3,327)"]
   end
 
-  subgraph Layer2["Layer II: SCV & General n-D Distributional EOW (18,407 lines)"]
-    SCV["SCVAnalysis.lean (10,541)"]
+  subgraph Layer2["Layer II: SCV, Malgrange–Zerner & General n-D Distributional EOW (20,849 lines)"]
+    SCV["SCVAnalysis.lean (12,983)"]
     DEOW["DistributionEOW.lean (6,325)"]
     AC["AnalyticContinuation.lean (1,541)"]
   end
@@ -79,16 +79,16 @@ flowchart TD
     VBHW["VectorBHW.lean (6,923)"]
   end
 
-  subgraph Layer4["Layer IV: OS Functional Calculus, Constructive Bridge, Vacuum Theory & Full Euclidean Domain (50,989 lines)"]
-    OSR["OSReconstruction.lean (21,119)"]
-    Vac["VacuumTheory.lean (13,204)"]
-    WB["WightmanBridge.lean (16,666)"]
+  subgraph Layer4["Layer IV: Pure-Euclidean All-n OS Reconstruction, Vacuum Theory & Full Euclidean Domain (60,797 lines)"]
+    OSR["OSReconstruction.lean (22,915)"]
+    Vac["VacuumTheory.lean (13,346)"]
+    WB["WightmanBridge.lean (24,536)"]
   end
 
-  subgraph Layer5["Layer V: Wick Combinatorics & 4D m > 0 Free QFT (11,084 lines)"]
+  subgraph Layer5["Layer V: Wick Combinatorics & 4D m > 0 Free QFT (14,734 lines)"]
     Wick["WickCombinatorics.lean (2,142)"]
     FFW["FreeFieldWick.lean (3,116)"]
-    FFF["FreeFieldFock.lean (5,826)"]
+    FFF["FreeFieldFock.lean (9,476)"]
   end
 
   Mink --> Giv --> Spin --> SL2M
@@ -123,11 +123,11 @@ flowchart TD
 | `src/Lightcone.lean` | 2,360 | Hahn–Banach hyperplane separation of Jost convex hulls from the forward lightcone, complex boost mapping into $\mathcal{T}_n$, and **Jost's Theorem** (`jost_theorem`). |
 | `src/PolarDecomposition.lean` | 3,327 | Path-connectedness of complex Lorentz orbit domains `{Λ ∈ SO⁺(1,3;ℂ) | Λ • z ∈ forward_tube_n n}` (`orbit_domain_path_connected`), eliminating multi-valuedness in BHW continuation. |
 
-#### Layer II: Several Complex Variables (SCV) & General $n$-Dimensional Distributional Edge-of-the-Wedge (`18,407` lines)
+#### Layer II: Several Complex Variables (SCV), Malgrange–Zerner Flat-Tube Analyticity & General $n$-Dimensional Distributional Edge-of-the-Wedge (`20,849` lines)
 
 | Module | Lines | Mathematical Scope |
 | :--- | ---: | :--- |
-| `src/SCVAnalysis.lean` | 10,541 | Polydisc Cauchy integral formulas, Hartogs separate-to-joint analyticity infrastructure, identity theorems on connected open sets in $\mathbb{C}^N$, 2D bounded L-shaped **Bochner Tube Theorem** (`bochner_tube_theorem`), and **General $n$-Dimensional Analytic Edge-of-the-Wedge Theorems** (`orthant_eow_extension`, `eow_all_dim`) across arbitrary convex open cones $V_+ \subset \mathbb{R}^n$. |
+| `src/SCVAnalysis.lean` | 12,983 | Polydisc Cauchy integral formulas, **General $N$-Dimensional Osgood Lemma** (`osgood_nd`), **General $N$-Dimensional Malgrange–Zerner Flattened-Tube & Local Cross Analyticity Theorems** (`malgrange_zerner_flat_tube`, `malgrange_zerner_local_cross`), identity theorems on connected open sets in $\mathbb{C}^N$, 2D bounded L-shaped **Bochner Tube Theorem** (`bochner_tube_theorem`), and **General $n$-Dimensional Analytic Edge-of-the-Wedge Theorems** (`orthant_eow_extension`, `eow_all_dim`) across arbitrary convex open cones $V_+ \subset \mathbb{R}^n$. |
 | `src/DistributionEOW.lean` | 6,325 | Test-function spaces $\mathcal{D}(\Omega)$ and distributions $\mathcal{D}'(\Omega,\mathbb{C})$, distributional boundary values from open cones, polynomial tube growth (`HasPolynomialTubeGrowth`), and **General $n$-Dimensional Continuous & Tempered Distributional Edge-of-the-Wedge Theorems** (`local_eow_of_continuous_boundary`, `local_eow_of_tempered_boundary`) via iterated cone-ODE antiderivative regularization. |
 | `src/AnalyticContinuation.lean` | 1,541 | Scalar Bargmann–Hall–Wightman continuation from $\mathcal{T}_n$ to $\mathcal{T}'_n$ by gluing along path-connected complex Lorentz orbits. |
 
@@ -139,21 +139,21 @@ flowchart TD
 | `src/WightmanFramework.lean` | 13,174 | `WightmanFamily`, Minkowski Fourier transforms, relativistic `SpectrumCondition`, adjacent spacelike `LocalCommutativity` $\implies$ `PermSpacelikeLocality` $\implies$ Jost `WeakLocality`, `Positivity`, the **UV-cutoff-free Cone Vladimirov Tube Extension** (`coneVladimirovTubeExtension`) via Schwartz finite-order jet factorizations and Hahn–Banach extension, and 2-point split-product Schwartz density (`wightman_two_eq_zero_of_schwartzProdSplit_eq_zero`). |
 | `src/VectorBHW.lean` | 6,923 | **General Spinor BHW Theorem** (`spinor_bhw_theorem`), **Relativistic PCT Theorem** (`wightman_pct_of_spectrumCondition`), chiral Weyl star-structure no-go (`isEmpty_starStructure_leftWeylRep`), PSD/PCT sesquilinear matrix vanishing (`eq_zero_of_psd_pct_pair_ne_spinParity`), **Unconditional General-Spin Spin–Statistics** (`spin_statistics_of_spectrumCondition`), nonempty real Jost permutation overlaps (`jost_inter_perm_nonempty`, `spinor_H_ext_perm_eq_on_jost_inter`), and **$4n$-Dimensional Jost-Window Tempered EOW Continuation** (`coneVladimirov_jost_eow_extension`). |
 
-#### Layer IV: Osterwalder–Schrader Semigroup, Canonical Functional Calculus, Constructive OS $\to$ Wightman Bridge & Full Euclidean Axioms (`50,989` lines)
+#### Layer IV: Pure-Euclidean All $n$-Point Osterwalder–Schrader Reconstruction, Canonical Functional Calculus & Full Euclidean Axioms (`60,797` lines)
 
 | Module | Lines | Mathematical Scope |
 | :--- | ---: | :--- |
-| `src/OSReconstruction.lean` | 21,119 | Time-ordered `orderedEuclidN n` and full non-coincident `nonCoincidentEuclidN n`, `OSAxioms` and `FullEuclidOSAxioms`, **canonical C\*-algebraic spectral functional calculus `canonicalOSHolomorphicSemigroup` on the right half-plane $\mathrm{Re}(z) > 0$ eliminating exogenous `spec`** (`forwardConeOSReconstructedWightmanOfBridge`), $SO(4) \times S_n$ Euclidean orbit covering (`exists_euclidRot_perm_mem_orderedEuclidN`), **unconditional relativistic-to-Euclidean extended-tube locality & gluing** (`euclidExtendedTubePermLocality_of_localCommutativity`, `schwingerFromPermutedTube_fullEuclidOSAxioms_of_localCommutativity`), **unconditional Euclidean & OS Spin–Statistics** (`osAxioms_spin_statistics`, `fullEuclidOSAxioms_spin_statistics`), **unconditional uniqueness** (`fullEuclid_eq_of_eq_on_orderedEuclidN`, `wightman_unique_unconditional`), and spectral-measure OS reconstruction (`osterwalder_schrader_measure_reconstruction_of_data`). |
-| `src/VacuumTheory.lean` | 13,204 | Equivalence `tubePCT_iff_weakLocality`, Spin–Statistics from `TubePCT` + `WeakLocality`, explicit 4-momentum symmetry-breaking counterexamples (`fourMomentumW q`, `fourMomentumS q` for $q \neq 0$), and standalone 2-point / $n$-point massive propagator analysis. |
-| `src/WightmanBridge.lean` | 16,666 | Bundled relativistic `WightmanAxioms` and `GeneralWightmanAxiomsWithUniqueVacuum`, weak holomorphicity of `canonicalOSHolomorphicSemigroup` (`isWeaklyHolomorphic_canonicalOSHolomorphicSemigroup`), **canonical Euclidean Laplace wavepacket unitary equivalence `osToWightmanLinearIsometryEquiv : P.Hilbert ≃ₗᵢ[ℂ] P.WightmanHilbertSpace` intertwining spacetime translations and transporting unique vacuum without exogenous `Φ`**, **Vladimirov tempered boundary-value construction from `OSTubeGrowthBound` (`vladimirovFromTubeWightmanFamily`) & constructive OS $\to$ Wightman `Positivity` (`positivity_of_osAxioms_and_tube`)**, `OSTubeExtensionData`, **pure-Euclidean 2-point OS $\to$ Wightman reconstruction (`os_two_point_wightman_reconstruction`)**, and the **master synthesis (`os_to_wightman_full_synthesis`)**. |
+| `src/OSReconstruction.lean` | 22,915 | Time-ordered `orderedEuclidN n` and full non-coincident `nonCoincidentEuclidN n`, `OSAxioms` and `FullEuclidOSAxioms`, **canonical C\*-algebraic spectral functional calculus `canonicalOSHolomorphicSemigroup` on $\mathrm{Re}(z) > 0$ eliminating exogenous `spec`**, **damped OS field operator bound `OSDampedFieldBounded` & general $n$-point multi-time holomorphic continuation `osMultiTimeH` on $(\mathbb{C}_+)^{n-1} \times \mathbb{R}^{3n}$ (`exists_osMultiTimeH_growth_bound`)**, $SO(4) \times S_n$ Euclidean orbit covering (`exists_euclidRot_perm_mem_orderedEuclidN`), **unconditional relativistic-to-Euclidean extended-tube locality & gluing** (`euclidExtendedTubePermLocality_of_localCommutativity`, `schwingerFromPermutedTube_fullEuclidOSAxioms_of_localCommutativity`), **unconditional Euclidean & OS Spin–Statistics** (`osAxioms_spin_statistics`, `fullEuclidOSAxioms_spin_statistics`), and **unconditional uniqueness** (`fullEuclid_eq_of_eq_on_orderedEuclidN`, `wightman_unique_unconditional`). |
+| `src/VacuumTheory.lean` | 13,346 | Equivalence `tubePCT_iff_weakLocality`, Spin–Statistics from `TubePCT` + `WeakLocality`, explicit 4-momentum symmetry-breaking counterexamples (`fourMomentumW q`, `fourMomentumS q` for $q \neq 0$), concrete `OSDampedFieldBounded` witnesses (`vacOSDampedFieldBounded`, `twoModeOSDampedFieldBounded`, `coherentOSDampedFieldBounded`, `z2FreeOSDampedFieldBounded`), and standalone massive propagator analysis. |
+| `src/WightmanBridge.lean` | 24,536 | Bundled `WightmanAxioms` and `GeneralWightmanAxiomsWithUniqueVacuum`, weak holomorphicity of `canonicalOSHolomorphicSemigroup`, **canonical Euclidean Laplace wavepacket unitary equivalence `osToWightmanLinearIsometryEquiv : P.Hilbert ≃ₗᵢ[ℂ] P.WightmanHilbertSpace` eliminating exogenous `Φ`**, **Vladimirov boundary values & constructive OS $\to$ Wightman `Positivity` (`positivity_of_osAxioms_and_tube`)**, **pure-Euclidean all $n$-point OS $\to$ Wightman reconstruction (`osReconstructedWightmanFamily`, `osReconstructed_poincareCovariant`, `osReconstructed_spectrumCondition`, `osReconstructedTubeExtensionData`, `os_full_wightman_reconstruction`, eliminating exogenous `OSTubeExtensionData` for all $n \in \mathbb{N}$)**, and pure-Euclidean 2-point OS reconstruction (`os_two_point_wightman_reconstruction`). |
 
-#### Layer V: Wick Combinatorics & 4D $m > 0$ Constructive Free QFT on $L^2$ Fock Space (`11,084` lines)
+#### Layer V: Wick Combinatorics & 4D $m > 0$ Constructive Free QFT on $L^2$ Fock Space (`14,734` lines)
 
 | Module | Lines | Mathematical Scope |
 | :--- | ---: | :--- |
 | `src/WickCombinatorics.lean` | 2,142 | Fixed-point-free involutions (`ChordPairing`), partial pairings (`PartialPairing`), reversed concatenation bijections (`concatRev`), exact fermionic chord-crossing parity (`cross_concatRev`), adjacent-swap pairing conjugation (`conjSwap`, `eta_pow_cross_conjSwap`), and $S_n$-permutation covariance of abstract Wick sums (`wickPairingSum_perm`). |
 | `src/FreeFieldWick.lean` | 3,116 | Lorentz-invariant positive-energy mass-shell measures ($m > 0$), all $n$-point Wick expansions `freeKGW`, `freeKGS`, `freeKGFullS`, `freeDiracW`, `freeDiracS`, `freeDiracFullS`, forward-cone spectrum condition, Poincaré covariance, **adjacent spacelike `LocalCommutativity`** & `PermSpacelikeLocality` & Jost `WeakLocality`, PCT, full non-coincident Euclidean smoothness/covariance/permutation symmetry, explicit equal-time non-coincident non-vanishing witnesses, `¬ ZeroMomentumSpectrumCondition`, and unconditional Spin–Statistics. |
-| `src/FreeFieldFock.lean` | 5,826 | Direct-sum $\sigma$-finite measure-theoretic Fock space `FockHilbert ν = Lp ℂ 2 (fockMeasure ν)`, symmetric/antisymmetric sector projections, all $n$-point Wightman `Positivity` and `OSReflectionPositive`, `freeKGOSAxioms` & `freeDiracOSAxioms`, **`freeKGFullEuclidOSAxioms` & `freeDiracFullEuclidOSAxioms`**, sharp exponential OS clustering $e^{-m\tau}$, forward-tube polynomial growth `ostubeGrowthBound_wickMassShellH` ($N = 2n$), concrete `OSTubeExtensionData` producers (`freeKGOSTubeExtensionData`, `freeDiracOSTubeExtensionData`, `freeKGFullOSTubeExtensionData`, `freeDiracFullOSTubeExtensionData`), pure-Euclidean 2-point OS reconstruction agreement (`freeKG_two_point_os_eq_freeKGW`, `freeDirac_two_point_os_eq_freeDiracW`), `freeKG_os_to_wightman_synthesis` & `freeDirac_os_to_wightman_synthesis`, and `freeKG_grand_master` / `freeDirac_grand_master`. |
+| `src/FreeFieldFock.lean` | 9,476 | Direct-sum $\sigma$-finite measure-theoretic Fock space `FockHilbert ν = Lp ℂ 2 (fockMeasure ν)`, symmetric/antisymmetric sector projections, all $n$-point Wightman `Positivity` and `OSReflectionPositive`, `freeKGFullEuclidOSAxioms` & `freeDiracFullEuclidOSAxioms`, sharp exponential OS clustering $e^{-m\tau}$, **Fock creation/annihilation operator bounds proving `OSDampedFieldBounded` ($K = 3$) & pure-Euclidean all $n$-point OS reconstruction agreement (`freeKGOSDampedFieldBounded`, `freeDiracOSDampedFieldBounded`, `freeKG_osReconstructedWightmanFamily_eq`, `freeDirac_osReconstructedWightmanFamily_eq`, `freeKG_pure_os_full_reconstruction`, `freeDirac_pure_os_full_reconstruction`)**, concrete `OSTubeExtensionData` producers, and `freeKG_grand_master` / `freeDirac_grand_master`. |
 
 ---
 
@@ -411,6 +411,12 @@ def OSTimeClusterDecomposition {R : HolomorphicLorentzRep ι} {S : StarStructure
       atTop
       (𝓝 (osKernel S D.𝒮 A (osVacuumConfig ι) *
         osKernel S D.𝒮 (osVacuumConfig ι) B))
+
+def OSDampedFieldBounded {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) : Prop :=
+  ∃ (C₀ : ℝ) (K : ℕ), 0 ≤ C₀ ∧
+    ∀ (α₀ : ι) (x_sp : Fin 3 → ℝ) (ε : ℝ) (hε : 0 < ε) (Ψ : OSPreHilbertSpace D),
+      ‖osPrependShiftLM D α₀ x_sp ε hε Ψ‖ ≤ C₀ * (1 + ε⁻¹) ^ K * ‖Ψ‖
 ```
 
 ### 3.6 Wick Pairings, $L^2$ Fock Space & 4D $m > 0$ Free Fields (`WickCombinatorics.lean`, `FreeFieldWick.lean`, `FreeFieldFock.lean`)
@@ -472,13 +478,57 @@ lemma orbit_domain_path_connected (n : ℕ) (z : Fin n → Fin 4 → ℂ) (hz : 
     IsPathConnected (orbit_domain n z)
 ```
 
-### 4.2 Several Complex Variables & General $n$-Dimensional Analytic & Tempered Distributional Edge-of-the-Wedge Theorems
+### 4.2 Several Complex Variables, Malgrange–Zerner Flat-Tube Analyticity & General $n$-Dimensional Edge-of-the-Wedge Theorems
 
 - **Bounded 2D Bochner Tube Theorem** (`src/SCVAnalysis.lean:5451`): Any bounded holomorphic function on the tube over a 2D L-shaped domain extends holomorphically to the tube over its convex hull.
+- **General $N$-Dimensional Osgood Lemma & Malgrange–Zerner Flattened-Tube / Local Cross Analyticity Theorems** (`src/SCVAnalysis.lean:10714, 12291, 12669`): Any continuous function on an open subset of $\mathbb{C}^N$ that is separately complex-differentiable in each coordinate is jointly holomorphic (`osgood_nd`). Building on `osgood_nd`, Gaussian-regularized $N$-dimensional Fourier–Laplace integral representations, and convex log-phase domination, `malgrange_zerner_flat_tube` proves that $N$ bounded continuous 1D strip branches $f_m$ on $\mathbb{R}^N + i (-\alpha, \alpha) e_m$ sharing a common real boundary value $f_0$ glue into a single bounded holomorphic function on the convex octahedron tube $\mathrm{TubeDomain}(\{y \in \mathbb{R}^N \mid \sum_m |y_m| < \alpha\})$, and `malgrange_zerner_local_cross` localizes this via Möbius strip-to-disc conformal maps to real-analytic balls of explicit radius $\rho(N, r, R) > 0$ on bounded real cubes.
 - **General $n$-Dimensional Analytic Edge-of-the-Wedge Theorems** (`src/SCVAnalysis.lean:10179, 10511`): For arbitrary dimension $n \in \mathbb{N}$ and any nonempty convex open cone $V_+ \subset \mathbb{R}^n$, any function holomorphic on `TubeDomain V_plus` and `TubeDomain (-V_plus)` and continuous across an open real window $U \subset \mathbb{R}^n$ extends holomorphically to an open neighborhood $W \subset \mathbb{C}^n$ of `WedgeDomain V_plus (-V_plus) U`.
 - **General $n$-Dimensional Tempered / Polynomial-Growth Distributional Edge-of-the-Wedge Theorem** (`src/DistributionEOW.lean:3479, 3566, 5685`) & **$4n$-Dimensional Jost-Window Continuation** (`src/VectorBHW.lean:6732`): Without assuming prior continuity up to the real boundary, any pair of holomorphic functions $f_\pm$ on opposite tubes satisfying polynomial boundary growth `HasPolynomialTubeGrowth V_± f_±` whose distributional boundary values agree on an open window $U \subset \Omega_n$ extend to a single holomorphic function on a complex neighborhood $W$ of $U$—instantiated directly in $4n$ variables for `coneVladimirovTubeExtension` across the open Jost set `jostFlatOpens n`.
 
 ```lean
+theorem osgood_nd : ∀ (N : ℕ) {U : Set (Fin N → ℂ)}, IsOpen U →
+    ∀ (f : (Fin N → ℂ) → ℂ), ContinuousOn f U →
+    (∀ z ∈ U, ∀ m : Fin N, DifferentiableAt ℂ (fun w => f (Function.update z m w)) (z m)) →
+    DifferentiableOn ℂ f U
+
+theorem malgrange_zerner_flat_tube (N : ℕ) {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
+    (f₀ : (Fin N → ℝ) → ℂ) (f_br : Fin N → (Fin N → ℂ) → ℂ)
+    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x : Fin N → ℝ, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin N) (x : Fin N → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin N, ContinuousOn (f_br m) (FlatStrip N α m))
+    (h_bdd_br : ∀ (m : Fin N), ∀ z ∈ FlatStrip N α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin N) (x : Fin N → ℝ),
+      DifferentiableOn ℂ (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w))
+        { w : ℂ | |w.im| < α }) :
+    ∃ F : (Fin N → ℂ) → ℂ,
+      DifferentiableOn ℂ F (TubeDomain (Octahedron N α)) ∧
+      (∀ z ∈ TubeDomain (Octahedron N α), ‖F z‖ ≤ M) ∧
+      (∀ x : Fin N → ℝ, F (fun j => (x j : ℂ)) = f₀ x) ∧
+      (∀ (m : Fin N), ∀ z ∈ FlatStrip N α m, F z = f_br m z)
+
+theorem malgrange_zerner_local_cross (N : ℕ) {r R M : ℝ}
+    (hr : 0 < r) (hR : 0 < R) (hM : 0 ≤ M) (x₀ : Fin N → ℝ)
+    (f₀ : (Fin N → ℝ) → ℂ) (f_br : Fin N → (Fin N → ℂ) → ℂ)
+    (hf₀_cont : ContinuousOn f₀ (RealCube N x₀ r))
+    (hf₀_bdd : ∀ x ∈ RealCube N x₀ r, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin N), ∀ x ∈ RealCube N x₀ r, f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin N, ContinuousOn (f_br m) (LocalCrossBranch N x₀ r R m))
+    (h_bdd_br : ∀ (m : Fin N), ∀ z ∈ LocalCrossBranch N x₀ r R m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin N), ∀ x ∈ RealCube N x₀ r,
+      DifferentiableOn ℂ (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w))
+        { w : ℂ | |w.re - x₀ m| < r ∧ |w.im| < R }) :
+    let ρ := mzCrossRadius N r R
+    ∃ H : (Fin N → ℂ) → ℂ,
+      DifferentiableOn ℂ H (Metric.ball (fun m => (x₀ m : ℂ)) ρ) ∧
+      (∀ z ∈ Metric.ball (fun m => (x₀ m : ℂ)) ρ, ‖H z‖ ≤ M) ∧
+      (∀ x : Fin N → ℝ, (fun m => (x m : ℂ)) ∈ Metric.ball (fun m => (x₀ m : ℂ)) ρ →
+        H (fun m => (x m : ℂ)) = f₀ x) ∧
+      (∀ (m : Fin N), ∀ z ∈ Metric.ball (fun m => (x₀ m : ℂ)) ρ ∩ LocalCrossBranch N x₀ r R m,
+        H z = f_br m z) ∧
+      (∀ m : Fin N,
+        ‖deriv (fun ζ => H (Function.update (fun j => (x₀ j : ℂ)) m ζ)) (x₀ m)‖ ≤
+          2 * M / ρ)
+
 theorem bochner_tube_theorem (r R : ℝ) (hr : 0 < r) (hR : r < R)
     (f : (Fin 2 → ℂ) → ℂ)
     (hf_holo : DifferentiableOn ℂ f (TubeDomain (LShape r R)))
@@ -693,13 +743,84 @@ theorem freeDiracFullS_spin_statistics {m : ℝ} (hm : 0 < m) {η : ℂ}
     η = -1
 ```
 
-### 4.6 Constructive Osterwalder–Schrader $\to$ Wightman Reconstruction, Canonical Hilbert Unitary Equivalence & Full Non-Coincident Euclidean Gluing
+### 4.6 Pure-Euclidean All $n$-Point Osterwalder–Schrader $\to$ Wightman Reconstruction, Canonical Hilbert Unitary Equivalence & Full Non-Coincident Euclidean Gluing
 
 - **Canonical Spectral Functional Calculus `OSHolomorphicSemigroup` & Canonical Unitary Equivalence $\mathcal{H}_{\mathrm{OS}} \simeq_{\mathbb{C}} \mathcal{H}_W$** (`src/OSReconstruction.lean:4287, 13933`, `src/WightmanBridge.lean:6264, 9382, 9589, 9934, 10040`): Using continuous functional calculus on self-adjoint contractions in $[0,1] \subset \mathbb{R}$, `canonicalOSHolomorphicSemigroup` constructs the right-half-plane holomorphic contraction semigroup directly from `OSAxioms` + contraction/clustering without exogenous spectral measures `spec`, and `isWeaklyHolomorphic_canonicalOSHolomorphicSemigroup` proves its weak holomorphicity. Furthermore, Paley–Wiener–Laplace uniqueness on $(0,\infty)^n$ proves that positive-Euclidean-time Schwartz wavepackets span a dense subspace of $\mathcal{H}_W$, yielding a canonical surjective linear isometry `osToWightmanLinearIsometryEquiv : P.Hilbert ≃ₗᵢ[ℂ] P.WightmanHilbertSpace` intertwining Euclidean/Minkowski spacetime translations and transporting unique vacuum to `GeneralWightmanAxiomsWithUniqueVacuum` without any exogenous map `Φ`.
-- **Vladimirov Tempered Boundary Values, Constructive OS $\to$ Wightman `Positivity`, Pure-Euclidean 2-Point Reconstruction & Master Synthesis** (`src/WightmanBridge.lean:11822, 13227, 13831, 14008, 16506, 16627`): Any forward-tube holomorphic family `H` satisfying `OSTubeGrowthBound H` determines a tempered `WightmanFamily` (`vladimirovFromTubeWightmanFamily`) via iterated ODE regularization, automatically inheriting `SpectrumCondition`, `PoincareCovariant`, `TubePCT`, `WeakLocality`, and—directly from `OSAxioms` reflection positivity via Laplace-multiplier approximation—all $n$-point relativistic Wightman `Positivity` (`positivity_of_osAxioms_and_tube`, `vladimirovFromTube_positivity`). For $n \le 2$, **no** tube assumption is required: `os_two_point_wightman_reconstruction` constructs $H_{\le 2}$ and $W_{\le 2}$ directly from `OSAxioms` + `OSTimeClusterDecomposition` + `OSPositiveTimeTwoPointPowerBound` via holomorphic semigroup proper-time analytic continuation $\tau(z_1 - z_0) = \sqrt{-(z_1 - z_0)_M^2}$ and complex spinor boost $A(\zeta) = -(i / \tau(\zeta)) \mathrm{vecToSpinor}(\zeta) \in SL(2, \mathbb{C})$ (`vec_to_spinor`). For all $n$, `OSTubeExtensionData` and `os_to_wightman_full_synthesis` unify OS $\to$ Wightman reconstruction, canonical Hilbert unitary equivalence, Spin–Statistics, and unconditional promotion to `FullEuclidOSAxioms`.
+- **Multi-Time Semigroup Continuation & Pure-Euclidean All $n$-Point OS $\to$ Wightman Full Reconstruction** (`src/OSReconstruction.lean:21618, 22606, 22851`, `src/WightmanBridge.lean:18464, 20121, 24458, 24470, 24479, 24498`): Under pure Euclidean `OSAxioms` + `OSTimeClusterDecomposition` + `OSDampedFieldBounded`—with **zero** exogenous `OSTubeExtensionData`—`osMultiTimeH` analytically continues the $n$-point Schwinger functions onto the multi-time right-half-plane domain $(\mathbb{C}_+)^{n-1} \times \mathbb{R}^{3n}$ with polynomial boundary growth (`exists_osMultiTimeH_growth_bound`). Iterated ODE regularization extracts tempered Minkowski boundary values `osReconstructedWightmanFamily`; Malgrange–Zerner real-analytic spatial-derivative Cauchy bounds and $SU(2) \times SU(2)$ Euclidean angular-momentum Ward identities integrate infinitesimal boosts to full $SL(2,\mathbb{C})$ Poincaré covariance (`osReconstructed_poincareCovariant`) and relativistic forward-cone `SpectrumCondition` (`osReconstructed_spectrumCondition`); `coneVladimirov_H_wickEmbedN_eq_schwinger` recovers $\mathcal{S}_n(y) = H_n(\mathrm{wickEmbedN}(y))$ on `orderedEuclidN n`; and `osReconstructedTubeExtensionData` + `os_full_wightman_reconstruction` automatically generate `OSTubeExtensionData`, `GeneralWightmanAxiomsWithUniqueVacuum`, $\mathcal{H}_{\mathrm{OS}} \simeq_{\mathbb{C}} \mathcal{H}_W$, Spin–Statistics, and unconditional promotion to `FullEuclidOSAxioms` for **all** $n \in \mathbb{N}$.
+- **Vladimirov Tempered Boundary Values, Constructive OS $\to$ Wightman `Positivity` & Pure-Euclidean 2-Point Reconstruction** (`src/WightmanBridge.lean:11822, 13227, 13831, 14008, 16506, 16627`): Any forward-tube holomorphic family `H` satisfying `OSTubeGrowthBound H` determines `vladimirovFromTubeWightmanFamily` and inherits all $n$-point relativistic Wightman `Positivity` (`positivity_of_osAxioms_and_tube`). For $n \le 2$, `os_two_point_wightman_reconstruction` independently constructs $H_{\le 2}$ and $W_{\le 2}$ from `OSPositiveTimeTwoPointPowerBound` via proper-time analytic continuation $\tau(z_1 - z_0) = \sqrt{-(z_1 - z_0)_M^2}$ and complex spinor boost $A(\zeta) = -(i / \tau(\zeta)) \mathrm{vecToSpinor}(\zeta) \in SL(2, \mathbb{C})$ (`vec_to_spinor`).
 - **$SO(4) \times S_n$ Orbit Covering, Unconditional Gluing from Relativistic `LocalCommutativity` & Unconditional Uniqueness** (`src/OSReconstruction.lean:14063, 16993, 17188, 18159, 18686`, `src/WightmanBridge.lean:5055, 10064`): Every non-coincident Euclidean configuration lands in `orderedEuclidN n` under $SO(4) \times S_n$, yielding full-Euclidean uniqueness (`fullEuclid_eq_of_eq_on_orderedEuclidN`), unconditional reconstructed Wightman uniqueness (`wightman_unique_unconditional`), and unconditional promotion of relativistic `LocalCommutativity` to `EuclidExtendedTubePermLocality` and `FullEuclidOSAxioms`.
 
 ```lean
+theorem exists_osMultiTimeH_growth_bound
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    ∀ (n : ℕ), ∃ (C_n : ℝ) (M_n : ℕ), 0 ≤ C_n ∧
+      ∀ (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ) (τ : Fin (n - 1) → ℂ),
+        (∀ k : Fin (n - 1), 0 < (τ k).re) →
+        ‖osMultiTimeH hOS hcluster hdamped n α x_sp τ‖ ≤
+          C_n * ∏ k : Fin (n - 1), (1 + ((τ k).re)⁻¹) ^ M_n
+
+noncomputable def osReconstructedWightmanFamily
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    WightmanFamily ι
+
+theorem osReconstructed_poincareCovariant
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    PoincareCovariant R (osReconstructedWightmanFamily hOS hcluster hdamped)
+
+theorem osReconstructed_spectrumCondition
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    SpectrumCondition (osReconstructedWightmanFamily hOS hcluster hdamped)
+
+noncomputable def osReconstructedTubeExtensionData
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData) :
+    OSTubeExtensionData R 𝒮
+
+theorem os_full_wightman_reconstruction
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hdamped : OSDampedFieldBounded hOS.toReflectionPositiveData)
+    (hnorm : OSVacuumNormalized 𝒮) :
+    let T := osReconstructedTubeExtensionData hOS hcluster hdamped
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = osReconstructedWightmanFamily hOS hcluster hdamped ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare R P.poincare) a (U Ψ)) ∧
+    ((∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ β : Fin 2 → ι, osReconstructedWightmanFamily hOS hcluster hdamped 2 β ≠ 0) →
+        η = ε) ∧
+      (∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+          x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) → η = ε)) ∧
+    ((η = 1 ∨ η = -1) →
+      LocalCommutativity η (osReconstructedWightmanFamily hOS hcluster hdamped) →
+      FullEuclidOSAxioms R S η P.permutedSchwinger ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n → P.permutedSchwinger n α x = 𝒮 n α x)
+
 noncomputable def ForwardConeOSReconstructedWightman.osToWightmanLinearIsometryEquiv
     (P : ForwardConeOSReconstructedWightman R S η 𝒮) :
     P.Hilbert ≃ₗᵢ[ℂ] P.WightmanHilbertSpace
@@ -819,9 +940,23 @@ noncomputable def freeDiracWightmanAxiomsWithUniqueVacuum {m : ℝ} (hm : 0 < m)
     WightmanAxiomsWithUniqueVacuum diracRep diracStarStructure (-1)
 ```
 
-Both models satisfy sharp exponential Euclidean time-cluster bounds with mass gap $m > 0$ (`src/FreeFieldFock.lean:5379-5399`) and end-to-end synthesis theorems (`src/FreeFieldFock.lean:5563-5696`):
+Both models satisfy Fock damped-field operator bounds (`K = 3`), pure-Euclidean all $n$-point OS reconstruction agreement (`src/FreeFieldFock.lean:9139-9299`), sharp exponential Euclidean time-cluster bounds with mass gap $m > 0$ (`src/FreeFieldFock.lean:5379-5399`), and end-to-end synthesis theorems (`src/FreeFieldFock.lean:9301-9476`):
 
 ```lean
+theorem freeKGOSDampedFieldBounded {m : ℝ} (hm : 0 < m) :
+    OSDampedFieldBounded (freeKGOSAxioms hm).toReflectionPositiveData
+
+theorem freeDiracOSDampedFieldBounded {m : ℝ} (hm : 0 < m) :
+    OSDampedFieldBounded (freeDiracOSAxioms hm).toReflectionPositiveData
+
+theorem freeKG_osReconstructedWightmanFamily_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily (freeKGOSAxioms hm) (freeKGOSTimeCluster hm)
+      (freeKGOSDampedFieldBounded hm) = freeKGW m hm
+
+theorem freeDirac_osReconstructedWightmanFamily_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm)
+      (freeDiracOSDampedFieldBounded hm) = freeDiracW m hm
+
 theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     FullEuclidOSAxioms trivialRep trivialStarStructure 1 (freeKGFullS m hm) ∧
     OSAxioms trivialRep trivialStarStructure 1 (freeKGS m hm) ∧
@@ -845,6 +980,13 @@ theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     (∀ {n : ℕ}, n ≤ 2 →
       osTwoPointWightmanFamily (freeKGOSAxioms hm) (freeKGOSTimeCluster hm)
         (freeKGS_positiveTimeTwoPointPowerBound hm) n = freeKGW m hm n) ∧
+    OSDampedFieldBounded (freeKGOSAxioms hm).toReflectionPositiveData ∧
+    OSDampedFieldBounded
+      (freeKGFullEuclidOSAxioms hm).toOSAxioms.toReflectionPositiveData ∧
+    osReconstructedWightmanFamily (freeKGOSAxioms hm) (freeKGOSTimeCluster hm)
+      (freeKGOSDampedFieldBounded hm) = freeKGW m hm ∧
+    osReconstructedWightmanFamily (freeKGFullEuclidOSAxioms hm).toOSAxioms
+      (freeKGFullOSTimeCluster hm) (freeKGFullOSDampedFieldBounded hm) = freeKGW m hm ∧
     Positivity trivialStarStructure (freeKGW m hm) ∧
     PoincareCovariant trivialRep (freeKGW m hm) ∧
     ForwardConeSpectrumCondition (freeKGW m hm) ∧
@@ -883,6 +1025,14 @@ theorem freeDirac_grand_master {m : ℝ} (hm : 0 < m) :
     (∀ {n : ℕ}, n ≤ 2 →
       osTwoPointWightmanFamily (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm)
         (freeDiracS_positiveTimeTwoPointPowerBound hm) n = freeDiracW m hm n) ∧
+    OSDampedFieldBounded (freeDiracOSAxioms hm).toReflectionPositiveData ∧
+    OSDampedFieldBounded
+      (freeDiracFullEuclidOSAxioms hm).toOSAxioms.toReflectionPositiveData ∧
+    osReconstructedWightmanFamily (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm)
+      (freeDiracOSDampedFieldBounded hm) = freeDiracW m hm ∧
+    osReconstructedWightmanFamily (freeDiracFullEuclidOSAxioms hm).toOSAxioms
+      (freeDiracFullOSTimeCluster hm) (freeDiracFullOSDampedFieldBounded hm) =
+      freeDiracW m hm ∧
     Positivity diracStarStructure (freeDiracW m hm) ∧
     PoincareCovariant diracRep (freeDiracW m hm) ∧
     ForwardConeSpectrumCondition (freeDiracW m hm) ∧
@@ -975,7 +1125,7 @@ In `FreeFieldFock.lean`, uniqueness of the translation-invariant Wightman vacuum
 
 ### 6.5 Unconditional General-Spin Spin–Statistics via PSD/PCT Sesquilinear Cancellation & Split-Product Spectral Density
 Classic proofs of the Spin–Statistics theorem for higher-spin or Dirac fields must handle non-diagonal Hermitian conjugation matrices (such as $C = \gamma^0$, which swaps left- and right-handed Weyl blocks so individual diagonal components are zero). Our proof avoids representation-by-representation casework through two general mechanisms:
-1. **Algebraic PSD + PCT Matrix Cancellation** (`src/VectorBHW.lean`, `eq_zero_of_psd_pct_pair_ne_spinParity`): Evaluating `StarStructure.intertwine` at $P_{\mathrm{PT}} = (-1, 1) \in SL(2,\mathbb{C}) \times SL(2,\mathbb{C})$ and combining with `R.HasSpinParity ε` ($\sigma(-1,-1) = \varepsilon I$) yields the exact intertwining relation $C \sigma(-1,1) = \varepsilon \overline{\sigma(-1,1)} C$. Whenever two $\iota \times \iota$ two-point matrices $M_1, M_2$ satisfy positive-semidefiniteness $u^\dagger (C M_k) u \ge 0$ ($\forall u \in \mathbb{C}^\iota$) together with mutual PCT transposition $M_1 = \eta \, \sigma(-1,1) M_2^{\mathsf{T}} \sigma(-1,1)^{\mathsf{T}}$ and $M_2 = \eta \, \sigma(-1,1) M_1^{\mathsf{T}} \sigma(-1,1)^{\mathsf{T}}$, polarization implies $C M_k$ is Hermitian and congruency forces $u^\dagger (C M_1) u$ and $(\eta \varepsilon) \, u^\dagger (C M_1) u$ to be simultaneously $\ge 0$—forcing $M_1 = M_2 = 0$ whenever $\eta \neq \varepsilon$ ($\varepsilon = \pm 1$).
+1. **Algebraic PSD + PCT Matrix Cancellation** (`src/VectorBHW.lean`, `eq_zero_of_psd_pct_pair_ne_spinParity`): Evaluating `StarStructure.intertwine` at $P_{\mathrm{PT}} = (-1, 1) \in SL(2,\mathbb{C}) \times SL(2,\mathbb{C})$ and combining with `R.HasSpinParity ε` ($\sigma(-1,-1) = \varepsilon I$) yields the exact intertwining relation $C \sigma(-1,1) = \varepsilon \overline{\sigma(-1,1)} C$. Whenever two $\iota \times \iota$ two-point matrices $M_1, M_2$ satisfy positive-semidefiniteness $u^\dagger (C M_k) u \ge 0$ ($\forall u \in \mathbb{C}^\iota$) together with mutual PCT transposition $M_1 = \eta \sigma(-1,1) M_2^{\mathsf{T}} \sigma(-1,1)^{\mathsf{T}}$ and $M_2 = \eta \sigma(-1,1) M_1^{\mathsf{T}} \sigma(-1,1)^{\mathsf{T}}$, polarization implies $C M_k$ is Hermitian and congruency forces $u^\dagger (C M_1) u$ and $(\eta \varepsilon) u^\dagger (C M_1) u$ to be simultaneously $\ge 0$—forcing $M_1 = M_2 = 0$ whenever $\eta \neq \varepsilon$ ($\varepsilon = \pm 1$).
 2. **Forward-Cone Split-Product Fourier Density & OS Cauchy–Schwarz Propagation** (`src/WightmanFramework.lean`, `wightman_two_eq_zero_of_schwartzProdSplit_eq_zero`; `src/OSReconstruction.lean`, `osAxioms_wrong_statistics_schwinger_eq_zero`): On the relativistic side, applying the algebraic lemma to $M_1(\varphi) = W_2(\varphi^* \otimes \varphi)$ and $M_2(\varphi) = W_2(\widetilde{\varphi}^* \otimes \widetilde{\varphi})$ kills $W_2(\varphi^* \otimes \varphi)$, polarization kills all split Schwartz products $\psi_1 \otimes \psi_2$, and evaluating on cone-adapted Schwartz wavepackets recovers $H_2(z) \equiv 0$ on $\mathcal{T}_2$ and hence $W_2 \equiv 0$ on all of $\mathcal{S}(\mathbb{R}^8)$. On the Euclidean OS side, applying the same matrix lemma directly to $M_{bc}(y) = \mathcal{S}_2((b,c), (-y^0, \mathbf{y}; y^0, \mathbf{y}))$ kills all 1-point OS Hilbert norms $\| \Psi_{1,c,y} \|_{\mathrm{OS}}^2 = 0$, which by Cauchy–Schwarz kills **every** $n$-point Schwinger function ($n \ge 1$) on `orderedEuclidN n`—and by $SO(4) \times S_n$ orbit covering (`exists_euclidRot_perm_mem_orderedEuclidN`), across all of `nonCoincidentEuclidN n`.
 
 ### 6.6 Full Non-Coincident Euclidean Gluing & Minkowski Adjacent Spacelike Locality
@@ -989,6 +1139,13 @@ Connecting relativistic adjacent spacelike `LocalCommutativity` to full non-coin
 1. **General $n$-Dimensional Continuous & Tempered Distributional Edge-of-the-Wedge** (`src/SCVAnalysis.lean`, `orthant_eow_extension`, `eow_all_dim`; `src/DistributionEOW.lean`, `local_eow_of_continuous_boundary`, `local_eow_of_tempered_boundary`): First, `orthant_eow_extension` proves the general $n$-variable continuous-boundary EOW theorem by slicing along diagonal complex lines $w \mapsto z + w \cdot \mathbf{1}$ via 1D Morera extension and promoting separate coordinate holomorphicity on polydiscs to joint $\mathbb{C}^n$-analyticity via Cauchy integral formulas; invertible linear frames map arbitrary nonempty convex open cones $V_+ \subset \mathbb{R}^n$ onto orthants (`eow_all_dim`). Second, when $f_\pm$ satisfy only `HasPolynomialTubeGrowth` ($\|f_\pm(x + i s y)\| \le C / s^N$) without boundary continuity, `local_eow_of_tempered_boundary` integrates $(N+2)$ times along a cone direction $v_0 \in V_+$ to obtain boundary-continuous holomorphic antiderivatives $F_\pm$, matches their boundary difference to a polynomial in $\langle x, v_0 \rangle$ annihilated by $(\partial_{v_0})^{N+2}$, applies `local_eow_of_continuous_boundary`, and recovers holomorphic continuation of $f_\pm$ by applying $(\partial_{v_0})^{N+2}$—instantiated directly in $4n$ dimensions for `coneVladimirovTubeExtension` (`coneVladimirov_jost_eow_extension`).
 2. **Real Jost Permutation Overlap & Complex Spatial-Time Strip Continuation** (`src/VectorBHW.lean`, `jost_inter_perm_nonempty`, `spinor_H_ext_perm_eq_on_jost_inter`; `src/OSReconstruction.lean`, `wickEmbedN_mem_extended_tube_iff_exists_euclidSep`, `euclidExtendedTubePermLocality_of_localCommutativity`): Every pair of permutations exhibits a nonempty open real Jost overlap $J_n \cap \sigma^{-1}(J_n)$ (witnessed by collinear spatial configurations $x_i = (0, i, 0, 0)$), where `LocalCommutativity.toPermSpacelikeLocality` and Schwartz bump density force `spinor_H_ext` to agree up to $\eta^{\mathrm{inv}(\sigma)}$. Next, `wickEmbedN_mem_extended_tube_iff_exists_euclidSep` characterizes `wickEmbedN n y ∈ extended_tube_n n` via Euclidean hyperplane separation $\langle u, y_{i+1} - y_i \rangle_E > 0$. Given $y$ separated by $u_1$ and $y \circ \pi$ separated by $u_2$, choosing a unit 4-vector $w \perp u_1, u_2$ (available strictly because spacetime dimension is $4 \ge 3$) and rotating $(u_1, u_2, w)$ into $(e_0, (\cos\theta)e_0 + (\sin\theta)e_1, e_2)$ constructs a single-variable complex curve $\gamma(s) = s \cdot \mathrm{wickEmbed}(y') + (1 - s)\varepsilon(0,0,i,0)$ ($\mathrm{Re}(s) \in (0,1)$) connecting real Jost overlap points ($s = i\tau$, $\tau > 0$) to the target Wick configuration ($s \to 1^-$) while staying simultaneously inside $\mathcal{T}'_n \cap \pi^{-1}(\mathcal{T}'_n)$ via an explicit complex Lorentz transformation in $SO^+(1,3;\mathbb{C})$. One-variable identity continuation along the strip $\mathrm{Re}(s) \in (0,1)$ and continuity at $s = 1$ establish `EuclidExtendedTubePermLocality` and hence `FullEuclidOSAxioms` unconditionally (`schwingerFromPermutedTube_fullEuclidOSAxioms_of_localCommutativity`, `WightmanAxioms.toFullEuclidOSAxioms`, `ForwardConeOSReconstructedWightman.toFullEuclidOSAxioms`).
 
+### 6.8 Multi-Time Semigroup Continuation, Malgrange–Zerner Cross Analyticity & Pure-Euclidean All $n$-Point OS Reconstruction
+Eliminating exogenous `OSTubeExtensionData` for arbitrary $n \in \mathbb{N}$—so that full relativistic Wightman QFT is reconstructed directly from pure Euclidean `OSAxioms` + `OSTimeClusterDecomposition` + `OSDampedFieldBounded`—unites four analytic and operator-theoretic stages:
+1. **General $N$-Dimensional Malgrange–Zerner Flattened-Tube & Local Cross Analyticity** (`src/SCVAnalysis.lean`, `osgood_nd`, `malgrange_zerner_flat_tube`, `malgrange_zerner_local_cross`): For $N$ continuous 1D strip branches $f_m$ on $\mathbb{R}^N + i (-\alpha, \alpha) e_m$ agreeing with $f_0$ on $\mathbb{R}^N$, multiplying by the Gaussian $\exp(-\varepsilon \sum_j z_j^2)$, shifting one contour at a time inside $|\mathrm{Im}(z_m)| < \alpha$, dominating the exponential Fourier growth via convexity on the octahedron $\sum_m |y_m| < \alpha$, and passing $\varepsilon \to 0^+$ via Cauchy integral derivative bounds constructs a joint holomorphic extension on `TubeDomain (Octahedron N α)`. Conformal strip-to-disc pullbacks localize this to bounded real cubes with explicit Cauchy derivative bounds $2 M / \rho(N, r, R)$ (`malgrange_zerner_local_cross`).
+2. **Damped OS Field Operators & Multi-Time Holomorphic Continuation on $(\mathbb{C}_+)^{n-1} \times \mathbb{R}^{3n}$** (`src/OSReconstruction.lean`, `OSDampedFieldBounded`, `osMultiTimeH`, `exists_osMultiTimeH_growth_bound`): Under `OSDampedFieldBounded` ($\|\Phi_\varepsilon(\alpha_0, \mathbf{x}) \Psi\|_{\mathrm{OS}} \le C_0 (1 + \varepsilon^{-1})^K \|\Psi\|_{\mathrm{OS}}$ for the damped field-prepend-and-shift operator $\Phi_\varepsilon = e^{-\varepsilon H} \phi(\varepsilon, \mathbf{x}) e^{-\varepsilon H}$), iterating $\Phi_\varepsilon$ interleaved with the canonical right-half-plane holomorphic contraction semigroup $Z(\tau_k - 2\varepsilon)$ defines `osMultiTimeH` across all $(\tau_1, \dots, \tau_{n-1}) \in (\mathbb{C}_+)^{n-1}$ independently of the splitting parameter $\varepsilon > 0$ (verified via 1D identity continuation and `osgood_nd`), with uniform polynomial growth $\prod_k (1 + (\mathrm{Re}(\tau_k))^{-1})^{M_n}$.
+3. **Boost Ward Identities & Full Forward-Tube Reconstruction** (`src/WightmanBridge.lean`, `osReconstructedWightmanFamily`, `osReconstructed_poincareCovariant`, `osReconstructed_spectrumCondition`, `coneVladimirov_H_wickEmbedN_eq_schwinger`, `os_full_wightman_reconstruction`): Iterated ODE antiderivatives along positive-time directions extract tempered Minkowski boundary values `osReconstructedWightmanFamily` satisfying spatial $SU(2)$ covariance, translation invariance, and joint energy positivity $\sum_{i \le k} p_i^0 \ge 0$. Differentiating Euclidean $SU(2) \times SU(2)$ rotation covariance on `orderedEuclidN n` yields Euclidean angular-momentum Ward identities; combining `malgrange_zerner_local_cross` real-analyticity in $(\tau, \mathbf{x})$ with analytic continuation from $\tau_k > 0$ to $\tau_k = \delta + i t_k$ ($\delta \to 0^+$) converts Euclidean $(0, j)$-rotations into infinitesimal Minkowski boosts, whose first-order ODE integrates along hyperbolic 1-parameter subgroups to full $SL(2,\mathbb{C})$ `PoincareCovariant`! Combined with energy positivity, Lorentz covariance forces full relativistic forward-cone `SpectrumCondition`, whence `coneVladimirovTubeExtension` automatically generates `osReconstructedTubeExtensionData : OSTubeExtensionData R 𝒮` and closes `os_full_wightman_reconstruction`.
+4. **Fock Creation/Annihilation Damped Bounds ($K = 3$) for 4D $m > 0$ Free Bose & Fermi Fields** (`src/FreeFieldFock.lean`, `wickMassShellOSDampedFieldBounded`, `freeKGOSDampedFieldBounded`, `freeDiracOSDampedFieldBounded`, `freeKG_pure_os_full_reconstruction`, `freeDirac_pure_os_full_reconstruction`): Decomposing `PartialPairing (j + 1) r` at index `0` (`partialPairingSuccZeroEquiv` and `partialPairingSuccSuccEquiv` with exact fermionic crossing parity `partialCross_prependUnpaired` / `partialCross_prependPaired`) splits the damped OS prepend-shift action on `FockHilbert ν` into a damped creation operator plus a damped annihilation operator. Bounding $(r + 1) e^{-4\varepsilon r m} \le 1 + (4 e m \varepsilon)^{-1}$ uniformly in the particle number $r$ and $\int_{\mathbb{R}^3} e^{-2\varepsilon \sqrt{m^2 + |\mathbf{q}|^2}} d^3q \le C_m (1 + \varepsilon^{-1})^3$ establishes `OSDampedFieldBounded` with sharp exponent $K = 3$ for both Klein–Gordon and Dirac fields, and proves `osReconstructedWightmanFamily = freeKGW` / `freeDiracW` across all $n \in \mathbb{N}$.
+
 ---
 
 ## 7. Mathematical Scope, Design Choices & Open Boundaries
@@ -999,21 +1156,20 @@ In the spirit of completely transparent formalization reporting, the boundaries 
    - Both the time-ordered chamber `orderedEuclidN n` (`OSAxioms`) and the full pairwise non-coincident Euclidean domain $\mathbb{R}^{4n}_{\neq}$ (`nonCoincidentEuclidN n`, `FullEuclidOSAxioms`) are fully developed in `OSReconstruction.lean` and `WightmanBridge.lean`: $SO(4) \times S_n$ orbit covering (`exists_euclidRot_perm_mem_orderedEuclidN`), uniqueness from `orderedEuclidN n` (`fullEuclid_eq_of_eq_on_orderedEuclidN`), unconditional full-Euclidean Spin–Statistics (`fullEuclidOSAxioms_spin_statistics`), and **unconditional general $n$-point gluing directly from relativistic `LocalCommutativity`** (`euclidExtendedTubePermLocality_of_localCommutativity`, `schwingerFromPermutedTube_fullEuclidOSAxioms_of_localCommutativity`, `WightmanAxioms.toFullEuclidOSAxioms`, `ForwardConeOSReconstructedWightman.toFullEuclidOSAxioms`, `coneVladimirov_fullEuclidOSAxioms_of_localCommutativity`).
    - Constructively, both massive 4D $m > 0$ free theories also inhabit `FullEuclidOSAxioms` across all $n \in \mathbb{N}$ (`freeKGFullEuclidOSAxioms`, `freeDiracFullEuclidOSAxioms`) with explicit non-vanishing witnesses on equal-time spatially separated points (`freeKGFullS_equalTime_ne_zero`, `freeDiracFullS_equalTime_exists_ne_zero`).
 
-2. **Osterwalder–Schrader Reconstruction (Eliminated Exogenous Operator/Hilbert/Positivity Inputs vs Multi-Time $n \ge 3$ Analytic Continuation)**:
-   - **Canonical Semigroup, Unitary Equivalence, Tempered Boundary Values, Wightman Positivity & $n \le 2$ Reconstruction (Exogenous `spec`, `F`, `Φ`, and `Positivity` Eliminated)**:
+2. **Pure-Euclidean All $n$-Point Osterwalder–Schrader Reconstruction (All Exogenous Operator/Hilbert/Positivity/Tube Inputs Eliminated)**:
+   - **End-to-End Pure-Euclidean Reconstruction Across All $n \in \mathbb{N}$**:
      1. *Canonical Spectral Functional Calculus* (`canonicalOSHolomorphicSemigroup`, `isWeaklyHolomorphic_canonicalOSHolomorphicSemigroup`): The right-half-plane holomorphic contraction semigroup `Z(z)` ($\mathrm{Re}(z) > 0$) and its weak holomorphicity are constructed directly from `OSAxioms` via continuous C\*-functional calculus on $[0,1] \subset \mathbb{R}$, eliminating exogenous spectral measure spaces `spec`.
-     2. *Canonical Hilbert Space Unitary Equivalence* (`osToWightmanLinearIsometryEquiv`, `toGeneralWightmanAxiomsWithUniqueVacuum`): Positive-Euclidean-time Schwartz wavepacket embedding and Paley–Wiener–Laplace density construct a canonical unitary equivalence $\mathcal{H}_{\mathrm{OS}} \simeq_{\mathbb{C}} \mathcal{H}_W$ intertwining spacetime translations and transporting cluster/unique-vacuum properties without any exogenous wavepacket map `Φ`.
-     3. *Vladimirov Boundary Values & Constructive OS $\to$ Wightman Positivity* (`vladimirovFromTubeWightmanFamily`, `positivity_of_osAxioms_and_tube`, `OSTubeExtensionData`, `os_to_wightman_full_synthesis`): Any covariant forward-tube holomorphic extension of $\mathcal{S}_n$ satisfying polynomial `OSTubeGrowthBound` automatically produces tempered Wightman distributions satisfying `SpectrumCondition`, `PoincareCovariant`, `TubePCT`, `WeakLocality`, and all $n$-point relativistic `Positivity`—eliminating exogenous spectral measure families `F` and exogenous Wightman `Positivity` assumptions.
-     4. *Pure-Euclidean $n \le 2$ Reconstruction* (`os_two_point_wightman_reconstruction`): For $n \le 2$, **no** tube input is assumed; `OSAxioms` + `OSTimeClusterDecomposition` + `OSPositiveTimeTwoPointPowerBound` directly construct $H_{\le 2}$ and $W_{\le 2}$ via semigroup proper-time analytic continuation $\tau(z_1 - z_0)$ and complex spinor boost $A(z_1 - z_0) \in SL(2,\mathbb{C})$.
-   - **Multi-Time $n \ge 3$ Glaser–Streater Envelope-of-Holomorphy Step**: Constructing `OSTubeExtensionData` for $n \ge 3$ purely from abstract time-ordered Euclidean `OSAxioms` + the OS 1975 factorial/linear growth condition (without assuming `H` on $\mathcal{T}_n$) requires the multi-variable Glaser–Streater / Malgrange–Zerner iterated flattened-tube envelope-of-holomorphy continuation from the multi-time right-half-plane semigroup domain $(\mathbb{C}_+)^{n-1} \times \mathbb{R}^{3n}$ onto the full $n$-point forward tube $\mathcal{T}_n$. For the concrete 4D $m > 0$ Klein–Gordon and Dirac theories, `OSTubeExtensionData` is constructed unconditionally for all $n \in \mathbb{N}$ (`freeKGOSTubeExtensionData`, `freeDiracOSTubeExtensionData`, `freeKGFullOSTubeExtensionData`, `freeDiracFullOSTubeExtensionData`).
+     2. *Multi-Time Semigroup Continuation, Malgrange–Zerner Boost Ward Identities & Automatic `OSTubeExtensionData` Generation* (`osMultiTimeH`, `osReconstructedWightmanFamily`, `osReconstructed_poincareCovariant`, `osReconstructed_spectrumCondition`, `osReconstructedTubeExtensionData`, `os_full_wightman_reconstruction`): Directly from pure Euclidean `OSAxioms` + `OSTimeClusterDecomposition` + `OSDampedFieldBounded`—with **zero** exogenous `OSTubeExtensionData`, **zero** exogenous spectral measures `F`, and **zero** exogenous Wightman `Positivity`—the library constructs all $n$-point tempered Wightman distributions, full forward-tube analytic continuations on $\mathcal{T}_n$, `GeneralWightmanAxiomsWithUniqueVacuum`, Spin–Statistics, and unconditional promotion to `FullEuclidOSAxioms` (alongside the independent $n \le 2$ proper-time reconstruction `os_two_point_wightman_reconstruction`).
+     3. *Canonical Hilbert Space Unitary Equivalence* (`osToWightmanLinearIsometryEquiv`, `toGeneralWightmanAxiomsWithUniqueVacuum`): Positive-Euclidean-time Schwartz wavepacket embedding and Paley–Wiener–Laplace density construct a canonical unitary equivalence $\mathcal{H}_{\mathrm{OS}} \simeq_{\mathbb{C}} \mathcal{H}_W$ intertwining spacetime translations and transporting cluster/unique-vacuum properties without any exogenous wavepacket map `Φ`.
+   - **Operator-Level `OSDampedFieldBounded` vs OS 1975 Schwinger Seminorm Growth ($E0'$)**: In the present formalization, the Euclidean regularity/growth hypothesis accompanying `OSAxioms` is formulated directly as the damped OS field operator bound `OSDampedFieldBounded` ($\|\Phi_\varepsilon(\alpha_0, \mathbf{x}) \Psi\|_{\mathrm{OS}} \le C_0 (1 + \varepsilon^{-1})^K \|\Psi\|_{\mathrm{OS}}$), verified constructively across `vacS`, finite-mode / coherent / $\mathbb{Z}_2$ models, and 4D $m > 0$ free Klein–Gordon and Dirac fields (`K = 3`). Deriving `OSDampedFieldBounded` from raw factorial-power Schwartz seminorm bounds ($E0'$) of Osterwalder–Schrader (1975) or constructing non-Gaussian interacting models ($P(\phi)_2$, $\mathrm{Yukawa}_2$) remain natural future extensions.
 
 3. **Spin–Statistics Theorem (Self-Conjugate Representations vs Pure Chiral Weyl Fields)**:
    - **Unconditionally Proved for All `(R, S)` with `HasSpinParity ε`**: Both on the relativistic Wightman side (`spin_statistics_of_spectrumCondition`, `WightmanAxioms.spin_statistics`) and on the Euclidean OS side (`osAxioms_spin_statistics`, `fullEuclidOSAxioms_spin_statistics`, `ForwardConeOSReconstructedWightman.spin_statistics_of_any_wightman_ne_zero`), $\eta = \varepsilon$ is proved unconditionally for **every** finite-dimensional polynomial Lorentz representation `R` with `R.HasSpinParity ε` admitting a `StarStructure R` (covering scalars, 4-vectors, Dirac bispinors with off-diagonal $C = \gamma^0$, and arbitrary $(m_1/2, m_2/2) \oplus (m_2/2, m_1/2)$ bispinor tensors), as well as for the concrete massive `freeKGW` and `freeDiracW` models.
    - **Pure Chiral Representations Without `StarStructure`**: As proved by `isEmpty_starStructure_leftWeylRep` and `isEmpty_starStructure_rightWeylRep`, a single 2-component Weyl spinor $(1/2, 0)$ or $(0, 1/2)$ cannot carry a self-conjugate `StarStructure` without adjoining its conjugate partner (forming a Majorana/Dirac pair). For pure chiral two-point functions on $\mathcal{T}_n$, `OSReconstruction.lean` separately proves Clebsch–Gordan origin-antisymmetry Spin–Statistics (`leftWeyl_spin_statistics_unconditional`, `rightWeyl_spin_statistics_unconditional`, `leftWeyl_wightman_spin_statistics_unconditional`) under non-vanishing at a zero-difference tube point $z_0 = z_1$.
 
-4. **Edge-of-the-Wedge & Tube Continuation Scope**:
-   - Both the **general $n$-dimensional continuous-boundary Edge-of-the-Wedge theorems** (`orthant_eow_extension`, `eow_all_dim`, `local_eow_of_continuous_boundary`) and the **general $n$-dimensional polynomial-growth tempered distributional Edge-of-the-Wedge theorem** (`local_eow_of_tempered_boundary`, together with its $4n$-dimensional QFT instantiation `coneVladimirov_jost_eow_extension`) are proved **unconditionally for arbitrary $n \in \mathbb{N}$** across any pair of opposite convex open cones $V_+, -V_+ \subset \mathbb{R}^n$.
-   - For convex-envelope continuation on single non-convex tubes, the bounded 2D L-shaped `bochner_tube_theorem` is proved unconditionally in `SCVAnalysis.lean` (general arbitrary-codimension unbounded Bochner tube continuation on $\mathbb{R}^n + i \Omega$ and multi-cone non-opposite Epstein hull theorems remain future SCV extensions).
+4. **Edge-of-the-Wedge, Malgrange–Zerner & Tube Continuation Scope**:
+   - The **general $N$-dimensional Osgood lemma and Malgrange–Zerner flattened-tube / local cross analyticity theorems** (`osgood_nd`, `malgrange_zerner_flat_tube`, `malgrange_zerner_local_cross`), the **general $n$-dimensional continuous-boundary Edge-of-the-Wedge theorems** (`orthant_eow_extension`, `eow_all_dim`, `local_eow_of_continuous_boundary`), and the **general $n$-dimensional polynomial-growth tempered distributional Edge-of-the-Wedge theorem** (`local_eow_of_tempered_boundary`, together with `coneVladimirov_jost_eow_extension`) are all proved **unconditionally for arbitrary dimension**.
+   - For convex-envelope continuation on single open non-convex tubes, the bounded 2D L-shaped `bochner_tube_theorem` is proved unconditionally in `SCVAnalysis.lean` (general arbitrary-codimension unbounded Bochner tube continuation on $\mathbb{R}^n + i \Omega$ and multi-cone non-opposite Epstein hull theorems remain future SCV extensions).
 
 5. **Modern `ForwardConeSpectrumCondition` vs Legacy `ZeroMomentumSpectrumCondition` Infrastructure**:
    - Early sections of `WightmanFramework.lean` (`vladimirov_H`) and `OSReconstruction.lean` (`OSReconstructedWightman`) contain an initial zero-momentum stepping-stone layer (`ZeroMomentumSpectrumCondition`). All physical theorems and 4D $m > 0$ models use the modern, UV-cutoff-free relativistic `SpectrumCondition` (`ForwardConeSpectrumCondition`), `coneVladimirovTubeExtension`, and `ForwardConeOSReconstructedWightman`.
@@ -1055,6 +1211,9 @@ import FreeFieldFock
 #print axioms Geometry.jost_theorem
 #print axioms Geometry.PolarDecomposition.orbit_domain_path_connected
 #print axioms QFT.Bochner.bochner_tube_theorem
+#print axioms QFT.osgood_nd
+#print axioms QFT.malgrange_zerner_flat_tube
+#print axioms QFT.malgrange_zerner_local_cross
 #print axioms QFT.orthant_eow_extension
 #print axioms QFT.eow_all_dim
 #print axioms Distribution.local_eow_of_continuous_boundary
@@ -1082,6 +1241,12 @@ import FreeFieldFock
 #print axioms QFT.positivity_of_osAxioms_and_tube
 #print axioms QFT.os_two_point_wightman_reconstruction
 #print axioms QFT.os_to_wightman_full_synthesis
+#print axioms QFT.exists_osMultiTimeH_growth_bound
+#print axioms QFT.osReconstructedWightmanFamily
+#print axioms QFT.osReconstructed_poincareCovariant
+#print axioms QFT.osReconstructed_spectrumCondition
+#print axioms QFT.osReconstructedTubeExtensionData
+#print axioms QFT.os_full_wightman_reconstruction
 #print axioms QFT.dirac_forwardCone_os_spin_statistics_any_nPoint
 #print axioms QFT.spinorTensorBispinor_forwardCone_os_spin_statistics_any_nPoint
 #print axioms QFT.osterwalder_schrader_measure_reconstruction_of_data
@@ -1089,6 +1254,12 @@ import FreeFieldFock
 #print axioms QFT.freeDirac_localCommutativity
 #print axioms QFT.freeKGFullEuclidOSAxioms
 #print axioms QFT.freeDiracFullEuclidOSAxioms
+#print axioms QFT.freeKGOSDampedFieldBounded
+#print axioms QFT.freeDiracOSDampedFieldBounded
+#print axioms QFT.freeKG_osReconstructedWightmanFamily_eq
+#print axioms QFT.freeDirac_osReconstructedWightmanFamily_eq
+#print axioms QFT.freeKG_pure_os_full_reconstruction
+#print axioms QFT.freeDirac_pure_os_full_reconstruction
 #print axioms QFT.freeKG_os_to_wightman_synthesis
 #print axioms QFT.freeDirac_os_to_wightman_synthesis
 #print axioms QFT.freeKG_grand_master
@@ -1108,7 +1279,8 @@ Every `#print axioms` query outputs:
 | **Bargmann, Hall & Wightman (1957)**, *Nuovo Cimento* **5**, 1–31 — Single-valued analytic continuation from $\mathcal{T}_n$ to $\mathcal{T}'_n$ | `orbit_domain_path_connected` (`PolarDecomposition.lean`), `bhw_theorem` (`AnalyticContinuation.lean`), `spinor_bhw_theorem` (`VectorBHW.lean`) |
 | **Jost (1957 / 1965)**, *The General Theory of Quantized Fields*, Ch. IV — Real points of $\mathcal{T}'_n$, equivalence of PCT and Weak Locality | `jost_theorem` (`Lightcone.lean`), `tubePCT_iff_weakLocality` (`VacuumTheory.lean`), `wightman_pct_of_spectrumCondition` (`VectorBHW.lean`) |
 | **Bogoliubov, Vladimirov & Epstein (1958 / 1960)**, *J. Math. Phys.* **1**, 524–531 — General $n$-dimensional analytic & tempered distributional Edge-of-the-Wedge theorem | `orthant_eow_extension` & `eow_all_dim` (`SCVAnalysis.lean`), `local_eow_of_continuous_boundary` & `local_eow_of_tempered_boundary` (`DistributionEOW.lean`), `coneVladimirov_jost_eow_extension` (`VectorBHW.lean`) |
+| **Malgrange & Zerner (1961) / Komatsu (1966)**, *Séminaire Schwartz* & *J. Fac. Sci. Univ. Tokyo* — Flattened-tube & separate real-analyticity convex-hull continuation | `osgood_nd`, `malgrange_zerner_flat_tube` & `malgrange_zerner_local_cross` (`SCVAnalysis.lean`) |
 | **Streater & Wightman (1964)**, *PCT, Spin and Statistics, and All That*, Ch. 2–4 — Tempered Wightman axioms, GNS reconstruction, Spin–Statistics, cluster uniqueness | `WightmanFramework.lean`, `spin_statistics_of_spectrumCondition` (`VectorBHW.lean`), `WightmanAxioms` & `WightmanAxiomsWithUniqueVacuum` (`WightmanBridge.lean`) |
 | **Vladimirov (1979)**, *Methods of the Theory of Generalized Functions* — Laplace transform of tempered distributions supported in dual cones | `coneVladimirovTubeExtension`, `coneVladimirov_tubeCovariant` (`WightmanFramework.lean`), `coneVladimirov_hasPolynomialTubeGrowth_forward` & `coneVladimirov_hasBoundaryValue_forward` (`VectorBHW.lean`) |
-| **Osterwalder & Schrader (1973, 1975)**, *Commun. Math. Phys.* **31**, 83–112 & **42**, 281–305 — Reflection positivity, contraction semigroup, Schwinger–Wightman correspondence & full non-coincident Euclidean analytic continuation | `OSAxioms`, `FullEuclidOSAxioms`, `euclidExtendedTubePermLocality_of_localCommutativity`, `schwingerFromPermutedTube_fullEuclidOSAxioms_of_localCommutativity`, `osAxioms_spin_statistics`, `fullEuclidOSAxioms_spin_statistics`, `OSHolomorphicSemigroup`, `wightman_unique_unconditional`, `osterwalder_schrader_measure_reconstruction_of_data` (`OSReconstruction.lean`), `ForwardConeOSReconstructedWightman.toFullEuclidOSAxioms` (`WightmanBridge.lean`) |
-| **Glimm & Jaffe (1987)**, *Quantum Physics: A Functional Integral Point of View*, Ch. 6 — Free bosonic/fermionic Euclidean & Minkowski fields, mass gap $e^{-m\tau}$ | `WickCombinatorics.lean`, `FreeFieldWick.lean`, `freeKG_grand_master` & `freeDirac_grand_master` (`FreeFieldFock.lean`) |
+| **Osterwalder & Schrader (1973, 1975)**, *Commun. Math. Phys.* **31**, 83–112 & **42**, 281–305 — Reflection positivity, multi-time contraction semigroup, pure-Euclidean all $n$-point Schwinger–Wightman reconstruction & full non-coincident Euclidean analytic continuation | `OSAxioms`, `FullEuclidOSAxioms`, `OSDampedFieldBounded`, `osMultiTimeH`, `exists_osMultiTimeH_growth_bound`, `euclidExtendedTubePermLocality_of_localCommutativity` (`OSReconstruction.lean`), `osReconstructedWightmanFamily`, `osReconstructed_poincareCovariant`, `osReconstructed_spectrumCondition`, `osReconstructedTubeExtensionData`, `os_full_wightman_reconstruction` (`WightmanBridge.lean`) |
+| **Glimm & Jaffe (1987)**, *Quantum Physics: A Functional Integral Point of View*, Ch. 6 — Free bosonic/fermionic Euclidean & Minkowski fields, damped Fock field bounds & mass gap $e^{-m\tau}$ | `WickCombinatorics.lean`, `FreeFieldWick.lean`, `freeKGOSDampedFieldBounded`, `freeDiracOSDampedFieldBounded`, `freeKG_pure_os_full_reconstruction`, `freeDirac_pure_os_full_reconstruction`, `freeKG_grand_master` & `freeDirac_grand_master` (`FreeFieldFock.lean`) |
