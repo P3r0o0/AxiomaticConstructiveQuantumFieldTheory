@@ -11980,30 +11980,38 @@ lemma mzFEps_norm_le_all {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
   intro z hz
   exact h_ind (n + 1) Finset.univ (by simp) z ⟨hz, fun j hj => (hj (Finset.mem_univ j)).elim⟩
 
-lemma mzFEps_bounded_cauchy {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
-    {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ}
-    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M)
-    (h_real : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
-    (h_cont_br : ∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m))
-    (h_bdd_br : ∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M)
-    (h_holo_br : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
-      (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α}) :
+lemma mzFEps_bounded_cauchy_uniform {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M) :
     ∀ (k : ℕ) {B γ : ℝ}, 0 < B → 0 < γ →
-      ∃ ε₀ > 0, ∀ ε₁ ∈ Set.Ioo 0 ε₀, ∀ ε₂ ∈ Set.Ioo 0 ε₀,
-        ∀ (A : Finset (Fin (n + 1))), A.card ≤ k →
-          ∀ z ∈ OctaSubTube (n + 1) α A, ‖z‖ ≤ B →
-            ‖mzFEps f₀ ε₁ z - mzFEps f₀ ε₂ z‖ ≤ γ := by
+      ∃ ε₀ > 0, ∀ {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ},
+        Continuous f₀ → (∀ x, ‖f₀ x‖ ≤ M) →
+        (∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x) →
+        (∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m)) →
+        (∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M) →
+        (∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
+          (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α}) →
+        ∀ ε₁ ∈ Set.Ioo 0 ε₀, ∀ ε₂ ∈ Set.Ioo 0 ε₀,
+          ∀ (A : Finset (Fin (n + 1))), A.card ≤ k →
+            ∀ z ∈ OctaSubTube (n + 1) α A, ‖z‖ ≤ B →
+              ‖mzFEps f₀ ε₁ z - mzFEps f₀ ε₂ z‖ ≤ γ := by
   have h_base : ∀ {B γ : ℝ}, 0 < B → 0 < γ →
-      ∃ ε₀ > 0, ∀ ε₁ ∈ Set.Ioo 0 ε₀, ∀ ε₂ ∈ Set.Ioo 0 ε₀,
-        ∀ (A : Finset (Fin (n + 1))), A.card ≤ 1 →
-          ∀ z ∈ OctaSubTube (n + 1) α A, ‖z‖ ≤ B →
-            ‖mzFEps f₀ ε₁ z - mzFEps f₀ ε₂ z‖ ≤ γ := by
+      ∃ ε₀ > 0, ∀ {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ},
+        Continuous f₀ → (∀ x, ‖f₀ x‖ ≤ M) →
+        (∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x) →
+        (∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m)) →
+        (∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M) →
+        (∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
+          (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α}) →
+        ∀ ε₁ ∈ Set.Ioo 0 ε₀, ∀ ε₂ ∈ Set.Ioo 0 ε₀,
+          ∀ (A : Finset (Fin (n + 1))), A.card ≤ 1 →
+            ∀ z ∈ OctaSubTube (n + 1) α A, ‖z‖ ≤ B →
+              ‖mzFEps f₀ ε₁ z - mzFEps f₀ ε₂ z‖ ≤ γ := by
     intro B γ hB hγ
     let S : ℝ := ((n + 1 : ℕ) : ℝ) * B ^ 2 + 1
     have hS_pos : 0 < S := by dsimp [S]; positivity
     let ε₀ : ℝ := min 1 (min (1 / S) (γ / (4 * (M + 1) * S)))
     have hε₀_pos : 0 < ε₀ := by dsimp [ε₀]; positivity
-    refine ⟨ε₀, hε₀_pos, fun ε₁ hε₁ ε₂ hε₂ A hA z hz hzB => ?_⟩
+    refine ⟨ε₀, hε₀_pos, fun {f₀ f_br} hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br
+      ε₁ hε₁ ε₂ hε₂ A hA z hz hzB => ?_⟩
     obtain ⟨m₀, hm₀⟩ := octaSubTube_subset_flatStrip_of_card_le_one hA hz
     rw [mzFEps_eq_on_flatStrip hα hM hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br
       h_holo_br hε₁.1 m₀ hm₀,
@@ -12062,8 +12070,10 @@ lemma mzFEps_bounded_cauchy {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
   | zero =>
     intro B γ hB hγ
     obtain ⟨ε₀, hε₀, hbd⟩ := h_base hB hγ
-    exact ⟨ε₀, hε₀, fun ε₁ hε₁ ε₂ hε₂ A hA z hz hzB =>
-      hbd ε₁ hε₁ ε₂ hε₂ A (hA.trans zero_le_one) z hz hzB⟩
+    exact ⟨ε₀, hε₀, fun hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br
+      ε₁ hε₁ ε₂ hε₂ A hA z hz hzB =>
+      hbd hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br
+        ε₁ hε₁ ε₂ hε₂ A (hA.trans zero_le_one) z hz hzB⟩
   | succ k ih =>
     intro B γ hB hγ
     let M₀ : ℝ := M * Real.exp (α ^ 2)
@@ -12082,7 +12092,8 @@ lemma mzFEps_bounded_cauchy {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
     obtain ⟨ε_b, hε_b, hbd_b⟩ := h_base hB hγ
     let ε₀ : ℝ := min 1 (min ε_ih ε_b)
     have hε₀_pos : 0 < ε₀ := lt_min zero_lt_one (lt_min hε_ih hε_b)
-    refine ⟨ε₀, hε₀_pos, fun ε₁ hε₁ ε₂ hε₂ A hA z hz hzB => ?_⟩
+    refine ⟨ε₀, hε₀_pos, fun {f₀ f_br} hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br
+      ε₁ hε₁ ε₂ hε₂ A hA z hz hzB => ?_⟩
     have hε₁_le1 : ε₁ ≤ 1 := hε₁.2.le.trans (min_le_left _ _)
     have hε₂_le1 : ε₂ ≤ 1 := hε₂.2.le.trans (min_le_left _ _)
     have hε₁_ih : ε₁ ∈ Set.Ioo 0 ε_ih :=
@@ -12096,18 +12107,21 @@ lemma mzFEps_bounded_cauchy {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
     have hγ'_le : γ' ≤ γ := div_le_self hγ.le hE_ge1
     have hB_le : B ≤ B' := by dsimp [B']; linarith
     by_cases hA1 : A.card ≤ 1
-    · exact hbd_b ε₁ hε₁_b ε₂ hε₂_b A hA1 z hz hzB
+    · exact hbd_b hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br
+        ε₁ hε₁_b ε₂ hε₂_b A hA1 z hz hzB
     · push Not at hA1
       obtain ⟨m₁, hm₁, m₂, hm₂, hne⟩ := Finset.one_lt_card.mp hA1
       by_cases hy₁ : (z m₁).im = 0
-      · refine (hbd_ih ε₁ hε₁_ih ε₂ hε₂_ih (A.erase m₁)
+      · refine (hbd_ih hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br
+          ε₁ hε₁_ih ε₂ hε₂_ih (A.erase m₁)
           (by rw [Finset.card_erase_of_mem hm₁]; omega) z ⟨hz.1, ?_⟩ (hzB.trans hB_le)).trans hγ'_le
         intro j hj
         by_cases hjm : j = m₁
         · subst hjm; exact hy₁
         · exact hz.2 j (fun hjA => hj (Finset.mem_erase.mpr ⟨hjm, hjA⟩))
       · by_cases hy₂ : (z m₂).im = 0
-        · refine (hbd_ih ε₁ hε₁_ih ε₂ hε₂_ih (A.erase m₂)
+        · refine (hbd_ih hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br
+            ε₁ hε₁_ih ε₂ hε₂_ih (A.erase m₂)
             (by rw [Finset.card_erase_of_mem hm₂]; omega) z ⟨hz.1, ?_⟩
               (hzB.trans hB_le)).trans hγ'_le
           intro j hj
@@ -12236,7 +12250,8 @@ lemma mzFEps_bounded_cauchy {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
                     _ ≤ B + (L + α) := add_le_add ((norm_le_pi_norm z m₂).trans hzB) hu_norm
                     _ = B' := by dsimp [B']; ring
                 · exact ((norm_le_pi_norm z j).trans hzB).trans hB_le
-              have h_ih_u := hbd_ih ε₁ hε₁_ih ε₂ hε₂_ih A' hA'_card _ hu_sub h_sw_norm
+              have h_ih_u := hbd_ih hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br
+                ε₁ hε₁_ih ε₂ hε₂_ih A' hA'_card _ hu_sub h_sw_norm
               have hexp_le : ‖Complex.exp (-u ^ 2)‖ ≤ E_α := by
                 rw [hexp_norm]
                 exact Real.exp_le_exp.mpr
@@ -12287,6 +12302,23 @@ lemma mzFEps_bounded_cauchy {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
                     simp [mzSweepLine, hjm1, hjm2, hz.2 j hj_notA]⟩)
             (z := 0) (by simpa using ht₁_neg.le) (by simpa using ht₂_pos.le)
           simpa [d, mzSweepLine_zero] using hd0
+
+lemma mzFEps_bounded_cauchy {n : ℕ} {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
+    {f₀ : (Fin (n + 1) → ℝ) → ℂ} {f_br : Fin (n + 1) → (Fin (n + 1) → ℂ) → ℂ}
+    (hf₀_cont : Continuous f₀) (hf₀_bdd : ∀ x, ‖f₀ x‖ ≤ M)
+    (h_real : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), f_br m (fun j => (x j : ℂ)) = f₀ x)
+    (h_cont_br : ∀ m : Fin (n + 1), ContinuousOn (f_br m) (FlatStrip (n + 1) α m))
+    (h_bdd_br : ∀ m : Fin (n + 1), ∀ z ∈ FlatStrip (n + 1) α m, ‖f_br m z‖ ≤ M)
+    (h_holo_br : ∀ (m : Fin (n + 1)) (x : Fin (n + 1) → ℝ), DifferentiableOn ℂ
+      (fun w => f_br m (Function.update (fun j => (x j : ℂ)) m w)) {w : ℂ | |w.im| < α}) :
+    ∀ (k : ℕ) {B γ : ℝ}, 0 < B → 0 < γ →
+      ∃ ε₀ > 0, ∀ ε₁ ∈ Set.Ioo 0 ε₀, ∀ ε₂ ∈ Set.Ioo 0 ε₀,
+        ∀ (A : Finset (Fin (n + 1))), A.card ≤ k →
+          ∀ z ∈ OctaSubTube (n + 1) α A, ‖z‖ ≤ B →
+            ‖mzFEps f₀ ε₁ z - mzFEps f₀ ε₂ z‖ ≤ γ := by
+  intro k B γ hB hγ
+  obtain ⟨ε₀, hε₀, hbd⟩ := mzFEps_bounded_cauchy_uniform hα hM k hB hγ
+  exact ⟨ε₀, hε₀, hbd hf₀_cont hf₀_bdd h_real h_cont_br h_bdd_br h_holo_br⟩
 
 theorem malgrange_zerner_flat_tube (N : ℕ) {α M : ℝ} (hα : 0 < α) (hM : 0 ≤ M)
     (f₀ : (Fin N → ℝ) → ℂ) (f_br : Fin N → (Fin N → ℂ) → ℂ)
@@ -12979,5 +13011,2003 @@ theorem malgrange_zerner_local_cross (N : ℕ) {r R M : ℝ}
     _ = 2 * M / ρ := by
         rw [sub_zero, abs_of_pos h2pi_pos]
         field_simp [h2pi_pos.ne', hρ_pos.ne']
+
+section Phase1LogTime
+
+def SectorCone (θ : ℝ) : Set ℂ :=
+  { τ : ℂ | 0 < τ.re ∧ |τ.im| < τ.re * Real.tan θ }
+
+lemma mem_sectorCone_iff_exists_exp {θ : ℝ} (hθ0 : 0 < θ) (hθpi : θ < Real.pi / 2) (τ : ℂ) :
+    τ ∈ SectorCone θ ↔ ∃ w : ℂ, |w.im| < θ ∧ Complex.exp w = τ := by
+  constructor
+  · intro ⟨hre, him⟩
+    have hτ_ne : τ ≠ 0 := fun h => by simp [h] at hre
+    refine ⟨Complex.log τ, ?_, Complex.exp_log hτ_ne⟩
+    rw [Complex.log_im]
+    have harg_lt : |τ.arg| < Real.pi / 2 :=
+      Complex.abs_arg_lt_pi_div_two_iff.mpr (Or.inl hre)
+    have htan_arg : Real.tan τ.arg = τ.im / τ.re := Complex.tan_arg τ
+    have htan_abs : Real.tan |τ.arg| < Real.tan θ := by
+      have h1 : |Real.tan τ.arg| < Real.tan θ := by
+        rw [htan_arg, abs_div, abs_of_pos hre, div_lt_iff₀ hre, mul_comm]
+        exact him
+      have h_eq : Real.tan |τ.arg| = |Real.tan τ.arg| := by
+        rcases le_or_gt 0 τ.arg with ha | ha
+        · rw [abs_of_nonneg ha, abs_of_nonneg (Real.tan_nonneg_of_nonneg_of_le_pi_div_two ha
+            (abs_lt.mp harg_lt).2.le)]
+        · rw [abs_of_neg ha, Real.tan_neg, abs_of_nonpos]
+          have hpos := Real.tan_nonneg_of_nonneg_of_le_pi_div_two (neg_nonneg.mpr ha.le)
+            (by linarith [(abs_lt.mp harg_lt).1])
+          rw [Real.tan_neg] at hpos
+          linarith
+      rwa [h_eq]
+    by_contra hge
+    have hle : θ ≤ |τ.arg| := not_lt.mp hge
+    have hmono := Real.strictMonoOn_tan.monotoneOn
+      ⟨by linarith, hθpi⟩ ⟨by linarith [abs_nonneg τ.arg], harg_lt⟩ hle
+    linarith
+  · rintro ⟨w, hw, rfl⟩
+    have hcos : 0 < Real.cos w.im :=
+      Real.cos_pos_of_mem_Ioo ⟨by linarith [abs_lt.mp hw], by linarith [abs_lt.mp hw]⟩
+    have hre : 0 < (Complex.exp w).re := by
+      rw [Complex.exp_re]
+      exact mul_pos (Real.exp_pos _) hcos
+    refine ⟨hre, ?_⟩
+    rw [Complex.exp_im, Complex.exp_re, abs_mul, abs_of_pos (Real.exp_pos _), mul_assoc]
+    refine mul_lt_mul_of_pos_left ?_ (Real.exp_pos _)
+    have h_tan : |Real.sin w.im| / Real.cos w.im < Real.tan θ := by
+      have h_eq : |Real.sin w.im| / Real.cos w.im = Real.tan |w.im| := by
+        rw [← abs_of_pos hcos, ← abs_div, ← Real.tan_eq_sin_div_cos]
+        rcases le_or_gt 0 w.im with ha | ha
+        · rw [abs_of_nonneg ha, abs_of_nonneg (Real.tan_nonneg_of_nonneg_of_le_pi_div_two ha
+            (by linarith [abs_lt.mp hw]))]
+        · rw [abs_of_neg ha, Real.tan_neg, abs_of_nonpos]
+          have hpos := Real.tan_nonneg_of_nonneg_of_le_pi_div_two (neg_nonneg.mpr ha.le)
+            (by linarith [(abs_lt.mp hw).1])
+          rw [Real.tan_neg] at hpos
+          linarith
+      rw [h_eq]
+      exact Real.strictMonoOn_tan
+        ⟨by linarith [abs_nonneg w.im], by linarith⟩
+        ⟨by linarith, hθpi⟩ hw
+    rwa [div_lt_iff₀ hcos, mul_comm] at h_tan
+
+lemma re_pos_iff_exists_exp (τ : ℂ) :
+    0 < τ.re ↔ ∃ w : ℂ, |w.im| < Real.pi / 2 ∧ Complex.exp w = τ := by
+  constructor
+  · intro hre
+    have hτ_ne : τ ≠ 0 := fun h => by simp [h] at hre
+    refine ⟨Complex.log τ, ?_, Complex.exp_log hτ_ne⟩
+    rw [Complex.log_im]
+    exact Complex.abs_arg_lt_pi_div_two_iff.mpr (Or.inl hre)
+  · rintro ⟨w, hw, rfl⟩
+    rw [Complex.exp_re]
+    exact mul_pos (Real.exp_pos _)
+      (Real.cos_pos_of_mem_Ioo ⟨(abs_lt.mp hw).1, (abs_lt.mp hw).2⟩)
+
+noncomputable def logTimeDamp (w : ℂ) : ℂ :=
+  Complex.exp w / (1 + Complex.exp w) ^ 2
+
+lemma re_one_add_exp_pos_of_abs_im_lt_pi_div_two {w : ℂ} (hw : |w.im| < Real.pi / 2) :
+    1 < (1 + Complex.exp w).re := by
+  have hre : 0 < (Complex.exp w).re := by
+    rw [Complex.exp_re]
+    exact mul_pos (Real.exp_pos _)
+      (Real.cos_pos_of_mem_Ioo ⟨(abs_lt.mp hw).1, (abs_lt.mp hw).2⟩)
+  simp [hre]
+
+lemma one_add_exp_ne_zero_of_abs_im_lt_pi_div_two {w : ℂ} (hw : |w.im| < Real.pi / 2) :
+    1 + Complex.exp w ≠ 0 := by
+  intro h
+  have hre := re_one_add_exp_pos_of_abs_im_lt_pi_div_two hw
+  rw [h, Complex.zero_re] at hre
+  linarith
+
+lemma differentiableOn_logTimeDamp :
+    DifferentiableOn ℂ logTimeDamp { w : ℂ | |w.im| < Real.pi / 2 } := by
+  intro w hw
+  have hne : (1 + Complex.exp w) ^ 2 ≠ 0 :=
+    pow_ne_zero 2 (one_add_exp_ne_zero_of_abs_im_lt_pi_div_two hw)
+  exact ((Complex.differentiable_exp.differentiableAt).div
+    (((differentiableAt_const (1 : ℂ)).add Complex.differentiable_exp.differentiableAt).pow 2)
+    hne).differentiableWithinAt
+
+lemma norm_sq_one_add_of_re_pos {τ : ℂ} (hτ : 0 < τ.re) :
+    1 + ‖τ‖ ^ 2 < ‖1 + τ‖ ^ 2 := by
+  have h1 : ‖1 + τ‖ ^ 2 = (1 + τ.re) ^ 2 + τ.im ^ 2 := by
+    rw [← Complex.normSq_eq_norm_sq, Complex.normSq_apply]
+    simp [sq]
+  have h2 : ‖τ‖ ^ 2 = τ.re ^ 2 + τ.im ^ 2 := by
+    rw [← Complex.normSq_eq_norm_sq, Complex.normSq_apply]
+    simp [sq]
+  nlinarith
+
+lemma norm_logTimeDamp_mul_le {w : ℂ} (hw : |w.im| < Real.pi / 2) :
+    ‖logTimeDamp w‖ * (1 + ‖Complex.exp w‖ + ‖Complex.exp w‖⁻¹) ≤ 3 / 2 := by
+  have hre : 0 < (Complex.exp w).re := (re_pos_iff_exists_exp _).mpr ⟨w, hw, rfl⟩
+  have hnorm_pos : 0 < ‖Complex.exp w‖ := norm_pos_iff.mpr (Complex.exp_ne_zero w)
+  have hsq : 1 + ‖Complex.exp w‖ ^ 2 < ‖1 + Complex.exp w‖ ^ 2 :=
+    norm_sq_one_add_of_re_pos hre
+  have h_amgm : 2 * ‖Complex.exp w‖ ≤ 1 + ‖Complex.exp w‖ ^ 2 := by
+    nlinarith [sq_nonneg (‖Complex.exp w‖ - 1)]
+  have h_num : ‖Complex.exp w‖ * (1 + ‖Complex.exp w‖ + ‖Complex.exp w‖⁻¹) =
+      1 + ‖Complex.exp w‖ + ‖Complex.exp w‖ ^ 2 := by
+    field_simp [hnorm_pos.ne']
+    ring
+  have h_le : 1 + ‖Complex.exp w‖ + ‖Complex.exp w‖ ^ 2 ≤
+      (3 / 2 : ℝ) * (1 + ‖Complex.exp w‖ ^ 2) := by
+    linarith
+  have h_den_pos : 0 < ‖1 + Complex.exp w‖ ^ 2 := by nlinarith [sq_nonneg ‖Complex.exp w‖]
+  unfold logTimeDamp
+  rw [norm_div, norm_pow, div_mul_eq_mul_div, h_num, div_le_iff₀ h_den_pos]
+  nlinarith
+
+lemma norm_logTimeDamp_le_half {w : ℂ} (hw : |w.im| < Real.pi / 2) :
+    ‖logTimeDamp w‖ ≤ 1 / 2 := by
+  have hre : 0 < (Complex.exp w).re := (re_pos_iff_exists_exp _).mpr ⟨w, hw, rfl⟩
+  have hsq : 1 + ‖Complex.exp w‖ ^ 2 < ‖1 + Complex.exp w‖ ^ 2 :=
+    norm_sq_one_add_of_re_pos hre
+  have h_amgm : 2 * ‖Complex.exp w‖ ≤ 1 + ‖Complex.exp w‖ ^ 2 := by
+    nlinarith [sq_nonneg (‖Complex.exp w‖ - 1)]
+  have h_den_pos : 0 < ‖1 + Complex.exp w‖ ^ 2 := by nlinarith [sq_nonneg ‖Complex.exp w‖]
+  unfold logTimeDamp
+  rw [norm_div, norm_pow, div_le_iff₀ h_den_pos]
+  linarith
+
+lemma one_add_exp_re_inv_mul_logTimeDamp_le {w : ℂ} {α : ℝ}
+    (hα_lt : α < Real.pi / 2) (hw : |w.im| ≤ α) :
+    ‖logTimeDamp w‖ * (1 + ((Complex.exp w).re)⁻¹) ≤ 2 / Real.cos α := by
+  have hw_lt : |w.im| < Real.pi / 2 := lt_of_le_of_lt hw hα_lt
+  have hcos_α_pos : 0 < Real.cos α :=
+    Real.cos_pos_of_mem_Ioo ⟨by linarith [abs_nonneg w.im], hα_lt⟩
+  have hcos_le : Real.cos α ≤ Real.cos w.im := by
+    rw [← Real.cos_abs w.im]
+    exact Real.strictAntiOn_cos.antitoneOn
+      ⟨abs_nonneg _, hw_lt.le.trans (by linarith [Real.pi_pos])⟩
+      ⟨by linarith [abs_nonneg w.im], hα_lt.le.trans (by linarith [Real.pi_pos])⟩ hw
+  have hre_ge : ‖Complex.exp w‖ * Real.cos α ≤ (Complex.exp w).re := by
+    rw [Complex.norm_exp, Complex.exp_re]
+    exact mul_le_mul_of_nonneg_left hcos_le (Real.exp_pos _).le
+  have hnorm_pos : 0 < ‖Complex.exp w‖ := norm_pos_iff.mpr (Complex.exp_ne_zero w)
+  have hre_inv : ((Complex.exp w).re)⁻¹ ≤ (Real.cos α)⁻¹ * ‖Complex.exp w‖⁻¹ := by
+    rw [← mul_inv, mul_comm]
+    exact inv_anti₀ (mul_pos hnorm_pos hcos_α_pos) hre_ge
+  have hcos_le_one : Real.cos α ≤ 1 := Real.cos_le_one α
+  have h1_le : (1 : ℝ) ≤ (Real.cos α)⁻¹ := (one_le_inv₀ hcos_α_pos).mpr hcos_le_one
+  have h_sum : 1 + ((Complex.exp w).re)⁻¹ ≤
+      (Real.cos α)⁻¹ * (1 + ‖Complex.exp w‖ + ‖Complex.exp w‖⁻¹) := by
+    nlinarith [norm_nonneg (Complex.exp w), inv_nonneg.mpr hcos_α_pos.le]
+  have h_base := norm_logTimeDamp_mul_le hw_lt
+  calc ‖logTimeDamp w‖ * (1 + ((Complex.exp w).re)⁻¹)
+      ≤ ‖logTimeDamp w‖ * ((Real.cos α)⁻¹ * (1 + ‖Complex.exp w‖ + ‖Complex.exp w‖⁻¹)) :=
+        mul_le_mul_of_nonneg_left h_sum (norm_nonneg _)
+    _ = (Real.cos α)⁻¹ * (‖logTimeDamp w‖ * (1 + ‖Complex.exp w‖ + ‖Complex.exp w‖⁻¹)) := by ring
+    _ ≤ (Real.cos α)⁻¹ * (3 / 2) :=
+        mul_le_mul_of_nonneg_left h_base (inv_nonneg.mpr hcos_α_pos.le)
+    _ ≤ (Real.cos α)⁻¹ * 2 :=
+        mul_le_mul_of_nonneg_left (by norm_num) (inv_nonneg.mpr hcos_α_pos.le)
+    _ = 2 / Real.cos α := by rw [div_eq_mul_inv, mul_comm]
+
+end Phase1LogTime
+
+section Phase1MidpointTube
+
+def MidpointSet {D : ℕ} (U_A U_B : Set (Fin D → ℝ)) : Set (Fin D → ℝ) :=
+  { y | ∃ yA ∈ U_A, ∃ yB ∈ U_B, y = (1 / 2 : ℝ) • yA + (1 / 2 : ℝ) • yB }
+
+lemma isOpen_midpointSet {D : ℕ} {U_A U_B : Set (Fin D → ℝ)}
+    (hB : IsOpen U_B) :
+    IsOpen (MidpointSet U_A U_B) := by
+  have h_eq : MidpointSet U_A U_B =
+      ⋃ yA ∈ U_A, (fun y => (2 : ℝ) • (y - (1 / 2 : ℝ) • yA)) ⁻¹' U_B := by
+    ext y
+    simp only [MidpointSet, Set.mem_setOf_eq, Set.mem_iUnion, Set.mem_preimage]
+    constructor
+    · rintro ⟨yA, hyA, yB, hyB, rfl⟩
+      refine ⟨yA, hyA, ?_⟩
+      have h_simp : (2 : ℝ) • (((1 / 2 : ℝ) • yA + (1 / 2 : ℝ) • yB) - (1 / 2 : ℝ) • yA) = yB := by
+        ext j; simp
+      rwa [h_simp]
+    · rintro ⟨yA, hyA, hyB⟩
+      refine ⟨yA, hyA, (2 : ℝ) • (y - (1 / 2 : ℝ) • yA), hyB, ?_⟩
+      ext j; simp
+  rw [h_eq]
+  refine isOpen_biUnion fun yA _ => hB.preimage ?_
+  fun_prop
+
+lemma convex_midpointSet {D : ℕ} {U_A U_B : Set (Fin D → ℝ)}
+    (hA : Convex ℝ U_A) (hB : Convex ℝ U_B) :
+    Convex ℝ (MidpointSet U_A U_B) := by
+  rintro x ⟨xA, hxA, xB, hxB, rfl⟩ y ⟨yA, hyA, yB, hyB, rfl⟩ a b ha hb hab
+  refine ⟨a • xA + b • yA, hA hxA hyA ha hb hab, a • xB + b • yB, hB hxB hyB ha hb hab, ?_⟩
+  ext j; simp; ring
+
+lemma inter_subset_midpointSet {D : ℕ} {U_A U_B : Set (Fin D → ℝ)} :
+    U_A ∩ U_B ⊆ MidpointSet U_A U_B := by
+  intro y ⟨hyA, hyB⟩
+  refine ⟨y, hyA, y, hyB, ?_⟩
+  ext j; simp; ring
+
+lemma symmetric_midpointSet {D : ℕ} {U_A U_B : Set (Fin D → ℝ)}
+    (hA : ∀ y ∈ U_A, -y ∈ U_A) (hB : ∀ y ∈ U_B, -y ∈ U_B) :
+    ∀ y ∈ MidpointSet U_A U_B, -y ∈ MidpointSet U_A U_B := by
+  rintro y ⟨yA, hyA, yB, hyB, rfl⟩
+  refine ⟨-yA, hA yA hyA, -yB, hB yB hyB, ?_⟩
+  ext j; simp; ring
+
+lemma tubeDomain_eqOn_of_starShaped {D : ℕ} {V : Set (Fin D → ℝ)} {δ : ℝ}
+    (hV_open : IsOpen V) (hδ : 0 < δ)
+    (hV_star : ∀ y ∈ V, ∀ s ∈ Set.Icc (0 : ℝ) 1, s • y ∈ V)
+    {f g : (Fin D → ℂ) → ℂ}
+    (hf : DifferentiableOn ℂ f (TubeDomain V))
+    (hg : DifferentiableOn ℂ g (TubeDomain V))
+    (h_eq_ball : Set.EqOn f g (TubeDomain (Metric.ball 0 δ))) :
+    Set.EqOn f g (TubeDomain V) := by
+  intro z₀ hz₀
+  let γ : ℂ → (Fin D → ℂ) := fun ζ j => ((z₀ j).re : ℂ) + ζ * (I * ((z₀ j).im : ℂ))
+  have hγ_diff : Differentiable ℂ γ :=
+    differentiable_pi.mpr fun j =>
+      (differentiable_const _).add (differentiable_id.mul (differentiable_const _))
+  have hγ_im : ∀ (ζ : ℂ) (j : Fin D), (γ ζ j).im = ζ.re * (z₀ j).im := by
+    intro ζ j
+    dsimp [γ]
+    simp [Complex.mul_im]
+  have hγ_mem : ∀ ζ : ℂ, ζ.re • (fun j => (z₀ j).im) ∈ V → γ ζ ∈ TubeDomain V := by
+    intro ζ hζ
+    change (fun j => (γ ζ j).im) ∈ V
+    have h_eq : (fun j => (γ ζ j).im) = ζ.re • (fun j => (z₀ j).im) := by
+      ext j; exact hγ_im ζ j
+    rw [h_eq]
+    exact hζ
+  let K : Set ℝ := Set.Icc 0 1
+  have h_sub_Icc : ∀ s ∈ K, s • (fun j => (z₀ j).im) ∈ V := fun s hs => hV_star _ hz₀ s hs
+  have h_open_pre : IsOpen { s : ℝ | s • (fun j => (z₀ j).im) ∈ V } :=
+    hV_open.preimage (continuous_id.smul continuous_const)
+  have h_exists_eps : ∃ η > 0, Set.Ioo (-η) (1 + η) ⊆ { s : ℝ | s • (fun j => (z₀ j).im) ∈ V } := by
+    have h0 : (0 : ℝ) ∈ { s : ℝ | s • (fun j => (z₀ j).im) ∈ V } := by
+      simpa using h_sub_Icc 0 ⟨le_rfl, zero_le_one⟩
+    have h1 : (1 : ℝ) ∈ { s : ℝ | s • (fun j => (z₀ j).im) ∈ V } := by
+      simpa using h_sub_Icc 1 ⟨zero_le_one, le_rfl⟩
+    rcases Metric.isOpen_iff.mp h_open_pre 0 h0 with ⟨η₀, hη₀, hsub₀⟩
+    rcases Metric.isOpen_iff.mp h_open_pre 1 h1 with ⟨η₁, hη₁, hsub₁⟩
+    refine ⟨min η₀ η₁, lt_min hη₀ hη₁, fun s hs => ?_⟩
+    by_cases hs0 : s < 0
+    · refine hsub₀ ?_
+      rw [Metric.mem_ball, Real.dist_eq, sub_zero, abs_of_neg hs0]
+      linarith [hs.1, min_le_left η₀ η₁]
+    · by_cases hs1 : s ≤ 1
+      · exact h_sub_Icc s ⟨not_lt.mp hs0, hs1⟩
+      · refine hsub₁ ?_
+        rw [Metric.mem_ball, Real.dist_eq, abs_of_pos (by linarith)]
+        linarith [hs.2, min_le_right η₀ η₁]
+  obtain ⟨η, hη_pos, hη_sub⟩ := h_exists_eps
+  let S : Set ℂ := { ζ : ℂ | -η < ζ.re ∧ ζ.re < 1 + η }
+  have hS_open : IsOpen S :=
+    (isOpen_lt continuous_const Complex.continuous_re).inter
+      (isOpen_lt Complex.continuous_re continuous_const)
+  have hS_conv : Convex ℝ S := by
+    intro a ha b hb u v hu hv huv
+    have ha1 : -η < a.re := ha.1
+    have ha2 : a.re < 1 + η := ha.2
+    have hb1 : -η < b.re := hb.1
+    have hb2 : b.re < 1 + η := hb.2
+    refine ⟨?_, ?_⟩
+    · change -η < (u • a + v • b).re
+      simp only [Complex.add_re, Complex.real_smul, Complex.mul_re, Complex.ofReal_re,
+        Complex.ofReal_im, zero_mul, sub_zero]
+      rcases eq_or_lt_of_le hu with rfl | hu' <;> nlinarith
+    · change (u • a + v • b).re < 1 + η
+      simp only [Complex.add_re, Complex.real_smul, Complex.mul_re, Complex.ofReal_re,
+        Complex.ofReal_im, zero_mul, sub_zero]
+      rcases eq_or_lt_of_le hu with rfl | hu' <;> nlinarith
+  have hγ_maps : Set.MapsTo γ S (TubeDomain V) := fun ζ hζ => hγ_mem ζ (hη_sub ⟨hζ.1, hζ.2⟩)
+  have hfγ : AnalyticOnNhd ℂ (f ∘ γ) S :=
+    (Complex.analyticOnNhd_iff_differentiableOn hS_open).mpr
+      (hf.comp hγ_diff.differentiableOn hγ_maps)
+  have hgγ : AnalyticOnNhd ℂ (g ∘ γ) S :=
+    (Complex.analyticOnNhd_iff_differentiableOn hS_open).mpr
+      (hg.comp hγ_diff.differentiableOn hγ_maps)
+  have h0_mem : (0 : ℂ) ∈ S := by
+    simp only [S, Set.mem_setOf_eq, Complex.zero_re]
+    exact ⟨by linarith, by linarith⟩
+  have h1_mem : (1 : ℂ) ∈ S := by
+    simp only [S, Set.mem_setOf_eq, Complex.one_re]
+    exact ⟨by linarith, by linarith⟩
+  have h_ev : (f ∘ γ) =ᶠ[𝓝 (0 : ℂ)] (g ∘ γ) := by
+    let r₀ : ℝ := min η (δ / (‖fun j => (z₀ j).im‖ + 1))
+    have hr₀ : 0 < r₀ := lt_min hη_pos (div_pos hδ (by positivity))
+    filter_upwards [Metric.ball_mem_nhds (0 : ℂ) hr₀] with ζ hζ
+    have hζ_norm : ‖ζ‖ < r₀ := by simpa [Metric.mem_ball, dist_eq_norm] using hζ
+    have hζ_re : |ζ.re| < r₀ := (Complex.abs_re_le_norm ζ).trans_lt hζ_norm
+    refine h_eq_ball ?_
+    change (fun j => (γ ζ j).im) ∈ Metric.ball 0 δ
+    rw [Metric.mem_ball, dist_zero_right]
+    have h_eq_im : (fun j => (γ ζ j).im) = ζ.re • (fun j => (z₀ j).im) := by
+      ext j; exact hγ_im ζ j
+    rw [h_eq_im, norm_smul, Real.norm_eq_abs]
+    have h1 : |ζ.re| < δ / (‖fun j => (z₀ j).im‖ + 1) :=
+      lt_of_lt_of_le hζ_re (min_le_right _ _)
+    have h_den : 0 < ‖fun j => (z₀ j).im‖ + 1 := by positivity
+    have h2 := (lt_div_iff₀ h_den).mp h1
+    nlinarith [abs_nonneg ζ.re]
+  have h_eq_all := hfγ.eqOn_of_preconnected_of_eventuallyEq hgγ hS_conv.isPreconnected h0_mem h_ev
+  have h_at_1 := h_eq_all h1_mem
+  have hγ1 : γ 1 = z₀ := by
+    ext j
+    dsimp [γ]
+    rw [one_mul, mul_comm I, Complex.re_add_im]
+  simpa only [Function.comp_apply, hγ1] using h_at_1
+
+def mzParamMap {D : ℕ} (yA yB : Fin D → ℝ) (z : Fin D → ℂ) (ζ : Fin 2 → ℂ) : Fin D → ℂ :=
+  fun j => z j + ζ 0 * (yA j : ℂ) + ζ 1 * (yB j : ℂ)
+
+def mzParamF0 {D : ℕ} (F_A : (Fin D → ℂ) → ℂ) (yA yB : Fin D → ℝ)
+    (z : Fin D → ℂ) (x : Fin 2 → ℝ) : ℂ :=
+  F_A (mzParamMap yA yB z (fun k => (x k : ℂ)))
+
+def mzParamBr {D : ℕ} (F_A F_B : (Fin D → ℂ) → ℂ) (yA yB : Fin D → ℝ)
+    (z : Fin D → ℂ) (m : Fin 2) (ζ : Fin 2 → ℂ) : ℂ :=
+  if m = 0 then F_A (mzParamMap yA yB z ζ) else F_B (mzParamMap yA yB z ζ)
+
+lemma mzParamMap_im {D : ℕ} (yA yB : Fin D → ℝ) (z : Fin D → ℂ) (ζ : Fin 2 → ℂ) (j : Fin D) :
+    (mzParamMap yA yB z ζ j).im = (z j).im + (ζ 0).im * yA j + (ζ 1).im * yB j := by
+  dsimp [mzParamMap]
+  simp [Complex.mul_im]
+
+lemma differentiable_mzParamMap_left {D : ℕ} (yA yB : Fin D → ℝ) (ζ : Fin 2 → ℂ) :
+    Differentiable ℂ (fun z : Fin D → ℂ => mzParamMap yA yB z ζ) :=
+  differentiable_pi.mpr fun j =>
+    ((differentiable_apply j).add (differentiable_const _)).add (differentiable_const _)
+
+lemma differentiable_mzParamMap_right {D : ℕ} (yA yB : Fin D → ℝ) (z : Fin D → ℂ) :
+    Differentiable ℂ (fun ζ : Fin 2 → ℂ => mzParamMap yA yB z ζ) :=
+  differentiable_pi.mpr fun _ =>
+    ((differentiable_const _).add ((differentiable_apply 0).mul (differentiable_const _))).add
+      ((differentiable_apply 1).mul (differentiable_const _))
+
+lemma differentiable_mzParamMap_uncurry {D : ℕ} (yA yB : Fin D → ℝ) :
+    Differentiable ℂ (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) => mzParamMap yA yB p.1 p.2) := by
+  refine differentiable_pi.mpr fun j => ?_
+  dsimp [mzParamMap]
+  fun_prop
+
+lemma norm_deriv_le_of_ball_bound {f : ℂ → ℂ} {c : ℂ} {R M : ℝ}
+    (hR : 0 < R)
+    (hf : DifferentiableOn ℂ f (Metric.ball c (2 * R)))
+    (hbdd : ∀ u ∈ Metric.ball c (2 * R), ‖f u‖ ≤ M)
+    {u : ℂ} (hu : u ∈ Metric.ball c R) :
+    ‖deriv f u‖ ≤ M / R := by
+  have hsub : Metric.closedBall u R ⊆ Metric.ball c (2 * R) := by
+    intro w hw
+    rw [Metric.mem_closedBall, dist_eq_norm] at hw
+    rw [Metric.mem_ball, dist_eq_norm] at hu ⊢
+    calc ‖w - c‖ = ‖(w - u) + (u - c)‖ := by ring_nf
+      _ ≤ ‖w - u‖ + ‖u - c‖ := norm_add_le _ _
+      _ < R + R := by linarith
+      _ = 2 * R := by ring
+  have h_eq : deriv f u = (2 * Real.pi * I : ℂ)⁻¹ • ∮ w in C(u, R), ((w - u) ^ 2)⁻¹ • f w := by
+    have h_cauchy := Complex.two_pi_I_inv_smul_circleIntegral_sub_sq_inv_smul_of_differentiable
+      Metric.isOpen_ball hsub hf (Metric.mem_ball_self hR)
+    exact h_cauchy.symm
+  rw [h_eq, smul_eq_mul, norm_mul, norm_inv, norm_mul, norm_mul, Complex.norm_ofNat,
+    Complex.norm_real, Real.norm_of_nonneg Real.pi_pos.le, Complex.norm_I, mul_one]
+  have h_ci : ‖∮ w in C(u, R), ((w - u) ^ 2)⁻¹ • f w‖ ≤ 2 * Real.pi * R * (M / R ^ 2) := by
+    refine circleIntegral.norm_integral_le_of_norm_le_const hR.le fun w hw => ?_
+    have hw_dist : ‖w - u‖ = R := by
+      simpa [Metric.mem_sphere, dist_eq_norm] using hw
+    rw [smul_eq_mul, norm_mul, norm_inv, norm_pow, hw_dist, ← div_eq_inv_mul]
+    exact div_le_div_of_nonneg_right (hbdd w (hsub (Metric.sphere_subset_closedBall hw)))
+      (sq_nonneg R)
+  have h2pi_pos : 0 < 2 * Real.pi := by positivity
+  calc (2 * Real.pi)⁻¹ * ‖∮ w in C(u, R), ((w - u) ^ 2)⁻¹ • f w‖
+      ≤ (2 * Real.pi)⁻¹ * (2 * Real.pi * R * (M / R ^ 2)) :=
+        mul_le_mul_of_nonneg_left h_ci (inv_nonneg.mpr h2pi_pos.le)
+    _ = M / R := by field_simp [h2pi_pos.ne', hR.ne']
+
+lemma mzParam_slice_holo_and_bdd {D : ℕ} {U U_A U_B : Set (Fin D → ℝ)}
+    {yA yB : Fin D → ℝ} {r M : ℝ}
+    {F_A F_B : (Fin D → ℂ) → ℂ}
+    (hFA_holo : DifferentiableOn ℂ F_A (TubeDomain U_A))
+    (hFB_holo : DifferentiableOn ℂ F_B (TubeDomain U_B))
+    (hFA_bdd : ∀ w ∈ TubeDomain U_A, ‖F_A w‖ ≤ M)
+    (hFB_bdd : ∀ w ∈ TubeDomain U_B, ‖F_B w‖ ≤ M)
+    (h_shift_A : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 0,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_A)
+    (h_shift_B : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 1,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_B)
+    (h_agree : ∀ z ∈ TubeDomain U, ∀ x : Fin 2 → ℝ,
+      F_A (mzParamMap yA yB z (fun k => (x k : ℂ))) =
+        F_B (mzParamMap yA yB z (fun k => (x k : ℂ))))
+    (hr : 0 < r) {z : Fin D → ℂ} (hz : z ∈ TubeDomain U) :
+    Continuous (mzParamF0 F_A yA yB z) ∧
+    (∀ x : Fin 2 → ℝ, ‖mzParamF0 F_A yA yB z x‖ ≤ M) ∧
+    (∀ (m : Fin 2) (x : Fin 2 → ℝ),
+      mzParamBr F_A F_B yA yB z m (fun k => (x k : ℂ)) = mzParamF0 F_A yA yB z x) ∧
+    (∀ m : Fin 2, ContinuousOn (mzParamBr F_A F_B yA yB z m) (FlatStrip 2 r m)) ∧
+    (∀ (m : Fin 2), ∀ ζ ∈ FlatStrip 2 r m, ‖mzParamBr F_A F_B yA yB z m ζ‖ ≤ M) ∧
+    (∀ (m : Fin 2) (x : Fin 2 → ℝ),
+      DifferentiableOn ℂ
+        (fun w => mzParamBr F_A F_B yA yB z m (Function.update (fun k => (x k : ℂ)) m w))
+        { w : ℂ | |w.im| < r }) := by
+  have hreal_mem0 : ∀ x : Fin 2 → ℝ, (fun k => (x k : ℂ)) ∈ FlatStrip 2 r 0 :=
+    fun x => ⟨by simp [hr], fun j _ => by simp⟩
+  have h_f0_cont : Continuous (mzParamF0 F_A yA yB z) := by
+    refine hFA_holo.continuousOn.comp_continuous ?_ fun x => h_shift_A z hz _ (hreal_mem0 x)
+    exact (differentiable_mzParamMap_right yA yB z).continuous.comp
+      (continuous_pi fun k => Complex.continuous_ofReal.comp (continuous_apply k))
+  have h_f0_bdd : ∀ x : Fin 2 → ℝ, ‖mzParamF0 F_A yA yB z x‖ ≤ M :=
+    fun x => hFA_bdd _ (h_shift_A z hz _ (hreal_mem0 x))
+  have h_real : ∀ (m : Fin 2) (x : Fin 2 → ℝ),
+      mzParamBr F_A F_B yA yB z m (fun k => (x k : ℂ)) = mzParamF0 F_A yA yB z x := by
+    intro m x
+    fin_cases m
+    · rfl
+    · dsimp [mzParamBr, mzParamF0]
+      exact (h_agree z hz x).symm
+  have h_cont_br : ∀ m : Fin 2, ContinuousOn (mzParamBr F_A F_B yA yB z m) (FlatStrip 2 r m) := by
+    intro m
+    fin_cases m
+    · exact hFA_holo.continuousOn.comp
+        (differentiable_mzParamMap_right yA yB z).continuous.continuousOn
+        fun ζ hζ => h_shift_A z hz ζ hζ
+    · exact hFB_holo.continuousOn.comp
+        (differentiable_mzParamMap_right yA yB z).continuous.continuousOn
+        fun ζ hζ => h_shift_B z hz ζ hζ
+  have h_bdd_br : ∀ (m : Fin 2), ∀ ζ ∈ FlatStrip 2 r m, ‖mzParamBr F_A F_B yA yB z m ζ‖ ≤ M := by
+    intro m ζ hζ
+    fin_cases m
+    · exact hFA_bdd _ (h_shift_A z hz ζ hζ)
+    · exact hFB_bdd _ (h_shift_B z hz ζ hζ)
+  have h_holo_br : ∀ (m : Fin 2) (x : Fin 2 → ℝ),
+      DifferentiableOn ℂ
+        (fun w => mzParamBr F_A F_B yA yB z m (Function.update (fun k => (x k : ℂ)) m w))
+        { w : ℂ | |w.im| < r } := by
+    intro m x
+    have h_upd_diff : Differentiable ℂ (fun w : ℂ => Function.update (fun k => (x k : ℂ)) m w) := by
+      refine differentiable_pi.mpr fun j => ?_
+      by_cases hjm : j = m
+      · subst hjm; simp only [Function.update_self]; exact differentiable_id
+      · simp only [Function.update_of_ne hjm]; exact differentiable_const _
+    have h_upd_maps : ∀ w : ℂ, |w.im| < r →
+        Function.update (fun k => (x k : ℂ)) m w ∈ FlatStrip 2 r m := by
+      intro w hw
+      refine ⟨by simpa using hw, fun j hjm => by simp [Function.update_of_ne hjm]⟩
+    fin_cases m
+    · exact hFA_holo.comp
+        ((differentiable_mzParamMap_right yA yB z).comp h_upd_diff).differentiableOn
+        fun w hw => h_shift_A z hz _ (h_upd_maps w hw)
+    · exact hFB_holo.comp
+        ((differentiable_mzParamMap_right yA yB z).comp h_upd_diff).differentiableOn
+        fun w hw => h_shift_B z hz _ (h_upd_maps w hw)
+  exact ⟨h_f0_cont, h_f0_bdd, h_real, h_cont_br, h_bdd_br, h_holo_br⟩
+
+lemma measurable_deriv_of_continuous_on_ball {Ω : Type*} [TopologicalSpace Ω] [MeasurableSpace Ω]
+    [BorelSpace Ω] {c : ℂ} {R : ℝ} (hR : 0 < R) {f : ℂ → Ω → ℂ}
+    (hf_cont : ∀ u ∈ Metric.ball c (2 * R), Continuous (f u))
+    (hf_diff : ∀ x : Ω, DifferentiableAt ℂ (fun v => f v x) c) :
+    Measurable (fun x : Ω => deriv (fun v => f v x) c) := by
+  let seq : ℕ → Ω → ℂ := fun n x =>
+    ((((n : ℝ) + 1) / R : ℝ) : ℂ) * (f (c + ((R / ((n : ℝ) + 1) : ℝ) : ℂ)) x - f c x)
+  have h_meas : ∀ n : ℕ, Measurable (seq n) := by
+    intro n
+    have h_step_pos : 0 < R / ((n : ℝ) + 1) := by positivity
+    have h_step_lt : R / ((n : ℝ) + 1) < 2 * R := by
+      have h1 : (1 : ℝ) ≤ (n : ℝ) + 1 := by linarith [Nat.cast_nonneg (α := ℝ) n]
+      have h2 : R / ((n : ℝ) + 1) ≤ R := div_le_self hR.le h1
+      linarith
+    have hu_mem : c + ((R / ((n : ℝ) + 1) : ℝ) : ℂ) ∈ Metric.ball c (2 * R) := by
+      rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_left, Complex.norm_real,
+        Real.norm_of_nonneg h_step_pos.le]
+      exact h_step_lt
+    have hc_mem : c ∈ Metric.ball c (2 * R) := Metric.mem_ball_self (by positivity)
+    exact (continuous_const.mul ((hf_cont _ hu_mem).sub (hf_cont c hc_mem))).measurable
+  refine measurable_of_tendsto_metrizable h_meas (tendsto_pi_nhds.mpr fun x => ?_)
+  have hsl := (hf_diff x).hasDerivAt.tendsto_slope_zero
+  have h_inv : Tendsto (fun n : ℕ => ((R / ((n : ℝ) + 1) : ℝ) : ℂ)) atTop (𝓝[≠] (0 : ℂ)) := by
+    rw [tendsto_nhdsWithin_iff]
+    refine ⟨?_, Filter.Eventually.of_forall fun n => ?_⟩
+    · have h1 : Tendsto (fun n : ℕ => R * ((n : ℝ) + 1)⁻¹) atTop (𝓝 (R * 0)) :=
+        (tendsto_inv_atTop_zero.comp
+          (tendsto_natCast_atTop_atTop.atTop_add tendsto_const_nhds)).const_mul R
+      have h2 : Tendsto (fun n : ℕ => R / ((n : ℝ) + 1)) atTop (𝓝 0) := by
+        simpa only [div_eq_mul_inv, mul_zero] using h1
+      exact (Complex.continuous_ofReal.tendsto 0).comp h2
+    · exact Complex.ofReal_ne_zero.mpr (div_pos hR (by positivity)).ne'
+  refine (hsl.comp h_inv).congr fun n => ?_
+  dsimp only [Function.comp_apply, seq]
+  have hR_ne : (R : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hR.ne'
+  have hn_ne : ((n : ℝ) + 1 : ℂ) ≠ 0 := by
+    have : (0 : ℝ) < (n : ℝ) + 1 := by positivity
+    exact_mod_cast this.ne'
+  simp only [smul_eq_mul]
+  push_cast
+  field_simp [hR_ne, hn_ne]
+
+lemma mzParam_gHat_differentiableAt {D : ℕ} {U U_A : Set (Fin D → ℝ)}
+    {yA yB : Fin D → ℝ} {r M ε : ℝ}
+    (hU_open : IsOpen U) (hr : 0 < r) (hM : 0 ≤ M) (hε : 0 < ε)
+    {F_A : (Fin D → ℂ) → ℂ}
+    (hFA_holo : DifferentiableOn ℂ F_A (TubeDomain U_A))
+    (hFA_bdd : ∀ w ∈ TubeDomain U_A, ‖F_A w‖ ≤ M)
+    (h_shift_A : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 0,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_A)
+    {z₀ : Fin D → ℂ} (hz₀ : z₀ ∈ TubeDomain U) (m : Fin D) (ξ : Fin 2 → ℝ) :
+    DifferentiableAt ℂ
+      (fun u : ℂ => fourierTransformND
+        (mzGaussianDamped (mzParamF0 F_A yA yB (Function.update z₀ m u)) ε) ξ)
+      (z₀ m) := by
+  have hTU_open : IsOpen (TubeDomain U) := isOpen_TubeDomain hU_open
+  rcases Metric.isOpen_iff.mp hTU_open z₀ hz₀ with ⟨R₀, hR₀_pos, hR₀_sub⟩
+  let R : ℝ := R₀ / 4
+  have hR_pos : 0 < R := by dsimp [R]; positivity
+  have h_upd_in : ∀ u ∈ Metric.ball (z₀ m) (2 * R), Function.update z₀ m u ∈ TubeDomain U := by
+    intro u hu
+    refine hR₀_sub ?_
+    rw [Metric.mem_ball] at hu ⊢
+    refine (dist_pi_lt_iff hR₀_pos).mpr fun j => ?_
+    by_cases hjm : j = m
+    · subst hjm
+      simp only [Function.update_self]
+      have : 2 * R < R₀ := by dsimp [R]; linarith
+      exact hu.trans this
+    · simp [Function.update_of_ne hjm, hR₀_pos]
+  let F_int : ℂ → (Fin 2 → ℝ) → ℂ := fun u x =>
+    mzGaussianDamped (mzParamF0 F_A yA yB (Function.update z₀ m u)) ε x *
+      Complex.exp (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ))
+  have h_inner_holo : ∀ x : Fin 2 → ℝ,
+      DifferentiableOn ℂ (fun u : ℂ => mzParamF0 F_A yA yB (Function.update z₀ m u) x)
+        (Metric.ball (z₀ m) (2 * R)) := by
+    intro x
+    have h_upd_diff : Differentiable ℂ (fun u : ℂ => Function.update z₀ m u) := by
+      refine differentiable_pi.mpr fun j => ?_
+      by_cases hjm : j = m
+      · subst hjm; simp only [Function.update_self]; exact differentiable_id
+      · simp only [Function.update_of_ne hjm]; exact differentiable_const _
+    refine hFA_holo.comp
+      ((differentiable_mzParamMap_left yA yB (fun k => (x k : ℂ))).comp h_upd_diff).differentiableOn
+      fun u hu => h_shift_A _ (h_upd_in u hu) _ ⟨by simp [hr], fun j _ => by simp⟩
+  have h_inner_bdd : ∀ (x : Fin 2 → ℝ), ∀ u ∈ Metric.ball (z₀ m) (2 * R),
+      ‖mzParamF0 F_A yA yB (Function.update z₀ m u) x‖ ≤ M :=
+    fun x u hu => hFA_bdd _ (h_shift_A _ (h_upd_in u hu) _ ⟨by simp [hr], fun j _ => by simp⟩)
+  let F'_int : ℂ → (Fin 2 → ℝ) → ℂ := fun u x =>
+    deriv (fun v : ℂ => mzParamF0 F_A yA yB (Function.update z₀ m v) x) u *
+      Complex.exp (-(ε : ℂ) * ∑ j : Fin 2, ((x j : ℂ) ^ 2)) *
+      Complex.exp (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ))
+  let bound : (Fin 2 → ℝ) → ℝ := fun x =>
+    (M / R) * ∏ j : Fin 2, Real.exp (-ε * (x j) ^ 2)
+  have h_bound_int : Integrable bound volume := by
+    have h1 : Integrable (fun x : Fin 2 → ℝ => ∏ j : Fin 2, Real.exp (-ε * (x j) ^ 2)) volume := by
+      have h_1d : ∀ _ : Fin 2, Integrable (fun t : ℝ => Real.exp (-ε * t ^ 2)) volume :=
+        fun _ => integrable_exp_neg_mul_sq hε
+      exact Integrable.fintype_prod h_1d
+    exact h1.const_mul (M / R)
+  have h_phase_norm : ∀ x : Fin 2 → ℝ,
+      ‖Complex.exp (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ))‖ = 1 := by
+    intro x
+    rw [Complex.norm_exp]
+    have h_re : (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ)).re = 0 := by
+      rw [Finset.mul_sum, Complex.re_sum]
+      exact Finset.sum_eq_zero fun j _ => by simp
+    rw [h_re, Real.exp_zero]
+  have h_gauss_norm : ∀ x : Fin 2 → ℝ,
+      ‖Complex.exp (-(ε : ℂ) * ∑ j : Fin 2, ((x j : ℂ) ^ 2))‖ =
+        ∏ j : Fin 2, Real.exp (-ε * (x j) ^ 2) := by
+    intro x
+    rw [Complex.norm_exp, ← Real.exp_sum]
+    congr 1
+    rw [Finset.mul_sum, Complex.re_sum]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    simp [sq]
+  have hf0_cont_on : ∀ u ∈ Metric.ball (z₀ m) (2 * R),
+      Continuous (mzParamF0 F_A yA yB (Function.update z₀ m u)) := fun u hu =>
+    hFA_holo.continuousOn.comp_continuous
+      ((differentiable_mzParamMap_right yA yB _).continuous.comp
+        (continuous_pi fun k => Complex.continuous_ofReal.comp (continuous_apply k)))
+      fun x => h_shift_A _ (h_upd_in u hu) _ ⟨by simp [hr], fun j _ => by simp⟩
+  have h_meas_F : ∀ᶠ u in 𝓝 (z₀ m), AEStronglyMeasurable (F_int u) volume := by
+    filter_upwards [Metric.ball_mem_nhds (z₀ m) hR_pos] with u hu
+    have hu2 : u ∈ Metric.ball (z₀ m) (2 * R) := Metric.ball_subset_ball (by linarith) hu
+    have h_g_cont :
+        Continuous (mzGaussianDamped (mzParamF0 F_A yA yB (Function.update z₀ m u)) ε) := by
+      unfold mzGaussianDamped
+      refine (hf0_cont_on u hu2).mul (Complex.continuous_exp.comp (continuous_const.mul ?_))
+      exact continuous_finsetSum Finset.univ fun j _ =>
+        (Complex.continuous_ofReal.comp (continuous_apply j)).pow 2
+    refine (h_g_cont.mul
+      (Complex.continuous_exp.comp (continuous_const.mul ?_))).aestronglyMeasurable
+    exact continuous_finsetSum Finset.univ fun j _ =>
+      (Complex.continuous_ofReal.comp (continuous_apply j)).mul continuous_const
+  have h_int_F0 : Integrable (F_int (z₀ m)) volume := by
+    have h_base : Integrable
+        (mzGaussianDamped (mzParamF0 F_A yA yB (Function.update z₀ m (z₀ m))) ε) volume :=
+      integrable_mzGaussianDamped hM
+        (hf0_cont_on (z₀ m) (Metric.mem_ball_self (by positivity)))
+        (fun x => h_inner_bdd x (z₀ m) (Metric.mem_ball_self (by positivity))) hε
+    refine h_base.norm.mono' (h_meas_F.self_of_nhds) (Filter.Eventually.of_forall fun x => ?_)
+    dsimp [F_int]
+    rw [norm_mul, h_phase_norm x, mul_one]
+  have h_meas_F' : AEStronglyMeasurable (F'_int (z₀ m)) volume := by
+    have hm1 : Measurable (fun x : Fin 2 → ℝ =>
+        deriv (fun v => mzParamF0 F_A yA yB (Function.update z₀ m v) x) (z₀ m)) :=
+      measurable_deriv_of_continuous_on_ball hR_pos hf0_cont_on fun x =>
+        (h_inner_holo x).differentiableAt (Metric.isOpen_ball.mem_nhds
+          (Metric.mem_ball_self (by positivity)))
+    have hc2 : Continuous (fun x : Fin 2 → ℝ =>
+        Complex.exp (-(ε : ℂ) * ∑ j : Fin 2, ((x j : ℂ) ^ 2))) :=
+      Complex.continuous_exp.comp (continuous_const.mul
+        (continuous_finsetSum Finset.univ fun j _ =>
+          (Complex.continuous_ofReal.comp (continuous_apply j)).pow 2))
+    have hc3 : Continuous (fun x : Fin 2 → ℝ =>
+        Complex.exp (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ))) :=
+      Complex.continuous_exp.comp (continuous_const.mul
+        (continuous_finsetSum Finset.univ fun j _ =>
+          (Complex.continuous_ofReal.comp (continuous_apply j)).mul continuous_const))
+    exact ((hm1.mul hc2.measurable).mul hc3.measurable).aestronglyMeasurable
+  have h_bound : ∀ᵐ x ∂volume, ∀ u ∈ Metric.ball (z₀ m) R, ‖F'_int u x‖ ≤ bound x := by
+    refine Filter.Eventually.of_forall fun x u hu => ?_
+    dsimp [F'_int, bound]
+    rw [norm_mul, norm_mul, h_phase_norm x, mul_one, h_gauss_norm x]
+    exact mul_le_mul_of_nonneg_right
+      (norm_deriv_le_of_ball_bound hR_pos (h_inner_holo x) (h_inner_bdd x) hu)
+      (Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+  have h_deriv : ∀ᵐ x ∂volume, ∀ u ∈ Metric.ball (z₀ m) R,
+      HasDerivAt (fun v => F_int v x) (F'_int u x) u := by
+    refine Filter.Eventually.of_forall fun x u hu => ?_
+    have hda : DifferentiableAt ℂ
+        (fun v => mzParamF0 F_A yA yB (Function.update z₀ m v) x) u :=
+      (h_inner_holo x).differentiableAt (Metric.isOpen_ball.mem_nhds
+        (Metric.ball_subset_ball (by linarith) hu))
+    dsimp [F_int, F'_int, mzGaussianDamped]
+    exact (hda.hasDerivAt.mul_const _).mul_const _
+  exact (hasDerivAt_integral_of_dominated_loc_of_deriv_le
+    (Metric.ball_mem_nhds (z₀ m) hR_pos) h_meas_F h_int_F0 h_meas_F' h_bound h_bound_int
+    h_deriv).2.differentiableAt
+
+lemma mzParam_mzFEps_differentiableAt_left {D : ℕ} {U U_A U_B : Set (Fin D → ℝ)}
+    {yA yB : Fin D → ℝ} {r M ε : ℝ}
+    (hU_open : IsOpen U) (hr : 0 < r) (hM : 0 ≤ M) (hε : 0 < ε)
+    {F_A F_B : (Fin D → ℂ) → ℂ}
+    (hFA_holo : DifferentiableOn ℂ F_A (TubeDomain U_A))
+    (hFB_holo : DifferentiableOn ℂ F_B (TubeDomain U_B))
+    (hFA_bdd : ∀ w ∈ TubeDomain U_A, ‖F_A w‖ ≤ M)
+    (hFB_bdd : ∀ w ∈ TubeDomain U_B, ‖F_B w‖ ≤ M)
+    (h_shift_A : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 0,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_A)
+    (h_shift_B : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 1,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_B)
+    (h_agree : ∀ z ∈ TubeDomain U, ∀ x : Fin 2 → ℝ,
+      F_A (mzParamMap yA yB z (fun k => (x k : ℂ))) =
+        F_B (mzParamMap yA yB z (fun k => (x k : ℂ))))
+    {z₀ : Fin D → ℂ} (hz₀ : z₀ ∈ TubeDomain U) (m : Fin D)
+    {ζ₀ : Fin 2 → ℂ} (hζ₀ : ζ₀ ∈ TubeDomain (Octahedron 2 r)) :
+    DifferentiableAt ℂ
+      (fun u : ℂ => mzFEps (mzParamF0 F_A yA yB (Function.update z₀ m u)) ε ζ₀)
+      (z₀ m) := by
+  have hTU_open : IsOpen (TubeDomain U) := isOpen_TubeDomain hU_open
+  rcases Metric.isOpen_iff.mp hTU_open z₀ hz₀ with ⟨R₀, hR₀_pos, hR₀_sub⟩
+  let R : ℝ := R₀ / 4
+  have hR_pos : 0 < R := by dsimp [R]; positivity
+  have h_upd_in : ∀ u ∈ Metric.ball (z₀ m) (2 * R), Function.update z₀ m u ∈ TubeDomain U := by
+    intro u hu
+    refine hR₀_sub ?_
+    rw [Metric.mem_ball] at hu ⊢
+    refine (dist_pi_lt_iff hR₀_pos).mpr fun j => ?_
+    by_cases hjm : j = m
+    · subst hjm
+      simp only [Function.update_self]
+      have : 2 * R < R₀ := by dsimp [R]; linarith
+      exact hu.trans this
+    · simp [Function.update_of_ne hjm, hR₀_pos]
+  let S_y : ℝ := ∑ j : Fin 2, |(ζ₀ j).im|
+  have hSy_lt : S_y < r := hζ₀
+  have hSy_nn : 0 ≤ S_y := Finset.sum_nonneg fun _ _ => abs_nonneg _
+  let β : ℝ := (S_y + r) / 2
+  have hβ_pos : 0 < β := by dsimp [β]; linarith
+  have hβ_lt : β < r := by dsimp [β]; linarith
+  let δ : ℝ := (β - S_y) / 4
+  have hδ_pos : 0 < δ := by dsimp [δ, β]; linarith
+  let C_β : ℝ := M * Real.exp (ε * β ^ 2) *
+    ∫ x : Fin 2 → ℝ, ∏ j : Fin 2, Real.exp (-ε * (x j) ^ 2)
+  have hC_nn : 0 ≤ C_β :=
+    mul_nonneg (mul_nonneg hM (Real.exp_pos _).le)
+      (integral_nonneg fun _ => Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+  let gHat : ℂ → (Fin 2 → ℝ) → ℂ := fun u ξ =>
+    fourierTransformND (mzGaussianDamped (mzParamF0 F_A yA yB (Function.update z₀ m u)) ε) ξ
+  have hgHat_holo : ∀ ξ : Fin 2 → ℝ,
+      DifferentiableOn ℂ (fun u : ℂ => gHat u ξ) (Metric.ball (z₀ m) (2 * R)) := by
+    intro ξ u hu
+    have hz_u : Function.update z₀ m u ∈ TubeDomain U := h_upd_in u hu
+    have hda := mzParam_gHat_differentiableAt hU_open hr hM hε hFA_holo hFA_bdd h_shift_A hz_u m ξ
+    have h_eq : (fun v : ℂ => fourierTransformND
+        (mzGaussianDamped
+          (mzParamF0 F_A yA yB (Function.update (Function.update z₀ m u) m v)) ε) ξ) =
+        fun v => gHat v ξ := by
+      ext v; simp [gHat]
+    rw [h_eq, Function.update_self] at hda
+    exact hda.differentiableWithinAt
+  have hgHat_bdd : ∀ u ∈ Metric.ball (z₀ m) (2 * R), ∀ (j : Fin 2) (ξ : Fin 2 → ℝ),
+      ‖gHat u ξ‖ ≤ C_β * Real.exp (-β * |ξ j|) := by
+    intro u hu j ξ
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ :=
+      mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree hr
+        (h_upd_in u hu)
+    exact mz_fourier_bound_coord hr hM h1 h2 h3 h4 h5 h6 hε hβ_pos hβ_lt j ξ
+  have hgHat_cont : ∀ u ∈ Metric.ball (z₀ m) (2 * R), Continuous (gHat u) := by
+    intro u hu
+    obtain ⟨h1, h2, _, _, _, _⟩ :=
+      mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree hr
+        (h_upd_in u hu)
+    exact continuous_fourierTransformND_of_integrable (integrable_mzGaussianDamped hM h1 h2 hε)
+  have hζ_sum_le : ∑ j : Fin 2, |(ζ₀ j).im| ≤ β - ((2 : ℕ) : ℝ) * δ := by
+    dsimp [δ, β, S_y]
+    linarith
+  let F_int : ℂ → (Fin 2 → ℝ) → ℂ := fun u ξ =>
+    gHat u ξ * Complex.exp (I * ∑ j : Fin 2, ζ₀ j * (ξ j : ℂ))
+  let F'_int : ℂ → (Fin 2 → ℝ) → ℂ := fun u ξ =>
+    deriv (fun v => gHat v ξ) u * Complex.exp (I * ∑ j : Fin 2, ζ₀ j * (ξ j : ℂ))
+  let bound : (Fin 2 → ℝ) → ℝ := fun ξ =>
+    (C_β / R) * Real.exp (-δ * ∑ j : Fin 2, |ξ j|)
+  have h_exp_int : Integrable (fun ξ : Fin 2 → ℝ => Real.exp (-δ * ∑ j : Fin 2, |ξ j|)) volume :=
+    integrable_exp_neg_abs_sum 2 hδ_pos
+  have h_bound_int : Integrable bound volume := h_exp_int.const_mul (C_β / R)
+  have h_phase_cont : Continuous (fun ξ : Fin 2 → ℝ =>
+      Complex.exp (I * ∑ j : Fin 2, ζ₀ j * (ξ j : ℂ))) :=
+    Complex.continuous_exp.comp (continuous_const.mul
+      (continuous_finsetSum Finset.univ fun j _ =>
+        continuous_const.mul (Complex.continuous_ofReal.comp (continuous_apply j))))
+  have h_meas_F : ∀ᶠ u in 𝓝 (z₀ m), AEStronglyMeasurable (F_int u) volume := by
+    filter_upwards [Metric.ball_mem_nhds (z₀ m) hR_pos] with u hu
+    exact ((hgHat_cont u (Metric.ball_subset_ball (by linarith) hu)).mul
+      h_phase_cont).aestronglyMeasurable
+  have h_int_F0 : Integrable (F_int (z₀ m)) volume := by
+    refine (h_exp_int.const_mul C_β).mono' h_meas_F.self_of_nhds
+      (Filter.Eventually.of_forall fun ξ => ?_)
+    exact mz_fourier_phase_domination (n := 1) (α := r) hC_nn hδ_pos
+      (hgHat_bdd (z₀ m) (Metric.mem_ball_self (by positivity))) hζ_sum_le hr ξ
+  have h_meas_F' : AEStronglyMeasurable (F'_int (z₀ m)) volume := by
+    have hm1 : Measurable (fun ξ : Fin 2 → ℝ => deriv (fun v => gHat v ξ) (z₀ m)) :=
+      measurable_deriv_of_continuous_on_ball hR_pos hgHat_cont fun ξ =>
+        (hgHat_holo ξ).differentiableAt (Metric.isOpen_ball.mem_nhds
+          (Metric.mem_ball_self (by positivity)))
+    exact (hm1.mul h_phase_cont.measurable).aestronglyMeasurable
+  have h_bound : ∀ᵐ ξ ∂volume, ∀ u ∈ Metric.ball (z₀ m) R, ‖F'_int u ξ‖ ≤ bound ξ := by
+    refine Filter.Eventually.of_forall fun ξ u hu => ?_
+    have h_deriv_coord : ∀ (j : Fin 2) (ξ' : Fin 2 → ℝ),
+        ‖deriv (fun v => gHat v ξ') u‖ ≤ (C_β / R) * Real.exp (-β * |ξ' j|) := by
+      intro j ξ'
+      have h1 := norm_deriv_le_of_ball_bound hR_pos (hgHat_holo ξ')
+        (fun v hv => hgHat_bdd v hv j ξ') hu
+      rwa [mul_div_right_comm] at h1
+    exact mz_fourier_phase_domination (n := 1) (α := r) (div_nonneg hC_nn hR_pos.le) hδ_pos
+      h_deriv_coord hζ_sum_le hr ξ
+  have h_deriv : ∀ᵐ ξ ∂volume, ∀ u ∈ Metric.ball (z₀ m) R,
+      HasDerivAt (fun v => F_int v ξ) (F'_int u ξ) u := by
+    refine Filter.Eventually.of_forall fun ξ u hu => ?_
+    have hda : DifferentiableAt ℂ (fun v => gHat v ξ) u :=
+      (hgHat_holo ξ).differentiableAt (Metric.isOpen_ball.mem_nhds
+        (Metric.ball_subset_ball (by linarith) hu))
+    exact hda.hasDerivAt.mul_const _
+  have h_int_da := (hasDerivAt_integral_of_dominated_loc_of_deriv_le
+    (Metric.ball_mem_nhds (z₀ m) hR_pos) h_meas_F h_int_F0 h_meas_F' h_bound h_bound_int
+    h_deriv).2.differentiableAt
+  exact h_int_da.const_mul (((2 * Real.pi)⁻¹ : ℂ) ^ 2)
+
+noncomputable def mzParamLim {D : ℕ} (F_A : (Fin D → ℂ) → ℂ) (yA yB : Fin D → ℝ)
+    (z : Fin D → ℂ) (ζ : Fin 2 → ℂ) : ℂ :=
+  limUnder (𝓝[>] (0 : ℝ)) (fun ε => mzFEps (mzParamF0 F_A yA yB z) ε ζ)
+
+lemma mzParam_mzFEps_continuousOn {D : ℕ} {U U_A U_B : Set (Fin D → ℝ)}
+    {yA yB : Fin D → ℝ} {r M ε : ℝ}
+    (hU_open : IsOpen U) (hr : 0 < r) (hM : 0 ≤ M) (hε : 0 < ε)
+    {F_A F_B : (Fin D → ℂ) → ℂ}
+    (hFA_holo : DifferentiableOn ℂ F_A (TubeDomain U_A))
+    (hFB_holo : DifferentiableOn ℂ F_B (TubeDomain U_B))
+    (hFA_bdd : ∀ w ∈ TubeDomain U_A, ‖F_A w‖ ≤ M)
+    (hFB_bdd : ∀ w ∈ TubeDomain U_B, ‖F_B w‖ ≤ M)
+    (h_shift_A : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 0,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_A)
+    (h_shift_B : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 1,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_B)
+    (h_agree : ∀ z ∈ TubeDomain U, ∀ x : Fin 2 → ℝ,
+      F_A (mzParamMap yA yB z (fun k => (x k : ℂ))) =
+        F_B (mzParamMap yA yB z (fun k => (x k : ℂ)))) :
+    ContinuousOn (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) => mzFEps (mzParamF0 F_A yA yB p.1) ε p.2)
+      (TubeDomain U ×ˢ TubeDomain (Octahedron 2 r)) := by
+  have hTU_open : IsOpen (TubeDomain U) := isOpen_TubeDomain hU_open
+  have hTO_open : IsOpen (TubeDomain (Octahedron 2 r)) := isOpen_TubeDomain (isOpen_Octahedron 2 r)
+  have h_gHat_cont : ∀ ξ : Fin 2 → ℝ,
+      ContinuousOn (fun z : Fin D → ℂ =>
+        fourierTransformND (mzGaussianDamped (mzParamF0 F_A yA yB z) ε) ξ) (TubeDomain U) := by
+    intro ξ
+    have h_gauss_int : Integrable (fun x : Fin 2 → ℝ =>
+        M * ∏ j : Fin 2, Real.exp (-ε * (x j) ^ 2)) volume :=
+      (Integrable.fintype_prod fun _ => integrable_exp_neg_mul_sq hε).const_mul M
+    refine MeasureTheory.continuousOn_of_dominated ?_ ?_ h_gauss_int ?_
+    · intro z hz
+      have h_cont_f0 : Continuous (mzParamF0 F_A yA yB z) :=
+        (mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree
+          hr hz).1
+      have h_cont_gd : Continuous (mzGaussianDamped (mzParamF0 F_A yA yB z) ε) :=
+        h_cont_f0.mul (Complex.continuous_exp.comp
+          (continuous_const.mul (continuous_finsetSum Finset.univ fun j _ =>
+            (Complex.continuous_ofReal.comp (continuous_apply j)).pow 2)))
+      have h_cont_ph : Continuous (fun x : Fin 2 → ℝ =>
+          Complex.exp (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ))) :=
+        Complex.continuous_exp.comp (continuous_const.mul
+          (continuous_finsetSum Finset.univ fun j _ =>
+          (Complex.continuous_ofReal.comp (continuous_apply j)).mul continuous_const))
+      exact (h_cont_gd.mul h_cont_ph).aestronglyMeasurable
+    · intro z hz
+      refine Filter.Eventually.of_forall fun x => ?_
+      rw [norm_mul, Complex.norm_exp]
+      have h_re0 : (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ)).re = 0 := by
+        simp only [neg_mul, Complex.neg_re, Complex.I_mul]
+        have h_im0 : (∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ)).im = 0 := by
+          rw [Complex.im_sum]
+          exact Finset.sum_eq_zero fun j _ => by simp
+        simp
+      rw [h_re0, Real.exp_zero, mul_one]
+      have hf0_le : ‖mzParamF0 F_A yA yB z x‖ ≤ M :=
+        (mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree
+          hr hz).2.1 x
+      dsimp only [mzGaussianDamped]
+      rw [norm_mul, Complex.norm_exp]
+      have h_exp_eq : (-↑ε * ∑ j : Fin 2, (x j : ℂ) ^ 2).re = ∑ j : Fin 2, (-ε * (x j) ^ 2) := by
+        rw [Finset.mul_sum, Complex.re_sum]
+        refine Finset.sum_congr rfl fun j _ => ?_
+        simp [sq]
+      rw [h_exp_eq, Real.exp_sum]
+      exact mul_le_mul_of_nonneg_right hf0_le
+        (Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+    · refine Filter.Eventually.of_forall fun x => ?_
+      have h_map_cont : Continuous (fun z : Fin D → ℂ =>
+          mzParamMap yA yB z (fun k => (x k : ℂ))) :=
+        continuous_pi fun i => by
+          dsimp only [mzParamMap]
+          exact ((continuous_apply i).add continuous_const).add continuous_const
+      have h_FA_comp : ContinuousOn (fun z : Fin D → ℂ =>
+          F_A (mzParamMap yA yB z (fun k => (x k : ℂ)))) (TubeDomain U) :=
+        hFA_holo.continuousOn.comp h_map_cont.continuousOn fun z hz =>
+          h_shift_A z hz (fun k => (x k : ℂ)) ⟨by simp [hr], fun _ _ => by simp⟩
+      exact (h_FA_comp.mul continuousOn_const).mul continuousOn_const
+  intro p₀ hp₀
+  rcases p₀ with ⟨z₀, ζ₀⟩
+  rcases hp₀ with ⟨hz₀, hζ₀⟩
+  have hζ₀_sum : ∑ j : Fin 2, |(ζ₀ j).im| < r := hζ₀
+  let S₀ : ℝ := (∑ j : Fin 2, |(ζ₀ j).im| + r) / 2
+  have hS₀_gt : ∑ j : Fin 2, |(ζ₀ j).im| < S₀ := by dsimp [S₀]; linarith
+  have hS₀_lt : S₀ < r := by dsimp [S₀]; linarith
+  let ρ : ℝ := (S₀ - ∑ j : Fin 2, |(ζ₀ j).im|) / 4
+  have hρ_pos : 0 < ρ := by dsimp [ρ]; linarith
+  let V : Set ((Fin D → ℂ) × (Fin 2 → ℂ)) :=
+    TubeDomain U ×ˢ (TubeDomain (Octahedron 2 r) ∩ Metric.ball ζ₀ ρ)
+  have hV_open : IsOpen V := hTU_open.prod (hTO_open.inter Metric.isOpen_ball)
+  have hp₀_V : (z₀, ζ₀) ∈ V := ⟨hz₀, hζ₀, Metric.mem_ball_self hρ_pos⟩
+  let β : ℝ := (S₀ + r) / 2
+  have hβ_pos : 0 < β := by
+    have hsum_nn : 0 ≤ ∑ j : Fin 2, |(ζ₀ j).im| := Finset.sum_nonneg fun _ _ => abs_nonneg _
+    dsimp [β, S₀]; linarith
+  have hβ_lt : β < r := by dsimp [β]; linarith
+  let δ : ℝ := (β - S₀) / 2
+  have hδ_pos : 0 < δ := by dsimp [δ, β]; linarith
+  let C_β : ℝ := M * Real.exp (ε * β ^ 2) *
+    ∫ x : Fin 2 → ℝ, ∏ j : Fin 2, Real.exp (-ε * (x j) ^ 2)
+  have hC_nn : 0 ≤ C_β :=
+    mul_nonneg (mul_nonneg hM (Real.exp_pos _).le)
+      (integral_nonneg fun _ => Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+  have h_bound_int : Integrable (fun ξ : Fin 2 → ℝ =>
+      C_β * Real.exp (-δ * ∑ j : Fin 2, |ξ j|)) volume :=
+    (integrable_exp_neg_abs_sum 2 hδ_pos).const_mul C_β
+  have h_int_cont : ContinuousOn (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) =>
+      ∫ ξ : Fin 2 → ℝ, fourierTransformND (mzGaussianDamped (mzParamF0 F_A yA yB p.1) ε) ξ *
+        Complex.exp (I * ∑ j : Fin 2, p.2 j * (ξ j : ℂ))) V := by
+    refine MeasureTheory.continuousOn_of_dominated ?_ ?_ h_bound_int ?_
+    · intro p hp
+      obtain ⟨h1, h2, h3, h4, h5, h6⟩ :=
+        mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree
+          hr hp.1
+      have h_g_cont :
+          Continuous (fourierTransformND (mzGaussianDamped (mzParamF0 F_A yA yB p.1) ε)) := by
+        have h_int_b : Integrable (fun x : Fin 2 → ℝ =>
+            M * ∏ j : Fin 2, Real.exp (-ε * (x j) ^ 2)) volume :=
+          (Integrable.fintype_prod fun _ => integrable_exp_neg_mul_sq hε).const_mul M
+        refine MeasureTheory.continuous_of_dominated ?_ ?_ h_int_b ?_
+        · intro ξ
+          have h_gd_cont : Continuous (mzGaussianDamped (mzParamF0 F_A yA yB p.1) ε) :=
+            h1.mul (Complex.continuous_exp.comp (continuous_const.mul
+              (continuous_finsetSum Finset.univ fun j _ =>
+                (Complex.continuous_ofReal.comp (continuous_apply j)).pow 2)))
+          have h_ph : Continuous (fun x : Fin 2 → ℝ =>
+              Complex.exp (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ))) :=
+            Complex.continuous_exp.comp (continuous_const.mul
+              (continuous_finsetSum Finset.univ fun j _ =>
+                (Complex.continuous_ofReal.comp (continuous_apply j)).mul continuous_const))
+          exact (h_gd_cont.mul h_ph).aestronglyMeasurable
+        · intro ξ
+          refine Filter.Eventually.of_forall fun x => ?_
+          rw [norm_mul, Complex.norm_exp]
+          have h_re0 : (-I * ∑ j : Fin 2, (x j : ℂ) * (ξ j : ℂ)).re = 0 := by
+            simp only [neg_mul, Complex.neg_re, Complex.I_mul]
+            simp
+          rw [h_re0, Real.exp_zero, mul_one]
+          dsimp only [mzGaussianDamped]
+          rw [norm_mul, Complex.norm_exp]
+          have h_exp_eq :
+              (-↑ε * ∑ j : Fin 2, (x j : ℂ) ^ 2).re = ∑ j : Fin 2, (-ε * (x j) ^ 2) := by
+            rw [Finset.mul_sum, Complex.re_sum]
+            exact Finset.sum_congr rfl fun j _ => by simp [sq]
+          rw [h_exp_eq, Real.exp_sum]
+          exact mul_le_mul_of_nonneg_right (h2 x)
+            (Finset.prod_nonneg fun _ _ => (Real.exp_pos _).le)
+        · refine Filter.Eventually.of_forall fun x => ?_
+          exact continuous_const.mul (Complex.continuous_exp.comp (continuous_const.mul
+            (continuous_finsetSum Finset.univ fun j _ =>
+              continuous_const.mul (Complex.continuous_ofReal.comp (continuous_apply j)))))
+      have h_ph_cont : Continuous (fun ξ : Fin 2 → ℝ =>
+          Complex.exp (I * ∑ j : Fin 2, p.2 j * (ξ j : ℂ))) :=
+        Complex.continuous_exp.comp (continuous_const.mul
+          (continuous_finsetSum Finset.univ fun j _ =>
+          continuous_const.mul (Complex.continuous_ofReal.comp (continuous_apply j))))
+      exact (h_g_cont.mul h_ph_cont).aestronglyMeasurable
+    · intro p hp
+      obtain ⟨h1, h2, h3, h4, h5, h6⟩ :=
+        mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree
+          hr hp.1
+      have h_coord : ∀ m ξ,
+          ‖fourierTransformND (mzGaussianDamped (mzParamF0 F_A yA yB p.1) ε) ξ‖ ≤
+            C_β * Real.exp (-β * |ξ m|) :=
+        fun m ξ => mz_fourier_bound_coord hr hM h1 h2 h3 h4 h5 h6 hε hβ_pos hβ_lt m ξ
+      have hp2_sum : ∑ j : Fin 2, |(p.2 j).im| ≤ β - ((1 + 1 : ℕ) : ℝ) * δ := by
+        have h_eq : β - ((1 + 1 : ℕ) : ℝ) * δ = S₀ := by dsimp [δ]; ring
+        rw [h_eq]
+        have h_dist : ‖p.2 - ζ₀‖ < ρ := by simpa [dist_eq_norm] using Metric.mem_ball.mp hp.2.2
+        have h_term : ∀ j : Fin 2, |(p.2 j).im| ≤ |(ζ₀ j).im| + ρ := fun j => by
+          have hj : |(p.2 j).im - (ζ₀ j).im| < ρ :=
+            (Complex.abs_im_le_norm (p.2 j - ζ₀ j)).trans_lt
+              ((norm_le_pi_norm (p.2 - ζ₀) j).trans_lt h_dist)
+          linarith [abs_sub_abs_le_abs_sub (p.2 j).im (ζ₀ j).im]
+        calc ∑ j : Fin 2, |(p.2 j).im| ≤ ∑ j : Fin 2, (|(ζ₀ j).im| + ρ) :=
+              Finset.sum_le_sum fun j _ => h_term j
+          _ = (∑ j : Fin 2, |(ζ₀ j).im|) + 2 * ρ := by
+              rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin]
+              simp [nsmul_eq_mul]
+          _ ≤ S₀ := by dsimp [ρ]; linarith
+      exact Filter.Eventually.of_forall fun ξ =>
+        mz_fourier_phase_domination (n := 1) hC_nn hδ_pos h_coord hp2_sum hr ξ
+    · refine Filter.Eventually.of_forall fun ξ => ?_
+      have h1 : ContinuousOn (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) =>
+          fourierTransformND (mzGaussianDamped (mzParamF0 F_A yA yB p.1) ε) ξ) V :=
+        (h_gHat_cont ξ).comp continuous_fst.continuousOn (fun p hp => hp.1)
+      have h2 : ContinuousOn (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) =>
+          Complex.exp (I * ∑ j : Fin 2, p.2 j * (ξ j : ℂ))) V :=
+        (Complex.continuous_exp.comp (continuous_const.mul
+          (continuous_finsetSum Finset.univ fun j _ =>
+            ((continuous_apply j).comp continuous_snd).mul continuous_const))).continuousOn
+      exact h1.mul h2
+  have h_cont_at : ContinuousAt
+      (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) => mzFEps (mzParamF0 F_A yA yB p.1) ε p.2) (z₀, ζ₀) :=
+    ((continuousOn_const.mul h_int_cont).continuousAt (hV_open.mem_nhds hp₀_V))
+  exact h_cont_at.continuousWithinAt
+
+lemma osgood_prod_fin_two {D : ℕ} {S : Set ((Fin D → ℂ) × (Fin 2 → ℂ))}
+    (hS_open : IsOpen S) (G : (Fin D → ℂ) × (Fin 2 → ℂ) → ℂ)
+    (hG_cont : ContinuousOn G S)
+    (h_left : ∀ z₀ ζ₀, (z₀, ζ₀) ∈ S → ∀ m : Fin D,
+      DifferentiableAt ℂ (fun w => G (Function.update z₀ m w, ζ₀)) (z₀ m))
+    (h_right : ∀ z₀ ζ₀, (z₀, ζ₀) ∈ S → ∀ k : Fin 2,
+      DifferentiableAt ℂ (fun w => G (z₀, Function.update ζ₀ k w)) (ζ₀ k)) :
+    DifferentiableOn ℂ G S := by
+  let split : (Fin (D + 2) → ℂ) →L[ℂ] (Fin D → ℂ) × (Fin 2 → ℂ) :=
+    ContinuousLinearMap.prod
+      (ContinuousLinearMap.pi fun i : Fin D => ContinuousLinearMap.proj (Fin.castAdd 2 i))
+      (ContinuousLinearMap.pi fun j : Fin 2 => ContinuousLinearMap.proj (Fin.natAdd D j))
+  let merge : (Fin D → ℂ) × (Fin 2 → ℂ) →L[ℂ] (Fin (D + 2) → ℂ) :=
+    ContinuousLinearMap.pi fun i : Fin (D + 2) =>
+      if h : i.val < D then
+        (ContinuousLinearMap.proj ⟨i.val, h⟩).comp (ContinuousLinearMap.fst ℂ _ _)
+      else
+        (ContinuousLinearMap.proj ⟨i.val - D, by omega⟩).comp (ContinuousLinearMap.snd ℂ _ _)
+  have h_split_merge : ∀ p : (Fin D → ℂ) × (Fin 2 → ℂ), split (merge p) = p := by
+    intro p
+    ext i
+    · simp [split, merge]
+    · simp only [split, merge, ContinuousLinearMap.prod_apply, ContinuousLinearMap.pi_apply,
+        ContinuousLinearMap.proj_apply, Fin.val_natAdd, not_lt.mpr (Nat.le_add_right D _),
+        ↓reduceDIte, ContinuousLinearMap.comp_apply, ContinuousLinearMap.coe_snd']
+      have h_idx : (⟨D + ↑i - D, by omega⟩ : Fin 2) = i := Fin.ext (by simp)
+      rw [h_idx]
+  let W : Set (Fin (D + 2) → ℂ) := split ⁻¹' S
+  have hW_open : IsOpen W := hS_open.preimage split.continuous
+  let Gflat : (Fin (D + 2) → ℂ) → ℂ := fun v => G (split v)
+  have hGflat_cont : ContinuousOn Gflat W :=
+    hG_cont.comp split.continuous.continuousOn (fun _ hv => hv)
+  have hGflat_holo : DifferentiableOn ℂ Gflat W := by
+    refine osgood_nd (D + 2) hW_open Gflat hGflat_cont ?_
+    intro v hv i
+    by_cases hi : i.val < D
+    · let m : Fin D := ⟨i.val, hi⟩
+      have h_upd : ∀ w : ℂ, split (Function.update v i w) =
+          (Function.update (split v).1 m w, (split v).2) := by
+        intro w
+        ext j
+        · simp only [split, ContinuousLinearMap.prod_apply, ContinuousLinearMap.pi_apply,
+            ContinuousLinearMap.proj_apply]
+          by_cases hjm : j = m
+          · subst hjm
+            have h_eq : Fin.castAdd 2 m = i := Fin.ext rfl
+            rw [h_eq, Function.update_self, Function.update_self]
+          · have h_ne : Fin.castAdd 2 j ≠ i := fun h => hjm (Fin.ext (by
+              have := congrArg Fin.val h; simpa [m] using this))
+            rw [Function.update_of_ne h_ne, Function.update_of_ne hjm]; simp
+        · simp only [split, ContinuousLinearMap.prod_apply, ContinuousLinearMap.pi_apply,
+            ContinuousLinearMap.proj_apply]
+          have h_ne : Fin.natAdd D j ≠ i := fun h => by
+            have := congrArg Fin.val h; simp at this; omega
+          rw [Function.update_of_ne h_ne]
+      have h_fun : (fun w => Gflat (Function.update v i w)) =
+          (fun w => G (Function.update (split v).1 m w, (split v).2)) := by
+        ext w; simp only [Gflat, h_upd]
+      rw [h_fun]
+      have h_val : v i = (split v).1 m := by
+        simp only [split, ContinuousLinearMap.prod_apply, ContinuousLinearMap.pi_apply,
+          ContinuousLinearMap.proj_apply]
+        congr 1
+      rw [h_val]
+      exact h_left (split v).1 (split v).2 hv m
+    · let k : Fin 2 := ⟨i.val - D, by omega⟩
+      have h_upd : ∀ w : ℂ, split (Function.update v i w) =
+          ((split v).1, Function.update (split v).2 k w) := by
+        intro w
+        ext j
+        · simp only [split, ContinuousLinearMap.prod_apply, ContinuousLinearMap.pi_apply,
+            ContinuousLinearMap.proj_apply]
+          have h_ne : Fin.castAdd 2 j ≠ i := fun h => by
+            have := congrArg Fin.val h; simp at this; omega
+          rw [Function.update_of_ne h_ne]
+        · simp only [split, ContinuousLinearMap.prod_apply, ContinuousLinearMap.pi_apply,
+            ContinuousLinearMap.proj_apply]
+          by_cases hjk : j = k
+          · subst hjk
+            have h_eq : Fin.natAdd D k = i := Fin.ext (by simp [k]; omega)
+            rw [h_eq, Function.update_self, Function.update_self]
+          · have h_ne : Fin.natAdd D j ≠ i := fun h => hjk (Fin.ext (by
+              have := congrArg Fin.val h; simp at this; dsimp [k]; omega))
+            rw [Function.update_of_ne h_ne, Function.update_of_ne hjk]; simp
+      have h_fun : (fun w => Gflat (Function.update v i w)) =
+          (fun w => G ((split v).1, Function.update (split v).2 k w)) := by
+        ext w; simp only [Gflat, h_upd]
+      rw [h_fun]
+      have h_val : v i = (split v).2 k := by
+        simp only [split, ContinuousLinearMap.prod_apply, ContinuousLinearMap.pi_apply,
+          ContinuousLinearMap.proj_apply]
+        congr 1; apply Fin.ext; simp [k]; omega
+      rw [h_val]
+      exact h_right (split v).1 (split v).2 hv k
+  have h_comp := hGflat_holo.comp merge.differentiable.differentiableOn
+    (fun p hp => by change split (merge p) ∈ S; rwa [h_split_merge])
+  refine h_comp.congr fun p _ => ?_
+  simp only [Function.comp_apply, Gflat, h_split_merge]
+
+lemma mzParam_limit_props {D : ℕ} {U U_A U_B : Set (Fin D → ℝ)}
+    {yA yB : Fin D → ℝ} {r M : ℝ}
+    (hU_open : IsOpen U) (hr : 0 < r) (hM : 0 ≤ M)
+    {F_A F_B : (Fin D → ℂ) → ℂ}
+    (hFA_holo : DifferentiableOn ℂ F_A (TubeDomain U_A))
+    (hFB_holo : DifferentiableOn ℂ F_B (TubeDomain U_B))
+    (hFA_bdd : ∀ w ∈ TubeDomain U_A, ‖F_A w‖ ≤ M)
+    (hFB_bdd : ∀ w ∈ TubeDomain U_B, ‖F_B w‖ ≤ M)
+    (h_shift_A : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 0,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_A)
+    (h_shift_B : ∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 1,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_B)
+    (h_agree : ∀ z ∈ TubeDomain U, ∀ x : Fin 2 → ℝ,
+      F_A (mzParamMap yA yB z (fun k => (x k : ℂ))) =
+        F_B (mzParamMap yA yB z (fun k => (x k : ℂ)))) :
+    DifferentiableOn ℂ (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) => mzParamLim F_A yA yB p.1 p.2)
+      (TubeDomain U ×ˢ TubeDomain (Octahedron 2 r)) ∧
+    (∀ z ∈ TubeDomain U, ∀ ζ ∈ TubeDomain (Octahedron 2 r),
+      ‖mzParamLim F_A yA yB z ζ‖ ≤ M) ∧
+    (∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 0,
+      mzParamLim F_A yA yB z ζ = F_A (mzParamMap yA yB z ζ)) ∧
+    (∀ z ∈ TubeDomain U, ∀ ζ ∈ FlatStrip 2 r 1,
+      mzParamLim F_A yA yB z ζ = F_B (mzParamMap yA yB z ζ)) := by
+  have hTU_open : IsOpen (TubeDomain U) := isOpen_TubeDomain hU_open
+  have hTO_open : IsOpen (TubeDomain (Octahedron 2 r)) := isOpen_TubeDomain (isOpen_Octahedron 2 r)
+  have hProd_open : IsOpen (TubeDomain U ×ˢ TubeDomain (Octahedron 2 r)) := hTU_open.prod hTO_open
+  have h_unif_ball : ∀ z₀ ∈ TubeDomain U, ∀ ζ₀ ∈ TubeDomain (Octahedron 2 r),
+      ∃ η > 0, Metric.ball (z₀, ζ₀) η ⊆ TubeDomain U ×ˢ TubeDomain (Octahedron 2 r) ∧
+        TendstoUniformlyOn
+          (fun ε (p : (Fin D → ℂ) × (Fin 2 → ℂ)) => mzFEps (mzParamF0 F_A yA yB p.1) ε p.2)
+          (fun p => mzParamLim F_A yA yB p.1 p.2)
+          (𝓝[>] (0 : ℝ)) (Metric.ball (z₀, ζ₀) η) := by
+    intro z₀ hz₀ ζ₀ hζ₀
+    rcases Metric.isOpen_iff.mp hProd_open (z₀, ζ₀) ⟨hz₀, hζ₀⟩ with ⟨η, hη, hsub⟩
+    refine ⟨η, hη, hsub, Bochner.tendstoUniformlyOn_limUnder_of_uniform_cauchy _ ?_⟩
+    intro γ hγ
+    let B : ℝ := ‖ζ₀‖ + η + 1
+    have hB_pos : 0 < B := by dsimp [B]; positivity
+    obtain ⟨ε₀, hε₀, hbd⟩ := mzFEps_bounded_cauchy_uniform (n := 1) hr hM 2 hB_pos hγ
+    refine ⟨ε₀, hε₀, fun ε₁ hε₁ ε₂ hε₂ p hp => ?_⟩
+    have hp_in := hsub hp
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ :=
+      mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree
+        hr hp_in.1
+    have hp2_norm : ‖p.2‖ ≤ B := by
+      have hd : ‖p.2 - ζ₀‖ < η := by
+        have hball : dist p (z₀, ζ₀) < η := Metric.mem_ball.mp hp
+        have hle : dist p.2 ζ₀ ≤ dist p (z₀, ζ₀) := le_max_right _ _
+        have hlt : dist p.2 ζ₀ < η := hle.trans_lt hball
+        rwa [dist_eq_norm] at hlt
+      calc ‖p.2‖ = ‖(p.2 - ζ₀) + ζ₀‖ := by ring_nf
+        _ ≤ ‖p.2 - ζ₀‖ + ‖ζ₀‖ := norm_add_le _ _
+        _ ≤ B := by dsimp [B]; linarith
+    exact hbd h1 h2 h3 h4 h5 h6 ε₁ hε₁ ε₂ hε₂ Finset.univ (by simp) p.2
+      ⟨hp_in.2, fun j hj => (hj (Finset.mem_univ j)).elim⟩ hp2_norm
+  have h_loc : TendstoLocallyUniformlyOn
+      (fun ε (p : (Fin D → ℂ) × (Fin 2 → ℂ)) => mzFEps (mzParamF0 F_A yA yB p.1) ε p.2)
+      (fun p => mzParamLim F_A yA yB p.1 p.2)
+      (𝓝[>] (0 : ℝ)) (TubeDomain U ×ˢ TubeDomain (Octahedron 2 r)) := by
+    refine tendstoLocallyUniformlyOn_of_forall_exists_nhds fun p₀ hp₀ => ?_
+    obtain ⟨η, hη, _, hunif⟩ := h_unif_ball p₀.1 hp₀.1 p₀.2 hp₀.2
+    exact ⟨Metric.ball p₀ η, nhdsWithin_le_nhds (Metric.ball_mem_nhds p₀ hη), hunif⟩
+  have h_cont : ContinuousOn
+      (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) => mzParamLim F_A yA yB p.1 p.2)
+      (TubeDomain U ×ˢ TubeDomain (Octahedron 2 r)) := by
+    intro p₀ hp₀
+    obtain ⟨η, hη, hsub, hunif⟩ := h_unif_ball p₀.1 hp₀.1 p₀.2 hp₀.2
+    have h_ev_cont : ∀ᶠ ε in 𝓝[>] (0 : ℝ),
+        ContinuousOn (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) =>
+          mzFEps (mzParamF0 F_A yA yB p.1) ε p.2) (Metric.ball p₀ η) :=
+      eventually_nhdsWithin_of_forall fun ε hε =>
+        (mzParam_mzFEps_continuousOn hU_open hr hM hε hFA_holo hFB_holo hFA_bdd hFB_bdd
+          h_shift_A h_shift_B h_agree).mono hsub
+    exact (hunif.continuousOn h_ev_cont.frequently |>.continuousAt
+      (Metric.ball_mem_nhds p₀ hη)).continuousWithinAt
+  have h_diff_left : ∀ z₀ ∈ TubeDomain U, ∀ ζ₀ ∈ TubeDomain (Octahedron 2 r), ∀ m : Fin D,
+      DifferentiableAt ℂ (fun w => mzParamLim F_A yA yB (Function.update z₀ m w) ζ₀) (z₀ m) := by
+    intro z₀ hz₀ ζ₀ hζ₀ m
+    let φ : ℂ → (Fin D → ℂ) × (Fin 2 → ℂ) := fun w => (Function.update z₀ m w, ζ₀)
+    have hφ_diff : Differentiable ℂ φ :=
+      (differentiable_pi.mpr fun j => by
+        by_cases hjm : j = m
+        · subst hjm; simp only [Function.update_self]; exact differentiable_id
+        · simp only [Function.update_of_ne hjm]; exact differentiable_const _).prodMk
+        (differentiable_const ζ₀)
+    let S_m : Set ℂ := φ ⁻¹' (TubeDomain U ×ˢ TubeDomain (Octahedron 2 r))
+    have hSm_open : IsOpen S_m := hProd_open.preimage hφ_diff.continuous
+    have h_loc_sl : TendstoLocallyUniformlyOn
+        (fun ε w => mzFEps (mzParamF0 F_A yA yB (Function.update z₀ m w)) ε ζ₀)
+        (fun w => mzParamLim F_A yA yB (Function.update z₀ m w) ζ₀) (𝓝[>] (0 : ℝ)) S_m :=
+      h_loc.comp φ (fun _ hw => hw) hφ_diff.continuous.continuousOn
+    have h_ev_sl : ∀ᶠ ε in 𝓝[>] (0 : ℝ),
+        DifferentiableOn ℂ (fun w => mzFEps (mzParamF0 F_A yA yB (Function.update z₀ m w)) ε ζ₀)
+          S_m := by
+      refine eventually_nhdsWithin_of_forall fun ε hε w hw => ?_
+      have h_da := mzParam_mzFEps_differentiableAt_left hU_open hr hM hε hFA_holo hFB_holo
+        hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree hw.1 m hw.2
+      have h_eq : (fun v => mzFEps
+          (mzParamF0 F_A yA yB (Function.update (Function.update z₀ m w) m v)) ε ζ₀) =
+          (fun v => mzFEps (mzParamF0 F_A yA yB (Function.update z₀ m v)) ε ζ₀) := by
+        ext v; simp [Function.update_idem]
+      dsimp only [φ] at h_da
+      rw [h_eq, Function.update_self] at h_da
+      exact h_da.differentiableWithinAt
+    have h_diffOn := h_loc_sl.differentiableOn h_ev_sl hSm_open
+    have hzm : z₀ m ∈ S_m := by
+      change (Function.update z₀ m (z₀ m), ζ₀) ∈ TubeDomain U ×ˢ TubeDomain (Octahedron 2 r)
+      rw [Function.update_eq_self]
+      exact ⟨hz₀, hζ₀⟩
+    exact (h_diffOn (z₀ m) hzm).differentiableAt (hSm_open.mem_nhds hzm)
+  have h_diff_right : ∀ z₀ ∈ TubeDomain U, ∀ ζ₀ ∈ TubeDomain (Octahedron 2 r), ∀ k : Fin 2,
+      DifferentiableAt ℂ (fun w => mzParamLim F_A yA yB z₀ (Function.update ζ₀ k w)) (ζ₀ k) := by
+    intro z₀ hz₀ ζ₀ hζ₀ k
+    let φ : ℂ → (Fin D → ℂ) × (Fin 2 → ℂ) := fun w => (z₀, Function.update ζ₀ k w)
+    have hφ_diff : Differentiable ℂ φ :=
+      (differentiable_const z₀).prodMk (differentiable_pi.mpr fun j => by
+        by_cases hjk : j = k
+        · subst hjk; simp only [Function.update_self]; exact differentiable_id
+        · simp only [Function.update_of_ne hjk]; exact differentiable_const _)
+    let S_k : Set ℂ := φ ⁻¹' (TubeDomain U ×ˢ TubeDomain (Octahedron 2 r))
+    have hSk_open : IsOpen S_k := hProd_open.preimage hφ_diff.continuous
+    have h_loc_sl : TendstoLocallyUniformlyOn
+        (fun ε w => mzFEps (mzParamF0 F_A yA yB z₀) ε (Function.update ζ₀ k w))
+        (fun w => mzParamLim F_A yA yB z₀ (Function.update ζ₀ k w)) (𝓝[>] (0 : ℝ)) S_k :=
+      h_loc.comp φ (fun _ hw => hw) hφ_diff.continuous.continuousOn
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ :=
+      mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree
+        hr hz₀
+    have h_ev_sl : ∀ᶠ ε in 𝓝[>] (0 : ℝ),
+        DifferentiableOn ℂ (fun w => mzFEps (mzParamF0 F_A yA yB z₀) ε (Function.update ζ₀ k w))
+          S_k := by
+      refine eventually_nhdsWithin_of_forall fun ε hε => ?_
+      have h_holo := mzFEps_holomorphic (n := 1) hr hM h1 h2 h3 h4 h5 h6 hε
+      have h_upd_diff : Differentiable ℂ (Function.update ζ₀ k) :=
+        differentiable_pi.mpr fun j => by
+          by_cases hjk : j = k
+          · subst hjk; simp only [Function.update_self]; exact differentiable_id
+          · simp only [Function.update_of_ne hjk]; exact differentiable_const _
+      exact h_holo.comp h_upd_diff.differentiableOn (fun _ hw => hw.2)
+    have h_diffOn := h_loc_sl.differentiableOn h_ev_sl hSk_open
+    have hζk : ζ₀ k ∈ S_k := by
+      change (z₀, Function.update ζ₀ k (ζ₀ k)) ∈ TubeDomain U ×ˢ TubeDomain (Octahedron 2 r)
+      rw [Function.update_eq_self]
+      exact ⟨hz₀, hζ₀⟩
+    exact (h_diffOn (ζ₀ k) hζk).differentiableAt (hSk_open.mem_nhds hζk)
+  have h_holo : DifferentiableOn ℂ
+      (fun p : (Fin D → ℂ) × (Fin 2 → ℂ) => mzParamLim F_A yA yB p.1 p.2)
+      (TubeDomain U ×ˢ TubeDomain (Octahedron 2 r)) :=
+    osgood_prod_fin_two hProd_open (fun p => mzParamLim F_A yA yB p.1 p.2) h_cont
+      (fun z₀ ζ₀ h m => h_diff_left z₀ h.1 ζ₀ h.2 m)
+      (fun z₀ ζ₀ h k => h_diff_right z₀ h.1 ζ₀ h.2 k)
+  refine ⟨h_holo, ?_, ?_, ?_⟩
+  · intro z hz ζ hζ
+    obtain ⟨η, hη, _, hunif⟩ := h_unif_ball z hz ζ hζ
+    have h_tendsto : Tendsto (fun ε => mzFEps (mzParamF0 F_A yA yB z) ε ζ)
+        (𝓝[>] (0 : ℝ)) (𝓝 (mzParamLim F_A yA yB z ζ)) :=
+      hunif.tendsto_at (x := (z, ζ)) (Metric.mem_ball_self hη)
+    have h_rhs : Tendsto (fun ε : ℝ => M * Real.exp (ε * r ^ 2)) (𝓝[>] (0 : ℝ)) (𝓝 M) := by
+      have hc : Continuous (fun ε : ℝ => M * Real.exp (ε * r ^ 2)) :=
+        continuous_const.mul (Real.continuous_exp.comp (continuous_id.mul continuous_const))
+      simpa using tendsto_nhdsWithin_of_tendsto_nhds
+        (s := Set.Ioi (0 : ℝ)) (hc.continuousAt (x := 0)).tendsto
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ :=
+      mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree hr hz
+    refine le_of_tendsto_of_tendsto h_tendsto.norm h_rhs ?_
+    exact eventually_nhdsWithin_of_forall fun ε hε =>
+      mzFEps_norm_le_all (n := 1) hr hM h1 h2 h3 h4 h5 h6 hε hζ
+  · intro z hz ζ hζ
+    have hζ_tube : ζ ∈ TubeDomain (Octahedron 2 r) := by
+      change ∑ j : Fin 2, |(ζ j).im| < r
+      rw [Finset.sum_eq_single (0 : Fin 2)]
+      · exact hζ.1
+      · intro j _ hj; simp [hζ.2 j hj]
+      · intro h; exact (h (Finset.mem_univ _)).elim
+    obtain ⟨η, hη, _, hunif⟩ := h_unif_ball z hz ζ hζ_tube
+    have h_t1 : Tendsto (fun ε => mzFEps (mzParamF0 F_A yA yB z) ε ζ)
+        (𝓝[>] (0 : ℝ)) (𝓝 (mzParamLim F_A yA yB z ζ)) :=
+      hunif.tendsto_at (x := (z, ζ)) (Metric.mem_ball_self hη)
+    let s : ℂ := ∑ j : Fin 2, (ζ j) ^ 2
+    have h_t2 : Tendsto (fun ε : ℝ => F_A (mzParamMap yA yB z ζ) * Complex.exp (-↑ε * s))
+        (𝓝[>] (0 : ℝ)) (𝓝 (F_A (mzParamMap yA yB z ζ))) := by
+      have hc : Continuous (fun ε : ℝ => F_A (mzParamMap yA yB z ζ) * Complex.exp (-↑ε * s)) :=
+        continuous_const.mul (Complex.continuous_exp.comp
+          ((Complex.continuous_ofReal.neg).mul continuous_const))
+      simpa using tendsto_nhdsWithin_of_tendsto_nhds
+        (s := Set.Ioi (0 : ℝ)) (hc.continuousAt (x := 0)).tendsto
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ :=
+      mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree hr hz
+    have h_ev : (fun ε => mzFEps (mzParamF0 F_A yA yB z) ε ζ) =ᶠ[𝓝[>] (0 : ℝ)]
+        fun ε => F_A (mzParamMap yA yB z ζ) * Complex.exp (-↑ε * s) :=
+      eventually_nhdsWithin_of_forall fun ε hε => by
+        have h := mzFEps_eq_on_flatStrip (n := 1) hr hM h1 h2 h3 h4 h5 h6 hε (0 : Fin 2) hζ
+        simpa [mzParamBr, s] using h
+    exact tendsto_nhds_unique h_t1 (h_t2.congr' h_ev.symm)
+  · intro z hz ζ hζ
+    have hζ_tube : ζ ∈ TubeDomain (Octahedron 2 r) := by
+      change ∑ j : Fin 2, |(ζ j).im| < r
+      rw [Finset.sum_eq_single (1 : Fin 2)]
+      · exact hζ.1
+      · intro j _ hj; simp [hζ.2 j hj]
+      · intro h; exact (h (Finset.mem_univ _)).elim
+    obtain ⟨η, hη, _, hunif⟩ := h_unif_ball z hz ζ hζ_tube
+    have h_t1 : Tendsto (fun ε => mzFEps (mzParamF0 F_A yA yB z) ε ζ)
+        (𝓝[>] (0 : ℝ)) (𝓝 (mzParamLim F_A yA yB z ζ)) :=
+      hunif.tendsto_at (x := (z, ζ)) (Metric.mem_ball_self hη)
+    let s : ℂ := ∑ j : Fin 2, (ζ j) ^ 2
+    have h_t2 : Tendsto (fun ε : ℝ => F_B (mzParamMap yA yB z ζ) * Complex.exp (-↑ε * s))
+        (𝓝[>] (0 : ℝ)) (𝓝 (F_B (mzParamMap yA yB z ζ))) := by
+      have hc : Continuous (fun ε : ℝ => F_B (mzParamMap yA yB z ζ) * Complex.exp (-↑ε * s)) :=
+        continuous_const.mul (Complex.continuous_exp.comp
+          ((Complex.continuous_ofReal.neg).mul continuous_const))
+      simpa using tendsto_nhdsWithin_of_tendsto_nhds
+        (s := Set.Ioi (0 : ℝ)) (hc.continuousAt (x := 0)).tendsto
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ :=
+      mzParam_slice_holo_and_bdd hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree hr hz
+    have h_ev : (fun ε => mzFEps (mzParamF0 F_A yA yB z) ε ζ) =ᶠ[𝓝[>] (0 : ℝ)]
+        fun ε => F_B (mzParamMap yA yB z ζ) * Complex.exp (-↑ε * s) :=
+      eventually_nhdsWithin_of_forall fun ε hε => by
+        have h := mzFEps_eq_on_flatStrip (n := 1) hr hM h1 h2 h3 h4 h5 h6 hε (1 : Fin 2) hζ
+        simpa [mzParamBr, s] using h
+    exact tendsto_nhds_unique h_t1 (h_t2.congr' h_ev.symm)
+
+lemma mzParamLim_diag_shift_invariant {D : ℕ} {δ r M : ℝ}
+    {U_A U_B : Set (Fin D → ℝ)} {yA yB : Fin D → ℝ}
+    (hr : 0 < r) (hM : 0 ≤ M)
+    {F_A F_B : (Fin D → ℂ) → ℂ}
+    (hFA_holo : DifferentiableOn ℂ F_A (TubeDomain U_A))
+    (hFB_holo : DifferentiableOn ℂ F_B (TubeDomain U_B))
+    (hFA_bdd : ∀ w ∈ TubeDomain U_A, ‖F_A w‖ ≤ M)
+    (hFB_bdd : ∀ w ∈ TubeDomain U_B, ‖F_B w‖ ≤ M)
+    (h_shift_A : ∀ z ∈ TubeDomain (Metric.ball 0 δ), ∀ ζ ∈ FlatStrip 2 r 0,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_A)
+    (h_shift_B : ∀ z ∈ TubeDomain (Metric.ball 0 δ), ∀ ζ ∈ FlatStrip 2 r 1,
+      mzParamMap yA yB z ζ ∈ TubeDomain U_B)
+    (h_agree : ∀ z ∈ TubeDomain (Metric.ball 0 δ), ∀ x : Fin 2 → ℝ,
+      F_A (mzParamMap yA yB z (fun k => (x k : ℂ))) =
+        F_B (mzParamMap yA yB z (fun k => (x k : ℂ))))
+    {z : Fin D → ℂ} (hz : z ∈ TubeDomain (Metric.ball 0 δ))
+    {s₁ s₂ : ℝ} (hs₁ : |s₁| < r) (hs₂ : |s₂| < r)
+    (hz' : (fun j => z j - (I * ((s₂ - s₁ : ℝ) : ℂ)) * (((yA j + yB j) / 2 : ℝ) : ℂ)) ∈
+      TubeDomain (Metric.ball 0 δ)) :
+    mzParamLim F_A yA yB
+        (fun j => z j - (I * ((s₂ - s₁ : ℝ) : ℂ)) * (((yA j + yB j) / 2 : ℝ) : ℂ))
+        (fun _ => I * ((s₂ : ℂ) / 2)) =
+      mzParamLim F_A yA yB z (fun _ => I * ((s₁ : ℂ) / 2)) := by
+  obtain ⟨hG_holo, _, hG_A, _⟩ := mzParam_limit_props Metric.isOpen_ball hr hM
+    hFA_holo hFB_holo hFA_bdd hFB_bdd h_shift_A h_shift_B h_agree
+  let y₀ : Fin D → ℝ := fun j => (yA j + yB j) / 2
+  have h_diag_mem : ∀ μ : ℂ, |μ.im| < r →
+      (fun _ : Fin 2 => μ / 2) ∈ TubeDomain (Octahedron 2 r) := by
+    intro μ hμ
+    change ∑ _ : Fin 2, |(μ / 2).im| < r
+    have h_im : (μ / 2).im = μ.im / 2 := by simp
+    simp only [h_im, abs_div, abs_of_pos (two_pos : (0 : ℝ) < 2), Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    linarith
+  have h_real_shift : ∀ (z₁ : Fin D → ℂ), z₁ ∈ TubeDomain (Metric.ball 0 δ) →
+      ∀ (μ₁ : ℂ), |μ₁.im| < r → ∀ (h : ℝ),
+        mzParamLim F_A yA yB (fun j => z₁ j - (h : ℂ) * (y₀ j : ℂ))
+          (fun _ => (μ₁ + (h : ℂ)) / 2) =
+          mzParamLim F_A yA yB z₁ (fun _ => μ₁ / 2) := by
+    intro z₁ hz₁ μ₁ hμ₁ h
+    have hz₁_norm : ‖fun j => (z₁ j).im‖ < δ := by
+      simpa [TubeDomain, Metric.mem_ball, dist_zero_right] using hz₁
+    let R_s : ℝ := min ((δ - ‖fun j => (z₁ j).im‖) / (2 * (‖fun j => (z₁ j).im‖ + 1)) + 1)
+      ((r - |μ₁.im|) / (2 * (|μ₁.im| + 1)) + 1)
+    have hRs_gt : 1 < R_s := by
+      have h1 : 0 < (δ - ‖fun j => (z₁ j).im‖) / (2 * (‖fun j => (z₁ j).im‖ + 1)) :=
+        div_pos (sub_pos.mpr hz₁_norm) (by positivity)
+      have h2 : 0 < (r - |μ₁.im|) / (2 * (|μ₁.im| + 1)) :=
+        div_pos (sub_pos.mpr hμ₁) (by positivity)
+      dsimp [R_s]
+      exact lt_min (by linarith) (by linarith)
+    have hRs_z : R_s * ‖fun j => (z₁ j).im‖ < δ := by
+      have hle : R_s ≤ (δ - ‖fun j => (z₁ j).im‖) / (2 * (‖fun j => (z₁ j).im‖ + 1)) + 1 :=
+        min_le_left _ _
+      have hnn : 0 ≤ ‖fun j => (z₁ j).im‖ := norm_nonneg _
+      have hden : 0 < 2 * (‖fun j => (z₁ j).im‖ + 1) := by positivity
+      have h_mul := mul_le_mul_of_nonneg_right hle hnn
+      have h_lt : ((δ - ‖fun j => (z₁ j).im‖) / (2 * (‖fun j => (z₁ j).im‖ + 1)) + 1) *
+          ‖fun j => (z₁ j).im‖ < δ := by
+        have h_num : (δ - ‖fun j => (z₁ j).im‖) * ‖fun j => (z₁ j).im‖ <
+            (δ - ‖fun j => (z₁ j).im‖) * (2 * (‖fun j => (z₁ j).im‖ + 1)) := by nlinarith
+        have h_div : (δ - ‖fun j => (z₁ j).im‖) / (2 * (‖fun j => (z₁ j).im‖ + 1)) *
+            ‖fun j => (z₁ j).im‖ < δ - ‖fun j => (z₁ j).im‖ := by
+          rw [div_mul_eq_mul_div, div_lt_iff₀ hden]
+          exact h_num
+        linarith
+      exact h_mul.trans_lt h_lt
+    have hRs_μ : R_s * |μ₁.im| < r := by
+      have hle : R_s ≤ (r - |μ₁.im|) / (2 * (|μ₁.im| + 1)) + 1 := min_le_right _ _
+      have hnn : 0 ≤ |μ₁.im| := abs_nonneg _
+      have hden : 0 < 2 * (|μ₁.im| + 1) := by positivity
+      have h_mul := mul_le_mul_of_nonneg_right hle hnn
+      have h_lt : ((r - |μ₁.im|) / (2 * (|μ₁.im| + 1)) + 1) * |μ₁.im| < r := by
+        have h_num : (r - |μ₁.im|) * |μ₁.im| < (r - |μ₁.im|) * (2 * (|μ₁.im| + 1)) := by nlinarith
+        have h_div : (r - |μ₁.im|) / (2 * (|μ₁.im| + 1)) * |μ₁.im| < r - |μ₁.im| := by
+          rw [div_mul_eq_mul_div, div_lt_iff₀ hden]
+          exact h_num
+        linarith
+      exact h_mul.trans_lt h_lt
+    let S : Set ℂ := {s : ℂ | |s.re| < R_s}
+    have hS_open : IsOpen S :=
+      (isOpen_lt (continuous_abs.comp Complex.continuous_re) continuous_const)
+    have hS_conv : Convex ℝ S := by
+      intro s₁ hs₁ s₂ hs₂ a b ha hb hab
+      simp only [S, Set.mem_setOf_eq, Complex.add_re, Complex.real_smul, Complex.mul_re,
+        Complex.ofReal_re, Complex.ofReal_im, zero_mul, sub_zero]
+      have hs₁' : |s₁.re| < R_s := hs₁
+      have hs₂' : |s₂.re| < R_s := hs₂
+      calc |a * s₁.re + b * s₂.re| ≤ |a * s₁.re| + |b * s₂.re| := abs_add_le _ _
+        _ = a * |s₁.re| + b * |s₂.re| := by
+            rw [abs_mul, abs_mul, abs_of_nonneg ha, abs_of_nonneg hb]
+        _ < a * R_s + b * R_s := by
+            rcases eq_or_lt_of_le ha with rfl | ha'
+            · simp only [zero_add] at hab; subst hab; nlinarith [hs₂']
+            · rcases eq_or_lt_of_le hb with rfl | hb'
+              · simp only [add_zero] at hab; subst hab; nlinarith [hs₁']
+              · nlinarith [hs₁', hs₂']
+        _ = R_s := by nlinarith
+    let zMap : ℂ → (Fin D → ℂ) := fun s j => ((z₁ j).re : ℂ) + s * (I * ((z₁ j).im : ℂ))
+    let μMap : ℂ → ℂ := fun s => (μ₁.re : ℂ) + s * (I * (μ₁.im : ℂ))
+    have hzMap_im : ∀ s j, (zMap s j).im = s.re * (z₁ j).im := fun s j => by
+      dsimp [zMap]; simp [Complex.mul_im]
+    have hμMap_im : ∀ s, (μMap s).im = s.re * μ₁.im := fun s => by
+      dsimp [μMap]; simp [Complex.mul_im]
+    have hzMap_in : ∀ s ∈ S, zMap s ∈ TubeDomain (Metric.ball 0 δ) := by
+      intro s hs
+      change (fun j => (zMap s j).im) ∈ Metric.ball 0 δ
+      rw [Metric.mem_ball, dist_zero_right]
+      have h_eq : (fun j => (zMap s j).im) = s.re • (fun j => (z₁ j).im) := by
+        ext j; exact hzMap_im s j
+      rw [h_eq, norm_smul, Real.norm_eq_abs]
+      calc |s.re| * ‖fun j => (z₁ j).im‖ ≤ R_s * ‖fun j => (z₁ j).im‖ :=
+            mul_le_mul_of_nonneg_right (le_of_lt hs) (norm_nonneg _)
+        _ < δ := hRs_z
+    have hμMap_in : ∀ s ∈ S, |(μMap s).im| < r := by
+      intro s hs
+      rw [hμMap_im, abs_mul]
+      calc |s.re| * |μ₁.im| ≤ R_s * |μ₁.im| :=
+            mul_le_mul_of_nonneg_right (le_of_lt hs) (abs_nonneg _)
+        _ < r := hRs_μ
+    let φ₁ : ℂ → (Fin D → ℂ) × (Fin 2 → ℂ) :=
+      fun s => (fun j => zMap s j - (h : ℂ) * (y₀ j : ℂ), fun _ => (μMap s + (h : ℂ)) / 2)
+    let φ₂ : ℂ → (Fin D → ℂ) × (Fin 2 → ℂ) :=
+      fun s => (zMap s, fun _ => μMap s / 2)
+    have hzMap_diff : Differentiable ℂ zMap :=
+      differentiable_pi.mpr fun j =>
+        (differentiable_const _).add (differentiable_id.mul (differentiable_const _))
+    have hμMap_diff : Differentiable ℂ μMap :=
+      (differentiable_const _).add (differentiable_id.mul (differentiable_const _))
+    have hφ₁_diff : Differentiable ℂ φ₁ :=
+      (differentiable_pi.mpr fun j =>
+        ((differentiable_apply j).comp hzMap_diff).sub (differentiable_const _)).prodMk
+        (differentiable_pi.mpr fun _ => (hμMap_diff.add (differentiable_const _)).div_const 2)
+    have hφ₂_diff : Differentiable ℂ φ₂ :=
+      hzMap_diff.prodMk (differentiable_pi.mpr fun _ => hμMap_diff.div_const 2)
+    let g₁ : ℂ → ℂ := fun s => mzParamLim F_A yA yB (φ₁ s).1 (φ₁ s).2
+    let g₂ : ℂ → ℂ := fun s => mzParamLim F_A yA yB (φ₂ s).1 (φ₂ s).2
+    have hg₁_holo : DifferentiableOn ℂ g₁ S :=
+      hG_holo.comp hφ₁_diff.differentiableOn fun s hs => by
+        refine ⟨?_, h_diag_mem _ ?_⟩
+        · change (fun j => (zMap s j - (h : ℂ) * (y₀ j : ℂ)).im) ∈ Metric.ball 0 δ
+          have h_im_eq : (fun j => (zMap s j - (h : ℂ) * (y₀ j : ℂ)).im) =
+              fun j => (zMap s j).im := by ext j; simp
+          rw [h_im_eq]; exact hzMap_in s hs
+        · simpa using hμMap_in s hs
+    have hg₂_holo : DifferentiableOn ℂ g₂ S :=
+      hG_holo.comp hφ₂_diff.differentiableOn fun s hs =>
+        ⟨hzMap_in s hs, h_diag_mem _ (hμMap_in s hs)⟩
+    have h_eq_im_axis : ∀ t : ℝ, g₁ (I * (t : ℂ)) = g₂ (I * (t : ℂ)) := by
+      intro t
+      have ht_S : I * (t : ℂ) ∈ S := by
+        change |(I * (t : ℂ)).re| < R_s
+        simp; linarith
+      have h_z1_in : (φ₁ (I * (t : ℂ))).1 ∈ TubeDomain (Metric.ball 0 δ) := by
+        change (fun j => (zMap (I * (t : ℂ)) j - (h : ℂ) * (y₀ j : ℂ)).im) ∈ Metric.ball 0 δ
+        have h_im_eq : (fun j => (zMap (I * (t : ℂ)) j - (h : ℂ) * (y₀ j : ℂ)).im) =
+            fun j => (zMap (I * (t : ℂ)) j).im := by ext j; simp
+        rw [h_im_eq]; exact hzMap_in _ ht_S
+      have h_z2_in : (φ₂ (I * (t : ℂ))).1 ∈ TubeDomain (Metric.ball 0 δ) := hzMap_in _ ht_S
+      have h_μ_im0 : (μMap (I * (t : ℂ))).im = 0 := by rw [hμMap_im]; simp
+      have h_f1 : (φ₁ (I * (t : ℂ))).2 ∈ FlatStrip 2 r 0 := by
+        refine ⟨?_, fun j _ => ?_⟩
+        · simp [φ₁, h_μ_im0, hr]
+        · simp [φ₁, h_μ_im0]
+      have h_f2 : (φ₂ (I * (t : ℂ))).2 ∈ FlatStrip 2 r 0 := by
+        refine ⟨?_, fun j _ => ?_⟩
+        · simp [φ₂, h_μ_im0, hr]
+        · simp [φ₂, h_μ_im0]
+      dsimp only [g₁, g₂]
+      rw [hG_A _ h_z1_in _ h_f1, hG_A _ h_z2_in _ h_f2]
+      congr 1
+      ext j
+      simp only [φ₁, φ₂, mzParamMap, y₀, Complex.ofReal_div, Complex.ofReal_add,
+        Complex.ofReal_ofNat]
+      ring
+    have h_freq : ∃ᶠ s in 𝓝[≠] (0 : ℂ), g₁ s = g₂ s := by
+      rw [Filter.frequently_iff]
+      intro U hU
+      rw [mem_nhdsWithin] at hU
+      rcases hU with ⟨V, hV_open, h0V, hV_sub⟩
+      rcases Metric.isOpen_iff.mp hV_open 0 h0V with ⟨η, hη, h_ball⟩
+      let s₀ : ℂ := I * ((η / 2 : ℝ) : ℂ)
+      have hs₀_ne : s₀ ≠ 0 := by
+        intro heq
+        have h1 : ‖s₀‖ = η / 2 := by
+          dsimp [s₀]; rw [norm_mul, Complex.norm_I, one_mul, Complex.norm_real,
+            Real.norm_of_nonneg (by positivity)]
+        rw [heq, norm_zero] at h1
+        linarith
+      have hs₀_V : s₀ ∈ V := h_ball (by
+        rw [Metric.mem_ball, dist_zero_right]
+        dsimp [s₀]
+        rw [norm_mul, Complex.norm_I, one_mul, Complex.norm_real,
+          Real.norm_of_nonneg (by positivity)]
+        linarith)
+      exact ⟨s₀, hV_sub ⟨hs₀_V, hs₀_ne⟩, h_eq_im_axis (η / 2)⟩
+    have h_eqOn := (hg₁_holo.analyticOnNhd hS_open).eqOn_of_preconnected_of_frequently_eq
+      (hg₂_holo.analyticOnNhd hS_open) hS_conv.isPreconnected
+      (by change |(0 : ℂ).re| < R_s; simp; linarith)
+      h_freq
+    have h1_S : (1 : ℂ) ∈ S := by change |(1 : ℂ).re| < R_s; simp [hRs_gt]
+    have h_at1 := h_eqOn h1_S
+    have hzMap1 : zMap 1 = z₁ := by
+      ext j; dsimp [zMap]; rw [one_mul, mul_comm I, Complex.re_add_im]
+    have hμMap1 : μMap 1 = μ₁ := by
+      dsimp [μMap]; rw [one_mul, mul_comm I, Complex.re_add_im]
+    simpa [g₁, g₂, φ₁, φ₂, hzMap1, hμMap1] using h_at1
+  let H : Set ℂ := {w : ℂ |
+    (fun j => (z j).im - w.im * y₀ j) ∈ Metric.ball 0 δ ∧ |s₁ + w.im| < r}
+  have hH_open : IsOpen H := by
+    have h1 : Continuous (fun w : ℂ => fun j : Fin D => (z j).im - w.im * y₀ j) :=
+      continuous_pi fun j => continuous_const.sub (Complex.continuous_im.mul continuous_const)
+    have h2 : Continuous (fun w : ℂ => |s₁ + w.im|) :=
+      continuous_abs.comp (continuous_const.add Complex.continuous_im)
+    exact (Metric.isOpen_ball.preimage h1).inter (isOpen_lt h2 continuous_const)
+  have hH_conv : Convex ℝ H := by
+    intro w₁ hw₁ w₂ hw₂ a b ha hb hab
+    refine ⟨?_, ?_⟩
+    · have h_eq : (fun j => (z j).im - (a • w₁ + b • w₂).im * y₀ j) =
+          a • (fun j => (z j).im - w₁.im * y₀ j) + b • (fun j => (z j).im - w₂.im * y₀ j) := by
+        ext j; simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul, Complex.add_im,
+          Complex.real_smul, Complex.mul_im, Complex.ofReal_re, Complex.ofReal_im, zero_mul,
+          add_zero]
+        have : (z j).im = (a + b) * (z j).im := by rw [hab, one_mul]
+        linarith
+      rw [h_eq]
+      exact (convex_ball (0 : Fin D → ℝ) δ) hw₁.1 hw₂.1 ha hb hab
+    · have h_eq : s₁ + (a • w₁ + b • w₂).im = a * (s₁ + w₁.im) + b * (s₁ + w₂.im) := by
+        simp only [Complex.add_im, Complex.real_smul, Complex.mul_im, Complex.ofReal_re,
+          Complex.ofReal_im, zero_mul, add_zero]
+        have : s₁ = (a + b) * s₁ := by rw [hab, one_mul]
+        linarith
+      rw [h_eq]
+      calc |a * (s₁ + w₁.im) + b * (s₁ + w₂.im)|
+          ≤ |a * (s₁ + w₁.im)| + |b * (s₁ + w₂.im)| := abs_add_le _ _
+        _ = a * |s₁ + w₁.im| + b * |s₁ + w₂.im| := by
+            rw [abs_mul, abs_mul, abs_of_nonneg ha, abs_of_nonneg hb]
+        _ < a * r + b * r := by
+            rcases eq_or_lt_of_le ha with rfl | ha'
+            · simp only [zero_add] at hab; subst hab; nlinarith [hw₂.2]
+            · rcases eq_or_lt_of_le hb with rfl | hb'
+              · simp only [add_zero] at hab; subst hab; nlinarith [hw₁.2]
+              · nlinarith [hw₁.2, hw₂.2]
+        _ = r := by nlinarith
+  let ψ : ℂ → (Fin D → ℂ) × (Fin 2 → ℂ) :=
+    fun w => (fun j => z j - w * (y₀ j : ℂ), fun _ => (I * (s₁ : ℂ) + w) / 2)
+  have hψ_diff : Differentiable ℂ ψ :=
+    (differentiable_pi.mpr fun j =>
+      (differentiable_const _).sub (differentiable_id.mul (differentiable_const _))).prodMk
+      (differentiable_pi.mpr fun _ => ((differentiable_const _).add differentiable_id).div_const 2)
+  let Fh : ℂ → ℂ := fun w => mzParamLim F_A yA yB (ψ w).1 (ψ w).2
+  have hFh_holo : DifferentiableOn ℂ Fh H :=
+    hG_holo.comp hψ_diff.differentiableOn fun w hw => by
+      refine ⟨?_, h_diag_mem _ ?_⟩
+      · change (fun j => (z j - w * (y₀ j : ℂ)).im) ∈ Metric.ball 0 δ
+        simpa [Complex.sub_im, Complex.mul_im] using hw.1
+      · simpa [Complex.add_im, Complex.mul_im] using hw.2
+  have h0_H : (0 : ℂ) ∈ H := by
+    refine ⟨?_, by simpa using hs₁⟩
+    simpa [TubeDomain] using hz
+  have h_freq_h : ∃ᶠ w in 𝓝[≠] (0 : ℂ),
+      Fh w = mzParamLim F_A yA yB z (fun _ => I * ((s₁ : ℂ) / 2)) := by
+    rw [Filter.frequently_iff]
+    intro U hU
+    rw [mem_nhdsWithin] at hU
+    rcases hU with ⟨V, hV_open, h0V, hV_sub⟩
+    rcases Metric.isOpen_iff.mp hV_open 0 h0V with ⟨η, hη, h_ball⟩
+    let w₀ : ℂ := ((η / 2 : ℝ) : ℂ)
+    have hw₀_ne : w₀ ≠ 0 := by
+      dsimp [w₀]; exact Complex.ofReal_ne_zero.mpr (by linarith)
+    have hw₀_V : w₀ ∈ V := h_ball (by
+      rw [Metric.mem_ball, dist_zero_right]
+      dsimp [w₀]; rw [Complex.norm_real, Real.norm_of_nonneg (by positivity)]; linarith)
+    refine ⟨w₀, hV_sub ⟨hw₀_V, hw₀_ne⟩, ?_⟩
+    have h_r := h_real_shift z hz (I * (s₁ : ℂ)) (by simpa using hs₁) (η / 2)
+    have h_div : (fun _ : Fin 2 => I * (s₁ : ℂ) / 2) = fun _ : Fin 2 => I * ((s₁ : ℂ) / 2) := by
+      ext _; ring
+    simpa [Fh, ψ, w₀, h_div] using h_r
+  have h_eqOn_H := (hFh_holo.analyticOnNhd hH_open).eqOn_of_preconnected_of_frequently_eq
+    (analyticOnNhd_const) hH_conv.isPreconnected h0_H h_freq_h
+  have hw_target : I * ((s₂ - s₁ : ℝ) : ℂ) ∈ H := by
+    refine ⟨?_, ?_⟩
+    · have h_im : (I * ((s₂ - s₁ : ℝ) : ℂ)).im = s₂ - s₁ := by simp
+      rw [h_im]
+      simpa [TubeDomain, y₀, Complex.sub_im, Complex.mul_im] using hz'
+    · have h_im : (I * ((s₂ - s₁ : ℝ) : ℂ)).im = s₂ - s₁ := by simp
+      rw [h_im]
+      simpa [add_sub_cancel] using hs₂
+  have h_res := h_eqOn_H hw_target
+  have h_arg2 : (fun _ : Fin 2 => (I * (s₁ : ℂ) + I * ((s₂ - s₁ : ℝ) : ℂ)) / 2) =
+      fun _ : Fin 2 => I * ((s₂ : ℂ) / 2) := by
+    ext _
+    rw [Complex.ofReal_sub]
+    ring
+  dsimp only [Fh, ψ] at h_res
+  rw [h_arg2] at h_res
+  exact h_res
+
+lemma exists_midpoint_pair_radius {D : ℕ} {U_A U_B : Set (Fin D → ℝ)}
+    (hA_open : IsOpen U_A) (hB_open : IsOpen U_B)
+    (hA_conv : Convex ℝ U_A) (hB_conv : Convex ℝ U_B)
+    (hA_symm : ∀ y ∈ U_A, -y ∈ U_A) (hB_symm : ∀ y ∈ U_B, -y ∈ U_B)
+    (hA_zero : (0 : Fin D → ℝ) ∈ U_A) (hB_zero : (0 : Fin D → ℝ) ∈ U_B)
+    {yA yB : Fin D → ℝ} (hyA : yA ∈ U_A) (hyB : yB ∈ U_B) :
+    ∃ r > (1 : ℝ), ∃ δ > (0 : ℝ),
+      Metric.ball (0 : Fin D → ℝ) δ ⊆ U_A ∩ U_B ∧
+      (∀ w ∈ Metric.ball (0 : Fin D → ℝ) δ, ∀ t ∈ Set.Ioo (-r) r, w + t • yA ∈ U_A) ∧
+      (∀ w ∈ Metric.ball (0 : Fin D → ℝ) δ, ∀ t ∈ Set.Ioo (-r) r, w + t • yB ∈ U_B) := by
+  have h_scale_A : ∃ rA > (1 : ℝ), rA • yA ∈ U_A := by
+    have h_cont : Continuous (fun t : ℝ => t • yA) := continuous_id.smul continuous_const
+    have h_open : IsOpen ((fun t : ℝ => t • yA) ⁻¹' U_A) := hA_open.preimage h_cont
+    have h1_mem : (1 : ℝ) ∈ (fun t : ℝ => t • yA) ⁻¹' U_A := by simpa using hyA
+    rcases Metric.isOpen_iff.mp h_open 1 h1_mem with ⟨ε, hε, hsub⟩
+    refine ⟨1 + ε / 2, by linarith, hsub ?_⟩
+    rw [Metric.mem_ball, Real.dist_eq, abs_of_pos (by linarith : 0 < 1 + ε / 2 - 1)]
+    linarith
+  have h_scale_B : ∃ rB > (1 : ℝ), rB • yB ∈ U_B := by
+    have h_cont : Continuous (fun t : ℝ => t • yB) := continuous_id.smul continuous_const
+    have h_open : IsOpen ((fun t : ℝ => t • yB) ⁻¹' U_B) := hB_open.preimage h_cont
+    have h1_mem : (1 : ℝ) ∈ (fun t : ℝ => t • yB) ⁻¹' U_B := by simpa using hyB
+    rcases Metric.isOpen_iff.mp h_open 1 h1_mem with ⟨ε, hε, hsub⟩
+    refine ⟨1 + ε / 2, by linarith, hsub ?_⟩
+    rw [Metric.mem_ball, Real.dist_eq, abs_of_pos (by linarith : 0 < 1 + ε / 2 - 1)]
+    linarith
+  rcases h_scale_A with ⟨rA, hrA, hrA_mem⟩
+  rcases h_scale_B with ⟨rB, hrB, hrB_mem⟩
+  let r : ℝ := min rA rB
+  have hr_gt1 : 1 < r := lt_min hrA hrB
+  have hr_pos : 0 < r := zero_lt_one.trans hr_gt1
+  have hr_yA : r • yA ∈ U_A := by
+    have h_eq : r • yA = (1 - r / rA) • (0 : Fin D → ℝ) + (r / rA) • (rA • yA) := by
+      rw [smul_zero, zero_add, smul_smul, div_mul_cancel₀ _ (by linarith)]
+    rw [h_eq]
+    refine hA_conv hA_zero hrA_mem ?_ (by positivity) (by ring)
+    have hle : r ≤ rA := min_le_left _ _
+    have hdiv : r / rA ≤ 1 := (div_le_one (by linarith)).mpr hle
+    linarith
+  have hr_yB : r • yB ∈ U_B := by
+    have h_eq : r • yB = (1 - r / rB) • (0 : Fin D → ℝ) + (r / rB) • (rB • yB) := by
+      rw [smul_zero, zero_add, smul_smul, div_mul_cancel₀ _ (by linarith)]
+    rw [h_eq]
+    refine hB_conv hB_zero hrB_mem ?_ (by positivity) (by ring)
+    have hle : r ≤ rB := min_le_right _ _
+    have hdiv : r / rB ≤ 1 := (div_le_one (by linarith)).mpr hle
+    linarith
+  rcases Metric.isOpen_iff.mp (hA_open.inter hB_open) 0 ⟨hA_zero, hB_zero⟩ with ⟨δ₀, hδ₀, hsub₀⟩
+  rcases Metric.isOpen_iff.mp hA_open (r • yA) hr_yA with ⟨δ₁, hδ₁, hsub₁⟩
+  rcases Metric.isOpen_iff.mp hA_open (-(r • yA)) (hA_symm _ hr_yA) with ⟨δ₂, hδ₂, hsub₂⟩
+  rcases Metric.isOpen_iff.mp hB_open (r • yB) hr_yB with ⟨δ₃, hδ₃, hsub₃⟩
+  rcases Metric.isOpen_iff.mp hB_open (-(r • yB)) (hB_symm _ hr_yB) with ⟨δ₄, hδ₄, hsub₄⟩
+  let δ : ℝ := min δ₀ (min (min δ₁ δ₂) (min δ₃ δ₄))
+  have hδ_pos : 0 < δ := lt_min hδ₀ (lt_min (lt_min hδ₁ hδ₂) (lt_min hδ₃ hδ₄))
+  refine ⟨r, hr_gt1, δ, hδ_pos, ?_, ?_, ?_⟩
+  · exact (Metric.ball_subset_ball (min_le_left _ _)).trans hsub₀
+  · intro w hw t ht
+    have hw_norm : ‖w‖ < δ := by simpa [Metric.mem_ball, dist_zero_right] using hw
+    have hw_pos : w + r • yA ∈ U_A := hsub₁ (by
+      rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_right]
+      exact hw_norm.trans_le ((min_le_right _ _).trans ((min_le_left _ _).trans (min_le_left _ _))))
+    have hw_neg : w - r • yA ∈ U_A := hsub₂ (by
+      rw [Metric.mem_ball, dist_eq_norm, sub_neg_eq_add, sub_add_cancel]
+      exact hw_norm.trans_le
+        ((min_le_right _ _).trans ((min_le_left _ _).trans (min_le_right _ _))))
+    have h_comb : w + t • yA =
+        ((r + t) / (2 * r)) • (w + r • yA) + ((r - t) / (2 * r)) • (w - r • yA) := by
+      ext j
+      simp only [Pi.add_apply, Pi.sub_apply, Pi.smul_apply, smul_eq_mul]
+      field_simp [hr_pos.ne']
+      ring
+    rw [h_comb]
+    refine hA_conv hw_pos hw_neg (div_nonneg (by linarith [ht.1]) (by positivity))
+      (div_nonneg (by linarith [ht.2]) (by positivity)) ?_
+    field_simp [hr_pos.ne']
+    ring
+  · intro w hw t ht
+    have hw_norm : ‖w‖ < δ := by simpa [Metric.mem_ball, dist_zero_right] using hw
+    have hw_pos : w + r • yB ∈ U_B := hsub₃ (by
+      rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_right]
+      exact hw_norm.trans_le
+        ((min_le_right _ _).trans ((min_le_right _ _).trans (min_le_left _ _))))
+    have hw_neg : w - r • yB ∈ U_B := hsub₄ (by
+      rw [Metric.mem_ball, dist_eq_norm, sub_neg_eq_add, sub_add_cancel]
+      exact hw_norm.trans_le
+        ((min_le_right _ _).trans ((min_le_right _ _).trans (min_le_right _ _))))
+    have h_comb : w + t • yB =
+        ((r + t) / (2 * r)) • (w + r • yB) + ((r - t) / (2 * r)) • (w - r • yB) := by
+      ext j
+      simp only [Pi.add_apply, Pi.sub_apply, Pi.smul_apply, smul_eq_mul]
+      field_simp [hr_pos.ne']
+      ring
+    rw [h_comb]
+    refine hB_conv hw_pos hw_neg (div_nonneg (by linarith [ht.1]) (by positivity))
+      (div_nonneg (by linarith [ht.2]) (by positivity)) ?_
+    field_simp [hr_pos.ne']
+    ring
+
+theorem symmetric_tube_midpoint_extension {D : ℕ} {U_A U_B : Set (Fin D → ℝ)} {M : ℝ}
+    (hA_open : IsOpen U_A) (hB_open : IsOpen U_B)
+    (hA_conv : Convex ℝ U_A) (hB_conv : Convex ℝ U_B)
+    (hA_symm : ∀ y ∈ U_A, -y ∈ U_A) (hB_symm : ∀ y ∈ U_B, -y ∈ U_B)
+    (hA_zero : (0 : Fin D → ℝ) ∈ U_A) (hB_zero : (0 : Fin D → ℝ) ∈ U_B)
+    (hM : 0 ≤ M)
+    {F_A F_B : (Fin D → ℂ) → ℂ}
+    (hFA_holo : DifferentiableOn ℂ F_A (TubeDomain U_A))
+    (hFB_holo : DifferentiableOn ℂ F_B (TubeDomain U_B))
+    (hFA_bdd : ∀ z ∈ TubeDomain U_A, ‖F_A z‖ ≤ M)
+    (hFB_bdd : ∀ z ∈ TubeDomain U_B, ‖F_B z‖ ≤ M)
+    (h_agree : ∀ z ∈ TubeDomain (U_A ∩ U_B), F_A z = F_B z) :
+    ∃ F : (Fin D → ℂ) → ℂ,
+      DifferentiableOn ℂ F (TubeDomain (MidpointSet U_A U_B)) ∧
+      (∀ z ∈ TubeDomain (MidpointSet U_A U_B), ‖F z‖ ≤ M) ∧
+      (∀ z ∈ TubeDomain (U_A ∩ U_B), F z = F_A z) ∧
+      (∀ z ∈ TubeDomain (MidpointSet U_A U_B ∩ U_A), F z = F_A z) ∧
+      (∀ z ∈ TubeDomain (MidpointSet U_A U_B ∩ U_B), F z = F_B z) := by
+  classical
+  have h_local : ∀ yA ∈ U_A, ∀ yB ∈ U_B,
+      ∃ (T : Set (Fin D → ℝ)) (G : (Fin D → ℂ) → ℂ) (δ : ℝ),
+        IsOpen T ∧ Convex ℝ T ∧ (0 : Fin D → ℝ) ∈ T ∧
+        ((fun j => (yA j + yB j) / 2) ∈ T) ∧
+        0 < δ ∧ Metric.ball (0 : Fin D → ℝ) δ ⊆ T ∩ (U_A ∩ U_B) ∧
+        DifferentiableOn ℂ G (TubeDomain T) ∧
+        (∀ w ∈ TubeDomain T, ‖G w‖ ≤ M) ∧
+        (∀ w ∈ TubeDomain (Metric.ball 0 δ), G w = F_A w) := by
+    intro yA hyA yB hyB
+    obtain ⟨r, hr1, δ, hδ, hball_sub, hshiftA, hshiftB⟩ :=
+      exists_midpoint_pair_radius hA_open hB_open hA_conv hB_conv hA_symm hB_symm hA_zero hB_zero
+        hyA hyB
+    have hr : 0 < r := zero_lt_one.trans hr1
+    let y₀ : Fin D → ℝ := fun j => (yA j + yB j) / 2
+    have h_shA : ∀ z ∈ TubeDomain (Metric.ball 0 δ), ∀ ζ ∈ FlatStrip 2 r 0,
+        mzParamMap yA yB z ζ ∈ TubeDomain U_A := by
+      intro z hz ζ hζ
+      change (fun j => (mzParamMap yA yB z ζ j).im) ∈ U_A
+      have h_eq : (fun j => (mzParamMap yA yB z ζ j).im) =
+          (fun j => (z j).im) + (ζ 0).im • yA := by
+        ext j; rw [mzParamMap_im, hζ.2 1 (by decide)]; simp
+      rw [h_eq]
+      exact hshiftA (fun j => (z j).im) hz (ζ 0).im (abs_lt.mp hζ.1)
+    have h_shB : ∀ z ∈ TubeDomain (Metric.ball 0 δ), ∀ ζ ∈ FlatStrip 2 r 1,
+        mzParamMap yA yB z ζ ∈ TubeDomain U_B := by
+      intro z hz ζ hζ
+      change (fun j => (mzParamMap yA yB z ζ j).im) ∈ U_B
+      have h_eq : (fun j => (mzParamMap yA yB z ζ j).im) =
+          (fun j => (z j).im) + (ζ 1).im • yB := by
+        ext j; rw [mzParamMap_im, hζ.2 0 (by decide)]; simp
+      rw [h_eq]
+      exact hshiftB (fun j => (z j).im) hz (ζ 1).im (abs_lt.mp hζ.1)
+    have h_agr : ∀ z ∈ TubeDomain (Metric.ball 0 δ), ∀ x : Fin 2 → ℝ,
+        F_A (mzParamMap yA yB z (fun k => (x k : ℂ))) =
+          F_B (mzParamMap yA yB z (fun k => (x k : ℂ))) := by
+      intro z hz x
+      refine h_agree _ ?_
+      change (fun j => (mzParamMap yA yB z (fun k => (x k : ℂ)) j).im) ∈ U_A ∩ U_B
+      have h_eq : (fun j => (mzParamMap yA yB z (fun k => (x k : ℂ)) j).im) =
+          fun j => (z j).im := by ext j; rw [mzParamMap_im]; simp
+      rw [h_eq]
+      exact hball_sub hz
+    obtain ⟨hL_holo, hL_bdd, hL_A, _⟩ := mzParam_limit_props Metric.isOpen_ball hr hM
+      hFA_holo hFB_holo hFA_bdd hFB_bdd h_shA h_shB h_agr
+    let T : Set (Fin D → ℝ) := {y : Fin D → ℝ | ∃ t ∈ Set.Ioo (-r) r, y - t • y₀ ∈ Metric.ball 0 δ}
+    have hT_open : IsOpen T := by
+      rw [isOpen_iff_forall_mem_open]
+      rintro y ⟨t, ht, hyt⟩
+      let S_t : Set (Fin D → ℝ) := {y' | y' - t • y₀ ∈ Metric.ball 0 δ}
+      refine ⟨S_t, fun y' hy' => ⟨t, ht, hy'⟩,
+        Metric.isOpen_ball.preimage (continuous_id.sub continuous_const), hyt⟩
+    have hT_conv : Convex ℝ T := by
+      rintro y₁ ⟨t₁, ht₁, hy₁⟩ y₂ ⟨t₂, ht₂, hy₂⟩ a b ha hb hab
+      refine ⟨a * t₁ + b * t₂, ?_, ?_⟩
+      · exact convex_Ioo (-r) r ht₁ ht₂ ha hb hab
+      · have h_eq : (a • y₁ + b • y₂) - (a * t₁ + b * t₂) • y₀ =
+            a • (y₁ - t₁ • y₀) + b • (y₂ - t₂ • y₀) := by
+          ext j; simp only [Pi.add_apply, Pi.sub_apply, Pi.smul_apply, smul_eq_mul]; ring
+        rw [h_eq]
+        exact (convex_ball (0 : Fin D → ℝ) δ) hy₁ hy₂ ha hb hab
+    have h0_T : (0 : Fin D → ℝ) ∈ T := ⟨0, ⟨by linarith, hr⟩, by simp [hδ]⟩
+    have hy₀_T : y₀ ∈ T := ⟨1, ⟨by linarith, hr1⟩, by simp [hδ]⟩
+    have hball_T : Metric.ball (0 : Fin D → ℝ) δ ⊆ T :=
+      fun y hy => ⟨0, ⟨by linarith, hr⟩, by simpa using hy⟩
+    let G : (Fin D → ℂ) → ℂ := fun w =>
+      if h : ∃ t ∈ Set.Ioo (-r) r, (fun j => (w j).im) - t • y₀ ∈ Metric.ball 0 δ then
+        let t := Classical.choose h
+        mzParamLim F_A yA yB (fun j => w j - (I * (t : ℂ)) * (y₀ j : ℂ))
+          (fun _ => I * ((t : ℂ) / 2))
+      else 0
+    have hG_eval : ∀ w : Fin D → ℂ, ∀ t ∈ Set.Ioo (-r) r,
+        (fun j => (w j).im) - t • y₀ ∈ Metric.ball 0 δ →
+        G w = mzParamLim F_A yA yB (fun j => w j - (I * (t : ℂ)) * (y₀ j : ℂ))
+          (fun _ => I * ((t : ℂ) / 2)) := by
+      intro w t ht hwt
+      have hex : ∃ s ∈ Set.Ioo (-r) r, (fun j => (w j).im) - s • y₀ ∈ Metric.ball 0 δ :=
+        ⟨t, ht, hwt⟩
+      dsimp only [G]
+      rw [dif_pos hex]
+      set t₀ := Classical.choose hex
+      have ht₀ : t₀ ∈ Set.Ioo (-r) r := (Classical.choose_spec hex).1
+      have hwt₀ : (fun j => (w j).im) - t₀ • y₀ ∈ Metric.ball 0 δ := (Classical.choose_spec hex).2
+      let z₁ : Fin D → ℂ := fun j => w j - (I * (t : ℂ)) * (y₀ j : ℂ)
+      have hz₁_in : z₁ ∈ TubeDomain (Metric.ball 0 δ) := by
+        change (fun j => (z₁ j).im) ∈ Metric.ball 0 δ
+        have h_im_eq : (fun j => (z₁ j).im) = (fun j => (w j).im) - t • y₀ := by
+          ext j; simp [z₁, Complex.mul_im]
+        rw [h_im_eq]; exact hwt
+      have hz₂_eq : (fun j => z₁ j - (I * ((t₀ - t : ℝ) : ℂ)) * (((yA j + yB j) / 2 : ℝ) : ℂ)) =
+          fun j => w j - (I * (t₀ : ℂ)) * (y₀ j : ℂ) := by
+        ext j; dsimp [z₁, y₀]; rw [Complex.ofReal_sub]; ring
+      have hz₂_in : (fun j => z₁ j - (I * ((t₀ - t : ℝ) : ℂ)) * (((yA j + yB j) / 2 : ℝ) : ℂ)) ∈
+          TubeDomain (Metric.ball 0 δ) := by
+        rw [hz₂_eq]
+        change (fun j => (w j - (I * (t₀ : ℂ)) * (y₀ j : ℂ)).im) ∈ Metric.ball 0 δ
+        have h_im_eq : (fun j => (w j - (I * (t₀ : ℂ)) * (y₀ j : ℂ)).im) =
+            (fun j => (w j).im) - t₀ • y₀ := by ext j; simp [Complex.mul_im]
+        rw [h_im_eq]; exact hwt₀
+      have h_inv := mzParamLim_diag_shift_invariant hr hM hFA_holo hFB_holo hFA_bdd hFB_bdd
+        h_shA h_shB h_agr hz₁_in (abs_lt.mpr ht) (abs_lt.mpr ht₀) hz₂_in
+      rw [hz₂_eq] at h_inv
+      exact h_inv
+    have hG_holo : DifferentiableOn ℂ G (TubeDomain T) := by
+      intro w₀ hw₀
+      rcases hw₀ with ⟨t, ht, hwt⟩
+      let V : Set (Fin D → ℂ) :=
+        {w : Fin D → ℂ | (fun j => (w j).im) - t • y₀ ∈ Metric.ball 0 δ}
+      have hV_open : IsOpen V :=
+        Metric.isOpen_ball.preimage
+          ((continuous_pi fun j => Complex.continuous_im.comp (continuous_apply j)).sub
+            continuous_const)
+      have hw₀_V : w₀ ∈ V := hwt
+      let φ : (Fin D → ℂ) → (Fin D → ℂ) × (Fin 2 → ℂ) :=
+        fun w => (fun j => w j - (I * (t : ℂ)) * (y₀ j : ℂ), fun _ => I * ((t : ℂ) / 2))
+      have hφ_diff : Differentiable ℂ φ :=
+        (differentiable_pi.mpr fun j =>
+          (differentiable_apply j).sub (differentiable_const _)).prodMk (differentiable_const _)
+      have h_comp : DifferentiableOn ℂ (fun w => mzParamLim F_A yA yB (φ w).1 (φ w).2) V :=
+        hL_holo.comp hφ_diff.differentiableOn fun w hw => by
+          refine ⟨?_, ?_⟩
+          · change (fun j => (w j - (I * (t : ℂ)) * (y₀ j : ℂ)).im) ∈ Metric.ball 0 δ
+            have h_im_eq : (fun j => (w j - (I * (t : ℂ)) * (y₀ j : ℂ)).im) =
+                (fun j => (w j).im) - t • y₀ := by ext j; simp [Complex.mul_im]
+            rw [h_im_eq]; exact hw
+          · change ∑ _ : Fin 2, |(I * ((t : ℂ) / 2)).im| < r
+            have h_im : (I * ((t : ℂ) / 2)).im = t / 2 := by simp
+            simp only [h_im, abs_div, abs_of_pos (two_pos : (0 : ℝ) < 2), Finset.sum_const,
+              Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+            linarith [abs_lt.mpr ht]
+      have h_da : DifferentiableAt ℂ (fun w => mzParamLim F_A yA yB (φ w).1 (φ w).2) w₀ :=
+        (h_comp w₀ hw₀_V).differentiableAt (hV_open.mem_nhds hw₀_V)
+      have h_ev : G =ᶠ[𝓝 w₀] fun w => mzParamLim F_A yA yB (φ w).1 (φ w).2 :=
+        Filter.eventually_of_mem (hV_open.mem_nhds hw₀_V) fun w hw => hG_eval w t ht hw
+      exact (h_da.congr_of_eventuallyEq h_ev).differentiableWithinAt
+    have hG_bdd : ∀ w ∈ TubeDomain T, ‖G w‖ ≤ M := by
+      rintro w ⟨t, ht, hwt⟩
+      rw [hG_eval w t ht hwt]
+      refine hL_bdd _ ?_ _ ?_
+      · change (fun j => (w j - (I * (t : ℂ)) * (y₀ j : ℂ)).im) ∈ Metric.ball 0 δ
+        have h_im_eq : (fun j => (w j - (I * (t : ℂ)) * (y₀ j : ℂ)).im) =
+            (fun j => (w j).im) - t • y₀ := by ext j; simp [Complex.mul_im]
+        rw [h_im_eq]; exact hwt
+      · change ∑ _ : Fin 2, |(I * ((t : ℂ) / 2)).im| < r
+        have h_im : (I * ((t : ℂ) / 2)).im = t / 2 := by simp
+        simp only [h_im, abs_div, abs_of_pos (two_pos : (0 : ℝ) < 2), Finset.sum_const,
+          Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+        linarith [abs_lt.mpr ht]
+    have hG_eqA : ∀ w ∈ TubeDomain (Metric.ball 0 δ), G w = F_A w := by
+      intro w hw
+      rw [hG_eval w 0 ⟨by linarith, hr⟩ (by simpa [TubeDomain] using hw)]
+      have h0_flat : (fun _ : Fin 2 => I * ((0 : ℂ) / 2)) ∈ FlatStrip 2 r 0 := by
+        refine ⟨by simp [hr], fun _ _ => by simp⟩
+      have h_eq := hL_A w hw _ h0_flat
+      have h_w_eq : (fun j => w j - (I * ((0 : ℝ) : ℂ)) * (y₀ j : ℂ)) = w := by ext j; simp
+      have h_map_eq : mzParamMap yA yB w (fun _ : Fin 2 => I * ((0 : ℂ) / 2)) = w := by
+        ext j; simp [mzParamMap]
+      rw [h_w_eq]
+      simp only [Complex.ofReal_zero]
+      rw [h_eq, h_map_eq]
+    exact ⟨T, G, δ, hT_open, hT_conv, h0_T, hy₀_T, hδ,
+      fun y hy => ⟨hball_T hy, hball_sub hy⟩, hG_holo, hG_bdd, hG_eqA⟩
+  let P : Set ((Fin D → ℝ) × (Fin D → ℝ)) := U_A ×ˢ U_B
+  let chartT : ∀ p : (Fin D → ℝ) × (Fin D → ℝ), p ∈ P → Set (Fin D → ℝ) :=
+    fun p hp => Classical.choose (h_local p.1 hp.1 p.2 hp.2)
+  let chartG : ∀ p : (Fin D → ℝ) × (Fin D → ℝ), p ∈ P → (Fin D → ℂ) → ℂ :=
+    fun p hp => Classical.choose (Classical.choose_spec (h_local p.1 hp.1 p.2 hp.2))
+  let chartδ : ∀ p : (Fin D → ℝ) × (Fin D → ℝ), p ∈ P → ℝ :=
+    fun p hp => Classical.choose (Classical.choose_spec
+      (Classical.choose_spec (h_local p.1 hp.1 p.2 hp.2)))
+  have hchart_spec : ∀ p (hp : p ∈ P),
+      IsOpen (chartT p hp) ∧ Convex ℝ (chartT p hp) ∧ (0 : Fin D → ℝ) ∈ chartT p hp ∧
+      ((fun j => (p.1 j + p.2 j) / 2) ∈ chartT p hp) ∧
+      0 < chartδ p hp ∧ Metric.ball (0 : Fin D → ℝ) (chartδ p hp) ⊆ chartT p hp ∩ (U_A ∩ U_B) ∧
+      DifferentiableOn ℂ (chartG p hp) (TubeDomain (chartT p hp)) ∧
+      (∀ w ∈ TubeDomain (chartT p hp), ‖chartG p hp w‖ ≤ M) ∧
+      (∀ w ∈ TubeDomain (Metric.ball 0 (chartδ p hp)), chartG p hp w = F_A w) :=
+    fun p hp => Classical.choose_spec (Classical.choose_spec (Classical.choose_spec
+      (h_local p.1 hp.1 p.2 hp.2)))
+  have h_chart_agree : ∀ p₁ (hp₁ : p₁ ∈ P) p₂ (hp₂ : p₂ ∈ P),
+      ∀ w ∈ TubeDomain (chartT p₁ hp₁ ∩ chartT p₂ hp₂), chartG p₁ hp₁ w = chartG p₂ hp₂ w := by
+    intro p₁ hp₁ p₂ hp₂ w hw
+    obtain ⟨hT1_o, hT1_c, h0_1, _, hδ1, _, hG1_h, _, hG1_A⟩ := hchart_spec p₁ hp₁
+    obtain ⟨hT2_o, hT2_c, h0_2, _, hδ2, _, hG2_h, _, hG2_A⟩ := hchart_spec p₂ hp₂
+    let δm : ℝ := min (chartδ p₁ hp₁) (chartδ p₂ hp₂)
+    have hδm : 0 < δm := lt_min hδ1 hδ2
+    have h_star : ∀ y ∈ chartT p₁ hp₁ ∩ chartT p₂ hp₂, ∀ s ∈ Set.Icc (0 : ℝ) 1,
+        s • y ∈ chartT p₁ hp₁ ∩ chartT p₂ hp₂ := by
+      intro y hy s hs
+      have h_eq : s • y = (1 - s) • (0 : Fin D → ℝ) + s • y := by rw [smul_zero, zero_add]
+      rw [h_eq]
+      exact ⟨hT1_c h0_1 hy.1 (by linarith [hs.2]) hs.1 (by ring),
+        hT2_c h0_2 hy.2 (by linarith [hs.2]) hs.1 (by ring)⟩
+    have h_eq_ball : Set.EqOn (chartG p₁ hp₁) (chartG p₂ hp₂) (TubeDomain (Metric.ball 0 δm)) := by
+      intro z hz
+      have hz1 : z ∈ TubeDomain (Metric.ball 0 (chartδ p₁ hp₁)) :=
+        Metric.ball_subset_ball (min_le_left _ _) hz
+      have hz2 : z ∈ TubeDomain (Metric.ball 0 (chartδ p₂ hp₂)) :=
+        Metric.ball_subset_ball (min_le_right _ _) hz
+      rw [hG1_A z hz1, hG2_A z hz2]
+    exact tubeDomain_eqOn_of_starShaped (hT1_o.inter hT2_o) hδm h_star
+      (hG1_h.mono fun _ h => h.1) (hG2_h.mono fun _ h => h.2) h_eq_ball hw
+  let F : (Fin D → ℂ) → ℂ := fun w =>
+    if h : ∃ p : (Fin D → ℝ) × (Fin D → ℝ), ∃ hp : p ∈ P, w ∈ TubeDomain (chartT p hp) then
+      let p := Classical.choose h
+      let hp := Classical.choose (Classical.choose_spec h)
+      chartG p hp w
+    else 0
+  have hF_eval : ∀ p (hp : p ∈ P), ∀ w ∈ TubeDomain (chartT p hp), F w = chartG p hp w := by
+    intro p hp w hw
+    have hex : ∃ q : (Fin D → ℝ) × (Fin D → ℝ), ∃ hq : q ∈ P, w ∈ TubeDomain (chartT q hq) :=
+      ⟨p, hp, hw⟩
+    dsimp only [F]
+    rw [dif_pos hex]
+    set q := Classical.choose hex
+    set hq := Classical.choose (Classical.choose_spec hex)
+    have hwq : w ∈ TubeDomain (chartT q hq) := Classical.choose_spec (Classical.choose_spec hex)
+    exact h_chart_agree q hq p hp w ⟨hwq, hw⟩
+  have h_mid_cover : ∀ w ∈ TubeDomain (MidpointSet U_A U_B),
+      ∃ p : (Fin D → ℝ) × (Fin D → ℝ), ∃ hp : p ∈ P, w ∈ TubeDomain (chartT p hp) := by
+    rintro w ⟨yA, hyA, yB, hyB, hy_eq⟩
+    have hp : (yA, yB) ∈ P := ⟨hyA, hyB⟩
+    refine ⟨(yA, yB), hp, ?_⟩
+    change (fun j => (w j).im) ∈ chartT (yA, yB) hp
+    have h_mid_eq : (fun j => (w j).im) = fun j => (yA j + yB j) / 2 := by
+      rw [hy_eq]; ext j; simp; ring
+    rw [h_mid_eq]
+    exact (hchart_spec (yA, yB) hp).2.2.2.1
+  have hF_holo : DifferentiableOn ℂ F (TubeDomain (MidpointSet U_A U_B)) := by
+    intro w₀ hw₀
+    obtain ⟨p, hp, hwp⟩ := h_mid_cover w₀ hw₀
+    have hT_open : IsOpen (TubeDomain (chartT p hp)) :=
+      isOpen_TubeDomain (hchart_spec p hp).1
+    have h_da : DifferentiableAt ℂ (chartG p hp) w₀ :=
+      ((hchart_spec p hp).2.2.2.2.2.2.1 w₀ hwp).differentiableAt (hT_open.mem_nhds hwp)
+    have h_ev : F =ᶠ[𝓝 w₀] chartG p hp :=
+      Filter.eventually_of_mem (hT_open.mem_nhds hwp) fun w hw => hF_eval p hp w hw
+    exact (h_da.congr_of_eventuallyEq h_ev).differentiableWithinAt
+  have hF_bdd : ∀ w ∈ TubeDomain (MidpointSet U_A U_B), ‖F w‖ ≤ M := by
+    intro w hw
+    obtain ⟨p, hp, hwp⟩ := h_mid_cover w hw
+    rw [hF_eval p hp w hwp]
+    exact (hchart_spec p hp).2.2.2.2.2.2.2.1 w hwp
+  have h0_P : ((0 : Fin D → ℝ), (0 : Fin D → ℝ)) ∈ P := ⟨hA_zero, hB_zero⟩
+  let δ₀ : ℝ := chartδ (0, 0) h0_P
+  have hδ₀_pos : 0 < δ₀ := (hchart_spec (0, 0) h0_P).2.2.2.2.1
+  have hF_ball : Set.EqOn F F_A (TubeDomain (Metric.ball 0 δ₀)) := by
+    intro w hw
+    have hwT : w ∈ TubeDomain (chartT (0, 0) h0_P) :=
+      ((hchart_spec (0, 0) h0_P).2.2.2.2.2.1 hw).1
+    rw [hF_eval (0, 0) h0_P w hwT]
+    exact (hchart_spec (0, 0) h0_P).2.2.2.2.2.2.2.2 w hw
+  have hF_ball_B : Set.EqOn F F_B (TubeDomain (Metric.ball 0 δ₀)) := by
+    intro w hw
+    rw [hF_ball hw]
+    exact h_agree w ((hchart_spec (0, 0) h0_P).2.2.2.2.2.1 hw).2
+  have hMid_open : IsOpen (MidpointSet U_A U_B) := isOpen_midpointSet hB_open
+  have hMid_conv : Convex ℝ (MidpointSet U_A U_B) := convex_midpointSet hA_conv hB_conv
+  have h0_Mid : (0 : Fin D → ℝ) ∈ MidpointSet U_A U_B :=
+    inter_subset_midpointSet ⟨hA_zero, hB_zero⟩
+  have hF_eq_A : ∀ w ∈ TubeDomain (MidpointSet U_A U_B ∩ U_A), F w = F_A w := by
+    have h_star : ∀ y ∈ MidpointSet U_A U_B ∩ U_A, ∀ s ∈ Set.Icc (0 : ℝ) 1,
+        s • y ∈ MidpointSet U_A U_B ∩ U_A := by
+      intro y hy s hs
+      have h_eq : s • y = (1 - s) • (0 : Fin D → ℝ) + s • y := by rw [smul_zero, zero_add]
+      rw [h_eq]
+      exact ⟨hMid_conv h0_Mid hy.1 (by linarith [hs.2]) hs.1 (by ring),
+        hA_conv hA_zero hy.2 (by linarith [hs.2]) hs.1 (by ring)⟩
+    exact tubeDomain_eqOn_of_starShaped (hMid_open.inter hA_open) hδ₀_pos h_star
+      (hF_holo.mono fun _ h => h.1) (hFA_holo.mono fun _ h => h.2) hF_ball
+  have hF_eq_B : ∀ w ∈ TubeDomain (MidpointSet U_A U_B ∩ U_B), F w = F_B w := by
+    have h_star : ∀ y ∈ MidpointSet U_A U_B ∩ U_B, ∀ s ∈ Set.Icc (0 : ℝ) 1,
+        s • y ∈ MidpointSet U_A U_B ∩ U_B := by
+      intro y hy s hs
+      have h_eq : s • y = (1 - s) • (0 : Fin D → ℝ) + s • y := by rw [smul_zero, zero_add]
+      rw [h_eq]
+      exact ⟨hMid_conv h0_Mid hy.1 (by linarith [hs.2]) hs.1 (by ring),
+        hB_conv hB_zero hy.2 (by linarith [hs.2]) hs.1 (by ring)⟩
+    exact tubeDomain_eqOn_of_starShaped (hMid_open.inter hB_open) hδ₀_pos h_star
+      (hF_holo.mono fun _ h => h.1) (hFB_holo.mono fun _ h => h.2) hF_ball_B
+  refine ⟨F, hF_holo, hF_bdd, ?_, hF_eq_A, hF_eq_B⟩
+  intro w hw
+  exact hF_eq_A w ⟨inter_subset_midpointSet hw, hw.1⟩
+
+end Phase1MidpointTube
 
 end QFT
