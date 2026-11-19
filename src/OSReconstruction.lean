@@ -22912,4 +22912,8263 @@ theorem exists_osMultiTimeH_growth_bound
             ring
 
 end
+
+section Phase2Theme6
+
+open Complex Set
+
+section Phase2LinearGrowth
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+def OSLinearGrowthCondition (𝒮 : SchwingerFamily ι) : Prop :=
+  ∃ (C A : ℝ) (M : ℕ), 0 ≤ C ∧ 1 ≤ A ∧
+    ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n →
+      ‖𝒮 n α x‖ ≤
+        C * A ^ n * ((n.factorial : ℝ) ^ M) *
+          ∏ k : Fin (n - 1),
+            (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ M
+
+noncomputable def osStarRowBound {R : HolomorphicLorentzRep ι} (S : StarStructure R) : ℝ :=
+  1 + ∑ a : ι, ∑ b : ι, ‖S.C a b‖
+
+lemma one_le_osStarRowBound {R : HolomorphicLorentzRep ι} (S : StarStructure R) :
+    1 ≤ osStarRowBound S := by
+  dsimp [osStarRowBound]
+  have hnn : 0 ≤ ∑ a : ι, ∑ b : ι, ‖S.C a b‖ :=
+    Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ => norm_nonneg _
+  linarith
+
+lemma sum_norm_starStructure_le {R : HolomorphicLorentzRep ι} (S : StarStructure R) (a : ι) :
+    ∑ b : ι, ‖S.C a b‖ ≤ osStarRowBound S := by
+  dsimp [osStarRowBound]
+  have h1 : ∑ b : ι, ‖S.C a b‖ ≤ ∑ a' : ι, ∑ b : ι, ‖S.C a' b‖ :=
+    Finset.single_le_sum (f := fun a' => ∑ b : ι, ‖S.C a' b‖)
+      (fun _ _ => Finset.sum_nonneg fun _ _ => norm_nonneg _) (Finset.mem_univ a)
+  linarith
+
+lemma sum_prod_norm_starStructure_le {R : HolomorphicLorentzRep ι} (S : StarStructure R)
+    (k : ℕ) (α : Fin k → ι) :
+    (∑ β : Fin k → ι, ∏ i : Fin k, ‖S.C (α i) (β i)‖) ≤ (osStarRowBound S) ^ k := by
+  rw [← Fintype.prod_sum (fun (i : Fin k) (b : ι) => ‖S.C (α i) b‖)]
+  calc (∏ i : Fin k, ∑ b : ι, ‖S.C (α i) b‖)
+      ≤ ∏ _i : Fin k, osStarRowBound S :=
+        Finset.prod_le_prod (fun _ _ => Finset.sum_nonneg fun _ _ => norm_nonneg _)
+          (fun i _ => sum_norm_starStructure_le S (α i))
+    _ = (osStarRowBound S) ^ k := by
+        rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+
+noncomputable def osLeftState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (j : ℕ) (α : Fin j → ι)
+    (x : posOrderedEuclidN j) : OSHilbert D :=
+  ∑ γ : Fin j → ι, (∏ i : Fin j, S.C (α i) (γ i)) • osBasis D ⟨j, (γ, x)⟩
+
+lemma inner_osLeftState_osBasis {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (j k : ℕ) (α : Fin j → ι)
+    (x : posOrderedEuclidN j) (β : Fin k → ι) (y : posOrderedEuclidN k) :
+    ⟪osLeftState D j α x, osBasis D ⟨k, (β, y)⟩⟫_ℂ =
+      D.𝒮 (j + k) (osConcatIdx j k α β) (osConcatPoint j k x.val y.val) := by
+  dsimp only [osLeftState]
+  rw [sum_inner]
+  simp_rw [inner_smul_left, inner_osBasis, osKernel]
+  have h_rearrange :
+      (∑ γ : Fin j → ι,
+        (starRingEnd ℂ) (∏ i : Fin j, S.C (α i) (γ i)) *
+          ∑ δL : Fin j → ι,
+            (∏ i : Fin j, S.C (γ i) (δL i)) *
+              D.𝒮 (j + k) (osConcatIdx j k δL β) (osConcatPoint j k x.val y.val)) =
+      ∑ δL : Fin j → ι,
+        (∑ γ : Fin j → ι, ∏ i : Fin j, star (S.C (α i) (γ i)) * S.C (γ i) (δL i)) *
+          D.𝒮 (j + k) (osConcatIdx j k δL β) (osConcatPoint j k x.val y.val) := by
+    simp_rw [Finset.mul_sum]
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl fun δL _ => ?_
+    rw [Finset.sum_mul]
+    refine Finset.sum_congr rfl fun γ _ => ?_
+    rw [map_prod, ← mul_assoc, ← Finset.prod_mul_distrib]
+    rfl
+  rw [h_rearrange]
+  simp_rw [sum_prod_star_C_mul_C S j α]
+  simp
+
+lemma inner_osLeftState_self {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (j : ℕ) (α : Fin j → ι) (x : posOrderedEuclidN j) :
+    ⟪osLeftState D j α x, osLeftState D j α x⟫_ℂ =
+      ∑ γ : Fin j → ι, (∏ i : Fin j, S.C (α i) (γ i)) *
+        D.𝒮 (j + j) (osConcatIdx j j α γ) (osConcatPoint j j x.val x.val) := by
+  conv_lhs => rhs; unfold osLeftState
+  rw [inner_sum]
+  refine Finset.sum_congr rfl fun γ _ => ?_
+  rw [inner_smul_right, inner_osLeftState_osBasis]
+
+lemma norm_sq_osLeftState_le {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (j : ℕ) (α : Fin j → ι) (x : posOrderedEuclidN j)
+    {B : ℝ} (hB : 0 ≤ B)
+    (h_bd : ∀ γ : Fin j → ι,
+      ‖D.𝒮 (j + j) (osConcatIdx j j α γ) (osConcatPoint j j x.val x.val)‖ ≤ B) :
+    ‖osLeftState D j α x‖ ^ 2 ≤ (osStarRowBound S) ^ j * B := by
+  have h_norm : ‖osLeftState D j α x‖ ^ 2 = ‖⟪osLeftState D j α x, osLeftState D j α x⟫_ℂ‖ := by
+    rw [inner_self_eq_norm_sq_to_K]
+    simp
+  rw [h_norm, inner_osLeftState_self]
+  calc ‖∑ γ : Fin j → ι, (∏ i : Fin j, S.C (α i) (γ i)) *
+          D.𝒮 (j + j) (osConcatIdx j j α γ) (osConcatPoint j j x.val x.val)‖
+      ≤ ∑ γ : Fin j → ι, ‖(∏ i : Fin j, S.C (α i) (γ i)) *
+          D.𝒮 (j + j) (osConcatIdx j j α γ) (osConcatPoint j j x.val x.val)‖ :=
+        norm_sum_le _ _
+    _ ≤ ∑ γ : Fin j → ι, (∏ i : Fin j, ‖S.C (α i) (γ i)‖) * B := by
+        refine Finset.sum_le_sum fun γ _ => ?_
+        rw [norm_mul, norm_prod]
+        exact mul_le_mul_of_nonneg_left (h_bd γ) (Finset.prod_nonneg fun _ _ => norm_nonneg _)
+    _ = (∑ γ : Fin j → ι, ∏ i : Fin j, ‖S.C (α i) (γ i)‖) * B := (Finset.sum_mul _ _ _).symm
+    _ ≤ (osStarRowBound S) ^ j * B :=
+        mul_le_mul_of_nonneg_right (sum_prod_norm_starStructure_le S j α) hB
+
+lemma norm_sq_osBasis_le {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (k : ℕ) (β : Fin k → ι) (y : posOrderedEuclidN k)
+    {B : ℝ} (hB : 0 ≤ B)
+    (h_bd : ∀ γ : Fin k → ι,
+      ‖D.𝒮 (k + k) (osConcatIdx k k γ β) (osConcatPoint k k y.val y.val)‖ ≤ B) :
+    ‖osBasis D ⟨k, (β, y)⟩‖ ^ 2 ≤ (osStarRowBound S) ^ k * B := by
+  let A : OSConfig ι := ⟨k, (β, y)⟩
+  have h_norm : ‖osBasis D A‖ ^ 2 = ‖⟪osBasis D A, osBasis D A⟫_ℂ‖ := by
+    rw [inner_self_eq_norm_sq_to_K]
+    simp
+  change ‖osBasis D A‖ ^ 2 ≤ (osStarRowBound S) ^ k * B
+  rw [h_norm, inner_osBasis, osKernel]
+  calc ‖∑ γ : Fin k → ι, (∏ i : Fin k, S.C (β i) (γ i)) *
+          D.𝒮 (k + k) (osConcatIdx k k γ β) (osConcatPoint k k y.val y.val)‖
+      ≤ ∑ γ : Fin k → ι, ‖(∏ i : Fin k, S.C (β i) (γ i)) *
+          D.𝒮 (k + k) (osConcatIdx k k γ β) (osConcatPoint k k y.val y.val)‖ :=
+        norm_sum_le _ _
+    _ ≤ ∑ γ : Fin k → ι, (∏ i : Fin k, ‖S.C (β i) (γ i)‖) * B := by
+        refine Finset.sum_le_sum fun γ _ => ?_
+        rw [norm_mul, norm_prod]
+        exact mul_le_mul_of_nonneg_left (h_bd γ) (Finset.prod_nonneg fun _ _ => norm_nonneg _)
+    _ = (∑ γ : Fin k → ι, ∏ i : Fin k, ‖S.C (β i) (γ i)‖) * B := (Finset.sum_mul _ _ _).symm
+    _ ≤ (osStarRowBound S) ^ k * B :=
+        mul_le_mul_of_nonneg_right (sum_prod_norm_starStructure_le S k β) hB
+
+end Phase2LinearGrowth
+
+section Phase2HilbertAnalytic
+
+lemma continuousOn_intervalIntegral_of_continuousOn_prod {X : Type*} [TopologicalSpace X]
+    [FirstCountableTopology X]
+    {W : Set X} {a b C : ℝ} (hab : a ≤ b) {g : X → ℝ → ℂ}
+    (hg_cont : ContinuousOn (fun q : X × ℝ => g q.1 q.2) (W ×ˢ Set.uIcc a b))
+    (hg_bdd : ∀ p ∈ W, ∀ θ ∈ Set.Ioc a b, ‖g p θ‖ ≤ C) :
+    ContinuousOn (fun p : X => ∫ θ in a..b, g p θ) W := by
+  have h_eq_set : (fun p : X => ∫ θ in a..b, g p θ) = fun p => ∫ θ in Set.Ioc a b, g p θ := by
+    ext p; exact intervalIntegral.integral_of_le hab
+  rw [h_eq_set]
+  have h_int_b : Integrable (fun _ : ℝ => C) (volume.restrict (Set.Ioc a b)) :=
+    integrableOn_const (hs := measure_Ioc_lt_top.ne)
+  refine MeasureTheory.continuousOn_of_dominated ?_ ?_ h_int_b ?_
+  · intro p hp
+    have hc : ContinuousOn (fun θ : ℝ => g p θ) (Set.uIcc a b) :=
+      hg_cont.comp (continuousOn_const.prodMk continuousOn_id) fun θ hθ => ⟨hp, hθ⟩
+    exact (hc.aestronglyMeasurable_of_isCompact isCompact_uIcc measurableSet_uIcc).mono_set
+      (Set.Ioc_subset_Icc_self.trans Set.Icc_subset_uIcc)
+  · intro p hp
+    exact (ae_restrict_iff' measurableSet_Ioc).mpr (Filter.Eventually.of_forall fun θ hθ =>
+      hg_bdd p hp θ hθ)
+  · refine (ae_restrict_iff' measurableSet_Ioc).mpr (Filter.Eventually.of_forall fun θ hθ => ?_)
+    exact hg_cont.comp (continuousOn_id.prodMk continuousOn_const)
+      fun p hp => ⟨hp, Set.Icc_subset_uIcc (Set.Ioc_subset_Icc_self hθ)⟩
+
+lemma differentiableOn_deriv_snd_of_differentiableOn_prod {U V : Set ℂ}
+    (hU : IsOpen U) (hV : IsOpen V) {F : ℂ → ℂ → ℂ}
+    (hF : DifferentiableOn ℂ (fun p : ℂ × ℂ => F p.1 p.2) (U ×ˢ V)) :
+    DifferentiableOn ℂ (fun p : ℂ × ℂ => deriv (fun w => F p.1 w) p.2) (U ×ˢ V) := by
+  have h_open : IsOpen (U ×ˢ V) := hU.prod hV
+  have hF_diff1 : ∀ v ∈ V, DifferentiableOn ℂ (fun u => F u v) U := fun v hv =>
+    hF.comp (differentiable_id.prodMk (differentiable_const v)).differentiableOn fun u hu => ⟨hu,
+      hv⟩
+  have hF_diff2 : ∀ u ∈ U, DifferentiableOn ℂ (fun v => F u v) V := fun u hu =>
+    hF.comp ((differentiable_const u).prodMk differentiable_id).differentiableOn fun v hv => ⟨hu,
+      hv⟩
+  have h_loc_eq : ∀ u₀ ∈ U, ∀ v₀ ∈ V,
+      ∃ ρ > (0 : ℝ), Metric.closedBall u₀ (2 * ρ) ⊆ U ∧ Metric.closedBall v₀ (2 * ρ) ⊆ V ∧
+        ∃ B ≥ (0 : ℝ),
+          (∀ u ∈ Metric.closedBall u₀ (2 * ρ), ∀ v ∈ Metric.closedBall v₀ (2 * ρ), ‖F u v‖ ≤ B) ∧
+          (∀ u ∈ Metric.ball u₀ ρ, ∀ v ∈ Metric.ball v₀ ρ,
+            deriv (fun w => F u w) v =
+              (2 * Real.pi * I : ℂ)⁻¹ *
+                ∫ θ in (0 : ℝ)..(2 * Real.pi),
+                  (I * ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)) *
+                    (((v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) - v) ^ 2)⁻¹ *
+                      F u (v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)))) := by
+    intro u₀ hu₀ v₀ hv₀
+    rcases Metric.isOpen_iff.mp hU u₀ hu₀ with ⟨r₁, hr₁, hsub₁⟩
+    rcases Metric.isOpen_iff.mp hV v₀ hv₀ with ⟨r₂, hr₂, hsub₂⟩
+    let ρ : ℝ := min r₁ r₂ / 4
+    have hρ : 0 < ρ := by dsimp [ρ]; positivity
+    have hcbU : Metric.closedBall u₀ (2 * ρ) ⊆ U :=
+      (Metric.closedBall_subset_ball (by dsimp [ρ]; linarith [min_le_left r₁ r₂])).trans hsub₁
+    have hcbV : Metric.closedBall v₀ (2 * ρ) ⊆ V :=
+      (Metric.closedBall_subset_ball (by dsimp [ρ]; linarith [min_le_right r₁ r₂])).trans hsub₂
+    have hK_comp : IsCompact (Metric.closedBall u₀ (2 * ρ) ×ˢ Metric.closedBall v₀ (2 * ρ)) :=
+      (isCompact_closedBall u₀ (2 * ρ)).prod (isCompact_closedBall v₀ (2 * ρ))
+    obtain ⟨B, hB⟩ := hK_comp.exists_bound_of_continuousOn
+      (hF.continuousOn.mono (Set.prod_mono hcbU hcbV))
+    refine ⟨ρ, hρ, hcbU, hcbV, max B 0, le_max_right _ _,
+      fun u hu v hv => (hB (u, v) ⟨hu, hv⟩).trans (le_max_left _ _), fun u hu v hv => ?_⟩
+    have huU : u ∈ U :=
+      hcbU (Metric.ball_subset_closedBall (Metric.ball_subset_ball (by linarith) hu))
+    have hv_ball : v ∈ Metric.ball v₀ (2 * ρ) := Metric.ball_subset_ball (by linarith) hv
+    have h_cauchy := Complex.two_pi_I_inv_smul_circleIntegral_sub_sq_inv_smul_of_differentiable
+      hV hcbV (hF_diff2 u huU) hv_ball
+    rw [← h_cauchy, smul_eq_mul, circleIntegral]
+    congr 1
+    refine intervalIntegral.integral_congr fun θ _ => ?_
+    simp only [circleMap, deriv_circleMap, smul_eq_mul]
+    ring
+  have h_cont : ContinuousOn (fun p : ℂ × ℂ => deriv (fun w => F p.1 w) p.2) (U ×ˢ V) := by
+    intro ⟨u₀, v₀⟩ ⟨hu₀, hv₀⟩
+    obtain ⟨ρ, hρ, hcbU, hcbV, B, hB, hF_bdd, h_eq⟩ := h_loc_eq u₀ hu₀ v₀ hv₀
+    let W : Set (ℂ × ℂ) := Metric.ball u₀ ρ ×ˢ Metric.ball v₀ ρ
+    have hW_open : IsOpen W := Metric.isOpen_ball.prod Metric.isOpen_ball
+    let g : (ℂ × ℂ) → ℝ → ℂ := fun p θ =>
+      (I * ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)) *
+        (((v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) - p.2) ^ 2)⁻¹ *
+          F p.1 (v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)))
+    have hg_cont : ContinuousOn (fun q : (ℂ × ℂ) × ℝ => g q.1 q.2) (W ×ˢ Set.uIcc 0 (2 *
+      Real.pi)) := by
+      have h_circ_cont : Continuous (fun θ : ℝ => v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)) :=
+        continuous_const.add (continuous_const.mul
+          (Complex.continuous_exp.comp (Complex.continuous_ofReal.mul continuous_const)))
+      have h_denom_ne : ∀ q ∈ W ×ˢ Set.uIcc (0 : ℝ) (2 * Real.pi),
+          (v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑q.2 * I) - q.1.2) ^ 2 ≠ 0 := by
+        rintro ⟨⟨u, v⟩, θ⟩ ⟨⟨_, hv⟩, _⟩
+        refine pow_ne_zero 2 (sub_ne_zero.mpr fun h_eq => ?_)
+        have h1 : ‖v - v₀‖ < ρ := by simpa [Metric.mem_ball, dist_eq_norm] using hv
+        have h2 : ‖v - v₀‖ = 2 * ρ := by
+          dsimp only at h_eq
+          have : v - v₀ = ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) := by
+            rw [← h_eq]; ring
+          rw [this, norm_mul, Complex.norm_real, Real.norm_of_nonneg (by positivity),
+            Complex.norm_exp_ofReal_mul_I, mul_one]
+        linarith
+      have hF_comp : ContinuousOn
+          (fun q : (ℂ × ℂ) × ℝ => F q.1.1 (v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑q.2 * I)))
+          (W ×ˢ Set.uIcc 0 (2 * Real.pi)) := by
+        refine hF.continuousOn.comp
+          ((continuous_fst.comp continuous_fst).prodMk (h_circ_cont.comp
+            continuous_snd)).continuousOn
+          fun q hq => ⟨hcbU (Metric.ball_subset_closedBall (Metric.ball_subset_ball (by linarith)
+            hq.1.1)),
+            hcbV ?_⟩
+        dsimp only [Function.comp_apply]
+        rw [Metric.mem_closedBall, dist_eq_norm, add_sub_cancel_left, norm_mul, Complex.norm_real,
+          Real.norm_of_nonneg (by positivity), Complex.norm_exp_ofReal_mul_I, mul_one]
+      have h_pre : ContinuousOn
+          (fun q : (ℂ × ℂ) × ℝ => I * ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑q.2 * I))
+          (W ×ˢ Set.uIcc 0 (2 * Real.pi)) :=
+        (continuous_const.mul (Complex.continuous_exp.comp
+          ((Complex.continuous_ofReal.comp continuous_snd).mul continuous_const))).continuousOn
+      have h_inv : ContinuousOn
+          (fun q : (ℂ × ℂ) × ℝ => ((v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑q.2 * I) - q.1.2) ^ 2)⁻¹)
+          (W ×ˢ Set.uIcc 0 (2 * Real.pi)) :=
+        (((h_circ_cont.comp continuous_snd).sub (continuous_snd.comp continuous_fst)).pow
+          2).continuousOn.inv₀
+          h_denom_ne
+      exact h_pre.mul (h_inv.mul hF_comp)
+    have h_int_cont : ContinuousOn (fun p : ℂ × ℂ => ∫ θ in (0 : ℝ)..(2 * Real.pi), g p θ) W := by
+      refine continuousOn_intervalIntegral_of_continuousOn_prod (by positivity) hg_cont
+        (C := 2 * ρ * ((ρ ^ 2)⁻¹ * B)) fun p hp θ _ => ?_
+      have h_dist_ge : ρ ≤ ‖v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) - p.2‖ := by
+        have h1 : ‖p.2 - v₀‖ < ρ := by simpa [Metric.mem_ball, dist_eq_norm] using hp.2
+        have h2 : ‖((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)‖ = 2 * ρ := by
+          rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg (by positivity),
+            Complex.norm_exp_ofReal_mul_I, mul_one]
+        have h3 : v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) - p.2 =
+            ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) - (p.2 - v₀) := by ring
+        rw [h3]
+        linarith [norm_sub_norm_le (((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)) (p.2 - v₀)]
+      have h_inv_le : ‖((v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) - p.2) ^ 2)⁻¹‖ ≤
+        (ρ ^ 2)⁻¹ := by
+        rw [norm_inv, norm_pow]
+        exact inv_anti₀ (by positivity) (pow_le_pow_left₀ hρ.le h_dist_ge 2)
+      have hF_le : ‖F p.1 (v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I))‖ ≤ B := by
+        refine hF_bdd p.1 (Metric.ball_subset_closedBall (Metric.ball_subset_ball (by linarith)
+          hp.1)) _ ?_
+        rw [Metric.mem_closedBall, dist_eq_norm, add_sub_cancel_left, norm_mul, Complex.norm_real,
+          Real.norm_of_nonneg (by positivity), Complex.norm_exp_ofReal_mul_I, mul_one]
+      dsimp only [g]
+      rw [norm_mul, norm_mul, norm_mul, norm_mul, Complex.norm_I, one_mul, Complex.norm_real,
+        Real.norm_of_nonneg (by positivity), Complex.norm_exp_ofReal_mul_I, mul_one]
+      exact mul_le_mul_of_nonneg_left
+        (mul_le_mul h_inv_le hF_le (norm_nonneg _) (by positivity)) (by positivity)
+    have h_ca : ContinuousAt (fun p : ℂ × ℂ => (2 * Real.pi * I : ℂ)⁻¹ *
+        ∫ θ in (0 : ℝ)..(2 * Real.pi), g p θ) (u₀, v₀) :=
+      (continuousOn_const.mul h_int_cont).continuousAt
+        (hW_open.mem_nhds ⟨Metric.mem_ball_self hρ, Metric.mem_ball_self hρ⟩)
+    have h_ev : (fun p : ℂ × ℂ => deriv (fun w => F p.1 w) p.2) =ᶠ[𝓝 (u₀, v₀)]
+        fun p => (2 * Real.pi * I : ℂ)⁻¹ * ∫ θ in (0 : ℝ)..(2 * Real.pi), g p θ :=
+      Filter.eventually_of_mem
+        (hW_open.mem_nhds ⟨Metric.mem_ball_self hρ, Metric.mem_ball_self hρ⟩)
+        fun p hp => h_eq p.1 hp.1 p.2 hp.2
+    exact (h_ca.congr h_ev.symm).continuousWithinAt
+  have h_diff_right : ∀ u₀ ∈ U, ∀ v₀ ∈ V,
+      DifferentiableAt ℂ (fun v => deriv (fun w => F u₀ w) v) v₀ := fun u₀ hu₀ v₀ hv₀ =>
+    (((hF_diff2 u₀ hu₀).analyticOnNhd hV).deriv v₀ hv₀).differentiableAt
+  have h_diff_left : ∀ u₀ ∈ U, ∀ v₀ ∈ V,
+      DifferentiableAt ℂ (fun u => deriv (fun w => F u w) v₀) u₀ := by
+    intro u₀ hu₀ v₀ hv₀
+    obtain ⟨ρ, hρ, hcbU, hcbV, B, hB, hF_bdd, h_eq⟩ := h_loc_eq u₀ hu₀ v₀ hv₀
+    let c : ℝ → ℂ := fun θ => v₀ + ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)
+    let K_pre : ℝ → ℂ := fun θ =>
+      (I * ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I)) * (((c θ - v₀) ^ 2)⁻¹)
+    have hK_pre_norm : ∀ θ : ℝ, ‖K_pre θ‖ = (2 * ρ)⁻¹ := by
+      intro θ
+      have hc : c θ - v₀ = ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) := by dsimp [c]; ring
+      dsimp [K_pre]
+      rw [hc, norm_mul, norm_mul, norm_mul, Complex.norm_I, one_mul, Complex.norm_real,
+        Real.norm_of_nonneg (by positivity), Complex.norm_exp_ofReal_mul_I, mul_one, norm_inv,
+        norm_pow, norm_mul, Complex.norm_real, Real.norm_of_nonneg (by positivity),
+        Complex.norm_exp_ofReal_mul_I, mul_one]
+      have h2ρ : (0 : ℝ) < 2 * ρ := by positivity
+      field_simp [h2ρ.ne']
+    have hK_pre_cont : Continuous K_pre := by
+      have hc : ∀ θ : ℝ, c θ - v₀ = ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) := fun θ => by
+        dsimp [c]; ring
+      have h_eq' : K_pre = fun θ : ℝ => I * (((2 * ρ : ℝ) : ℂ) * Complex.exp ((θ : ℂ) * I))⁻¹ := by
+        ext θ; dsimp [K_pre]; rw [hc]
+        have hne : ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) ≠ 0 :=
+          mul_ne_zero (Complex.ofReal_ne_zero.mpr (by positivity)) (Complex.exp_ne_zero _)
+        field_simp [hne]
+      rw [h_eq']
+      exact continuous_const.mul ((continuous_const.mul (Complex.continuous_exp.comp
+        (Complex.continuous_ofReal.mul continuous_const))).inv₀ fun θ =>
+          mul_ne_zero (Complex.ofReal_ne_zero.mpr (by positivity)) (Complex.exp_ne_zero _))
+    have hc_mem : ∀ θ : ℝ, c θ ∈ Metric.closedBall v₀ (2 * ρ) := fun θ => by
+      rw [Metric.mem_closedBall, dist_eq_norm]
+      have : c θ - v₀ = ((2 * ρ : ℝ) : ℂ) * Complex.exp (↑θ * I) := by dsimp [c]; ring
+      rw [this, norm_mul, Complex.norm_real, Real.norm_of_nonneg (by positivity),
+        Complex.norm_exp_ofReal_mul_I, mul_one]
+    have hF_deriv_bd : ∀ u ∈ Metric.ball u₀ ρ, ∀ θ : ℝ,
+        ‖deriv (fun u' => F u' (c θ)) u‖ ≤ B / ρ := fun u hu θ =>
+      norm_deriv_le_of_ball_bound hρ
+        ((hF_diff1 (c θ) (hcbV (hc_mem θ))).mono (Metric.ball_subset_closedBall.trans hcbU))
+        (fun u' hu' => hF_bdd u' (Metric.ball_subset_closedBall hu') (c θ) (hc_mem θ)) hu
+    let G_int : ℂ → ℝ → ℂ := fun u θ => K_pre θ * F u (c θ)
+    let G'_int : ℂ → ℝ → ℂ := fun u θ => K_pre θ * deriv (fun u' => F u' (c θ)) u
+    have h_meas_G : ∀ᶠ u in 𝓝 u₀,
+      AEStronglyMeasurable (G_int u) (volume.restrict (Set.uIoc 0 (2 * Real.pi))) := by
+      filter_upwards [Metric.ball_mem_nhds u₀ hρ] with u hu
+      have huU : u ∈ U :=
+        hcbU (Metric.ball_subset_closedBall (Metric.ball_subset_ball (by linarith) hu))
+      have hFc : Continuous (fun θ : ℝ => F u (c θ)) :=
+        (hF_diff2 u huU).continuousOn.comp_continuous
+          (continuous_const.add (continuous_const.mul
+            (Complex.continuous_exp.comp (Complex.continuous_ofReal.mul continuous_const))))
+          fun θ => hcbV (hc_mem θ)
+      exact (hK_pre_cont.mul hFc).aestronglyMeasurable
+    have h_int_G0 : IntervalIntegrable (G_int u₀) volume 0 (2 * Real.pi) := by
+      have hFc : Continuous (fun θ : ℝ => F u₀ (c θ)) :=
+        (hF_diff2 u₀ hu₀).continuousOn.comp_continuous
+          (continuous_const.add (continuous_const.mul
+            (Complex.continuous_exp.comp (Complex.continuous_ofReal.mul continuous_const))))
+          fun θ => hcbV (hc_mem θ)
+      exact (hK_pre_cont.mul hFc).intervalIntegrable _ _
+    have h_meas_G' : AEStronglyMeasurable (G'_int u₀) (volume.restrict (Set.uIoc 0 (2 *
+      Real.pi))) := by
+      have h_d_meas : Measurable (fun θ : ℝ => deriv (fun u' => F u' (c θ)) u₀) := by
+        refine measurable_deriv_of_continuous_on_ball hρ (fun u hu => ?_) (fun θ => ?_)
+        · have huU : u ∈ U := hcbU (Metric.ball_subset_closedBall hu)
+          exact (hF_diff2 u huU).continuousOn.comp_continuous
+            (continuous_const.add (continuous_const.mul
+              (Complex.continuous_exp.comp (Complex.continuous_ofReal.mul continuous_const))))
+            fun θ => hcbV (hc_mem θ)
+        · exact (hF_diff1 (c θ) (hcbV (hc_mem θ))).differentiableAt (hU.mem_nhds hu₀)
+      exact (hK_pre_cont.measurable.mul h_d_meas).aestronglyMeasurable
+    have h_bound : ∀ᵐ θ ∂volume, θ ∈ Set.uIoc 0 (2 * Real.pi) →
+        ∀ u ∈ Metric.ball u₀ ρ, ‖G'_int u θ‖ ≤ (2 * ρ)⁻¹ * (B / ρ) :=
+      Filter.Eventually.of_forall fun θ _ u hu => by
+        dsimp [G'_int]
+        rw [norm_mul, hK_pre_norm]
+        exact mul_le_mul_of_nonneg_left (hF_deriv_bd u hu θ) (by positivity)
+    have h_deriv : ∀ᵐ θ ∂volume, θ ∈ Set.uIoc 0 (2 * Real.pi) →
+        ∀ u ∈ Metric.ball u₀ ρ, HasDerivAt (fun u' => G_int u' θ) (G'_int u θ) u :=
+      Filter.Eventually.of_forall fun θ _ u hu => by
+        have huU : u ∈ U :=
+          hcbU (Metric.ball_subset_closedBall (Metric.ball_subset_ball (by linarith) hu))
+        have hda : DifferentiableAt ℂ (fun u' => F u' (c θ)) u :=
+          (hF_diff1 (c θ) (hcbV (hc_mem θ))).differentiableAt (hU.mem_nhds huU)
+        exact hda.hasDerivAt.const_mul (K_pre θ)
+    have h_int_da : DifferentiableAt ℂ (fun u => ∫ θ in (0 : ℝ)..(2 * Real.pi), G_int u θ) u₀ :=
+      (intervalIntegral.hasDerivAt_integral_of_dominated_loc_of_deriv_le
+        (Metric.ball_mem_nhds u₀ hρ) h_meas_G h_int_G0 h_meas_G' h_bound
+        intervalIntegrable_const h_deriv).2.differentiableAt
+    have h_ev : (fun u => deriv (fun w => F u w) v₀) =ᶠ[𝓝 u₀]
+        fun u => (2 * Real.pi * I : ℂ)⁻¹ * ∫ θ in (0 : ℝ)..(2 * Real.pi), G_int u θ :=
+      Filter.eventually_of_mem (Metric.ball_mem_nhds u₀ hρ) fun u hu => by
+        dsimp only
+        rw [h_eq u hu v₀ (Metric.mem_ball_self hρ)]
+        congr 1
+        refine intervalIntegral.integral_congr fun θ _ => ?_
+        dsimp [G_int, K_pre, c]; ring
+    exact (h_int_da.const_mul _).congr_of_eventuallyEq h_ev
+  let split : (Fin 2 → ℂ) →L[ℂ] ℂ × ℂ :=
+    (ContinuousLinearMap.proj (0 : Fin 2)).prod (ContinuousLinearMap.proj (1 : Fin 2))
+  let merge : ℂ × ℂ →L[ℂ] (Fin 2 → ℂ) :=
+    ContinuousLinearMap.pi fun i : Fin 2 =>
+      if i = 0 then ContinuousLinearMap.fst ℂ ℂ ℂ else ContinuousLinearMap.snd ℂ ℂ ℂ
+  have h_sm : ∀ p : ℂ × ℂ, split (merge p) = p := fun p => by
+    ext <;> simp [split, merge]
+  let W2 : Set (Fin 2 → ℂ) := split ⁻¹' (U ×ˢ V)
+  have hW2_open : IsOpen W2 := h_open.preimage split.continuous
+  let G2 : (Fin 2 → ℂ) → ℂ := fun z => deriv (fun w => F (z 0) w) (z 1)
+  have hG2_cont : ContinuousOn G2 W2 :=
+    h_cont.comp split.continuous.continuousOn fun _ hz => hz
+  have hG2_holo : DifferentiableOn ℂ G2 W2 := by
+    refine osgood_nd 2 hW2_open G2 hG2_cont fun z hz m => ?_
+    fin_cases m
+    · dsimp only
+      have h_fun : (fun w => G2 (Function.update z 0 w)) =
+        fun w => deriv (fun w' => F w w') (z 1) := by
+        ext w; simp [G2]
+      change DifferentiableAt ℂ (fun w => G2 (Function.update z 0 w)) (z 0)
+      rw [h_fun]
+      exact h_diff_left (z 0) hz.1 (z 1) hz.2
+    · dsimp only
+      have h_fun : (fun w => G2 (Function.update z 1 w)) =
+        fun w => deriv (fun w' => F (z 0) w') w := by
+        ext w; simp [G2]
+      change DifferentiableAt ℂ (fun w => G2 (Function.update z 1 w)) (z 1)
+      rw [h_fun]
+      exact h_diff_right (z 0) hz.1 (z 1) hz.2
+  have h_comp := hG2_holo.comp merge.differentiable.differentiableOn
+    fun p hp => by change split (merge p) ∈ U ×ˢ V; rwa [h_sm]
+  refine h_comp.congr fun p _ => ?_
+  simp [Function.comp_apply, G2, merge]
+
+lemma differentiableOn_iteratedDeriv_prod {U V : Set ℂ}
+    (hU : IsOpen U) (hV : IsOpen V) {F : ℂ → ℂ → ℂ}
+    (hF : DifferentiableOn ℂ (fun p : ℂ × ℂ => F p.1 p.2) (U ×ˢ V)) :
+    ∀ n m : ℕ, DifferentiableOn ℂ
+      (fun p : ℂ × ℂ => iteratedDeriv n (fun u => iteratedDeriv m (fun v => F u v) p.2) p.1)
+      (U ×ˢ V) := by
+  have h_inner : ∀ m : ℕ, DifferentiableOn ℂ
+      (fun p : ℂ × ℂ => iteratedDeriv m (fun v => F p.1 v) p.2) (U ×ˢ V) := by
+    intro m
+    induction m with
+    | zero => simpa using hF
+    | succ m ih =>
+      have h1 := differentiableOn_deriv_snd_of_differentiableOn_prod hU hV
+        (F := fun u v => iteratedDeriv m (fun w => F u w) v) ih
+      refine h1.congr fun p _ => ?_
+      simp [iteratedDeriv_succ]
+  intro n m
+  let G : ℂ → ℂ → ℂ := fun v u => iteratedDeriv m (fun w => F u w) v
+  have hG : DifferentiableOn ℂ (fun p : ℂ × ℂ => G p.1 p.2) (V ×ˢ U) := by
+    let swap : ℂ × ℂ →L[ℂ] ℂ × ℂ :=
+      (ContinuousLinearMap.snd ℂ ℂ ℂ).prod (ContinuousLinearMap.fst ℂ ℂ ℂ)
+    exact (h_inner m).comp swap.differentiable.differentiableOn fun p hp => ⟨hp.2, hp.1⟩
+  have h_outer : ∀ n' : ℕ, DifferentiableOn ℂ
+      (fun p : ℂ × ℂ => iteratedDeriv n' (fun u => G p.1 u) p.2) (V ×ˢ U) := by
+    intro n'
+    induction n' with
+    | zero => simpa using hG
+    | succ n' ih =>
+      have h1 := differentiableOn_deriv_snd_of_differentiableOn_prod hV hU
+        (F := fun v u => iteratedDeriv n' (fun w => G v w) u) ih
+      refine h1.congr fun p _ => ?_
+      simp [iteratedDeriv_succ]
+  let swap : ℂ × ℂ →L[ℂ] ℂ × ℂ :=
+    (ContinuousLinearMap.snd ℂ ℂ ℂ).prod (ContinuousLinearMap.fst ℂ ℂ ℂ)
+  exact (h_outer n).comp swap.differentiable.differentiableOn fun p hp => ⟨hp.2, hp.1⟩
+
+lemma tendsto_mixed_diffQuot_of_holo_prod {U V : Set ℂ} (hU : IsOpen U) (hV : IsOpen V)
+    {F : ℂ → ℂ → ℂ} (hF : DifferentiableOn ℂ (fun p : ℂ × ℂ => F p.1 p.2) (U ×ˢ V))
+    {u₀ v₀ : ℂ} (hu₀ : u₀ ∈ U) (hv₀ : v₀ ∈ V) :
+    Tendsto
+      (fun p : ℂ × ℂ =>
+        (p.1 * p.2)⁻¹ * (F (u₀ + p.1) (v₀ + p.2) - F (u₀ + p.1) v₀ - F u₀ (v₀ + p.2) + F u₀ v₀))
+      (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ))
+      (𝓝 (deriv (fun u => deriv (fun v => F u v) v₀) u₀)) := by
+  have hF1 : DifferentiableOn ℂ (fun p : ℂ × ℂ => deriv (fun v => F p.1 v) p.2) (U ×ˢ V) :=
+    differentiableOn_deriv_snd_of_differentiableOn_prod hU hV hF
+  have hF11 : DifferentiableOn ℂ
+      (fun p : ℂ × ℂ => deriv (fun u => deriv (fun v => F u v) p.2) p.1) (U ×ˢ V) := by
+    have h := differentiableOn_iteratedDeriv_prod hU hV hF 1 1
+    refine h.congr fun p _ => ?_
+    simp [iteratedDeriv_one]
+  let L : ℂ := deriv (fun u => deriv (fun v => F u v) v₀) u₀
+  rw [Metric.tendsto_nhds]
+  intro ε hε
+  have h_cont11 : ContinuousAt
+      (fun p : ℂ × ℂ => deriv (fun u => deriv (fun v => F u v) p.2) p.1) (u₀, v₀) :=
+    (hF11 (u₀, v₀) ⟨hu₀, hv₀⟩).continuousWithinAt.continuousAt ((hU.prod hV).mem_nhds ⟨hu₀, hv₀⟩)
+  rcases Metric.isOpen_iff.mp hU u₀ hu₀ with ⟨r₀, hr₀, hr₀_sub⟩
+  rcases Metric.isOpen_iff.mp hV v₀ hv₀ with ⟨r₀', hr₀', hr₀'_sub⟩
+  rcases Metric.tendsto_nhds.mp h_cont11 (ε / 2) (by positivity) |>
+      (fun h => Metric.mem_nhds_iff.mp h) with ⟨r₁, hr₁, hr₁_sub⟩
+  let r : ℝ := min (min r₀ r₀') r₁
+  have hr : 0 < r := lt_min (lt_min hr₀ hr₀') hr₁
+  have h_mem : (Metric.ball (0 : ℂ) r \ {0}) ×ˢ (Metric.ball (0 : ℂ) r \ {0}) ∈
+      𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ) :=
+    Filter.prod_mem_prod (sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hr) _)
+      (sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hr) _)
+  filter_upwards [h_mem] with ⟨h₁, h₂⟩ ⟨⟨hh₁_b, hh₁_ne⟩, ⟨hh₂_b, hh₂_ne⟩⟩
+  have hh₁_r : ‖h₁‖ < r := by simpa [Metric.mem_ball, dist_zero_right] using hh₁_b
+  have hh₂_r : ‖h₂‖ < r := by simpa [Metric.mem_ball, dist_zero_right] using hh₂_b
+  let ψ : ℝ → ℝ → ℂ := fun t s =>
+    deriv (fun u => deriv (fun v => F u v) (v₀ + (s : ℂ) * h₂)) (u₀ + (t : ℂ) * h₁)
+  have h_in_ball : ∀ t ∈ Set.Icc (0 : ℝ) 1, ∀ s ∈ Set.Icc (0 : ℝ) 1,
+      u₀ + (t : ℂ) * h₁ ∈ Metric.ball u₀ r ∧ v₀ + (s : ℂ) * h₂ ∈ Metric.ball v₀ r := by
+    intro t ht s hs
+    refine ⟨?_, ?_⟩
+    · rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_left, norm_mul, Complex.norm_real,
+        Real.norm_of_nonneg ht.1]
+      exact (mul_le_of_le_one_left (norm_nonneg _) ht.2).trans_lt hh₁_r
+    · rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_left, norm_mul, Complex.norm_real,
+        Real.norm_of_nonneg hs.1]
+      exact (mul_le_of_le_one_left (norm_nonneg _) hs.2).trans_lt hh₂_r
+  have h_ftc_s : ∀ u ∈ U,
+      F u (v₀ + h₂) - F u v₀ =
+        h₂ * ∫ s in (0 : ℝ)..1, deriv (fun v => F u v) (v₀ + (s : ℂ) * h₂) := by
+    intro u hu
+    have h_diff_v : DifferentiableOn ℂ (fun v => F u v) V :=
+      hF.comp ((differentiable_const u).prodMk differentiable_id).differentiableOn fun v hv => ⟨hu,
+        hv⟩
+    have h_hd : ∀ s ∈ Set.uIcc (0 : ℝ) 1,
+        HasDerivAt (fun s' : ℝ => F u (v₀ + (s' : ℂ) * h₂))
+          (h₂ * deriv (fun v => F u v) (v₀ + (s : ℂ) * h₂)) s := by
+      intro s hs
+      rw [Set.uIcc_of_le zero_le_one] at hs
+      have hv_s : v₀ + (s : ℂ) * h₂ ∈ V :=
+        hr₀'_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_right _ _))
+          (h_in_ball 0 ⟨le_rfl, zero_le_one⟩ s hs).2)
+      have h1 : HasDerivAt (fun v : ℂ => F u v) (deriv (fun v => F u v) (v₀ + (s : ℂ) * h₂))
+          (v₀ + (s : ℂ) * h₂) := (h_diff_v.differentiableAt (hV.mem_nhds hv_s)).hasDerivAt
+      have h2 : HasDerivAt (fun w : ℂ => v₀ + w * h₂) h₂ (s : ℂ) := by
+        simpa using ((hasDerivAt_id (s : ℂ)).mul_const h₂).const_add v₀
+      have h3 := (h1.comp (s : ℂ) h2).comp_ofReal
+      simpa [mul_comm] using h3
+    have h_int : IntervalIntegrable (fun s : ℝ => h₂ * deriv (fun v => F u v) (v₀ + (s : ℂ) * h₂))
+        volume 0 1 := by
+      refine ContinuousOn.intervalIntegrable ?_
+      rw [Set.uIcc_of_le zero_le_one]
+      have h_lin : Continuous (fun s : ℝ => (u, v₀ + (s : ℂ) * h₂)) :=
+        continuous_const.prodMk (continuous_const.add (Complex.continuous_ofReal.mul
+          continuous_const))
+      exact continuousOn_const.mul (hF1.continuousOn.comp h_lin.continuousOn fun s hs =>
+        ⟨hu, hr₀'_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_right _ _))
+          (h_in_ball 0 ⟨le_rfl, zero_le_one⟩ s hs).2)⟩)
+    have h_eq := intervalIntegral.integral_eq_sub_of_hasDerivAt h_hd h_int
+    rw [intervalIntegral.integral_const_mul] at h_eq
+    simpa using h_eq.symm
+  have h_ftc_t : ∀ s ∈ Set.Icc (0 : ℝ) 1,
+      deriv (fun v => F (u₀ + h₁) v) (v₀ + (s : ℂ) * h₂) -
+        deriv (fun v => F u₀ v) (v₀ + (s : ℂ) * h₂) =
+        h₁ * ∫ t in (0 : ℝ)..1, ψ t s := by
+    intro s hs
+    have hv_s : v₀ + (s : ℂ) * h₂ ∈ V :=
+      hr₀'_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_right _ _))
+        (h_in_ball 0 ⟨le_rfl, zero_le_one⟩ s hs).2)
+    have h_diff_u : DifferentiableOn ℂ (fun u => deriv (fun v => F u v) (v₀ + (s : ℂ) * h₂)) U :=
+      hF1.comp (differentiable_id.prodMk (differentiable_const _)).differentiableOn fun u hu =>
+        ⟨hu, hv_s⟩
+    have h_hd : ∀ t ∈ Set.uIcc (0 : ℝ) 1,
+        HasDerivAt (fun t' : ℝ => deriv (fun v => F (u₀ + (t' : ℂ) * h₁) v) (v₀ + (s : ℂ) * h₂))
+          (h₁ * ψ t s) t := by
+      intro t ht
+      rw [Set.uIcc_of_le zero_le_one] at ht
+      have hu_t : u₀ + (t : ℂ) * h₁ ∈ U :=
+        hr₀_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_left _ _))
+          (h_in_ball t ht s hs).1)
+      have h1 : HasDerivAt (fun u : ℂ => deriv (fun v => F u v) (v₀ + (s : ℂ) * h₂)) (ψ t s)
+          (u₀ + (t : ℂ) * h₁) := (h_diff_u.differentiableAt (hU.mem_nhds hu_t)).hasDerivAt
+      have h2 : HasDerivAt (fun w : ℂ => u₀ + w * h₁) h₁ (t : ℂ) := by
+        simpa using ((hasDerivAt_id (t : ℂ)).mul_const h₁).const_add u₀
+      have h3 := (h1.comp (t : ℂ) h2).comp_ofReal
+      simpa [mul_comm] using h3
+    have h_int : IntervalIntegrable (fun t : ℝ => h₁ * ψ t s) volume 0 1 := by
+      refine ContinuousOn.intervalIntegrable ?_
+      rw [Set.uIcc_of_le zero_le_one]
+      have h_lin : Continuous (fun t : ℝ => (u₀ + (t : ℂ) * h₁, v₀ + (s : ℂ) * h₂)) :=
+        (continuous_const.add (Complex.continuous_ofReal.mul continuous_const)).prodMk
+          continuous_const
+      exact continuousOn_const.mul (hF11.continuousOn.comp h_lin.continuousOn fun t ht =>
+        ⟨hr₀_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_left _ _))
+          (h_in_ball t ht s hs).1), hv_s⟩)
+    have h_eq := intervalIntegral.integral_eq_sub_of_hasDerivAt h_hd h_int
+    rw [intervalIntegral.integral_const_mul] at h_eq
+    simpa using h_eq.symm
+  have hu_h1 : u₀ + h₁ ∈ U := by
+    have := (h_in_ball 1 ⟨zero_le_one, le_rfl⟩ 0 ⟨le_rfl, zero_le_one⟩).1
+    simpa using hr₀_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_left _ _)) this)
+  have h_double :
+      (h₁ * h₂)⁻¹ * (F (u₀ + h₁) (v₀ + h₂) - F (u₀ + h₁) v₀ - F u₀ (v₀ + h₂) + F u₀ v₀) - L =
+        ∫ s in (0 : ℝ)..1, ∫ t in (0 : ℝ)..1, (ψ t s - L) := by
+    have h_sub_eq : F (u₀ + h₁) (v₀ + h₂) - F (u₀ + h₁) v₀ - F u₀ (v₀ + h₂) + F u₀ v₀ =
+        (F (u₀ + h₁) (v₀ + h₂) - F (u₀ + h₁) v₀) - (F u₀ (v₀ + h₂) - F u₀ v₀) := by ring
+    have h_i1 : IntervalIntegrable
+        (fun s : ℝ => deriv (fun v => F (u₀ + h₁) v) (v₀ + (s : ℂ) * h₂)) volume 0 1 := by
+      refine ContinuousOn.intervalIntegrable ?_
+      rw [Set.uIcc_of_le zero_le_one]
+      have h_lin : Continuous (fun s : ℝ => (u₀ + h₁, v₀ + (s : ℂ) * h₂)) :=
+        continuous_const.prodMk (continuous_const.add (Complex.continuous_ofReal.mul
+          continuous_const))
+      exact hF1.continuousOn.comp h_lin.continuousOn fun s hs =>
+        ⟨hu_h1, hr₀'_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_right _ _))
+          (h_in_ball 0 ⟨le_rfl, zero_le_one⟩ s hs).2)⟩
+    have h_i2 : IntervalIntegrable
+        (fun s : ℝ => deriv (fun v => F u₀ v) (v₀ + (s : ℂ) * h₂)) volume 0 1 := by
+      refine ContinuousOn.intervalIntegrable ?_
+      rw [Set.uIcc_of_le zero_le_one]
+      have h_lin : Continuous (fun s : ℝ => (u₀, v₀ + (s : ℂ) * h₂)) :=
+        continuous_const.prodMk (continuous_const.add (Complex.continuous_ofReal.mul
+          continuous_const))
+      exact hF1.continuousOn.comp h_lin.continuousOn fun s hs =>
+        ⟨hu₀, hr₀'_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_right _ _))
+          (h_in_ball 0 ⟨le_rfl, zero_le_one⟩ s hs).2)⟩
+    have h_lhs :
+        (h₁ * h₂)⁻¹ * (F (u₀ + h₁) (v₀ + h₂) - F (u₀ + h₁) v₀ - F u₀ (v₀ + h₂) + F u₀ v₀) =
+          ∫ s in (0 : ℝ)..1,
+            h₁⁻¹ * (deriv (fun v => F (u₀ + h₁) v) (v₀ + (s : ℂ) * h₂) -
+              deriv (fun v => F u₀ v) (v₀ + (s : ℂ) * h₂)) := by
+      rw [h_sub_eq, h_ftc_s (u₀ + h₁) hu_h1, h_ftc_s u₀ hu₀, ← mul_sub,
+        ← intervalIntegral.integral_sub h_i1 h_i2, intervalIntegral.integral_const_mul,
+        mul_inv, mul_comm h₁⁻¹ h₂⁻¹, mul_assoc, mul_left_comm h₁⁻¹, inv_mul_cancel_left₀ hh₂_ne]
+    rw [h_lhs]
+    have hL_int : L = ∫ _s in (0 : ℝ)..1, L := by simp
+    conv_lhs => rhs; rw [hL_int]
+    rw [← intervalIntegral.integral_sub ((h_i1.sub h_i2).const_mul h₁⁻¹) intervalIntegrable_const]
+    refine intervalIntegral.integral_congr fun s hs => ?_
+    rw [Set.uIcc_of_le zero_le_one] at hs
+    rw [h_ftc_t s hs, inv_mul_cancel_left₀ hh₁_ne]
+    have h_it : IntervalIntegrable (fun t : ℝ => ψ t s) volume 0 1 := by
+      refine ContinuousOn.intervalIntegrable ?_
+      rw [Set.uIcc_of_le zero_le_one]
+      have h_lin : Continuous (fun t : ℝ => (u₀ + (t : ℂ) * h₁, v₀ + (s : ℂ) * h₂)) :=
+        (continuous_const.add (Complex.continuous_ofReal.mul continuous_const)).prodMk
+          continuous_const
+      exact hF11.continuousOn.comp h_lin.continuousOn fun t ht =>
+        ⟨hr₀_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_left _ _))
+          (h_in_ball t ht s hs).1),
+          hr₀'_sub (Metric.ball_subset_ball ((min_le_left _ _).trans (min_le_right _ _))
+            (h_in_ball t ht s hs).2)⟩
+    have hL_t : L = ∫ _t in (0 : ℝ)..1, L := by simp
+    conv_lhs => rhs; rw [hL_t]
+    rw [← intervalIntegral.integral_sub h_it intervalIntegrable_const]
+  rw [dist_eq_norm, h_double]
+  have h_norm_le : ‖∫ s in (0 : ℝ)..1, ∫ t in (0 : ℝ)..1, (ψ t s - L)‖ ≤ (ε / 2) * |1 - 0| := by
+    refine intervalIntegral.norm_integral_le_of_norm_le_const fun s hs => ?_
+    rw [Set.uIoc_of_le zero_le_one] at hs
+    have hs_icc : s ∈ Set.Icc (0 : ℝ) 1 := ⟨hs.1.le, hs.2⟩
+    have h_inner : ‖∫ t in (0 : ℝ)..1, (ψ t s - L)‖ ≤ (ε / 2) * |1 - 0| := by
+      refine intervalIntegral.norm_integral_le_of_norm_le_const fun t ht => ?_
+      rw [Set.uIoc_of_le zero_le_one] at ht
+      have ht_icc : t ∈ Set.Icc (0 : ℝ) 1 := ⟨ht.1.le, ht.2⟩
+      have h_pair : (u₀ + (t : ℂ) * h₁, v₀ + (s : ℂ) * h₂) ∈ Metric.ball (u₀, v₀) r₁ := by
+        have h1 := Metric.ball_subset_ball (min_le_right _ _) (h_in_ball t ht_icc s hs_icc).1
+        have h2 := Metric.ball_subset_ball (min_le_right _ _) (h_in_ball t ht_icc s hs_icc).2
+        rw [Metric.mem_ball, Prod.dist_eq]
+        exact max_lt (Metric.mem_ball.mp h1) (Metric.mem_ball.mp h2)
+      have h_lt := hr₁_sub h_pair
+      dsimp only [Set.mem_setOf_eq] at h_lt
+      rw [dist_eq_norm] at h_lt
+      exact le_of_lt h_lt
+    simpa using h_inner
+  have h_le2 : ‖∫ s in (0 : ℝ)..1, ∫ t in (0 : ℝ)..1, (ψ t s - L)‖ ≤ ε / 2 := by
+    simpa using h_norm_le
+  linarith
+
+lemma deriv_comm_of_holo_prod {U V : Set ℂ} (hU : IsOpen U) (hV : IsOpen V)
+    {F : ℂ → ℂ → ℂ} (hF : DifferentiableOn ℂ (fun p : ℂ × ℂ => F p.1 p.2) (U ×ˢ V))
+    {u₀ v₀ : ℂ} (hu₀ : u₀ ∈ U) (hv₀ : v₀ ∈ V) :
+    deriv (fun v => deriv (fun u => F u v) u₀) v₀ =
+      deriv (fun u => deriv (fun v => F u v) v₀) u₀ := by
+  have h1 := tendsto_mixed_diffQuot_of_holo_prod hU hV hF hu₀ hv₀
+  let swap : ℂ × ℂ →L[ℂ] ℂ × ℂ :=
+    (ContinuousLinearMap.snd ℂ ℂ ℂ).prod (ContinuousLinearMap.fst ℂ ℂ ℂ)
+  have hF_swap : DifferentiableOn ℂ (fun p : ℂ × ℂ => F p.2 p.1) (V ×ˢ U) :=
+    hF.comp swap.differentiable.differentiableOn fun p hp => ⟨hp.2, hp.1⟩
+  have h2 := tendsto_mixed_diffQuot_of_holo_prod hV hU (F := fun v u => F u v) hF_swap hv₀ hu₀
+  have h_swap_t : Tendsto (fun p : ℂ × ℂ => (p.2, p.1))
+      (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ)) (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ)) :=
+    Filter.Tendsto.prodMk Filter.tendsto_snd Filter.tendsto_fst
+  have h2' : Tendsto
+      (fun p : ℂ × ℂ =>
+        (p.1 * p.2)⁻¹ * (F (u₀ + p.1) (v₀ + p.2) - F (u₀ + p.1) v₀ - F u₀ (v₀ + p.2) + F u₀ v₀))
+      (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ))
+      (𝓝 (deriv (fun v => deriv (fun u => F u v) u₀) v₀)) := by
+    have hc := h2.comp h_swap_t
+    refine hc.congr fun p => ?_
+    dsimp only [Function.comp_apply]
+    ring
+  exact tendsto_nhds_unique h2' h1
+
+lemma hilbert_cauchy_of_tendsto_inner {α : Type*} {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] {l : Filter α} [l.NeBot] {q : α → H} {L : ℂ}
+    (h : Tendsto (fun p : α × α => ⟪q p.1, q p.2⟫_ℂ) (l ×ˢ l) (𝓝 L)) :
+    Cauchy (Filter.map q l) := by
+  rw [Metric.cauchy_iff]
+  refine ⟨Filter.NeBot.map inferInstance q, fun ε hε => ?_⟩
+  have h11 : Tendsto (fun p : α × α => ⟪q p.1, q p.1⟫_ℂ) (l ×ˢ l) (𝓝 L) :=
+    h.comp (Filter.Tendsto.prodMk Filter.tendsto_fst Filter.tendsto_fst)
+  have h22 : Tendsto (fun p : α × α => ⟪q p.2, q p.2⟫_ℂ) (l ×ˢ l) (𝓝 L) :=
+    h.comp (Filter.Tendsto.prodMk Filter.tendsto_snd Filter.tendsto_snd)
+  have h21 : Tendsto (fun p : α × α => ⟪q p.2, q p.1⟫_ℂ) (l ×ˢ l) (𝓝 L) :=
+    h.comp (Filter.Tendsto.prodMk Filter.tendsto_snd Filter.tendsto_fst)
+  have h_all : Tendsto (fun p : α × α => ⟪q p.1 - q p.2, q p.1 - q p.2⟫_ℂ) (l ×ˢ l) (𝓝 0) := by
+    have h_eq : (fun p : α × α => ⟪q p.1 - q p.2, q p.1 - q p.2⟫_ℂ) =
+        fun p => ⟪q p.1, q p.1⟫_ℂ - ⟪q p.1, q p.2⟫_ℂ - ⟪q p.2, q p.1⟫_ℂ + ⟪q p.2, q p.2⟫_ℂ := by
+      ext p; rw [inner_sub_left, inner_sub_right, inner_sub_right]; ring
+    rw [h_eq]
+    have h0 := ((h11.sub h).sub h21).add h22
+    have hL0 : L - L - L + L = 0 := by ring
+    rwa [hL0] at h0
+  have h_ev := Metric.tendsto_nhds.mp h_all ((ε / 2) ^ 2) (by positivity)
+  rw [Filter.eventually_prod_iff] at h_ev
+  rcases h_ev with ⟨p₁, hp₁, p₂, hp₂, h_imp⟩
+  let S_set : Set α := {h | p₁ h ∧ p₂ h}
+  have hS_mem : S_set ∈ l := Filter.inter_mem hp₁ hp₂
+  refine ⟨q '' S_set, Filter.image_mem_map hS_mem, ?_⟩
+  rintro _ ⟨h₁, hh₁, rfl⟩ _ ⟨h₂, hh₂, rfl⟩
+  have hlt := h_imp hh₁.1 hh₂.2
+  rw [dist_zero_right, inner_self_eq_norm_sq_to_K] at hlt
+  have hsq : ‖q h₁ - q h₂‖ ^ 2 < (ε / 2) ^ 2 := by simpa using hlt
+  have hlt2 : ‖q h₁ - q h₂‖ < ε / 2 := by nlinarith [norm_nonneg (q h₁ - q h₂)]
+  rw [dist_eq_norm]
+  linarith
+
+lemma hilbert_hasDerivAt_real_of_kernel {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] [CompleteSpace H]
+    {U : Set ℂ} (hU : IsOpen U) {Φ : ℝ → H} {F : ℂ → ℂ → ℂ}
+    (hF : DifferentiableOn ℂ (fun p : ℂ × ℂ => F p.1 p.2) (U ×ˢ U))
+    (h_inner : ∀ s t : ℝ, (s : ℂ) ∈ U → (t : ℂ) ∈ U → ⟪Φ s, Φ t⟫_ℂ = F (s : ℂ) (t : ℂ))
+    {s₀ : ℝ} (hs₀ : (s₀ : ℂ) ∈ U) :
+    ∃ v : H, HasDerivAt Φ v s₀ ∧
+      (∀ t : ℝ, (t : ℂ) ∈ U → ⟪v, Φ t⟫_ℂ = deriv (fun u => F u (t : ℂ)) (s₀ : ℂ)) ∧
+      (∀ t : ℝ, (t : ℂ) ∈ U → ⟪Φ t, v⟫_ℂ = deriv (fun w => F (t : ℂ) w) (s₀ : ℂ)) := by
+  let q : ℝ → H := fun h => (h : ℂ)⁻¹ • (Φ (s₀ + h) - Φ s₀)
+  have h_mix := tendsto_mixed_diffQuot_of_holo_prod hU hU hF hs₀ hs₀
+  let L : ℂ := deriv (fun u => deriv (fun v => F u v) (s₀ : ℂ)) (s₀ : ℂ)
+  have h_real_mix : Tendsto
+      (fun p : ℝ × ℝ =>
+        ((p.1 : ℂ) * (p.2 : ℂ))⁻¹ *
+          (F ((s₀ : ℂ) + (p.1 : ℂ)) ((s₀ : ℂ) + (p.2 : ℂ)) -
+            F ((s₀ : ℂ) + (p.1 : ℂ)) (s₀ : ℂ) -
+            F (s₀ : ℂ) ((s₀ : ℂ) + (p.2 : ℂ)) + F (s₀ : ℂ) (s₀ : ℂ)))
+      (𝓝[≠] (0 : ℝ) ×ˢ 𝓝[≠] (0 : ℝ)) (𝓝 L) := by
+    have h1 : Tendsto (fun x : ℝ => (x : ℂ)) (𝓝[≠] (0 : ℝ)) (𝓝[≠] (0 : ℂ)) :=
+      tendsto_nhdsWithin_iff.mpr
+        ⟨(Complex.continuous_ofReal.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+          (by simp),
+         eventually_nhdsWithin_of_forall fun x hx => Complex.ofReal_ne_zero.mpr hx⟩
+    have h_emb : Tendsto (fun p : ℝ × ℝ => ((p.1 : ℂ), (p.2 : ℂ)))
+        (𝓝[≠] (0 : ℝ) ×ˢ 𝓝[≠] (0 : ℝ)) (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ)) :=
+      Filter.Tendsto.prodMk (h1.comp Filter.tendsto_fst) (h1.comp Filter.tendsto_snd)
+    have h_comp := h_mix.comp h_emb
+    exact h_comp
+  have h_inner_q : ∀ᶠ p : ℝ × ℝ in 𝓝[≠] (0 : ℝ) ×ˢ 𝓝[≠] (0 : ℝ),
+      ⟪q p.1, q p.2⟫_ℂ =
+        ((p.1 : ℂ) * (p.2 : ℂ))⁻¹ *
+          (F ((s₀ : ℂ) + (p.1 : ℂ)) ((s₀ : ℂ) + (p.2 : ℂ)) -
+            F ((s₀ : ℂ) + (p.1 : ℂ)) (s₀ : ℂ) -
+            F (s₀ : ℂ) ((s₀ : ℂ) + (p.2 : ℂ)) + F (s₀ : ℂ) (s₀ : ℂ)) := by
+    rcases Metric.isOpen_iff.mp hU (s₀ : ℂ) hs₀ with ⟨r, hr, hr_sub⟩
+    have h_mem : (Metric.ball (0 : ℝ) r \ {0}) ×ˢ (Metric.ball (0 : ℝ) r \ {0}) ∈
+        𝓝[≠] (0 : ℝ) ×ˢ 𝓝[≠] (0 : ℝ) :=
+      Filter.prod_mem_prod (sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hr) _)
+        (sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hr) _)
+    filter_upwards [h_mem] with ⟨h₁, h₂⟩ ⟨⟨hh₁, _⟩, ⟨hh₂, _⟩⟩
+    have hs1 : ((s₀ + h₁ : ℝ) : ℂ) ∈ U := hr_sub (by
+      rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left, Complex.norm_real]
+      simpa [Metric.mem_ball, Real.dist_eq] using hh₁)
+    have hs2 : ((s₀ + h₂ : ℝ) : ℂ) ∈ U := hr_sub (by
+      rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left, Complex.norm_real]
+      simpa [Metric.mem_ball, Real.dist_eq] using hh₂)
+    dsimp only [q]
+    rw [inner_smul_left, inner_smul_right, inner_sub_left, inner_sub_right, inner_sub_right,
+      h_inner _ _ hs1 hs2, h_inner _ _ hs1 hs₀, h_inner _ _ hs₀ hs2, h_inner _ _ hs₀ hs₀]
+    simp only [map_inv₀, Complex.conj_ofReal, Complex.ofReal_add]
+    ring
+  have h_tendsto_inner : Tendsto (fun p : ℝ × ℝ => ⟪q p.1, q p.2⟫_ℂ)
+      (𝓝[≠] (0 : ℝ) ×ˢ 𝓝[≠] (0 : ℝ)) (𝓝 L) :=
+    h_real_mix.congr' (h_inner_q.mono fun _ h => h.symm)
+  have h_cauchy : Cauchy (Filter.map q (𝓝[≠] (0 : ℝ))) :=
+    hilbert_cauchy_of_tendsto_inner h_tendsto_inner
+  obtain ⟨v, hv⟩ := CompleteSpace.complete h_cauchy
+  have h_hasDeriv : HasDerivAt Φ v s₀ := by
+    rw [hasDerivAt_iff_tendsto_slope_zero]
+    have h_eq : (fun h : ℝ => h⁻¹ • (Φ (s₀ + h) - Φ s₀)) = q := by
+      ext h; dsimp only [q]; rw [← Complex.ofReal_inv, Complex.coe_smul]
+    rw [h_eq]
+    exact hv
+  refine ⟨v, h_hasDeriv, ?_, ?_⟩
+  · intro t ht
+    have h1 : Tendsto (fun h : ℝ => ⟪q h, Φ t⟫_ℂ) (𝓝[≠] (0 : ℝ)) (𝓝 ⟪v, Φ t⟫_ℂ) :=
+      (continuous_id.inner continuous_const).continuousAt.tendsto.comp hv
+    have hF_u : DifferentiableAt ℂ (fun u => F u (t : ℂ)) (s₀ : ℂ) :=
+      (hF.comp (differentiable_id.prodMk (differentiable_const (t : ℂ))).differentiableOn
+        fun u hu => ⟨hu, ht⟩).differentiableAt (hU.mem_nhds hs₀)
+    have h2 : Tendsto (fun h : ℝ => (h : ℂ)⁻¹ * (F ((s₀ : ℂ) +
+      (h : ℂ)) (t : ℂ) - F (s₀ : ℂ) (t : ℂ)))
+        (𝓝[≠] (0 : ℝ)) (𝓝 (deriv (fun u => F u (t : ℂ)) (s₀ : ℂ))) := by
+      have h_sl := (hasDerivAt_iff_tendsto_slope_zero.mp hF_u.hasDerivAt)
+      have h_emb : Tendsto (fun x : ℝ => (x : ℂ)) (𝓝[≠] (0 : ℝ)) (𝓝[≠] (0 : ℂ)) :=
+        tendsto_nhdsWithin_iff.mpr
+          ⟨(Complex.continuous_ofReal.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+            (by simp),
+           eventually_nhdsWithin_of_forall fun x hx => Complex.ofReal_ne_zero.mpr hx⟩
+      simpa [Function.comp_def, smul_eq_mul] using h_sl.comp h_emb
+    have h_ev_eq : (fun h : ℝ => ⟪q h, Φ t⟫_ℂ) =ᶠ[𝓝[≠] (0 : ℝ)]
+        fun h => (h : ℂ)⁻¹ * (F ((s₀ : ℂ) + (h : ℂ)) (t : ℂ) - F (s₀ : ℂ) (t : ℂ)) := by
+      rcases Metric.isOpen_iff.mp hU (s₀ : ℂ) hs₀ with ⟨r, hr, hr_sub⟩
+      filter_upwards [sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hr) _] with h ⟨hh, _⟩
+      have hs1 : ((s₀ + h : ℝ) : ℂ) ∈ U := hr_sub (by
+        rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left,
+          Complex.norm_real]
+        simpa [Metric.mem_ball, Real.dist_eq] using hh)
+      dsimp only [q]
+      rw [inner_smul_left, inner_sub_left, h_inner _ _ hs1 ht, h_inner _ _ hs₀ ht]
+      simp [Complex.ofReal_add]
+    exact tendsto_nhds_unique h1 (h2.congr' h_ev_eq.symm)
+  · intro t ht
+    have h1 : Tendsto (fun h : ℝ => ⟪Φ t, q h⟫_ℂ) (𝓝[≠] (0 : ℝ)) (𝓝 ⟪Φ t, v⟫_ℂ) :=
+      (continuous_const.inner continuous_id).continuousAt.tendsto.comp hv
+    have hF_w : DifferentiableAt ℂ (fun w => F (t : ℂ) w) (s₀ : ℂ) :=
+      (hF.comp ((differentiable_const (t : ℂ)).prodMk differentiable_id).differentiableOn
+        fun w hw => ⟨ht, hw⟩).differentiableAt (hU.mem_nhds hs₀)
+    have h2 : Tendsto (fun h : ℝ => (h : ℂ)⁻¹ * (F (t : ℂ) ((s₀ : ℂ) +
+      (h : ℂ)) - F (t : ℂ) (s₀ : ℂ)))
+        (𝓝[≠] (0 : ℝ)) (𝓝 (deriv (fun w => F (t : ℂ) w) (s₀ : ℂ))) := by
+      have h_sl := (hasDerivAt_iff_tendsto_slope_zero.mp hF_w.hasDerivAt)
+      have h_emb : Tendsto (fun x : ℝ => (x : ℂ)) (𝓝[≠] (0 : ℝ)) (𝓝[≠] (0 : ℂ)) :=
+        tendsto_nhdsWithin_iff.mpr
+          ⟨(Complex.continuous_ofReal.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+            (by simp),
+           eventually_nhdsWithin_of_forall fun x hx => Complex.ofReal_ne_zero.mpr hx⟩
+      simpa [Function.comp_def, smul_eq_mul] using h_sl.comp h_emb
+    have h_ev_eq : (fun h : ℝ => ⟪Φ t, q h⟫_ℂ) =ᶠ[𝓝[≠] (0 : ℝ)]
+        fun h => (h : ℂ)⁻¹ * (F (t : ℂ) ((s₀ : ℂ) + (h : ℂ)) - F (t : ℂ) (s₀ : ℂ)) := by
+      rcases Metric.isOpen_iff.mp hU (s₀ : ℂ) hs₀ with ⟨r, hr, hr_sub⟩
+      filter_upwards [sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hr) _] with h ⟨hh, _⟩
+      have hs1 : ((s₀ + h : ℝ) : ℂ) ∈ U := hr_sub (by
+        rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left,
+          Complex.norm_real]
+        simpa [Metric.mem_ball, Real.dist_eq] using hh)
+      dsimp only [q]
+      rw [inner_smul_right, inner_sub_right, h_inner _ _ ht hs1, h_inner _ _ ht hs₀]
+      simp [Complex.ofReal_add]
+    exact tendsto_nhds_unique h1 (h2.congr' h_ev_eq.symm)
+
+lemma hilbert_differentiableAt_of_kernel {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] [CompleteSpace H]
+    {U : Set ℂ} (hU : IsOpen U)
+    {Φ : ℂ → H} {F : ℂ → ℂ → ℂ}
+    (hF : DifferentiableOn ℂ (fun p : ℂ × ℂ => F p.1 p.2) ((star ⁻¹' U) ×ˢ U))
+    (h_inner : ∀ u v : ℂ, u ∈ U → v ∈ U → ⟪Φ u, Φ v⟫_ℂ = F (star u) v)
+    {z₀ : ℂ} (hz₀ : z₀ ∈ U) :
+    DifferentiableAt ℂ Φ z₀ := by
+  let q : ℂ → H := fun h => h⁻¹ • (Φ (z₀ + h) - Φ z₀)
+  let F_shift : ℂ → ℂ → ℂ := fun u v => F (star z₀ + u) (z₀ + v)
+  let W0 : Set ℂ := {w : ℂ | z₀ + w ∈ U}
+  have h_open_W0 : IsOpen W0 := hU.preimage (continuous_const.add continuous_id)
+  have h_open_W0s : IsOpen (star ⁻¹' W0) := h_open_W0.preimage Complex.continuous_conj
+  have h0_W0 : (0 : ℂ) ∈ W0 := by simpa [W0] using hz₀
+  have h0_W0s : (0 : ℂ) ∈ star ⁻¹' W0 := by simpa [W0] using hz₀
+  have hF_shift : DifferentiableOn ℂ (fun p : ℂ × ℂ => F_shift p.1 p.2) ((star ⁻¹' W0) ×ˢ W0) :=
+    hF.comp ((differentiable_const (star z₀)).add differentiable_fst |>.prodMk
+      ((differentiable_const z₀).add differentiable_snd)).differentiableOn
+      fun p hp => by
+        refine ⟨?_, hp.2⟩
+        change star (star z₀ + p.1) ∈ U
+        rw [star_add, star_star]
+        exact hp.1
+  have h_mix := tendsto_mixed_diffQuot_of_holo_prod h_open_W0s h_open_W0 hF_shift h0_W0s h0_W0
+  let L : ℂ := deriv (fun u => deriv (fun v => F_shift u v) 0) 0
+  have h_conj_emb : Tendsto (fun p : ℂ × ℂ => (star p.1, p.2))
+      (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ)) (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ)) := by
+    have h1 : Tendsto (star : ℂ → ℂ) (𝓝[≠] (0 : ℂ)) (𝓝[≠] (0 : ℂ)) :=
+      tendsto_nhdsWithin_iff.mpr
+        ⟨(Complex.continuous_conj.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+          (by simp),
+         eventually_nhdsWithin_of_forall fun x hx => star_ne_zero.mpr hx⟩
+    exact Filter.Tendsto.prodMk (h1.comp Filter.tendsto_fst) Filter.tendsto_snd
+  have h_mix_conj : Tendsto
+      (fun p : ℂ × ℂ =>
+        (star p.1 * p.2)⁻¹ *
+          (F_shift (star p.1) p.2 - F_shift (star p.1) 0 - F_shift 0 p.2 + F_shift 0 0))
+      (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ)) (𝓝 L) := by
+    have h_comp := h_mix.comp h_conj_emb
+    simpa [Function.comp_def, L] using h_comp
+  have h_inner_q : ∀ᶠ p : ℂ × ℂ in 𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ),
+      ⟪q p.1, q p.2⟫_ℂ =
+        (star p.1 * p.2)⁻¹ *
+          (F_shift (star p.1) p.2 - F_shift (star p.1) 0 - F_shift 0 p.2 + F_shift 0 0) := by
+    rcases Metric.isOpen_iff.mp hU z₀ hz₀ with ⟨r, hr, hr_sub⟩
+    have h_mem : (Metric.ball (0 : ℂ) r \ {0}) ×ˢ (Metric.ball (0 : ℂ) r \ {0}) ∈
+        𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ) :=
+      Filter.prod_mem_prod (sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hr) _)
+        (sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hr) _)
+    filter_upwards [h_mem] with ⟨h₁, h₂⟩ ⟨⟨hh₁, _⟩, ⟨hh₂, _⟩⟩
+    have hz1 : z₀ + h₁ ∈ U := hr_sub (by
+      rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_left]
+      simpa [Metric.mem_ball, dist_zero_right] using hh₁)
+    have hz2 : z₀ + h₂ ∈ U := hr_sub (by
+      rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_left]
+      simpa [Metric.mem_ball, dist_zero_right] using hh₂)
+    dsimp only [q, F_shift]
+    rw [inner_smul_left, inner_smul_right, inner_sub_left, inner_sub_right, inner_sub_right,
+      h_inner _ _ hz1 hz2, h_inner _ _ hz1 hz₀, h_inner _ _ hz₀ hz2, h_inner _ _ hz₀ hz₀]
+    simp only [map_inv₀, star_add, add_zero, Complex.star_def]
+    ring
+  have h_tendsto_inner : Tendsto (fun p : ℂ × ℂ => ⟪q p.1, q p.2⟫_ℂ)
+      (𝓝[≠] (0 : ℂ) ×ˢ 𝓝[≠] (0 : ℂ)) (𝓝 L) :=
+    h_mix_conj.congr' (h_inner_q.mono fun _ h => h.symm)
+  obtain ⟨v, hv⟩ := CompleteSpace.complete (hilbert_cauchy_of_tendsto_inner h_tendsto_inner)
+  exact (hasDerivAt_iff_tendsto_slope_zero.mpr hv).differentiableAt
+
+lemma hilbert_iterated_deriv_seq {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] [CompleteSpace H]
+    {x₀ R : ℝ}
+    (Φ : ℝ → H) (K : ℂ → ℂ → ℂ)
+    (hK_holo : DifferentiableOn ℂ (fun p : ℂ × ℂ => K p.1 p.2)
+      (Metric.ball (x₀ : ℂ) R ×ˢ Metric.ball (x₀ : ℂ) R))
+    (hK_real : ∀ s ∈ Metric.ball x₀ R, ∀ t ∈ Metric.ball x₀ R,
+      ⟪Φ s, Φ t⟫_ℂ = K (s : ℂ) (t : ℂ)) :
+    ∃ Φ_d : ℕ → ℝ → H,
+      Φ_d 0 = Φ ∧
+      (∀ n m : ℕ, ∀ s t : ℝ, (s : ℂ) ∈ Metric.ball (x₀ : ℂ) R →
+        (t : ℂ) ∈ Metric.ball (x₀ : ℂ) R →
+        ⟪Φ_d n s, Φ_d m t⟫_ℂ =
+          iteratedDeriv n (fun u => iteratedDeriv m (fun v => K u v) (t : ℂ)) (s : ℂ)) := by
+  let S2 : Set ℂ := Metric.ball (x₀ : ℂ) R
+  have hS2_open : IsOpen S2 := Metric.isOpen_ball
+  let Kderiv : ℕ → ℕ → ℂ → ℂ → ℂ := fun n m u v =>
+    iteratedDeriv n (fun u' => iteratedDeriv m (fun v' => K u' v') v) u
+  have hKderiv_holo : ∀ n m : ℕ,
+      DifferentiableOn ℂ (fun p : ℂ × ℂ => Kderiv n m p.1 p.2) (S2 ×ˢ S2) :=
+    differentiableOn_iteratedDeriv_prod hS2_open hS2_open hK_holo
+  classical
+  let step : (n : ℕ) → (ℝ → H) → (ℝ → H) := fun n f s =>
+    if h : (s : ℂ) ∈ S2 ∧
+        (∀ a b : ℝ, (a : ℂ) ∈ S2 → (b : ℂ) ∈ S2 → ⟪f a, f b⟫_ℂ = Kderiv n n (a : ℂ) (b : ℂ)) then
+      Classical.choose (hilbert_hasDerivAt_real_of_kernel hS2_open (hKderiv_holo n n) h.2 h.1)
+    else 0
+  let Φ_d : ℕ → ℝ → H := Nat.rec Φ step
+  have h_comm_iter : ∀ (n p : ℕ) (w₀ u₀ : ℂ), w₀ ∈ S2 → u₀ ∈ S2 →
+      deriv (fun w => iteratedDeriv p (fun u => iteratedDeriv n (fun v => K u v) w) u₀) w₀ =
+        iteratedDeriv p (fun u => iteratedDeriv (n + 1) (fun v => K u v) w₀) u₀ := by
+    intro n p
+    induction p with
+    | zero => intro w₀ u₀ _ _; simp [iteratedDeriv_succ]
+    | succ p ihp =>
+      intro w₀ u₀ hw₀ hu₀
+      have h_eq1 : (fun w => iteratedDeriv (p + 1)
+            (fun u => iteratedDeriv n (fun v => K u v) w) u₀) =
+          fun w => deriv (fun u => iteratedDeriv p
+            (fun u' => iteratedDeriv n (fun v => K u' v) w) u) u₀ := by
+        ext w; simp [iteratedDeriv_succ]
+      rw [h_eq1, deriv_comm_of_holo_prod hS2_open hS2_open (hKderiv_holo p n) hu₀ hw₀]
+      have h_eq2 : deriv (fun u => deriv (fun w => iteratedDeriv p
+            (fun u' => iteratedDeriv n (fun v => K u' v) w) u) w₀) u₀ =
+          deriv (fun u => iteratedDeriv p
+            (fun u' => iteratedDeriv (n + 1) (fun v => K u' v) w₀) u) u₀ := by
+        refine Filter.EventuallyEq.deriv_eq ?_
+        filter_upwards [hS2_open.mem_nhds hu₀] with u hu
+        exact ihp w₀ u hw₀ hu
+      rw [h_eq2]
+      simp [iteratedDeriv_succ]
+  have h_diag : ∀ n : ℕ,
+      (∀ s t : ℝ, (s : ℂ) ∈ S2 → (t : ℂ) ∈ S2 →
+        ⟪Φ_d n s, Φ_d n t⟫_ℂ = Kderiv n n (s : ℂ) (t : ℂ)) ∧
+      (∀ s : ℝ, (s : ℂ) ∈ S2 → HasDerivAt (Φ_d n) (Φ_d (n + 1) s) s) := by
+    intro n
+    induction n with
+    | zero =>
+      have h00 : ∀ s t : ℝ, (s : ℂ) ∈ S2 → (t : ℂ) ∈ S2 →
+          ⟪Φ_d 0 s, Φ_d 0 t⟫_ℂ = Kderiv 0 0 (s : ℂ) (t : ℂ) := by
+        intro s t hs ht
+        have hs' : s ∈ Metric.ball x₀ R := by
+          simpa [S2, Metric.mem_ball, dist_eq_norm, ← Complex.ofReal_sub,
+            Complex.norm_real] using hs
+        have ht' : t ∈ Metric.ball x₀ R := by
+          simpa [S2, Metric.mem_ball, dist_eq_norm, ← Complex.ofReal_sub,
+            Complex.norm_real] using ht
+        simpa [Φ_d, Kderiv] using hK_real s hs' t ht'
+      refine ⟨h00, fun s hs => ?_⟩
+      change HasDerivAt (Φ_d 0) (step 0 (Φ_d 0) s) s
+      dsimp only [step]
+      rw [dif_pos ⟨hs, h00⟩]
+      exact (Classical.choose_spec
+        (hilbert_hasDerivAt_real_of_kernel hS2_open (hKderiv_holo 0 0) h00 hs)).1
+    | succ n ih =>
+      have h_spec : ∀ s : ℝ, (hs : (s : ℂ) ∈ S2) →
+          HasDerivAt (Φ_d n) (Φ_d (n + 1) s) s ∧
+          (∀ t : ℝ, (t : ℂ) ∈ S2 →
+            ⟪Φ_d (n + 1) s, Φ_d n t⟫_ℂ = deriv (fun u => Kderiv n n u (t : ℂ)) (s : ℂ)) := by
+        intro s hs
+        change HasDerivAt (Φ_d n) (step n (Φ_d n) s) s ∧
+          (∀ t : ℝ, (t : ℂ) ∈ S2 →
+            ⟪step n (Φ_d n) s, Φ_d n t⟫_ℂ = deriv (fun u => Kderiv n n u (t : ℂ)) (s : ℂ))
+        dsimp only [step]
+        rw [dif_pos ⟨hs, ih.1⟩]
+        have hsp := Classical.choose_spec
+          (hilbert_hasDerivAt_real_of_kernel hS2_open (hKderiv_holo n n) ih.1 hs)
+        exact ⟨hsp.1, hsp.2.1⟩
+      have h_nn : ∀ s t : ℝ, (s : ℂ) ∈ S2 → (t : ℂ) ∈ S2 →
+          ⟪Φ_d (n + 1) s, Φ_d (n + 1) t⟫_ℂ = Kderiv (n + 1) (n + 1) (s : ℂ) (t : ℂ) := by
+        intro s t hs ht
+        have h1 : Tendsto (fun h : ℝ => ⟪Φ_d (n + 1) s, (h : ℂ)⁻¹ • (Φ_d n (t + h) - Φ_d n t)⟫_ℂ)
+            (𝓝[≠] (0 : ℝ)) (𝓝 ⟪Φ_d (n + 1) s, Φ_d (n + 1) t⟫_ℂ) := by
+          have h_sl := hasDerivAt_iff_tendsto_slope_zero.mp (h_spec t ht).1
+          have h_eq : (fun h : ℝ => ⟪Φ_d (n + 1) s, (h : ℂ)⁻¹ • (Φ_d n (t + h) - Φ_d n t)⟫_ℂ) =
+              fun h : ℝ => ⟪Φ_d (n + 1) s, h⁻¹ • (Φ_d n (t + h) - Φ_d n t)⟫_ℂ := by
+            ext h; rw [← Complex.ofReal_inv, Complex.coe_smul]
+          rw [h_eq]
+          exact (continuous_const.inner continuous_id).continuousAt.tendsto.comp h_sl
+        have hF_w : DifferentiableAt ℂ
+            (fun w => deriv (fun u => Kderiv n n u w) (s : ℂ)) (t : ℂ) := by
+          have h11 := differentiableOn_iteratedDeriv_prod hS2_open hS2_open (hKderiv_holo n n) 1 0
+          have hslice :=
+            h11.comp ((differentiable_const (s : ℂ)).prodMk differentiable_id).differentiableOn
+            fun w hw => ⟨hs, hw⟩
+          have h_eq : (fun w => deriv (fun u => Kderiv n n u w) (s : ℂ)) =
+              fun w => iteratedDeriv 1 (fun u => iteratedDeriv 0 (fun v => Kderiv n n u v) w) (s :
+                ℂ) := by
+            ext w; simp [iteratedDeriv_one]
+          rw [h_eq]
+          exact hslice.differentiableAt (hS2_open.mem_nhds ht)
+        have h2 : Tendsto (fun h : ℝ =>
+              (h : ℂ)⁻¹ * (deriv (fun u => Kderiv n n u ((t : ℂ) + (h : ℂ))) (s : ℂ) -
+                deriv (fun u => Kderiv n n u (t : ℂ)) (s : ℂ)))
+            (𝓝[≠] (0 : ℝ))
+            (𝓝 (deriv (fun w => deriv (fun u => Kderiv n n u w) (s : ℂ)) (t : ℂ))) := by
+          have h_sl := hasDerivAt_iff_tendsto_slope_zero.mp hF_w.hasDerivAt
+          have h_emb : Tendsto (fun x : ℝ => (x : ℂ)) (𝓝[≠] (0 : ℝ)) (𝓝[≠] (0 : ℂ)) :=
+            tendsto_nhdsWithin_iff.mpr
+              ⟨(Complex.continuous_ofReal.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+                (by simp),
+               eventually_nhdsWithin_of_forall fun x hx => Complex.ofReal_ne_zero.mpr hx⟩
+          simpa [Function.comp_def, smul_eq_mul] using h_sl.comp h_emb
+        have h_ev : (fun h : ℝ => ⟪Φ_d (n + 1) s,
+          (h : ℂ)⁻¹ • (Φ_d n (t + h) - Φ_d n t)⟫_ℂ) =ᶠ[𝓝[≠] (0 : ℝ)]
+            fun h => (h : ℂ)⁻¹ * (deriv (fun u => Kderiv n n u ((t : ℂ) + (h : ℂ))) (s : ℂ) -
+              deriv (fun u => Kderiv n n u (t : ℂ)) (s : ℂ)) := by
+          rcases Metric.isOpen_iff.mp hS2_open (t : ℂ) ht with ⟨ρ, hρ, hρ_sub⟩
+          filter_upwards [sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hρ) _] with h ⟨hh, _⟩
+          have ht1 : ((t + h : ℝ) : ℂ) ∈ S2 := hρ_sub (by
+            rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left,
+              Complex.norm_real]
+            simpa [Metric.mem_ball, Real.dist_eq] using hh)
+          rw [inner_smul_right, inner_sub_right, (h_spec s hs).2 (t + h) ht1,
+            (h_spec s hs).2 t ht, Complex.ofReal_add]
+        have h_lim := tendsto_nhds_unique h1 (h2.congr' h_ev.symm)
+        have h_inner_eq : (fun w => deriv (fun u => Kderiv n n u w) (s : ℂ)) =
+            fun w => iteratedDeriv (n +
+              1) (fun u => iteratedDeriv n (fun v => K u v) w) (s : ℂ) := by
+          ext w; simp [Kderiv, iteratedDeriv_succ]
+        rw [h_lim, h_inner_eq, h_comm_iter n (n + 1) (t : ℂ) (s : ℂ) ht hs]
+      refine ⟨h_nn, fun s hs => ?_⟩
+      change HasDerivAt (Φ_d (n + 1)) (step (n + 1) (Φ_d (n + 1)) s) s
+      dsimp only [step]
+      rw [dif_pos ⟨hs, h_nn⟩]
+      exact (Classical.choose_spec
+        (hilbert_hasDerivAt_real_of_kernel hS2_open (hKderiv_holo (n + 1) (n + 1)) h_nn hs)).1
+  have h_n0 : ∀ n : ℕ, ∀ s t : ℝ, (s : ℂ) ∈ S2 → (t : ℂ) ∈ S2 →
+      ⟪Φ_d n s, Φ_d 0 t⟫_ℂ = Kderiv n 0 (s : ℂ) (t : ℂ) := by
+    intro n
+    induction n with
+    | zero => exact (h_diag 0).1
+    | succ n ih =>
+      intro s t hs ht
+      have h1 : Tendsto (fun h : ℝ => ⟪(h : ℂ)⁻¹ • (Φ_d n (s + h) - Φ_d n s), Φ_d 0 t⟫_ℂ)
+          (𝓝[≠] (0 : ℝ)) (𝓝 ⟪Φ_d (n + 1) s, Φ_d 0 t⟫_ℂ) := by
+        have h_sl := hasDerivAt_iff_tendsto_slope_zero.mp ((h_diag n).2 s hs)
+        have h_eq : (fun h : ℝ => ⟪(h : ℂ)⁻¹ • (Φ_d n (s + h) - Φ_d n s), Φ_d 0 t⟫_ℂ) =
+            fun h : ℝ => ⟪h⁻¹ • (Φ_d n (s + h) - Φ_d n s), Φ_d 0 t⟫_ℂ := by
+          ext h; rw [← Complex.ofReal_inv, Complex.coe_smul]
+        rw [h_eq]
+        exact (continuous_id.inner continuous_const).continuousAt.tendsto.comp h_sl
+      have hF_u : DifferentiableAt ℂ (fun u => Kderiv n 0 u (t : ℂ)) (s : ℂ) :=
+        ((hKderiv_holo n 0).comp (differentiable_id.prodMk (differentiable_const (t :
+          ℂ))).differentiableOn
+          fun u hu => ⟨hu, ht⟩).differentiableAt (hS2_open.mem_nhds hs)
+      have h2 : Tendsto (fun h : ℝ =>
+            (h : ℂ)⁻¹ * (Kderiv n 0 ((s : ℂ) + (h : ℂ)) (t : ℂ) - Kderiv n 0 (s : ℂ) (t : ℂ)))
+          (𝓝[≠] (0 : ℝ)) (𝓝 (Kderiv (n + 1) 0 (s : ℂ) (t : ℂ))) := by
+        have h_sl := hasDerivAt_iff_tendsto_slope_zero.mp hF_u.hasDerivAt
+        have h_emb : Tendsto (fun x : ℝ => (x : ℂ)) (𝓝[≠] (0 : ℝ)) (𝓝[≠] (0 : ℂ)) :=
+          tendsto_nhdsWithin_iff.mpr
+            ⟨(Complex.continuous_ofReal.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+              (by simp),
+             eventually_nhdsWithin_of_forall fun x hx => Complex.ofReal_ne_zero.mpr hx⟩
+        simpa [Function.comp_def, smul_eq_mul, Kderiv, iteratedDeriv_succ] using h_sl.comp h_emb
+      have h_ev : (fun h : ℝ => ⟪(h : ℂ)⁻¹ • (Φ_d n (s + h) - Φ_d n s), Φ_d 0 t⟫_ℂ) =ᶠ[𝓝[≠] (0 : ℝ)]
+          fun h => (h : ℂ)⁻¹ * (Kderiv n 0 ((s : ℂ) +
+            (h : ℂ)) (t : ℂ) - Kderiv n 0 (s : ℂ) (t : ℂ)) := by
+        rcases Metric.isOpen_iff.mp hS2_open (s : ℂ) hs with ⟨ρ, hρ, hρ_sub⟩
+        filter_upwards [sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hρ) _] with h ⟨hh, _⟩
+        have hs1 : ((s + h : ℝ) : ℂ) ∈ S2 := hρ_sub (by
+          rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left,
+            Complex.norm_real]
+          simpa [Metric.mem_ball, Real.dist_eq] using hh)
+        rw [inner_smul_left, inner_sub_left, ih (s + h) t hs1 ht, ih s t hs ht]
+        simp [Complex.ofReal_add]
+      exact tendsto_nhds_unique h1 (h2.congr' h_ev.symm)
+  refine ⟨Φ_d, rfl, fun n m => ?_⟩
+  induction m with
+  | zero => exact h_n0 n
+  | succ m ihm =>
+    intro s t hs ht
+    have h1 : Tendsto (fun h : ℝ => ⟪Φ_d n s, (h : ℂ)⁻¹ • (Φ_d m (t + h) - Φ_d m t)⟫_ℂ)
+        (𝓝[≠] (0 : ℝ)) (𝓝 ⟪Φ_d n s, Φ_d (m + 1) t⟫_ℂ) := by
+      have h_sl := hasDerivAt_iff_tendsto_slope_zero.mp ((h_diag m).2 t ht)
+      have h_eq : (fun h : ℝ => ⟪Φ_d n s, (h : ℂ)⁻¹ • (Φ_d m (t + h) - Φ_d m t)⟫_ℂ) =
+          fun h : ℝ => ⟪Φ_d n s, h⁻¹ • (Φ_d m (t + h) - Φ_d m t)⟫_ℂ := by
+        ext h; rw [← Complex.ofReal_inv, Complex.coe_smul]
+      rw [h_eq]
+      exact (continuous_const.inner continuous_id).continuousAt.tendsto.comp h_sl
+    have hF_w : DifferentiableAt ℂ (fun w => Kderiv n m (s : ℂ) w) (t : ℂ) :=
+      ((hKderiv_holo n m).comp ((differentiable_const (s : ℂ)).prodMk
+        differentiable_id).differentiableOn
+        fun w hw => ⟨hs, hw⟩).differentiableAt (hS2_open.mem_nhds ht)
+    have h2 : Tendsto (fun h : ℝ =>
+          (h : ℂ)⁻¹ * (Kderiv n m (s : ℂ) ((t : ℂ) + (h : ℂ)) - Kderiv n m (s : ℂ) (t : ℂ)))
+        (𝓝[≠] (0 : ℝ)) (𝓝 (deriv (fun w => Kderiv n m (s : ℂ) w) (t : ℂ))) := by
+      have h_sl := hasDerivAt_iff_tendsto_slope_zero.mp hF_w.hasDerivAt
+      have h_emb : Tendsto (fun x : ℝ => (x : ℂ)) (𝓝[≠] (0 : ℝ)) (𝓝[≠] (0 : ℂ)) :=
+        tendsto_nhdsWithin_iff.mpr
+          ⟨(Complex.continuous_ofReal.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+            (by simp),
+           eventually_nhdsWithin_of_forall fun x hx => Complex.ofReal_ne_zero.mpr hx⟩
+      simpa [Function.comp_def, smul_eq_mul] using h_sl.comp h_emb
+    have h_ev : (fun h : ℝ => ⟪Φ_d n s, (h : ℂ)⁻¹ • (Φ_d m (t + h) - Φ_d m t)⟫_ℂ) =ᶠ[𝓝[≠] (0 : ℝ)]
+        fun h => (h : ℂ)⁻¹ * (Kderiv n m (s : ℂ) ((t : ℂ) +
+          (h : ℂ)) - Kderiv n m (s : ℂ) (t : ℂ)) := by
+      rcases Metric.isOpen_iff.mp hS2_open (t : ℂ) ht with ⟨ρ, hρ, hρ_sub⟩
+      filter_upwards [sdiff_mem_nhdsWithin_compl (Metric.ball_mem_nhds 0 hρ) _] with h ⟨hh, _⟩
+      have ht1 : ((t + h : ℝ) : ℂ) ∈ S2 := hρ_sub (by
+        rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left,
+          Complex.norm_real]
+        simpa [Metric.mem_ball, Real.dist_eq] using hh)
+      rw [inner_smul_right, inner_sub_right, ihm s (t + h) hs ht1, ihm s t hs ht,
+        Complex.ofReal_add]
+    have h_lim := tendsto_nhds_unique h1 (h2.congr' h_ev.symm)
+    rw [h_lim]
+    exact h_comm_iter m n (t : ℂ) (s : ℂ) ht hs
+
+lemma complex_taylor_hasSum {c : ℂ} {r δ : ℝ} (hr : 0 < r) (hδ : 0 < δ) {f : ℂ → ℂ}
+    (hf : DifferentiableOn ℂ f (Metric.ball c (r + δ))) {w : ℂ} (hw : w ∈ Metric.ball c r) :
+    HasSum (fun n : ℕ => ((n.factorial : ℂ)⁻¹) * (w - c) ^ n * iteratedDeriv n f c) (f w) := by
+  let r' : NNReal := ⟨r, hr.le⟩
+  have hr' : (0 : NNReal) < r' := NNReal.coe_pos.mp hr
+  have h_diff_cl : DiffContOnCl ℂ f (Metric.ball c (r' : ℝ)) :=
+    (hf.mono (Metric.closure_ball_subset_closedBall.trans
+      (Metric.closedBall_subset_ball (by change r < r + δ; linarith)))).diffContOnCl
+  have h_fps := h_diff_cl.hasFPowerSeriesOnBall hr'
+  have h_emem : w - c ∈ Metric.eball (0 : ℂ) (r' : ENNReal) := by
+    rw [Metric.mem_eball, edist_dist, dist_zero_right]
+    have hr'_eq : (r' : ENNReal) = ENNReal.ofReal r := (ENNReal.ofReal_eq_coe_nnreal hr.le).symm
+    rw [hr'_eq]
+    exact (ENNReal.ofReal_lt_ofReal_iff hr).mpr (by simpa [Metric.mem_ball, dist_eq_norm] using hw)
+  have h_hs := h_fps.hasSum h_emem
+  have h_eq : c + (w - c) = w := by ring
+  rw [h_eq] at h_hs
+  refine h_hs.congr_fun fun n => ?_
+  have h_fact := h_fps.factorial_smul (w - c) n
+  rw [iteratedFDeriv_apply_eq_iteratedDeriv_mul_prod, Finset.prod_const, Finset.card_univ,
+    Fintype.card_fin, ← Nat.cast_smul_eq_nsmul ℂ, smul_eq_mul, smul_eq_mul] at h_fact
+  have hfac : (n.factorial : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr (Nat.factorial_ne_zero n)
+  calc ((n.factorial : ℂ)⁻¹) * (w - c) ^ n * iteratedDeriv n f c
+      = ((n.factorial : ℂ)⁻¹) * ((w - c) ^ n * iteratedDeriv n f c) := by ring
+    _ = ((n.factorial : ℂ)⁻¹) * ((n.factorial : ℂ) *
+      cauchyPowerSeries f c r' n (fun _ => w - c)) := by
+        rw [← h_fact]
+    _ = cauchyPowerSeries f c r' n (fun _ => w - c) := inv_mul_cancel_left₀ hfac _
+
+lemma hilbert_holomorphic_ball_of_kernel {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] [CompleteSpace H]
+    {x₀ r R B : ℝ} (hr : 0 < r) (hrR : r < R) (hB : 0 ≤ B)
+    (Φ : ℝ → H) (K : ℂ → ℂ → ℂ)
+    (hK_holo : DifferentiableOn ℂ (fun p : ℂ × ℂ => K p.1 p.2)
+      (Metric.ball (x₀ : ℂ) R ×ˢ Metric.ball (x₀ : ℂ) R))
+    (hK_bdd : ∀ u ∈ Metric.ball (x₀ : ℂ) R, ∀ v ∈ Metric.ball (x₀ : ℂ) R,
+      ‖K u v‖ ≤ B)
+    (hK_real : ∀ s ∈ Metric.ball x₀ R, ∀ t ∈ Metric.ball x₀ R,
+      ⟪Φ s, Φ t⟫_ℂ = K (s : ℂ) (t : ℂ)) :
+    ∃ Φ_ext : ℂ → H,
+      DifferentiableOn ℂ Φ_ext (Metric.ball (x₀ : ℂ) r) ∧
+      (∀ t ∈ Metric.ball x₀ r, Φ_ext (t : ℂ) = Φ t) ∧
+      (∀ u ∈ Metric.ball (x₀ : ℂ) r, ∀ v ∈ Metric.ball (x₀ : ℂ) r,
+        ⟪Φ_ext u, Φ_ext v⟫_ℂ = K (star u) v) := by
+  let S2 : Set ℂ := Metric.ball (x₀ : ℂ) R
+  have hR_pos : 0 < R := hr.trans hrR
+  have hS2_open : IsOpen S2 := Metric.isOpen_ball
+  let Kderiv : ℕ → ℕ → ℂ → ℂ → ℂ := fun n m u v =>
+    iteratedDeriv n (fun u' => iteratedDeriv m (fun v' => K u' v') v) u
+  have hKderiv_holo : ∀ n m : ℕ,
+      DifferentiableOn ℂ (fun p : ℂ × ℂ => Kderiv n m p.1 p.2) (S2 ×ˢ S2) :=
+    differentiableOn_iteratedDeriv_prod hS2_open hS2_open hK_holo
+  have hKderiv_bdd : ∀ (n m : ℕ),
+      ‖Kderiv n m (x₀ : ℂ) (x₀ : ℂ)‖ ≤
+        (n.factorial : ℝ) * (m.factorial : ℝ) * B / (r ^ n * r ^ m) := by
+    intro n m
+    have h_inner_bdd : ∀ u ∈ Metric.closedBall (x₀ : ℂ) r,
+        ‖iteratedDeriv m (fun v' => K u v') (x₀ : ℂ)‖ ≤ (m.factorial : ℝ) * B / r ^ m := by
+      intro u hu
+      have hu_S2 : u ∈ S2 := Metric.closedBall_subset_ball (by linarith) hu
+      have hsub : Metric.closedBall (x₀ : ℂ) r ⊆ S2 := Metric.closedBall_subset_ball (by linarith)
+      have h_diff_v : DifferentiableOn ℂ (fun v' => K u v') S2 :=
+        hK_holo.comp ((differentiable_const u).prodMk differentiable_id).differentiableOn
+          fun v hv => ⟨hu_S2, hv⟩
+      exact Complex.norm_iteratedDeriv_le_of_forall_mem_sphere_norm_le
+        (f := fun v' => K u v') (c := (x₀ : ℂ)) (R := r) (C := B) m hr
+        ((h_diff_v.mono (Metric.closure_ball_subset_closedBall.trans hsub)).diffContOnCl)
+        (fun w hw => hK_bdd u hu_S2 w (hsub (Metric.sphere_subset_closedBall hw)))
+    have h_outer_diff : DifferentiableOn ℂ
+        (fun u => iteratedDeriv m (fun v' => K u v') (x₀ : ℂ)) S2 :=
+      (hKderiv_holo 0 m).comp (differentiable_id.prodMk (differentiable_const (x₀ :
+        ℂ))).differentiableOn
+        fun u hu => ⟨hu, Metric.mem_ball_self (by positivity)⟩
+    have hsub : Metric.closedBall (x₀ : ℂ) r ⊆ S2 := Metric.closedBall_subset_ball (by linarith)
+    have h1 := Complex.norm_iteratedDeriv_le_of_forall_mem_sphere_norm_le
+      (f := fun u => iteratedDeriv m (fun v' => K u v') (x₀ : ℂ))
+      (c := (x₀ : ℂ)) (R := r) (C := (m.factorial : ℝ) * B / r ^ m) n hr
+      ((h_outer_diff.mono (Metric.closure_ball_subset_closedBall.trans hsub)).diffContOnCl)
+      (fun w hw => h_inner_bdd w (Metric.sphere_subset_closedBall hw))
+    calc ‖Kderiv n m (x₀ : ℂ) (x₀ : ℂ)‖
+        ≤ (n.factorial : ℝ) * ((m.factorial : ℝ) * B / r ^ m) / r ^ n := h1
+      _ = (n.factorial : ℝ) * (m.factorial : ℝ) * B / (r ^ n * r ^ m) := by ring
+  obtain ⟨Φ_d, hΦ_d0, hΦ_d_inner⟩ := hilbert_iterated_deriv_seq Φ K hK_holo hK_real
+  let c : ℕ → H := fun n => ((n.factorial : ℂ)⁻¹) • (Φ_d n x₀)
+  have hc_norm : ∀ n : ℕ, ‖c n‖ ≤ Real.sqrt B / r ^ n := by
+    intro n
+    have h_nn := hΦ_d_inner n n x₀ x₀
+      (Metric.mem_ball_self (by positivity)) (Metric.mem_ball_self (by positivity))
+    have h_nsq : ‖Φ_d n x₀‖ ^ 2 = ‖Kderiv n n (x₀ : ℂ) (x₀ : ℂ)‖ := by
+      dsimp only [Kderiv]; rw [← h_nn, inner_self_eq_norm_sq_to_K]; simp
+    have h_bd := hKderiv_bdd n n
+    have h_nle : ‖Φ_d n x₀‖ ≤ (n.factorial : ℝ) * Real.sqrt B / r ^ n := by
+      have h_sq_le : ‖Φ_d n x₀‖ ^ 2 ≤ ((n.factorial : ℝ) * Real.sqrt B / r ^ n) ^ 2 := by
+        rw [h_nsq, div_pow, mul_pow, Real.sq_sqrt hB, sq (r ^ n)]
+        calc ‖Kderiv n n (x₀ : ℂ) (x₀ : ℂ)‖
+            ≤ (n.factorial : ℝ) * (n.factorial : ℝ) * B / (r ^ n * r ^ n) := h_bd
+          _ = (n.factorial : ℝ) ^ 2 * B / (r ^ n * r ^ n) := by ring
+      nlinarith [norm_nonneg (Φ_d n x₀),
+        div_nonneg (mul_nonneg (Nat.cast_nonneg n.factorial) (Real.sqrt_nonneg B)) (pow_nonneg
+          hr.le n)]
+    dsimp only [c]
+    rw [norm_smul, norm_inv, Complex.norm_natCast]
+    have hfac_pos : (0 : ℝ) < (n.factorial : ℝ) := Nat.cast_pos.mpr (Nat.factorial_pos n)
+    calc (n.factorial : ℝ)⁻¹ * ‖Φ_d n x₀‖
+        ≤ (n.factorial : ℝ)⁻¹ * ((n.factorial : ℝ) * Real.sqrt B / r ^ n) :=
+          mul_le_mul_of_nonneg_left h_nle (inv_nonneg.mpr hfac_pos.le)
+      _ = Real.sqrt B / r ^ n := by field_simp [hfac_pos.ne']
+  let Φ_ext : ℂ → H := fun w => ∑' n : ℕ, ((w - (x₀ : ℂ)) ^ n) • c n
+  have h_summable : ∀ w ∈ Metric.ball (x₀ : ℂ) r,
+    Summable (fun n : ℕ => ((w - (x₀ : ℂ)) ^ n) • c n) := by
+    intro w hw
+    have hw_lt : ‖w - (x₀ : ℂ)‖ / r < 1 :=
+      (div_lt_one hr).mpr (by simpa [Metric.mem_ball, dist_eq_norm] using hw)
+    refine Summable.of_norm_bounded (g := fun n : ℕ => Real.sqrt B * (‖w - (x₀ : ℂ)‖ / r) ^ n)
+      ((summable_geometric_of_lt_one (by positivity) hw_lt).mul_left (Real.sqrt B)) fun n => ?_
+    rw [norm_smul, norm_pow, div_pow]
+    calc ‖w - (x₀ : ℂ)‖ ^ n * ‖c n‖
+        ≤ ‖w - (x₀ : ℂ)‖ ^ n * (Real.sqrt B / r ^ n) :=
+          mul_le_mul_of_nonneg_left (hc_norm n) (pow_nonneg (norm_nonneg _) n)
+      _ = Real.sqrt B * (‖w - (x₀ : ℂ)‖ ^ n / r ^ n) := by ring
+  have hΦ_holo : DifferentiableOn ℂ Φ_ext (Metric.ball (x₀ : ℂ) r) := by
+    intro w₀ hw₀
+    have hw₀_lt : ‖w₀ - (x₀ : ℂ)‖ < r := by simpa [Metric.mem_ball, dist_eq_norm] using hw₀
+    let ρ : ℝ := (r + ‖w₀ - (x₀ : ℂ)‖) / 2
+    have hρ_lt : ρ < r := by dsimp [ρ]; linarith
+    have hw₀_ball : w₀ ∈ Metric.ball (x₀ : ℂ) ρ := by
+      rw [Metric.mem_ball, dist_eq_norm]; dsimp [ρ]; linarith
+    have h_unif : TendstoUniformlyOn
+        (fun N w => ∑ n ∈ Finset.range N, ((w - (x₀ : ℂ)) ^ n) • c n)
+        Φ_ext atTop (Metric.ball (x₀ : ℂ) ρ) := by
+      refine tendstoUniformlyOn_tsum_nat (u := fun n => Real.sqrt B * (ρ / r) ^ n)
+        ((summable_geometric_of_lt_one (by positivity) ((div_lt_one hr).mpr hρ_lt)).mul_left _) ?_
+      intro n w hw
+      have hw_le : ‖w - (x₀ : ℂ)‖ ≤ ρ :=
+        le_of_lt (by simpa [Metric.mem_ball, dist_eq_norm] using hw)
+      rw [norm_smul, norm_pow, div_pow]
+      calc ‖w - (x₀ : ℂ)‖ ^ n * ‖c n‖
+          ≤ ρ ^ n * (Real.sqrt B / r ^ n) :=
+            mul_le_mul (pow_le_pow_left₀ (norm_nonneg _) hw_le n) (hc_norm n) (norm_nonneg _)
+              (pow_nonneg (by positivity) n)
+        _ = Real.sqrt B * (ρ ^ n / r ^ n) := by ring
+    have h_ev_diff : ∀ᶠ N in atTop,
+        DifferentiableOn ℂ (fun w => ∑ n ∈ Finset.range N, ((w - (x₀ : ℂ)) ^ n) • c n)
+          (Metric.ball (x₀ : ℂ) ρ) :=
+      Filter.Eventually.of_forall fun N =>
+        (Differentiable.fun_sum fun n _ =>
+          ((differentiable_id.sub (differentiable_const _)).pow n).smul (differentiable_const
+            _)).differentiableOn
+    have h_diffOn := h_unif.tendstoLocallyUniformlyOn.differentiableOn h_ev_diff Metric.isOpen_ball
+    exact (h_diffOn w₀ hw₀_ball).differentiableAt (Metric.isOpen_ball.mem_nhds hw₀_ball)
+      |>.differentiableWithinAt
+  have h_taylor : ∀ {f : ℂ → ℂ}, DifferentiableOn ℂ f S2 → ∀ w ∈ Metric.ball (x₀ : ℂ) r,
+      HasSum (fun n : ℕ => ((n.factorial : ℂ)⁻¹) * (w - (x₀ : ℂ)) ^ n * iteratedDeriv n f (x₀ : ℂ))
+        (f w) := fun hf w hw =>
+    complex_taylor_hasSum hr (sub_pos.mpr hrR) (by simpa [add_sub_cancel] using hf) hw
+  have h_inner_c_ext : ∀ (n : ℕ) (v : ℂ), v ∈ Metric.ball (x₀ : ℂ) r →
+      ⟪c n, Φ_ext v⟫_ℂ = ((n.factorial : ℂ)⁻¹) * iteratedDeriv n (fun u => K u v) (x₀ : ℂ) := by
+    intro n v hv
+    have h_hs := ((h_summable v hv).hasSum).map (innerSL ℂ (c n)) (innerSL ℂ (c n)).continuous
+    have h_sum_eq : ⟪c n, Φ_ext v⟫_ℂ = ∑' m : ℕ, ((v - (x₀ : ℂ)) ^ m) * ⟪c n, c m⟫_ℂ := by
+      simpa [Φ_ext, innerSL_apply_apply, inner_smul_right] using h_hs.tsum_eq.symm
+    have h_swap_iter : ∀ (a b : ℕ) (u₀ v₀ : ℂ), u₀ ∈ S2 → v₀ ∈ S2 →
+        Kderiv a b u₀ v₀ =
+          iteratedDeriv b (fun w => iteratedDeriv a (fun u => K u w) u₀) v₀ := by
+      intro a b
+      induction b with
+      | zero => intro u₀ v₀ _ _; simp [Kderiv]
+      | succ b ihb =>
+        intro u₀ v₀ hu₀ hv₀
+        have h_eq1 : iteratedDeriv (b + 1) (fun w => iteratedDeriv a (fun u => K u w) u₀) v₀ =
+            deriv (fun w => iteratedDeriv b (fun w' => iteratedDeriv a (fun u => K u w') u₀) w) v₀
+              := by
+          simp [iteratedDeriv_succ]
+        rw [h_eq1]
+        have h_ev : (fun w => iteratedDeriv b (fun w' => iteratedDeriv a (fun u => K u w') u₀) w)
+          =ᶠ[𝓝 v₀]
+            fun w => Kderiv a b u₀ w := by
+          filter_upwards [hS2_open.mem_nhds hv₀] with w hw
+          exact (ihb u₀ w hu₀ hw).symm
+        rw [h_ev.deriv_eq]
+        have h_comm : ∀ (p : ℕ) (u' : ℂ), u' ∈ S2 →
+            deriv (fun w => Kderiv p b u' w) v₀ = Kderiv p (b + 1) u' v₀ := by
+          intro p
+          induction p with
+          | zero => intro u' _; simp [Kderiv, iteratedDeriv_succ]
+          | succ p ihp =>
+            intro u' hu'
+            have h_s1 : (fun w => Kderiv (p + 1) b u' w) =
+                fun w => deriv (fun u => Kderiv p b u w) u' := by
+              ext w; simp [Kderiv, iteratedDeriv_succ]
+            rw [h_s1, deriv_comm_of_holo_prod hS2_open hS2_open (hKderiv_holo p b) hu' hv₀]
+            have h_ev2 : (fun u => deriv (fun w => Kderiv p b u w) v₀) =ᶠ[𝓝 u']
+                fun u => Kderiv p (b + 1) u v₀ := by
+              filter_upwards [hS2_open.mem_nhds hu'] with u hu
+              exact ihp u hu
+            rw [h_ev2.deriv_eq]
+            simp [Kderiv, iteratedDeriv_succ]
+        exact (h_comm a u₀ hu₀).symm
+    have h_term : ∀ m : ℕ, ((v - (x₀ : ℂ)) ^ m) * ⟪c n, c m⟫_ℂ =
+        ((n.factorial : ℂ)⁻¹) *
+          (((m.factorial : ℂ)⁻¹) * (v - (x₀ : ℂ)) ^ m *
+            iteratedDeriv m (fun w => iteratedDeriv n (fun u => K u w) (x₀ : ℂ)) (x₀ : ℂ)) := by
+      intro m
+      have h_cm : ⟪c n, c m⟫_ℂ = ((n.factorial : ℂ)⁻¹) * ((m.factorial : ℂ)⁻¹) *
+          Kderiv n m (x₀ : ℂ) (x₀ : ℂ) := by
+        dsimp only [c]
+        rw [inner_smul_left, inner_smul_right,
+          hΦ_d_inner n m x₀ x₀ (Metric.mem_ball_self (by positivity))
+            (Metric.mem_ball_self (by positivity))]
+        simp only [map_inv₀, map_natCast]
+        ring
+      rw [h_cm, h_swap_iter n m (x₀ : ℂ) (x₀ : ℂ) (Metric.mem_ball_self (by positivity))
+        (Metric.mem_ball_self (by positivity))]
+      ring
+    have h_f_diff : DifferentiableOn ℂ (fun w => iteratedDeriv n (fun u => K u w) (x₀ : ℂ)) S2 :=
+      (hKderiv_holo n 0).comp ((differentiable_const (x₀ : ℂ)).prodMk
+        differentiable_id).differentiableOn
+        fun w hw => ⟨Metric.mem_ball_self (by positivity), hw⟩
+    have h_tay := (h_taylor h_f_diff v hv).mul_left ((n.factorial : ℂ)⁻¹)
+    rw [h_sum_eq]
+    simp_rw [h_term]
+    exact h_tay.tsum_eq
+  have hΦ_inner : ∀ u ∈ Metric.ball (x₀ : ℂ) r, ∀ v ∈ Metric.ball (x₀ : ℂ) r,
+      ⟪Φ_ext u, Φ_ext v⟫_ℂ = K (star u) v := by
+    intro u hu v hv
+    have hu_star : star u ∈ Metric.ball (x₀ : ℂ) r := by
+      rw [Metric.mem_ball, dist_eq_norm] at hu ⊢
+      have h_eq : star u - (x₀ : ℂ) = star (u - (x₀ : ℂ)) := by simp
+      rw [h_eq, norm_star]
+      exact hu
+    have h_hs :=
+      ((h_summable u hu).hasSum).map (innerSL ℂ (Φ_ext v)) (innerSL ℂ (Φ_ext v)).continuous
+    have h_sum_eq : ⟪Φ_ext u, Φ_ext v⟫_ℂ =
+        ∑' n : ℕ, ((star u - (x₀ : ℂ)) ^ n) * ⟪c n, Φ_ext v⟫_ℂ := by
+      have h1 : ⟪Φ_ext v, Φ_ext u⟫_ℂ = ∑' n : ℕ, ((u - (x₀ : ℂ)) ^ n) * ⟪Φ_ext v, c n⟫_ℂ := by
+        simpa [Φ_ext, innerSL_apply_apply, inner_smul_right] using h_hs.tsum_eq.symm
+      have h2 := congrArg star h1
+      rw [Complex.star_def, inner_conj_symm] at h2
+      have h3 : (starRingEnd ℂ) (∑' n : ℕ, ((u - (x₀ : ℂ)) ^ n) * ⟪Φ_ext v, c n⟫_ℂ) =
+          ∑' n : ℕ, (starRingEnd ℂ) (((u - (x₀ : ℂ)) ^ n) * ⟪Φ_ext v, c n⟫_ℂ) :=
+        Complex.conj_tsum _
+      rw [h2, h3]
+      refine tsum_congr fun n => ?_
+      simp [map_mul, inner_conj_symm]
+    rw [h_sum_eq]
+    simp_rw [fun n => h_inner_c_ext n v hv]
+    have h_f_diff : DifferentiableOn ℂ (fun u' => K u' v) S2 :=
+      hK_holo.comp (differentiable_id.prodMk (differentiable_const v)).differentiableOn
+        fun u' hu' => ⟨hu', Metric.ball_subset_ball (by linarith) hv⟩
+    have h_tay := h_taylor h_f_diff (star u) hu_star
+    refine (h_tay.congr_fun fun n => by ring).tsum_eq
+  have hΦ_real : ∀ t ∈ Metric.ball x₀ r, Φ_ext (t : ℂ) = Φ t := by
+    intro t ht
+    have ht_ball : (t : ℂ) ∈ Metric.ball (x₀ : ℂ) r := by
+      rw [Metric.mem_ball, dist_eq_norm, ← Complex.ofReal_sub, Complex.norm_real]
+      simpa [Metric.mem_ball, Real.dist_eq] using ht
+    have ht_2r : t ∈ Metric.ball x₀ R := Metric.ball_subset_ball hrR.le ht
+    have h_inner_t : ⟪Φ_ext (t : ℂ), Φ t⟫_ℂ = K (t : ℂ) (t : ℂ) := by
+      have h_hs := ((h_summable (t : ℂ) ht_ball).hasSum).map
+        (innerSL ℂ (Φ t)) (innerSL ℂ (Φ t)).continuous
+      have h1 : ⟪Φ t, Φ_ext (t : ℂ)⟫_ℂ = ∑' n : ℕ, (((t : ℂ) - (x₀ : ℂ)) ^ n) * ⟪Φ t, c n⟫_ℂ := by
+        simpa [Φ_ext, innerSL_apply_apply, inner_smul_right] using h_hs.tsum_eq.symm
+      have h2 := congrArg star h1
+      rw [Complex.star_def, inner_conj_symm] at h2
+      have h3 : (starRingEnd ℂ) (∑' n : ℕ, (((t : ℂ) - (x₀ : ℂ)) ^ n) * ⟪Φ t, c n⟫_ℂ) =
+          ∑' n : ℕ, (starRingEnd ℂ) ((((t : ℂ) - (x₀ : ℂ)) ^ n) * ⟪Φ t, c n⟫_ℂ) :=
+        Complex.conj_tsum _
+      rw [h2, h3]
+      have h_term : ∀ n : ℕ, (starRingEnd ℂ) ((((t : ℂ) - (x₀ : ℂ)) ^ n) * ⟪Φ t, c n⟫_ℂ) =
+          ((n.factorial : ℂ)⁻¹) * ((t : ℂ) - (x₀ : ℂ)) ^ n *
+            iteratedDeriv n (fun u => K u (t : ℂ)) (x₀ : ℂ) := by
+        intro n
+        rw [map_mul, map_pow, map_sub, Complex.conj_ofReal, Complex.conj_ofReal, inner_conj_symm]
+        dsimp only [c]
+        rw [inner_smul_left]
+        have h_eq_d0 : Φ t = Φ_d 0 t := by rw [hΦ_d0]
+        rw [h_eq_d0, hΦ_d_inner n 0 x₀ t (Metric.mem_ball_self (by positivity))
+          (Metric.ball_subset_ball (by linarith) ht_ball)]
+        simp only [map_inv₀, map_natCast, iteratedDeriv_zero]
+        ring
+      simp_rw [h_term]
+      have h_f_diff : DifferentiableOn ℂ (fun u => K u (t : ℂ)) S2 :=
+        hK_holo.comp (differentiable_id.prodMk (differentiable_const (t : ℂ))).differentiableOn
+          fun u hu => ⟨hu, Metric.ball_subset_ball (by linarith) ht_ball⟩
+      exact (h_taylor h_f_diff (t : ℂ) ht_ball).tsum_eq
+    have h_norm0 : ‖Φ_ext (t : ℂ) - Φ t‖ ^ 2 = 0 := by
+      have h_nsq : ((‖Φ_ext (t : ℂ) - Φ t‖ ^ 2 : ℝ) : ℂ) =
+          ⟪Φ_ext (t : ℂ) - Φ t, Φ_ext (t : ℂ) - Φ t⟫_ℂ := by
+        rw [inner_self_eq_norm_sq_to_K]; simp
+      have h_zero : ⟪Φ_ext (t : ℂ) - Φ t, Φ_ext (t : ℂ) - Φ t⟫_ℂ = 0 := by
+        have h_inner_t2 : ⟪Φ t, Φ_ext (t : ℂ)⟫_ℂ = star (K (t : ℂ) (t : ℂ)) := by
+          rw [Complex.star_def, ← inner_conj_symm, h_inner_t]
+        rw [inner_sub_left, inner_sub_right, inner_sub_right,
+          hΦ_inner (t : ℂ) ht_ball (t : ℂ) ht_ball, h_inner_t, h_inner_t2, hK_real t ht_2r t ht_2r]
+        have h_real_k : star (K (t : ℂ) (t : ℂ)) = K (t : ℂ) (t : ℂ) := by
+          rw [← hK_real t ht_2r t ht_2r, Complex.star_def, inner_conj_symm]
+        simp [h_real_k]
+      rw [h_zero] at h_nsq
+      exact_mod_cast h_nsq
+    exact sub_eq_zero.mp (norm_eq_zero.mp (sq_eq_zero_iff.mp h_norm0))
+  exact ⟨Φ_ext, hΦ_holo, hΦ_real, hΦ_inner⟩
+
+lemma hilbert_holomorphic_tube_of_kernel {k : ℕ} {H : Type*} [NormedAddCommGroup H]
+    [InnerProductSpace ℂ H] [CompleteSpace H]
+    {U : Set (Fin k → ℝ)} (hU_open : IsOpen U) (hU_conv : Convex ℝ U)
+    (hU_symm : ∀ y ∈ U, -y ∈ U) (hU_zero : (0 : Fin k → ℝ) ∈ U)
+    (Φ : (Fin k → ℝ) → H) (K : (Fin k → ℂ) → (Fin k → ℂ) → ℂ)
+    (hK_holo : DifferentiableOn ℂ (fun p : (Fin k → ℂ) × (Fin k → ℂ) => K p.1 p.2)
+      (TubeDomain U ×ˢ TubeDomain U))
+    (hK_real : ∀ x₁ x₂ : Fin k → ℝ,
+      ⟪Φ x₁, Φ x₂⟫_ℂ = K (fun j => (x₁ j : ℂ)) (fun j => (x₂ j : ℂ))) :
+    ∃ Φ_ext : (Fin k → ℂ) → H,
+      ContinuousOn Φ_ext (TubeDomain U) ∧
+      (∀ x : Fin k → ℝ, Φ_ext (fun j => (x j : ℂ)) = Φ x) ∧
+      (∀ w₁ ∈ TubeDomain U, ∀ w₂ ∈ TubeDomain U,
+        ⟪Φ_ext w₁, Φ_ext w₂⟫_ℂ = K (fun j => star (w₁ j)) w₂) ∧
+      (∀ w₀ ∈ TubeDomain U, ∀ m : Fin k,
+        DifferentiableAt ℂ (fun ζ => Φ_ext (Function.update w₀ m ζ)) (w₀ m)) ∧
+      (∀ v : H, DifferentiableOn ℂ (fun w => ⟪v, Φ_ext w⟫_ℂ) (TubeDomain U)) := by
+  have hTU_open : IsOpen (TubeDomain U) := isOpen_TubeDomain hU_open
+  have h_ray_ext : ∀ (x y : Fin k → ℝ), y ∈ U →
+      ∃ r₁ > (1 : ℝ), ∃ ψ : ℂ → H,
+        DifferentiableOn ℂ ψ (Metric.ball (0 : ℂ) r₁) ∧
+        (∀ t ∈ Metric.ball (0 : ℝ) r₁, ψ (t : ℂ) = Φ (x + t • y)) ∧
+        (∀ ζ ∈ Metric.ball (0 : ℂ) r₁, (fun j => (x j : ℂ) + ζ * (y j : ℂ)) ∈ TubeDomain U) := by
+    intro x y hy
+    have h_cont_smul : Continuous (fun t : ℝ => t • y) := continuous_id.smul continuous_const
+    have h_open_pre : IsOpen ((fun t : ℝ => t • y) ⁻¹' U) := hU_open.preimage h_cont_smul
+    rcases Metric.isOpen_iff.mp h_open_pre 1 (by simpa using hy) with ⟨ε, hε, hε_sub⟩
+    let r : ℝ := 1 + ε / 2
+    have hr1 : 1 < r := by dsimp [r]; linarith
+    have hr_mem : r • y ∈ U := hε_sub (by
+      rw [Metric.mem_ball, Real.dist_eq, abs_of_pos (by dsimp [r]; linarith : 0 < r - 1)]
+      dsimp [r]; linarith)
+    have h_smul_in : ∀ t : ℝ, |t| ≤ r → t • y ∈ U := by
+      intro t ht
+      have h_eq : t • y = ((r + t) / (2 * r)) • (r • y) + ((r - t) / (2 * r)) • (-(r • y)) := by
+        ext j; simp only [Pi.add_apply, Pi.neg_apply, Pi.smul_apply, smul_eq_mul]
+        have hr_pos : 0 < r := zero_lt_one.trans hr1
+        field_simp [hr_pos.ne']; ring
+      rw [h_eq]
+      have hr_pos : 0 < r := zero_lt_one.trans hr1
+      refine hU_conv hr_mem (hU_symm _ hr_mem)
+        (div_nonneg (by linarith [(abs_le.mp ht).1]) (by positivity))
+        (div_nonneg (by linarith [(abs_le.mp ht).2]) (by positivity)) ?_
+      field_simp [hr_pos.ne']; ring
+    let r₁ : ℝ := (1 + r) / 2
+    let R : ℝ := (r₁ + r) / 2
+    have hr₁_gt1 : 1 < r₁ := by dsimp [r₁]; linarith
+    have hr₁_ltR : r₁ < R := by dsimp [R, r₁]; linarith
+    have hR_ltr : R < r := by dsimp [R, r₁]; linarith
+    let line : ℂ → (Fin k → ℂ) := fun ζ j => (x j : ℂ) + ζ * (y j : ℂ)
+    have hline_diff : Differentiable ℂ line :=
+      differentiable_pi.mpr fun j => (differentiable_const _).add (differentiable_id.mul
+        (differentiable_const _))
+    have hline_in : ∀ ζ ∈ Metric.closedBall (0 : ℂ) R, line ζ ∈ TubeDomain U := by
+      intro ζ hζ
+      change (fun j => (line ζ j).im) ∈ U
+      have h_eq : (fun j => (line ζ j).im) = ζ.im • y := by ext j; dsimp [line]; simp
+      rw [h_eq]
+      refine h_smul_in ζ.im ?_
+      have h1 : |ζ.im| ≤ ‖ζ‖ := Complex.abs_im_le_norm ζ
+      have h2 : ‖ζ‖ ≤ R := by simpa [Metric.mem_closedBall, dist_zero_right] using hζ
+      linarith
+    let K_line : ℂ → ℂ → ℂ := fun u v => K (line u) (line v)
+    have hK_line_holo : DifferentiableOn ℂ (fun p : ℂ × ℂ => K_line p.1 p.2)
+        (Metric.ball (0 : ℂ) R ×ˢ Metric.ball (0 : ℂ) R) :=
+      hK_holo.comp ((hline_diff.comp differentiable_fst).prodMk
+        (hline_diff.comp differentiable_snd)).differentiableOn
+        fun p hp => ⟨hline_in p.1 (Metric.ball_subset_closedBall hp.1),
+          hline_in p.2 (Metric.ball_subset_closedBall hp.2)⟩
+    have hK_cont_cb : ContinuousOn (fun p : ℂ × ℂ => K_line p.1 p.2)
+        (Metric.closedBall (0 : ℂ) R ×ˢ Metric.closedBall (0 : ℂ) R) :=
+      hK_holo.continuousOn.comp ((hline_diff.continuous.comp continuous_fst).prodMk
+        (hline_diff.continuous.comp continuous_snd)).continuousOn
+        fun p hp => ⟨hline_in p.1 hp.1, hline_in p.2 hp.2⟩
+    obtain ⟨B, hB⟩ :=
+      ((isCompact_closedBall (0 : ℂ) R).prod (isCompact_closedBall (0 : ℂ)
+        R)).exists_bound_of_continuousOn
+      hK_cont_cb
+    have hK_real_line : ∀ s ∈ Metric.ball (0 : ℝ) R, ∀ t ∈ Metric.ball (0 : ℝ) R,
+        ⟪Φ (x + s • y), Φ (x + t • y)⟫_ℂ = K_line (s : ℂ) (t : ℂ) := by
+      intro s _ t _
+      rw [hK_real]
+      congr 1 <;> · ext j; simp [line]
+    obtain ⟨ψ, hψ_holo, hψ_real, _⟩ := hilbert_holomorphic_ball_of_kernel
+      (x₀ := 0) (r := r₁) (R := R) (B :=
+        max B 0) (zero_lt_one.trans hr₁_gt1) hr₁_ltR (le_max_right _ _)
+      (fun t => Φ (x + t • y)) K_line (by simpa using hK_line_holo)
+      (fun u hu v hv => (hB (u, v) ⟨Metric.ball_subset_closedBall (by simpa using hu),
+        Metric.ball_subset_closedBall (by simpa using hv)⟩).trans (le_max_left _ _))
+      hK_real_line
+    exact ⟨r₁, hr₁_gt1, ψ, by simpa using hψ_holo, hψ_real,
+      fun ζ hζ => hline_in ζ (Metric.ball_subset_closedBall (Metric.ball_subset_ball hr₁_ltR.le
+        hζ))⟩
+  classical
+  let Φ_ext : (Fin k → ℂ) → H := fun w =>
+    if h : w ∈ TubeDomain U then
+      let x : Fin k → ℝ := fun j => (w j).re
+      let y : Fin k → ℝ := fun j => (w j).im
+      let ψ := Classical.choose (Classical.choose_spec (h_ray_ext x y h)).2
+      ψ I
+    else 0
+  have h_inner_real_ext : ∀ (x' : Fin k → ℝ), ∀ w ∈ TubeDomain U,
+      ⟪Φ x', Φ_ext w⟫_ℂ = K (fun j => (x' j : ℂ)) w := by
+    intro x' w hw
+    dsimp only [Φ_ext]
+    rw [dif_pos hw]
+    set x : Fin k → ℝ := fun j => (w j).re
+    set y : Fin k → ℝ := fun j => (w j).im
+    set r₁ := Classical.choose (h_ray_ext x y hw)
+    set ψ := Classical.choose (Classical.choose_spec (h_ray_ext x y hw)).2
+    have hr₁ : 1 < r₁ := (Classical.choose_spec (h_ray_ext x y hw)).1
+    have hψ_spec := Classical.choose_spec (Classical.choose_spec (h_ray_ext x y hw)).2
+    let f₁ : ℂ → ℂ := fun ζ => ⟪Φ x', ψ ζ⟫_ℂ
+    let f₂ : ℂ → ℂ := fun ζ => K (fun j => (x' j : ℂ)) (fun j => (x j : ℂ) + ζ * (y j : ℂ))
+    have hf₁_holo : DifferentiableOn ℂ f₁ (Metric.ball (0 : ℂ) r₁) :=
+      (innerSL ℂ (Φ x')).differentiable.comp_differentiableOn hψ_spec.1
+    have hf₂_holo : DifferentiableOn ℂ f₂ (Metric.ball (0 : ℂ) r₁) := by
+      have h_line : Differentiable ℂ (fun ζ : ℂ => fun j : Fin k => (x j : ℂ) + ζ * (y j : ℂ)) :=
+        differentiable_pi.mpr fun j =>
+          (differentiable_const _).add (differentiable_id.mul (differentiable_const _))
+      exact hK_holo.comp ((differentiable_const _).prodMk h_line).differentiableOn
+        fun ζ hζ => ⟨by
+          change (fun j => ((x' j : ℂ)).im) ∈ U
+          have hz : (fun j : Fin k => ((x' j : ℂ)).im) = 0 := by ext j; simp
+          rw [hz]; exact hU_zero, hψ_spec.2.2 ζ hζ⟩
+    have h_freq : ∃ᶠ ζ in 𝓝[≠] (0 : ℂ), f₁ ζ = f₂ ζ := by
+      rw [Filter.frequently_iff]
+      intro W hW
+      rw [mem_nhdsWithin] at hW
+      rcases hW with ⟨V, hV_open, h0V, hV_sub⟩
+      rcases Metric.isOpen_iff.mp hV_open 0 h0V with ⟨η, hη, h_ball⟩
+      let t₀ : ℝ := min (η / 2) (r₁ / 2)
+      have ht₀_pos : 0 < t₀ := lt_min (by positivity) (by linarith)
+      have ht₀_V : (t₀ : ℂ) ∈ V := h_ball (by
+        rw [Metric.mem_ball, dist_zero_right, Complex.norm_real, Real.norm_of_nonneg ht₀_pos.le]
+        exact (min_le_left _ _).trans_lt (by linarith))
+      have ht₀_r1 : t₀ ∈ Metric.ball (0 : ℝ) r₁ := by
+        rw [Metric.mem_ball, Real.dist_eq, sub_zero, abs_of_pos ht₀_pos]
+        exact (min_le_right _ _).trans_lt (by linarith)
+      refine ⟨(t₀ : ℂ), hV_sub ⟨ht₀_V, Complex.ofReal_ne_zero.mpr ht₀_pos.ne'⟩, ?_⟩
+      have hψt : ψ (t₀ : ℂ) = Φ (x + t₀ • y) := hψ_spec.2.1 t₀ ht₀_r1
+      dsimp only [f₁, f₂]
+      rw [hψt, hK_real]
+      congr 1; ext j; simp
+    have h_eqOn := (hf₁_holo.analyticOnNhd Metric.isOpen_ball).eqOn_of_preconnected_of_frequently_eq
+      (hf₂_holo.analyticOnNhd Metric.isOpen_ball) (convex_ball (0 : ℂ) r₁).isPreconnected
+      (Metric.mem_ball_self (by linarith)) h_freq
+    have hI_mem : (I : ℂ) ∈ Metric.ball (0 : ℂ) r₁ := by
+      rw [Metric.mem_ball, dist_zero_right, Complex.norm_I]; exact hr₁
+    have h_atI := h_eqOn hI_mem
+    have hw_eq : (fun j => (x j : ℂ) + I * (y j : ℂ)) = w := by
+      ext j; dsimp [x, y]; rw [mul_comm I, Complex.re_add_im]
+    simpa [f₁, f₂, hw_eq] using h_atI
+  have hΦ_inner : ∀ w₁ ∈ TubeDomain U, ∀ w₂ ∈ TubeDomain U,
+      ⟪Φ_ext w₁, Φ_ext w₂⟫_ℂ = K (fun j => star (w₁ j)) w₂ := by
+    intro w₁ hw₁ w₂ hw₂
+    dsimp only [Φ_ext]
+    rw [dif_pos hw₁]
+    set x₁ : Fin k → ℝ := fun j => (w₁ j).re
+    set y₁ : Fin k → ℝ := fun j => (w₁ j).im
+    set r₁ := Classical.choose (h_ray_ext x₁ y₁ hw₁)
+    set ψ := Classical.choose (Classical.choose_spec (h_ray_ext x₁ y₁ hw₁)).2
+    have hr₁ : 1 < r₁ := (Classical.choose_spec (h_ray_ext x₁ y₁ hw₁)).1
+    have hψ_spec := Classical.choose_spec (Classical.choose_spec (h_ray_ext x₁ y₁ hw₁)).2
+    let g₁ : ℂ → ℂ := fun ζ => ⟪ψ (star ζ), Φ_ext w₂⟫_ℂ
+    let g₂ : ℂ → ℂ := fun ζ => K (fun j => (x₁ j : ℂ) + ζ * (y₁ j : ℂ)) w₂
+    have hg₁_holo : DifferentiableOn ℂ g₁ (Metric.ball (0 : ℂ) r₁) := by
+      intro ζ₀ hζ₀
+      have hζ₀_s : star ζ₀ ∈ Metric.ball (0 : ℂ) r₁ := by
+        simpa [Metric.mem_ball, dist_zero_right] using hζ₀
+      have h_da := (hψ_spec.1 (star ζ₀) hζ₀_s).differentiableAt (Metric.isOpen_ball.mem_nhds hζ₀_s)
+      have h_in_da : DifferentiableAt ℂ (fun ζ => ⟪Φ_ext w₂, ψ ζ⟫_ℂ) (star ζ₀) :=
+        ((innerSL ℂ (Φ_ext w₂)).differentiableAt.comp (star ζ₀) h_da)
+      have h_hd := h_in_da.hasDerivAt
+      have h_hd_conj : HasDerivAt g₁ (star (deriv (fun ζ => ⟪Φ_ext w₂, ψ ζ⟫_ℂ) (star ζ₀))) ζ₀ := by
+        rw [hasDerivAt_iff_tendsto_slope_zero] at h_hd ⊢
+        have h_c := Complex.continuous_conj.continuousAt.tendsto.comp h_hd
+        have h_s : Tendsto (star : ℂ → ℂ) (𝓝[≠] (0 : ℂ)) (𝓝[≠] (0 : ℂ)) :=
+          tendsto_nhdsWithin_iff.mpr
+            ⟨(Complex.continuous_conj.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+              (by simp),
+             eventually_nhdsWithin_of_forall fun z hz => star_ne_zero.mpr hz⟩
+        have h_cs := h_c.comp h_s
+        refine h_cs.congr fun h => ?_
+        dsimp only [Function.comp_apply, g₁]
+        simp only [smul_eq_mul, map_mul, map_inv₀, map_sub, star_add, Complex.star_def,
+          inner_conj_symm, RingHomCompTriple.comp_apply, RingHom.id_apply]
+      exact h_hd_conj.differentiableAt.differentiableWithinAt
+    have hg₂_holo : DifferentiableOn ℂ g₂ (Metric.ball (0 : ℂ) r₁) := by
+      have h_line : Differentiable ℂ (fun ζ : ℂ => fun j : Fin k => (x₁ j : ℂ) + ζ * (y₁ j : ℂ)) :=
+        differentiable_pi.mpr fun j =>
+          (differentiable_const _).add (differentiable_id.mul (differentiable_const _))
+      exact hK_holo.comp (h_line.prodMk (differentiable_const w₂)).differentiableOn
+        fun ζ hζ => ⟨hψ_spec.2.2 ζ hζ, hw₂⟩
+    have h_freq : ∃ᶠ ζ in 𝓝[≠] (0 : ℂ), g₁ ζ = g₂ ζ := by
+      rw [Filter.frequently_iff]
+      intro W hW
+      rw [mem_nhdsWithin] at hW
+      rcases hW with ⟨V, hV_open, h0V, hV_sub⟩
+      rcases Metric.isOpen_iff.mp hV_open 0 h0V with ⟨η, hη, h_ball⟩
+      let t₀ : ℝ := min (η / 2) (r₁ / 2)
+      have ht₀_pos : 0 < t₀ := lt_min (by positivity) (by linarith)
+      have ht₀_V : (t₀ : ℂ) ∈ V := h_ball (by
+        rw [Metric.mem_ball, dist_zero_right, Complex.norm_real, Real.norm_of_nonneg ht₀_pos.le]
+        exact (min_le_left _ _).trans_lt (by linarith))
+      have ht₀_r1 : t₀ ∈ Metric.ball (0 : ℝ) r₁ := by
+        rw [Metric.mem_ball, Real.dist_eq, sub_zero, abs_of_pos ht₀_pos]
+        exact (min_le_right _ _).trans_lt (by linarith)
+      refine ⟨(t₀ : ℂ), hV_sub ⟨ht₀_V, Complex.ofReal_ne_zero.mpr ht₀_pos.ne'⟩, ?_⟩
+      have hψt : ψ (t₀ : ℂ) = Φ (x₁ + t₀ • y₁) := hψ_spec.2.1 t₀ ht₀_r1
+      dsimp only [g₁, g₂]
+      rw [Complex.star_def, Complex.conj_ofReal, hψt,
+        h_inner_real_ext (x₁ + t₀ • y₁) w₂ hw₂]
+      congr 1; ext j; simp
+    have h_eqOn := (hg₁_holo.analyticOnNhd Metric.isOpen_ball).eqOn_of_preconnected_of_frequently_eq
+      (hg₂_holo.analyticOnNhd Metric.isOpen_ball) (convex_ball (0 : ℂ) r₁).isPreconnected
+      (Metric.mem_ball_self (by linarith)) h_freq
+    have hnegI_mem : (-I : ℂ) ∈ Metric.ball (0 : ℂ) r₁ := by
+      rw [Metric.mem_ball, dist_zero_right, norm_neg, Complex.norm_I]; exact hr₁
+    have h_atnegI := h_eqOn hnegI_mem
+    have hstar_negI : star (-I : ℂ) = I := by simp
+    have hw1_star : (fun j => (x₁ j : ℂ) + (-I) * (y₁ j : ℂ)) = fun j => star (w₁ j) := by
+      ext j
+      apply Complex.ext <;> simp [x₁, y₁]
+    dsimp only [g₁, g₂] at h_atnegI
+    rw [hstar_negI, hw1_star] at h_atnegI
+    simpa [Φ_ext, dif_pos hw₂] using h_atnegI
+  have hΦ_real : ∀ x : Fin k → ℝ, Φ_ext (fun j => (x j : ℂ)) = Φ x := by
+    intro x
+    have hx_in : (fun j => (x j : ℂ)) ∈ TubeDomain U := by
+      change (fun j => ((x j : ℂ)).im) ∈ U
+      have hz : (fun j : Fin k => ((x j : ℂ)).im) = 0 := by ext j; simp
+      rw [hz]; exact hU_zero
+    have h_norm0 : ‖Φ_ext (fun j => (x j : ℂ)) - Φ x‖ ^ 2 = 0 := by
+      have h_nsq : ((‖Φ_ext (fun j => (x j : ℂ)) - Φ x‖ ^ 2 : ℝ) : ℂ) =
+          ⟪Φ_ext (fun j => (x j : ℂ)) - Φ x, Φ_ext (fun j => (x j : ℂ)) - Φ x⟫_ℂ := by
+        rw [inner_self_eq_norm_sq_to_K]; simp
+      have h_zero : ⟪Φ_ext (fun j => (x j : ℂ)) - Φ x, Φ_ext (fun j => (x j : ℂ)) - Φ x⟫_ℂ = 0 := by
+        have h_star_x : (fun j => star (x j : ℂ)) = fun j => (x j : ℂ) := by ext j; simp
+        have h_in1 := h_inner_real_ext x (fun j => (x j : ℂ)) hx_in
+        have h_in2 : ⟪Φ_ext (fun j => (x j : ℂ)), Φ x⟫_ℂ =
+            star (K (fun j => (x j : ℂ)) (fun j => (x j : ℂ))) := by
+          rw [Complex.star_def, ← inner_conj_symm, h_in1]
+        have h_real_k : star (K (fun j => (x j : ℂ)) (fun j => (x j : ℂ))) =
+            K (fun j => (x j : ℂ)) (fun j => (x j : ℂ)) := by
+          rw [← hK_real x x, Complex.star_def, inner_conj_symm]
+        rw [inner_sub_left, inner_sub_right, inner_sub_right,
+          hΦ_inner _ hx_in _ hx_in, h_star_x, h_in1, h_in2, h_real_k, hK_real x x]
+        ring
+      rw [h_zero] at h_nsq
+      exact_mod_cast h_nsq
+    exact sub_eq_zero.mp (norm_eq_zero.mp (sq_eq_zero_iff.mp h_norm0))
+  have hΦ_cont : ContinuousOn Φ_ext (TubeDomain U) := by
+    intro w₀ hw₀
+    rw [Metric.continuousWithinAt_iff]
+    intro ε hε
+    have hK_cont_pair : ContinuousOn
+        (fun w : Fin k → ℂ => K (fun j => star (w j)) w - K (fun j => star (w j)) w₀ -
+          K (fun j => star (w₀ j)) w + K (fun j => star (w₀ j)) w₀) (TubeDomain U) := by
+      have h_star_cont : Continuous (fun w : Fin k → ℂ => fun j => star (w j)) :=
+        continuous_pi fun j => Complex.continuous_conj.comp (continuous_apply j)
+      have h_star_in : ∀ w ∈ TubeDomain U, (fun j => star (w j)) ∈ TubeDomain U := fun w hw => by
+        change (fun j => (star (w j)).im) ∈ U
+        have h_eq : (fun j => (star (w j)).im) = -(fun j => (w j).im) := by ext j; simp
+        rw [h_eq]; exact hU_symm _ hw
+      have h1 : ContinuousOn (fun w => K (fun j => star (w j)) w) (TubeDomain U) :=
+        hK_holo.continuousOn.comp (h_star_cont.prodMk continuous_id).continuousOn
+          fun w hw => ⟨h_star_in w hw, hw⟩
+      have h2 : ContinuousOn (fun w => K (fun j => star (w j)) w₀) (TubeDomain U) :=
+        hK_holo.continuousOn.comp (h_star_cont.prodMk continuous_const).continuousOn
+          fun w hw => ⟨h_star_in w hw, hw₀⟩
+      have h3 : ContinuousOn (fun w => K (fun j => star (w₀ j)) w) (TubeDomain U) :=
+        hK_holo.continuousOn.comp (continuous_const.prodMk continuous_id).continuousOn
+          fun w hw => ⟨h_star_in w₀ hw₀, hw⟩
+      exact ((h1.sub h2).sub h3).add continuousOn_const
+    have h_at0 := Metric.continuousWithinAt_iff.mp (hK_cont_pair w₀ hw₀) (ε ^ 2) (by positivity)
+    rcases h_at0 with ⟨δ, hδ, h_imp⟩
+    refine ⟨δ, hδ, fun w hw hdw => ?_⟩
+    have hlt := h_imp hw hdw
+    have h_val0 : K (fun j => star (w₀ j)) w₀ - K (fun j => star (w₀ j)) w₀ -
+        K (fun j => star (w₀ j)) w₀ + K (fun j => star (w₀ j)) w₀ = 0 := by ring
+    rw [h_val0, dist_zero_right] at hlt
+    have h_nsq : ‖Φ_ext w - Φ_ext w₀‖ ^ 2 =
+        ‖K (fun j => star (w j)) w - K (fun j => star (w j)) w₀ -
+          K (fun j => star (w₀ j)) w + K (fun j => star (w₀ j)) w₀‖ := by
+      have h_eq : ⟪Φ_ext w - Φ_ext w₀, Φ_ext w - Φ_ext w₀⟫_ℂ =
+          K (fun j => star (w j)) w - K (fun j => star (w j)) w₀ -
+            K (fun j => star (w₀ j)) w + K (fun j => star (w₀ j)) w₀ := by
+        rw [inner_sub_left, inner_sub_right, inner_sub_right,
+          hΦ_inner w hw w hw, hΦ_inner w hw w₀ hw₀, hΦ_inner w₀ hw₀ w hw, hΦ_inner w₀ hw₀ w₀ hw₀]
+        ring
+      rw [← h_eq, inner_self_eq_norm_sq_to_K]; simp
+    rw [dist_eq_norm]
+    nlinarith [norm_nonneg (Φ_ext w - Φ_ext w₀), h_nsq]
+  have hΦ_coord_diff : ∀ w₀ ∈ TubeDomain U, ∀ m : Fin k,
+      DifferentiableAt ℂ (fun ζ => Φ_ext (Function.update w₀ m ζ)) (w₀ m) := by
+    intro w₀ hw₀ m
+    let S_m : Set ℂ := {ζ : ℂ | Function.update w₀ m ζ ∈ TubeDomain U}
+    have h_upd_cont : Continuous (fun ζ : ℂ => Function.update w₀ m ζ) :=
+      continuous_pi fun j => by
+        by_cases hjm : j = m
+        · subst hjm; simp only [Function.update_self]; exact continuous_id
+        · simp only [Function.update_of_ne hjm]; exact continuous_const
+    have hSm_open : IsOpen S_m := hTU_open.preimage h_upd_cont
+    have h_upd_diff : Differentiable ℂ (fun ζ : ℂ => Function.update w₀ m ζ) :=
+      differentiable_pi.mpr fun j => by
+        by_cases hjm : j = m
+        · subst hjm; simp only [Function.update_self]; exact differentiable_id
+        · simp only [Function.update_of_ne hjm]; exact differentiable_const _
+    have h_upd_star_diff : Differentiable ℂ (fun ζ : ℂ => Function.update (fun j => star (w₀ j)) m
+      ζ) :=
+      differentiable_pi.mpr fun j => by
+        by_cases hjm : j = m
+        · subst hjm; simp only [Function.update_self]; exact differentiable_id
+        · simp only [Function.update_of_ne hjm]; exact differentiable_const _
+    have hF_holo : DifferentiableOn ℂ
+        (fun p : ℂ × ℂ => K (Function.update (fun j => star (w₀ j)) m p.1) (Function.update w₀ m
+          p.2))
+        ((star ⁻¹' S_m) ×ˢ S_m) :=
+      hK_holo.comp ((h_upd_star_diff.comp differentiable_fst).prodMk
+        (h_upd_diff.comp differentiable_snd)).differentiableOn fun p hp => by
+        refine ⟨?_, hp.2⟩
+        change (fun j => (Function.update (fun j => star (w₀ j)) m p.1 j).im) ∈ U
+        have h_eq : (fun j => (Function.update (fun j => star (w₀ j)) m p.1 j).im) =
+            -(fun j => (Function.update w₀ m (star p.1) j).im) := by
+          ext j
+          by_cases hjm : j = m
+          · subst hjm; simp
+          · simp [Function.update_of_ne hjm]
+        rw [h_eq]
+        exact hU_symm _ hp.1
+    have hw₀m_mem : w₀ m ∈ S_m := by
+      change Function.update w₀ m (w₀ m) ∈ TubeDomain U
+      rwa [Function.update_eq_self]
+    exact hilbert_differentiableAt_of_kernel
+      (F := fun u v => K (Function.update (fun j => star (w₀ j)) m u) (Function.update w₀ m v))
+      hSm_open hF_holo
+      (fun u v hu hv => by
+        rw [hΦ_inner _ hu _ hv]
+        have h_arg : (fun j => star (Function.update w₀ m u j)) =
+            Function.update (fun j => star (w₀ j)) m (star u) := by
+          ext j
+          by_cases hjm : j = m
+          · subst hjm; simp
+          · simp [Function.update_of_ne hjm]
+        rw [h_arg])
+      hw₀m_mem
+  have hΦ_weak_holo : ∀ v : H, DifferentiableOn ℂ (fun w => ⟪v, Φ_ext w⟫_ℂ) (TubeDomain U) := by
+    intro v
+    refine osgood_nd k hTU_open (fun w => ⟪v, Φ_ext w⟫_ℂ)
+      ((innerSL ℂ v).continuous.comp_continuousOn hΦ_cont) fun w₀ hw₀ m => ?_
+    exact (innerSL ℂ v).differentiableAt.comp (w₀ m) (hΦ_coord_diff w₀ hw₀ m)
+  exact ⟨Φ_ext, hΦ_cont, hΦ_real, hΦ_inner, hΦ_coord_diff, hΦ_weak_holo⟩
+
+end Phase2HilbertAnalytic
+
+section Phase2CutAndInduction
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+def osBuildPoints (m : ℕ) (x_sp : Fin (m + 1) → Fin 3 → ℝ) (t : Fin m → ℝ) (t₀ : ℝ) :
+    Fin (m + 1) → Fin 4 → ℝ :=
+  fun i => Fin.cons (t₀ + ∑ j : Fin m with j.val < i.val, t j) (x_sp i)
+
+lemma osBuildPoints_zero_coord (m : ℕ) (x_sp : Fin (m + 1) → Fin 3 → ℝ) (t : Fin m → ℝ)
+    (t₀ : ℝ) (i : Fin (m + 1)) :
+    osBuildPoints m x_sp t t₀ i 0 = t₀ + ∑ j : Fin m with j.val < i.val, t j := rfl
+
+lemma osBuildPoints_spatialPart (m : ℕ) (x_sp : Fin (m + 1) → Fin 3 → ℝ) (t : Fin m → ℝ)
+    (t₀ : ℝ) (i : Fin (m + 1)) :
+    spatialPart (osBuildPoints m x_sp t t₀ i) = x_sp i := by
+  ext μ
+  rfl
+
+lemma osBuildPoints_time_diff (m : ℕ) (x_sp : Fin (m + 1) → Fin 3 → ℝ) (t : Fin m → ℝ)
+    (t₀ : ℝ) (k : Fin m) :
+    osBuildPoints m x_sp t t₀ ⟨k.val + 1, by omega⟩ 0 -
+      osBuildPoints m x_sp t t₀ ⟨k.val, by omega⟩ 0 = t k := by
+  simp only [osBuildPoints_zero_coord]
+  have h_filt : (Finset.univ.filter fun j : Fin m => j.val < k.val + 1) =
+      insert k (Finset.univ.filter fun j : Fin m => j.val < k.val) := by
+    ext j
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_insert, Fin.ext_iff]
+    omega
+  have hk_not : k ∉ (Finset.univ.filter fun j : Fin m => j.val < k.val) := by
+    simp
+  rw [h_filt, Finset.sum_insert hk_not]
+  ring
+
+lemma osBuildPoints_mem_orderedEuclidN (m : ℕ) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    {t : Fin m → ℝ} (ht : ∀ j : Fin m, 0 < t j) (t₀ : ℝ) :
+    osBuildPoints m x_sp t t₀ ∈ orderedEuclidN (m + 1) := by
+  intro i hi
+  have hdiff := osBuildPoints_time_diff m x_sp t t₀ ⟨i.val, by omega⟩
+  have hpos := ht ⟨i.val, by omega⟩
+  linarith
+
+lemma osBuildPoints_mem_posOrderedEuclidN (m : ℕ) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    {t : Fin m → ℝ} (ht : ∀ j : Fin m, 0 < t j) {t₀ : ℝ} (ht₀ : 0 < t₀) :
+    osBuildPoints m x_sp t t₀ ∈ posOrderedEuclidN (m + 1) := by
+  refine ⟨fun i => ?_, osBuildPoints_mem_orderedEuclidN m x_sp ht t₀⟩
+  rw [osBuildPoints_zero_coord]
+  have hsum : 0 ≤ ∑ j : Fin m with j.val < i.val, t j :=
+    Finset.sum_nonneg fun j _ => (ht j).le
+  linarith
+
+lemma osBuildPoints_shift_eq (m : ℕ) (x_sp : Fin (m + 1) → Fin 3 → ℝ) (t : Fin m → ℝ)
+    (t₀ a : ℝ) :
+    (fun i => osBuildPoints m x_sp t t₀ i + euclidTimeVec a) =
+      osBuildPoints m x_sp t (t₀ + a) := by
+  ext i μ
+  refine Fin.cases ?_ (fun ν => ?_) μ
+  · simp only [Pi.add_apply, osBuildPoints_zero_coord, euclidTimeVec, ↓reduceIte]
+    ring
+  · simp [osBuildPoints, euclidTimeVec]
+
+lemma osBuildPoints_eq_of_ordered {m : ℕ} {x : Fin (m + 1) → Fin 4 → ℝ} :
+    osBuildPoints m (fun i => spatialPart (x i))
+      (fun k : Fin m => x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0) (x 0 0) = x := by
+  ext i μ
+  refine Fin.cases ?_ (fun ν => ?_) μ
+  · simp only [osBuildPoints_zero_coord]
+    rcases i with ⟨k, hk⟩
+    induction k with
+    | zero =>
+      simp
+    | succ k ih =>
+      have hk' : k < m + 1 := by omega
+      have h_filt : (Finset.univ.filter fun j : Fin m => j.val < k + 1) =
+          insert ⟨k, by omega⟩ (Finset.univ.filter fun j : Fin m => j.val < k) := by
+        ext j
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_insert, Fin.ext_iff]
+        omega
+      have h_not : (⟨k, by omega⟩ : Fin m) ∉ (Finset.univ.filter fun j : Fin m => j.val < k) := by
+        simp
+      rw [h_filt, Finset.sum_insert h_not]
+      have h_prev := ih hk'
+      linarith
+  · rfl
+
+lemma schwinger_osBuildPoints_shift {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {η : ℂ} {𝒮 : SchwingerFamily ι} (hOS : OSAxioms R S η 𝒮)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    {t : Fin m → ℝ} (ht : ∀ j : Fin m, 0 < t j) (t₀ t₁ : ℝ) :
+    𝒮 (m + 1) α (osBuildPoints m x_sp t t₁) = 𝒮 (m + 1) α (osBuildPoints m x_sp t t₀) := by
+  have h_eq : osBuildPoints m x_sp t t₁ =
+      fun i => osBuildPoints m x_sp t t₀ i + euclidTimeVec (t₁ - t₀) := by
+    rw [osBuildPoints_shift_eq]
+    congr 1; ring
+  rw [h_eq]
+  exact hOS.os1_translation (m + 1) α (osBuildPoints m x_sp t t₀)
+    (osBuildPoints_mem_orderedEuclidN m x_sp ht t₀) (euclidTimeVec (t₁ - t₀))
+
+lemma osConcatPoint_osBuildPoints_eq_shift (L R : ℕ) (hL : 0 < L) (hR : 0 < R)
+    (x_sp_L : Fin L → Fin 3 → ℝ) (t_L : Fin (L - 1) → ℝ) (ε_L : ℝ)
+    (x_sp_R : Fin R → Fin 3 → ℝ) (t_R : Fin (R - 1) → ℝ) (ε_R : ℝ) :
+    let xL : Fin L → Fin 4 → ℝ :=
+      osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) t_L ε_L ∘ finCongr (by omega)
+    let xR : Fin R → Fin 4 → ℝ :=
+      osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R ε_R ∘ finCongr (by omega)
+    let x_sp_all : Fin (L + R) → Fin 3 → ℝ :=
+      Fin.append (x_sp_L ∘ Fin.rev) x_sp_R
+    let t_all : Fin (L + R - 1) → ℝ := fun k =>
+      if hkL : k.val < L - 1 then t_L ⟨L - 2 - k.val, by omega⟩
+      else if hkM : k.val = L - 1 then ε_L + ε_R
+      else t_R ⟨k.val - L, by omega⟩
+    let t0_all : ℝ := -(ε_L + ∑ j : Fin (L - 1), t_L j)
+    osConcatPoint L R xL xR =
+      osBuildPoints (L + R - 1) (x_sp_all ∘ finCongr (by omega)) t_all t0_all ∘
+        finCongr (by omega) := by
+  intro xL xR x_sp_all t_all t0_all
+  ext i μ
+  refine Fin.cases ?_ (fun ν => ?_) μ
+  · simp only [Function.comp_apply, osBuildPoints_zero_coord]
+    by_cases hi : i.val < L
+    · have hi_eq : i = Fin.castAdd R ⟨i.val, hi⟩ := by ext; rfl
+      rw [hi_eq, osConcatPoint_castAdd]
+      simp only [euclidTimeReflect, ↓reduceIte, Function.comp_apply, xL,
+        osBuildPoints_zero_coord, finCongr_apply, Fin.val_cast, Fin.val_rev]
+      have h_split : (∑ j : Fin (L - 1), t_L j) =
+          (∑ j : Fin (L - 1) with j.val < L - 1 - i.val, t_L j) +
+            (∑ j : Fin (L - 1) with L - 1 - i.val ≤ j.val, t_L j) := by
+        rw [← Finset.sum_filter_add_sum_filter_not Finset.univ (fun j : Fin (L - 1) => j.val <
+          L - 1 - i.val)]
+        congr 1
+        refine Finset.sum_congr ?_ (fun _ _ => rfl)
+        ext j; simp
+      have h_bij : (∑ j : Fin (L + R - 1) with j.val < i.val, t_all j) =
+          ∑ j : Fin (L - 1) with L - 1 - i.val ≤ j.val, t_L j := by
+        refine Finset.sum_bij (fun (j : Fin (L + R - 1)) hj =>
+          (⟨L - 2 - j.val, by
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+            omega⟩ : Fin (L - 1))) ?_ ?_ ?_ ?_
+        · intro j hj
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj ⊢
+          omega
+        · intro j₁ hj₁ j₂ hj₂ h_eq
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj₁ hj₂
+          simp only [Fin.mk.injEq] at h_eq
+          ext; omega
+        · intro b hb
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb
+          refine ⟨⟨L - 2 - b.val, by omega⟩, ?_, ?_⟩
+          · simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega
+          · ext; dsimp; omega
+        · intro j hj
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+          dsimp only [t_all]
+          rw [dif_pos (by omega)]
+      simp only [Fin.val_castAdd, t0_all] at h_bij ⊢
+      have h_f1 : (∑ j : Fin (L - 1) with j.val < L - (i.val + 1), t_L j) =
+          ∑ j : Fin (L - 1) with j.val < L - 1 - i.val, t_L j := by
+        refine Finset.sum_congr ?_ (fun _ _ => rfl)
+        ext j; simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega
+      rw [h_f1, h_bij, h_split]
+      ring
+    · have hi_ge : L ≤ i.val := by omega
+      have hi_eq : i = Fin.natAdd L ⟨i.val - L, by omega⟩ := by ext; dsimp; omega
+      rw [hi_eq, osConcatPoint_natAdd]
+      simp only [Function.comp_apply, xR, osBuildPoints_zero_coord, finCongr_apply, Fin.val_cast,
+        Fin.val_natAdd, t0_all]
+      have h_part : (Finset.univ.filter fun j : Fin (L + R - 1) => j.val < L + (i.val - L)) =
+          (Finset.univ.filter fun j : Fin (L + R - 1) => j.val < L - 1) ∪
+          insert ⟨L - 1, by omega⟩
+            (Finset.univ.filter fun j : Fin (L + R - 1) => L ≤
+              j.val ∧ j.val < L + (i.val - L)) := by
+        ext j
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_union,
+          Finset.mem_insert, Fin.ext_iff]
+        omega
+      have h_disj1 : Disjoint (Finset.univ.filter fun j : Fin (L + R - 1) => j.val < L - 1)
+          (insert ⟨L - 1, by omega⟩
+            (Finset.univ.filter fun j : Fin (L + R - 1) => L ≤
+              j.val ∧ j.val < L + (i.val - L))) := by
+        rw [Finset.disjoint_left]
+        intro j hj1 hj2
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_insert,
+          Fin.ext_iff] at hj1 hj2
+        omega
+      have h_not_m : (⟨L - 1, by omega⟩ : Fin (L + R - 1)) ∉
+          (Finset.univ.filter fun j : Fin (L + R - 1) => L ≤ j.val ∧ j.val < L + (i.val - L)) := by
+        simp; omega
+      rw [h_part, Finset.sum_union h_disj1, Finset.sum_insert h_not_m]
+      have h_sumL : (∑ j : Fin (L + R - 1) with j.val < L - 1, t_all j) =
+          ∑ j : Fin (L - 1), t_L j := by
+        refine Finset.sum_bij (fun (j : Fin (L + R - 1)) hj =>
+          (⟨L - 2 - j.val, by
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+            omega⟩ : Fin (L - 1))) ?_ ?_ ?_ ?_
+        · intro _ _; exact Finset.mem_univ _
+        · intro j₁ hj₁ j₂ hj₂ h_eq
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj₁ hj₂
+          simp only [Fin.mk.injEq] at h_eq
+          ext; omega
+        · intro b _
+          refine ⟨⟨L - 2 - b.val, by omega⟩, ?_, ?_⟩
+          · simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega
+          · ext; dsimp; omega
+        · intro j hj
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+          dsimp only [t_all]
+          rw [dif_pos hj]
+      have h_mid : t_all ⟨L - 1, by omega⟩ = ε_L + ε_R := by
+        dsimp only [t_all]
+        rw [dif_neg (by omega), dif_pos rfl]
+      have h_sumR : (∑ j : Fin (L + R - 1) with L ≤ j.val ∧ j.val < L + (i.val - L), t_all j) =
+          ∑ j : Fin (R - 1) with j.val < i.val - L, t_R j := by
+        refine Finset.sum_bij (fun (j : Fin (L + R - 1)) hj =>
+          (⟨j.val - L, by
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+            omega⟩ : Fin (R - 1))) ?_ ?_ ?_ ?_
+        · intro j hj
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj ⊢
+          omega
+        · intro j₁ hj₁ j₂ hj₂ h_eq
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj₁ hj₂
+          simp only [Fin.mk.injEq] at h_eq
+          ext; omega
+        · intro b hb
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb
+          refine ⟨⟨L + b.val, by omega⟩, ?_, ?_⟩
+          · simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega
+          · ext; dsimp; omega
+        · intro j hj
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+          dsimp only [t_all]
+          rw [dif_neg (by omega), dif_neg (by omega)]
+      rw [h_sumL, h_mid, h_sumR]
+      ring
+  · by_cases hi : i.val < L
+    · have hi_eq : i = Fin.castAdd R ⟨i.val, hi⟩ := by ext; rfl
+      simp only [Function.comp_apply, osBuildPoints, Fin.cons_succ, finCongr_apply, x_sp_all]
+      have h_rhs : Fin.cast (by omega : L + R - 1 + 1 = L + R)
+          (Fin.cast (by omega : L + R = L + R - 1 + 1) i) = Fin.castAdd R ⟨i.val, hi⟩ := by
+        ext; exact congrArg Fin.val hi_eq
+      rw [h_rhs, Fin.append_left]
+      conv_lhs => rw [hi_eq]
+      rw [osConcatPoint_castAdd]
+      simp [euclidTimeReflect, osBuildPoints, xL]
+    · have hi_eq : i = Fin.natAdd L ⟨i.val - L, by omega⟩ := by ext; dsimp; omega
+      simp only [Function.comp_apply, osBuildPoints, Fin.cons_succ, finCongr_apply, x_sp_all]
+      have h_rhs : Fin.cast (by omega : L + R - 1 + 1 = L + R)
+          (Fin.cast (by omega : L + R = L + R - 1 + 1) i) = Fin.natAdd L ⟨i.val - L, by omega⟩ := by
+        ext; exact congrArg Fin.val hi_eq
+      rw [h_rhs, Fin.append_right]
+      conv_lhs => rw [hi_eq]
+      rw [osConcatPoint_natAdd]
+      simp [osBuildPoints, xR]
+
+lemma inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (m : ℕ) (r : Fin m) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    {t : Fin m → ℝ} (ht : ∀ j : Fin m, 0 < t j) {ε : ℝ} (hε : 0 < ε) (hr : 2 * ε < t r) :
+    let L : ℕ := r.val + 1
+    let R : ℕ := m - r.val
+    let α_L : Fin L → ι := fun j => α ⟨r.val - j.val, by omega⟩
+    let α_R : Fin R → ι := fun j => α ⟨r.val + 1 + j.val, by omega⟩
+    let x_sp_L : Fin L → Fin 3 → ℝ := fun j => x_sp ⟨r.val - j.val, by omega⟩
+    let x_sp_R : Fin R → Fin 3 → ℝ := fun j => x_sp ⟨r.val + 1 + j.val, by omega⟩
+    let t_L : Fin (L - 1) → ℝ := fun j => t ⟨r.val - 1 - j.val, by omega⟩
+    let t_R : Fin (R - 1) → ℝ := fun j => t ⟨r.val + 1 + j.val, by omega⟩
+    let xL : posOrderedEuclidN L :=
+      ⟨osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) t_L ε ∘ finCongr (by omega), by
+        have h_mem := osBuildPoints_mem_posOrderedEuclidN (L - 1) (x_sp_L ∘ finCongr (by omega))
+          (fun j => ht ⟨r.val - 1 - j.val, by omega⟩) hε
+        refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩
+    let xR : posOrderedEuclidN R :=
+      ⟨osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R ε ∘ finCongr (by omega), by
+        have h_mem := osBuildPoints_mem_posOrderedEuclidN (R - 1) (x_sp_R ∘ finCongr (by omega))
+          (fun j => ht ⟨r.val + 1 + j.val, by omega⟩) hε
+        refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩
+    ⟪osLeftState hOS.toReflectionPositiveData L α_L xL,
+      osClusterSemigroupTotal hOS hcluster ((t r - 2 * ε : ℝ) : ℂ)
+        (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, xR)⟩)⟫_ℂ =
+      𝒮 (m + 1) α (osBuildPoints m x_sp t 0) := by
+  intro L R α_L α_R x_sp_L x_sp_R t_L t_R xL xR
+  have hs_nonneg : 0 ≤ t r - 2 * ε := by linarith
+  have h_semi : osClusterSemigroupTotal hOS hcluster ((t r - 2 * ε : ℝ) : ℂ)
+      (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, xR)⟩) =
+      osBasis hOS.toReflectionPositiveData
+        (osConfigTimeShift (t r - 2 * ε) hs_nonneg ⟨R, (α_R, xR)⟩) := by
+    unfold osClusterSemigroupTotal
+    rw [canonicalOSHolomorphicSemigroupTotal_real_eq _ _ _ _ (t r - 2 * ε) hs_nonneg]
+    dsimp only [osBasis]
+    rw [osContractionSemigroup_toOSHilbert, osTimeShiftLM, osLiftConfigMap_osBasisPre]
+  rw [h_semi]
+  have h_shift_cfg : osConfigTimeShift (t r - 2 * ε) hs_nonneg ⟨R, (α_R, xR)⟩ =
+      ⟨R, (α_R, ⟨osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R (t r - ε) ∘
+        finCongr (by omega), by
+        have h_mem := osBuildPoints_mem_posOrderedEuclidN (R - 1) (x_sp_R ∘ finCongr (by omega))
+          (fun j => ht ⟨r.val + 1 + j.val, by omega⟩) (by linarith : 0 < t r - ε)
+        refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩)⟩ := by
+    dsimp only [osConfigTimeShift]
+    congr 1
+    refine Prod.ext rfl (Subtype.ext ?_)
+    ext i μ
+    change (osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R ε (finCongr (by omega) i) +
+        euclidTimeVec (t r - 2 * ε)) μ =
+        osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R (t r - ε) (finCongr (by omega) i) μ
+    have h_sh := osBuildPoints_shift_eq (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R ε (t r - 2 * ε)
+    have h_eq : ε + (t r - 2 * ε) = t r - ε := by ring
+    rw [h_eq] at h_sh
+    exact congrFun (congrFun h_sh (finCongr (by omega) i)) μ
+  rw [h_shift_cfg, inner_osLeftState_osBasis]
+  have hLR : L + R = m + 1 := by omega
+  have h_concat := osConcatPoint_osBuildPoints_eq_shift L R (by omega) (by omega)
+    x_sp_L t_L ε x_sp_R t_R (t r - ε)
+  dsimp only at h_concat
+  rw [h_concat]
+  have h_idx : osConcatIdx L R α_L α_R = α ∘ finCongr hLR := by
+    ext i
+    by_cases hi : i.val < L
+    · have hi_eq : i = Fin.castAdd R ⟨i.val, hi⟩ := by ext; rfl
+      rw [hi_eq, osConcatIdx_castAdd]
+      dsimp only [α_L, Function.comp_apply, finCongr_apply, Fin.rev]
+      congr 1; ext; dsimp; omega
+    · have hi_eq : i = Fin.natAdd L ⟨i.val - L, by omega⟩ := by ext; dsimp; omega
+      rw [hi_eq, osConcatIdx_natAdd]
+      dsimp only [α_R, Function.comp_apply, finCongr_apply]
+      congr 1
+  have h_sp : Fin.append (x_sp_L ∘ Fin.rev) x_sp_R ∘ finCongr (by omega : L + R - 1 + 1 = L + R) =
+      x_sp ∘ finCongr (by omega : L + R - 1 + 1 = m + 1) := by
+    ext i
+    by_cases hi : i.val < L
+    · have hi_eq : finCongr (by omega : L + R - 1 + 1 = L + R) i = Fin.castAdd R ⟨i.val, hi⟩ := by
+        ext; rfl
+      simp only [Function.comp_apply, hi_eq, Fin.append_left]
+      dsimp only [x_sp_L, Fin.rev]
+      congr 1; ext; dsimp; omega
+    · have hi_eq : finCongr (by omega : L + R - 1 + 1 = L + R) i =
+          Fin.natAdd L ⟨i.val - L, by omega⟩ := by
+        ext; dsimp; omega
+      simp only [Function.comp_apply, hi_eq, Fin.append_right]
+      dsimp only [x_sp_R]
+      congr 1; ext; dsimp; omega
+  have h_t : (fun k : Fin (L + R - 1) =>
+      if hkL : k.val < L - 1 then t_L ⟨L - 2 - k.val, by omega⟩
+      else if hkM : k.val = L - 1 then ε + (t r - ε)
+      else t_R ⟨k.val - L, by omega⟩) = t ∘ finCongr (by omega : L + R - 1 = m) := by
+    ext k
+    by_cases hkL : k.val < L - 1
+    · rw [dif_pos hkL]
+      dsimp only [t_L, Function.comp_apply, finCongr_apply]
+      congr 1; ext; dsimp; omega
+    · by_cases hkM : k.val = L - 1
+      · rw [dif_neg hkL, dif_pos hkM]
+        have hkr : finCongr (by omega : L + R - 1 = m) k = r := by ext; dsimp; omega
+        rw [Function.comp_apply, hkr]; ring
+      · rw [dif_neg hkL, dif_neg hkM]
+        dsimp only [t_R, Function.comp_apply, finCongr_apply]
+        congr 1; ext; dsimp; omega
+  rw [h_idx, h_sp, h_t]
+  have h_pts : (osBuildPoints (L + R - 1) (x_sp ∘ finCongr (by omega))
+        (t ∘ finCongr (by omega)) (-(ε + ∑ j : Fin (L - 1), t_L j)) ∘
+        finCongr (by omega : L + R = L + R - 1 + 1)) =
+      (osBuildPoints m x_sp t (-(ε + ∑ j : Fin (L - 1), t_L j))) ∘ finCongr hLR := by
+    ext i μ
+    refine Fin.cases ?_ (fun ν => ?_) μ
+    · simp only [Function.comp_apply, osBuildPoints_zero_coord]
+      congr 1
+      refine Finset.sum_bij (fun (j : Fin (L + R - 1)) _ => finCongr (by omega : L + R - 1 = m) j)
+        ?_ ?_ ?_ ?_
+      · intro j hj; simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj ⊢; exact hj
+      · intro j₁ _ j₂ _ h; exact (finCongr (by omega : L + R - 1 = m)).injective h
+      · intro b hb
+        refine ⟨finCongr (by omega : m = L + R - 1) b, ?_, by ext; rfl⟩
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢; exact hb
+      · intro j _; rfl
+    · rfl
+  rw [h_pts]
+  change 𝒮 (L + R) (α ∘ finCongr hLR)
+      (osBuildPoints m x_sp t (-(ε + ∑ j : Fin (L - 1), t_L j)) ∘ finCongr hLR) =
+    𝒮 (m + 1) α (osBuildPoints m x_sp t 0)
+  rw [schwinger_congr_n 𝒮 hLR]
+  exact schwinger_osBuildPoints_shift hOS m α x_sp ht 0 (-(ε + ∑ j : Fin (L - 1), t_L j))
+
+def osBox {d : ℕ} (θ : ℝ) : Set (Fin d → ℝ) :=
+  { y : Fin d → ℝ | ∀ i : Fin d, |y i| < θ }
+
+lemma isOpen_osBox {d : ℕ} (θ : ℝ) : IsOpen (osBox (d := d) θ) := by
+  have h_eq : osBox (d := d) θ = ⋂ i : Fin d, { y : Fin d → ℝ | |y i| < θ } := by
+    ext y; simp [osBox]
+  rw [h_eq]
+  exact isOpen_iInter_of_finite fun i =>
+    isOpen_lt (continuous_abs.comp (continuous_apply i)) continuous_const
+
+lemma convex_osBox {d : ℕ} (θ : ℝ) : Convex ℝ (osBox (d := d) θ) := by
+  intro y₁ hy₁ y₂ hy₂ a b ha hb hab i
+  simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul]
+  calc |a * y₁ i + b * y₂ i|
+      ≤ |a * y₁ i| + |b * y₂ i| := abs_add_le _ _
+    _ = a * |y₁ i| + b * |y₂ i| := by rw [abs_mul, abs_mul, abs_of_nonneg ha, abs_of_nonneg hb]
+    _ < a * θ + b * θ := by
+        rcases eq_or_lt_of_le ha with rfl | ha'
+        · simp only [zero_mul, zero_add] at hab ⊢
+          rw [hab, one_mul, one_mul]; exact hy₂ i
+        · have h1 : a * |y₁ i| < a * θ := mul_lt_mul_of_pos_left (hy₁ i) ha'
+          have h2 : b * |y₂ i| ≤ b * θ := mul_le_mul_of_nonneg_left (hy₂ i).le hb
+          linarith
+    _ = θ := by rw [← add_mul, hab, one_mul]
+
+lemma osBox_symm {d : ℕ} {θ : ℝ} {y : Fin d → ℝ} (hy : y ∈ osBox θ) : -y ∈ osBox θ := by
+  intro i
+  simpa [osBox] using hy i
+
+lemma zero_mem_osBox {d : ℕ} {θ : ℝ} (hθ : 0 < θ) : (0 : Fin d → ℝ) ∈ osBox θ := by
+  intro i
+  simpa [osBox] using hθ
+
+noncomputable def osSubstTimes {m : ℕ} (S : Finset (Fin m)) (t : Fin m → ℝ)
+    (u : Fin S.card → ℝ) : Fin m → ℝ :=
+  fun j => if h : j ∈ S then u ((S.orderIsoOfFin rfl).symm ⟨j, h⟩) else t j
+
+lemma osSubstTimes_of_notMem {m : ℕ} (S : Finset (Fin m)) (t : Fin m → ℝ)
+    (u : Fin S.card → ℝ) {j : Fin m} (hj : j ∉ S) :
+    osSubstTimes S t u j = t j :=
+  dif_neg hj
+
+lemma osSubstTimes_orderEmbOfFin {m : ℕ} (S : Finset (Fin m)) (t : Fin m → ℝ)
+    (u : Fin S.card → ℝ) (i : Fin S.card) :
+    osSubstTimes S t u (S.orderEmbOfFin rfl i) = u i := by
+  dsimp only [osSubstTimes]
+  rw [dif_pos (S.orderEmbOfFin_mem rfl i)]
+  congr 1
+  exact (S.orderIsoOfFin rfl).symm_apply_apply i
+
+lemma osSubstTimes_pos {m : ℕ} (S : Finset (Fin m)) {t : Fin m → ℝ}
+    (ht : ∀ j ∉ S, 0 < t j) {u : Fin S.card → ℝ} (hu : ∀ i, 0 < u i) :
+    ∀ j : Fin m, 0 < osSubstTimes S t u j := by
+  intro j
+  dsimp only [osSubstTimes]
+  split_ifs with h
+  · exact hu _
+  · exact ht j h
+
+noncomputable def osThetaSeqAvg (prev : ℕ → ℝ) (init : ℝ) : ℕ → ℝ
+  | 0 => init
+  | p + 1 => (prev p + osThetaSeqAvg prev init p) / 2
+
+noncomputable def osThetaSeq : ℕ → ℕ → ℝ
+  | 0 => fun p => Real.pi / 2 - (Real.pi / 4) * (2⁻¹ : ℝ) ^ p
+  | 1 => fun p => Real.pi / 2 - (Real.pi / 4) * (2⁻¹ : ℝ) ^ p
+  | k + 2 =>
+      if k % 2 = 0 then osThetaSeqAvg (osThetaSeq (k + 1)) (Real.pi / (4 * (k + 3) : ℝ))
+      else osThetaSeq (k + 1)
+
+lemma osThetaSeq_odd (k p : ℕ) : osThetaSeq (2 * k + 1) p = osThetaSeq (2 * k) p := by
+  cases k with
+  | zero => rfl
+  | succ k =>
+    have h_mod : (2 * k + 1) % 2 ≠ 0 := by omega
+    change (if (2 * k + 1) % 2 = 0 then _ else osThetaSeq (2 * k + 2)) p = _
+    rw [if_neg h_mod]
+    have h_eq : 2 * k + 2 = 2 * (k + 1) := by omega
+    rw [h_eq]
+
+lemma osThetaSeq_even_zero (k : ℕ) :
+    osThetaSeq (2 * k + 2) 0 = Real.pi / (4 * (2 * k + 3) : ℝ) := by
+  have h_mod : (2 * k) % 2 = 0 := by omega
+  change (if (2 * k) % 2 = 0 then
+    osThetaSeqAvg (osThetaSeq (2 * k + 1)) (Real.pi / (4 * ((2 * k : ℕ) + 3) : ℝ)) else _) 0 = _
+  rw [if_pos h_mod]
+  dsimp [osThetaSeqAvg]
+  push_cast
+  ring
+
+lemma osThetaSeq_even_succ (k p : ℕ) :
+    osThetaSeq (2 * k + 2) (p + 1) =
+      (osThetaSeq (2 * k + 1) p + osThetaSeq (2 * k + 2) p) / 2 := by
+  have h_mod : (2 * k) % 2 = 0 := by omega
+  change (if (2 * k) % 2 = 0 then
+    osThetaSeqAvg (osThetaSeq (2 * k + 1)) (Real.pi / (4 * ((2 * k : ℕ) + 3) : ℝ)) else _) (p + 1) =
+    (osThetaSeq (2 * k + 1) p + (if (2 * k) % 2 = 0 then
+      osThetaSeqAvg (osThetaSeq (2 * k + 1)) (Real.pi / (4 * ((2 * k : ℕ) + 3) : ℝ)) else _) p) / 2
+  rw [if_pos h_mod]
+  rfl
+
+lemma osThetaSeq_pos (k p : ℕ) : 0 < osThetaSeq k p := by
+  induction k generalizing p with
+  | zero =>
+    dsimp [osThetaSeq]
+    have hpow : ((2⁻¹ : ℝ) ^ p) ≤ 1 := pow_le_one₀ (by positivity) (by norm_num)
+    nlinarith [Real.pi_pos]
+  | succ k ih =>
+    cases k with
+    | zero =>
+      dsimp [osThetaSeq]
+      have hpow : ((2⁻¹ : ℝ) ^ p) ≤ 1 := pow_le_one₀ (by positivity) (by norm_num)
+      nlinarith [Real.pi_pos]
+    | succ k =>
+      dsimp [osThetaSeq]
+      split_ifs
+      · induction p with
+        | zero => dsimp [osThetaSeqAvg]; positivity
+        | succ p ihp => dsimp [osThetaSeqAvg]; linarith [ih p, ihp]
+      · exact ih p
+
+lemma osThetaSeq_le_zero (k p : ℕ) : osThetaSeq k p ≤ osThetaSeq 0 p := by
+  induction k generalizing p with
+  | zero => exact le_rfl
+  | succ k ih =>
+    cases k with
+    | zero => exact le_rfl
+    | succ k =>
+      dsimp [osThetaSeq]
+      split_ifs
+      · induction p with
+        | zero =>
+          dsimp [osThetaSeqAvg]
+          have h1 : (12 : ℝ) ≤ 4 * ((k : ℝ) + 3) := by linarith [Nat.cast_nonneg (α := ℝ) k]
+          have h2 : Real.pi / (4 * ((k : ℝ) + 3)) ≤ Real.pi / 12 :=
+            div_le_div_of_nonneg_left Real.pi_pos.le (by positivity) h1
+          linarith [Real.pi_pos]
+        | succ p ihp =>
+          dsimp [osThetaSeqAvg]
+          have h1 := ih p
+          dsimp [osThetaSeq] at h1
+          have hmono : osThetaSeq 0 p ≤ osThetaSeq 0 (p + 1) := by
+            dsimp [osThetaSeq]
+            have hpow : (2⁻¹ : ℝ) ^ (p + 1) ≤ (2⁻¹ : ℝ) ^ p :=
+              pow_le_pow_of_le_one (by positivity) (by norm_num) (Nat.le_succ p)
+            nlinarith [Real.pi_pos]
+          dsimp [osThetaSeq] at hmono
+          linarith [h1, ihp, hmono]
+      · exact ih p
+
+lemma osThetaSeq_lt_pi_div_two (k p : ℕ) : osThetaSeq k p < Real.pi / 2 := by
+  have h1 := osThetaSeq_le_zero k p
+  dsimp [osThetaSeq] at h1
+  have h2 : 0 < (Real.pi / 4) * (2⁻¹ : ℝ) ^ p := by positivity
+  linarith
+
+lemma osThetaSeq_defect_le (k p : ℕ) :
+    Real.pi / 2 - osThetaSeq k p ≤ (Real.pi / 2) * ((p + 1 : ℝ) ^ k) * (2⁻¹ : ℝ) ^ p := by
+  induction k generalizing p with
+  | zero =>
+    dsimp [osThetaSeq]
+    have hpow : (0 : ℝ) ≤ (2⁻¹ : ℝ) ^ p := by positivity
+    nlinarith [Real.pi_pos]
+  | succ k ih =>
+    cases k with
+    | zero =>
+      dsimp [osThetaSeq]
+      have hpow : (0 : ℝ) ≤ (2⁻¹ : ℝ) ^ p := by positivity
+      have hp1 : (1 : ℝ) ≤ (p + 1 : ℝ) := by linarith [Nat.cast_nonneg (α := ℝ) p]
+      simp only [pow_one]
+      nlinarith [Real.pi_pos, mul_nonneg Real.pi_pos.le hpow]
+    | succ k =>
+      dsimp [osThetaSeq]
+      split_ifs
+      · induction p with
+        | zero =>
+          dsimp [osThetaSeqAvg]
+          have hpos : 0 < Real.pi / (4 * ((k : ℝ) + 3)) := by positivity
+          simp only [Nat.cast_zero, zero_add, one_pow, mul_one, pow_zero]
+          linarith
+        | succ p ihp =>
+          dsimp [osThetaSeqAvg]
+          have h1 := ih p
+          have h2 := ihp
+          have h_alg : ((p + 1 : ℝ) ^ (k + 1) + (p + 1 : ℝ) ^ (k + 2)) * (2⁻¹ : ℝ) ^ p / 2 ≤
+              ((p + 2 : ℝ) ^ (k + 2)) * (2⁻¹ : ℝ) ^ (p + 1) := by
+            have h_pow : (2⁻¹ : ℝ) ^ (p + 1) = (2⁻¹ : ℝ) ^ p / 2 := by
+              rw [pow_succ]; ring
+            rw [h_pow]
+            have h_sum : (p + 1 : ℝ) ^ (k + 1) + (p + 1 : ℝ) ^ (k + 2) =
+                (p + 1 : ℝ) ^ (k + 1) * (p + 2 : ℝ) := by
+              rw [pow_succ]; ring
+            rw [h_sum]
+            have h_le : (p + 1 : ℝ) ^ (k + 1) ≤ (p + 2 : ℝ) ^ (k + 1) :=
+              pow_le_pow_left₀ (by positivity) (by linarith) (k + 1)
+            have h_le2 : (p + 1 : ℝ) ^ (k + 1) * (p + 2 : ℝ) ≤ (p + 2 : ℝ) ^ (k + 2) := by
+              rw [pow_succ]
+              exact mul_le_mul_of_nonneg_right h_le (by positivity)
+            have h2p : (0 : ℝ) ≤ (2⁻¹ : ℝ) ^ p / 2 := by positivity
+            calc ((p + 1 : ℝ) ^ (k + 1) * (p + 2 : ℝ)) * (2⁻¹ : ℝ) ^ p / 2
+                = ((p + 1 : ℝ) ^ (k + 1) * (p + 2 : ℝ)) * ((2⁻¹ : ℝ) ^ p / 2) := by ring
+              _ ≤ (p + 2 : ℝ) ^ (k + 2) * ((2⁻¹ : ℝ) ^ p / 2) :=
+                  mul_le_mul_of_nonneg_right h_le2 h2p
+          have h_cast : ((p + 1 : ℕ) + 1 : ℝ) = (p + 2 : ℝ) := by push_cast; ring
+          rw [h_cast]
+          have h_pi : 0 ≤ Real.pi / 2 := by positivity
+          have h_step : Real.pi / 2 -
+              (osThetaSeq (k + 1) p +
+                osThetaSeqAvg (osThetaSeq (k + 1)) (Real.pi / (4 * ((k : ℝ) + 3))) p) / 2 ≤
+              (Real.pi / 2) * (((p + 1 : ℝ) ^ (k + 1) + (p + 1 : ℝ) ^ (k +
+                2)) * (2⁻¹ : ℝ) ^ p / 2) := by
+            linarith
+          exact h_step.trans (by
+            have h_mul := mul_le_mul_of_nonneg_left h_alg h_pi
+            linarith)
+      · have h1 := ih p
+        have h_le : ((p : ℝ) + 1) ^ (k + 1) ≤ ((p : ℝ) + 1) ^ (k + 2) := by
+          rw [pow_succ]
+          have hge1 : (1 : ℝ) ≤ (p : ℝ) + 1 := by linarith [Nat.cast_nonneg (α := ℝ) p]
+          exact le_mul_of_one_le_right (by positivity) hge1
+        have h_fac : 0 ≤ (Real.pi / 2) * (2⁻¹ : ℝ) ^ p := by positivity
+        calc Real.pi / 2 - osThetaSeq (k + 1) p
+            ≤ (Real.pi / 2) * ((p : ℝ) + 1) ^ (k + 1) * (2⁻¹ : ℝ) ^ p := h1
+          _ ≤ (Real.pi / 2) * ((p : ℝ) + 1) ^ (k + 2) * (2⁻¹ : ℝ) ^ p := by
+              have h_mul := mul_le_mul_of_nonneg_right h_le h_fac
+              linarith
+
+lemma osThetaSeq_cos_ge (k p : ℕ) :
+    (2⁻¹ : ℝ) ^ (p + 1) ≤ Real.cos (osThetaSeq k p) := by
+  have h1 : osThetaSeq k p ≤ Real.pi / 2 - (Real.pi / 4) * (2⁻¹ : ℝ) ^ p :=
+    osThetaSeq_le_zero k p
+  have h2 : 0 ≤ osThetaSeq k p := (osThetaSeq_pos k p).le
+  have h3 : Real.pi / 2 - (Real.pi / 4) * (2⁻¹ : ℝ) ^ p ≤ Real.pi := by
+    have : 0 ≤ (Real.pi / 4) * (2⁻¹ : ℝ) ^ p := by positivity
+    linarith [Real.pi_pos]
+  have h_anti : Real.cos (Real.pi / 2 - (Real.pi / 4) * (2⁻¹ : ℝ) ^ p) ≤
+      Real.cos (osThetaSeq k p) :=
+    Real.strictAntiOn_cos.antitoneOn ⟨h2, by linarith⟩ ⟨by linarith, h3⟩ h1
+  rw [Real.cos_pi_div_two_sub] at h_anti
+  have h_x_nonneg : 0 ≤ (Real.pi / 4) * (2⁻¹ : ℝ) ^ p := by positivity
+  have h_x_le : (Real.pi / 4) * (2⁻¹ : ℝ) ^ p ≤ Real.pi / 2 := by
+    have hpow : (2⁻¹ : ℝ) ^ p ≤ 1 := pow_le_one₀ (by positivity) (by norm_num)
+    nlinarith [Real.pi_pos]
+  have h_sin : (2 / Real.pi) * ((Real.pi / 4) * (2⁻¹ : ℝ) ^ p) ≤
+      Real.sin ((Real.pi / 4) * (2⁻¹ : ℝ) ^ p) :=
+    Real.mul_le_sin h_x_nonneg h_x_le
+  have h_eq : (2 / Real.pi) * ((Real.pi / 4) * (2⁻¹ : ℝ) ^ p) = (2⁻¹ : ℝ) ^ (p + 1) := by
+    rw [pow_succ]
+    field_simp [Real.pi_pos.ne']
+    ring
+  linarith
+
+lemma differentiableOn_conj_comp_star {d : ℕ} {U : Set (Fin d → ℝ)}
+    (hU_open : IsOpen U) (hU_symm : ∀ y ∈ U, -y ∈ U)
+    {g : (Fin d → ℂ) → ℂ} (hg : DifferentiableOn ℂ g (TubeDomain U)) :
+    DifferentiableOn ℂ (fun w => star (g (fun j => star (w j)))) (TubeDomain U) := by
+  have hTU_open : IsOpen (TubeDomain U) := isOpen_TubeDomain hU_open
+  have h_star_maps : Set.MapsTo (fun w : Fin d → ℂ => fun j => star (w j))
+      (TubeDomain U) (TubeDomain U) := by
+    intro w hw
+    change (fun j => (star (w j)).im) ∈ U
+    have h_eq : (fun j => (star (w j)).im) = -(fun j => (w j).im) := by ext j; simp
+    rw [h_eq]; exact hU_symm _ hw
+  have h_cont : ContinuousOn (fun w : Fin d → ℂ => star (g (fun j => star (w j))))
+      (TubeDomain U) :=
+    Complex.continuous_conj.comp_continuousOn
+      (hg.continuousOn.comp (continuous_pi fun j =>
+        Complex.continuous_conj.comp (continuous_apply j)).continuousOn h_star_maps)
+  refine osgood_nd d hTU_open _ h_cont fun w₀ hw₀ m => ?_
+  have h_upd_diff : Differentiable ℂ (fun ζ : ℂ => Function.update (fun j => star (w₀ j)) m ζ) :=
+    differentiable_pi.mpr fun j => by
+      by_cases hjm : j = m
+      · subst hjm; simp only [Function.update_self]; exact differentiable_id
+      · simp only [Function.update_of_ne hjm]; exact differentiable_const _
+  have h_sw₀ : (fun j => star (w₀ j)) ∈ TubeDomain U := h_star_maps hw₀
+  have h_g_da : DifferentiableAt ℂ
+      (fun ζ => g (Function.update (fun j => star (w₀ j)) m ζ)) (star (w₀ m)) := by
+    have h1 := (hg _ h_sw₀).differentiableAt (hTU_open.mem_nhds h_sw₀)
+    have h2 : Function.update (fun j => star (w₀ j)) m (star (w₀ m)) = fun j => star (w₀ j) :=
+      Function.update_eq_self m (fun j => star (w₀ j))
+    rw [← h2] at h1
+    exact h1.comp (star (w₀ m)) (h_upd_diff.differentiableAt)
+  have h_hd := h_g_da.hasDerivAt
+  have h_hd_conj : HasDerivAt (fun ζ => star (g (fun j => star (Function.update w₀ m ζ j))))
+      (star (deriv (fun ζ => g (Function.update (fun j => star (w₀ j)) m ζ)) (star (w₀ m))))
+      (w₀ m) := by
+    rw [hasDerivAt_iff_tendsto_slope_zero] at h_hd ⊢
+    have h_c := Complex.continuous_conj.continuousAt.tendsto.comp h_hd
+    have h_s : Tendsto (star : ℂ → ℂ) (𝓝[≠] (0 : ℂ)) (𝓝[≠] (0 : ℂ)) :=
+      tendsto_nhdsWithin_iff.mpr
+        ⟨(Complex.continuous_conj.continuousAt.tendsto.mono_left nhdsWithin_le_nhds).trans
+          (by simp),
+         eventually_nhdsWithin_of_forall fun z hz => star_ne_zero.mpr hz⟩
+    refine (h_c.comp h_s).congr fun h => ?_
+    dsimp only [Function.comp_apply]
+    have h_arg1 : (fun j => star (Function.update w₀ m (w₀ m + h) j)) =
+        Function.update (fun j => star (w₀ j)) m (star (w₀ m) + star h) := by
+      ext j
+      by_cases hjm : j = m
+      · subst hjm; simp [star_add]
+      · simp [Function.update_of_ne hjm]
+    have h_arg2 : (fun j => star (Function.update w₀ m (w₀ m) j)) =
+        Function.update (fun j => star (w₀ j)) m (star (w₀ m)) := by
+      ext j
+      by_cases hjm : j = m
+      · subst hjm; simp
+      · simp [Function.update_of_ne hjm]
+    rw [h_arg1, h_arg2]
+    simp only [smul_eq_mul, map_mul, map_inv₀, map_sub, Complex.star_def,
+      RingHomCompTriple.comp_apply, RingHom.id_apply]
+  exact h_hd_conj.differentiableAt
+
+lemma holo_eqOn_polydisk_of_real_eq {d : ℕ} {x₀ : Fin d → ℝ} {r : ℝ} (hr : 0 < r)
+    {F₁ F₂ : (Fin d → ℂ) → ℂ}
+    (hF₁ : DifferentiableOn ℂ F₁ (Set.pi Set.univ fun j => Metric.ball (x₀ j : ℂ) r))
+    (hF₂ : DifferentiableOn ℂ F₂ (Set.pi Set.univ fun j => Metric.ball (x₀ j : ℂ) r))
+    (h_real : ∀ x : Fin d → ℝ, (∀ j, |x j - x₀ j| < r) →
+      F₁ (fun j => (x j : ℂ)) = F₂ (fun j => (x j : ℂ))) :
+    ∀ w ∈ Set.pi Set.univ (fun j => Metric.ball (x₀ j : ℂ) r), F₁ w = F₂ w := by
+  have h_step : ∀ k : ℕ, k ≤ d →
+      ∀ w ∈ Set.pi Set.univ (fun j => Metric.ball (x₀ j : ℂ) r),
+        (∀ j : Fin d, k ≤ j.val → (w j).im = 0) → F₁ w = F₂ w := by
+    intro k
+    induction k with
+    | zero =>
+      intro _ w hw h_im
+      have hw_real : w = fun j => ((w j).re : ℂ) := by
+        ext j; apply Complex.ext <;> simp [h_im j (Nat.zero_le _)]
+      rw [hw_real]
+      refine h_real (fun j => (w j).re) fun j => ?_
+      have hj := hw j (Set.mem_univ j)
+      rw [Metric.mem_ball, dist_eq_norm] at hj
+      have hre : |(w j).re - x₀ j| ≤ ‖w j - (x₀ j : ℂ)‖ := by
+        simpa [Complex.sub_re, Complex.ofReal_re] using Complex.abs_re_le_norm (w j - (x₀ j : ℂ))
+      exact hre.trans_lt hj
+    | succ k ih =>
+      intro hkd w hw h_im
+      let m : Fin d := ⟨k, by omega⟩
+      let g₁ : ℂ → ℂ := fun ζ => F₁ (Function.update w m ζ)
+      let g₂ : ℂ → ℂ := fun ζ => F₂ (Function.update w m ζ)
+      have h_upd_maps : Set.MapsTo (fun ζ => Function.update w m ζ)
+          (Metric.ball (x₀ m : ℂ) r) (Set.pi Set.univ fun j => Metric.ball (x₀ j : ℂ) r) := by
+        intro ζ hζ j _
+        by_cases hjm : j = m
+        · subst hjm; simpa using hζ
+        · simpa [Function.update_of_ne hjm] using hw j (Set.mem_univ j)
+      have h_upd_diff : Differentiable ℂ (fun ζ => Function.update w m ζ) :=
+        differentiable_pi.mpr fun j => by
+          by_cases hjm : j = m
+          · subst hjm; simp only [Function.update_self]; exact differentiable_id
+          · simp only [Function.update_of_ne hjm]; exact differentiable_const _
+      have hg₁ : DifferentiableOn ℂ g₁ (Metric.ball (x₀ m : ℂ) r) :=
+        hF₁.comp h_upd_diff.differentiableOn h_upd_maps
+      have hg₂ : DifferentiableOn ℂ g₂ (Metric.ball (x₀ m : ℂ) r) :=
+        hF₂.comp h_upd_diff.differentiableOn h_upd_maps
+      have h_freq : ∃ᶠ ζ in 𝓝[≠] (x₀ m : ℂ), g₁ ζ = g₂ ζ := by
+        rw [Filter.frequently_iff]
+        intro W hW
+        rw [mem_nhdsWithin] at hW
+        rcases hW with ⟨V, hV_open, hxV, hV_sub⟩
+        rcases Metric.isOpen_iff.mp hV_open (x₀ m : ℂ) hxV with ⟨η, hη, h_ball⟩
+        let t : ℝ := min (η / 2) (r / 2)
+        have ht_pos : 0 < t := lt_min (by positivity) (by positivity)
+        have hz_V : ((x₀ m + t : ℝ) : ℂ) ∈ V := h_ball (by
+          rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left,
+            Complex.norm_real, Real.norm_of_nonneg ht_pos.le]
+          exact (min_le_left _ _).trans_lt (by linarith))
+        have hz_ne : ((x₀ m + t : ℝ) : ℂ) ≠ (x₀ m : ℂ) := by
+          intro h
+          have h1 : x₀ m + t = x₀ m := Complex.ofReal_injective h
+          linarith
+        have hz_ball : ((x₀ m + t : ℝ) : ℂ) ∈ Metric.ball (x₀ m : ℂ) r := by
+          rw [Metric.mem_ball, dist_eq_norm, Complex.ofReal_add, add_sub_cancel_left,
+            Complex.norm_real, Real.norm_of_nonneg ht_pos.le]
+          exact (min_le_right _ _).trans_lt (by linarith)
+        refine ⟨((x₀ m + t : ℝ) : ℂ), hV_sub ⟨hz_V, hz_ne⟩, ?_⟩
+        refine ih (by omega) _ (h_upd_maps hz_ball) fun j hj => ?_
+        by_cases hjm : j = m
+        · subst hjm; simp
+        · simp only [Function.update_of_ne hjm]
+          exact h_im j (by have : j.val ≠ k := fun h => hjm (Fin.ext h); omega)
+      have h_eqOn := (hg₁.analyticOnNhd Metric.isOpen_ball).eqOn_of_preconnected_of_frequently_eq
+        (hg₂.analyticOnNhd Metric.isOpen_ball) (convex_ball (x₀ m : ℂ) r).isPreconnected
+        (Metric.mem_ball_self hr) h_freq
+      have h_at := h_eqOn (hw m (Set.mem_univ m))
+      simpa [g₁, g₂, Function.update_eq_self] using h_at
+  intro w hw
+  exact h_step d le_rfl w hw fun j hj => absurd hj (not_le_of_gt j.isLt)
+
+lemma os_cut_open_eqOn_of_real_eq {d : ℕ} {U : Set (Fin d → ℝ)}
+    (hU_open : IsOpen U) (hU_conv : Convex ℝ U) (hU_zero : (0 : Fin d → ℝ) ∈ U)
+    (i_cut : Fin d) (hU_cut : ∀ y ∈ U, |y i_cut| < Real.pi / 2)
+    {ε : ℝ} (hε : 0 < ε)
+    {F₁ F₂ : (Fin d → ℂ) → ℂ}
+    (hF₁ : DifferentiableOn ℂ F₁ { w ∈ TubeDomain U | 2 * ε < (Complex.exp (w i_cut)).re })
+    (hF₂ : DifferentiableOn ℂ F₂ { w ∈ TubeDomain U | 2 * ε < (Complex.exp (w i_cut)).re })
+    (h_real : ∀ x : Fin d → ℝ, 2 * ε < Real.exp (x i_cut) →
+      F₁ (fun j => (x j : ℂ)) = F₂ (fun j => (x j : ℂ))) :
+    ∀ w ∈ { w ∈ TubeDomain U | 2 * ε < (Complex.exp (w i_cut)).re }, F₁ w = F₂ w := by
+  intro w hw
+  let V : Set (Fin d → ℂ) := { z ∈ TubeDomain U | 2 * ε < (Complex.exp (z i_cut)).re }
+  have hV_open : IsOpen V :=
+    (isOpen_TubeDomain hU_open).inter
+      (isOpen_lt continuous_const
+        (Complex.continuous_re.comp (Complex.continuous_exp.comp (continuous_apply i_cut))))
+  let γ : ℂ → (Fin d → ℂ) := fun ζ j => ((w j).re : ℂ) + ζ * I * ((w j).im : ℂ)
+  have hγ_diff : Differentiable ℂ γ :=
+    differentiable_pi.mpr fun j =>
+      (differentiable_const _).add
+        ((differentiable_id.mul (differentiable_const I)).mul (differentiable_const _))
+  have hγ_seg : ∀ t ∈ Set.Icc (0 : ℝ) 1, γ (t : ℂ) ∈ V := by
+    intro t ht
+    refine ⟨?_, ?_⟩
+    · change (fun j => (γ (t : ℂ) j).im) ∈ U
+      have h_eq : (fun j => (γ (t : ℂ) j).im) =
+          (1 - t) • (0 : Fin d → ℝ) + t • (fun j => (w j).im) := by
+        ext j; simp [γ]
+      rw [h_eq]
+      exact hU_conv hU_zero hw.1 (by linarith [ht.2]) ht.1 (by ring)
+    · rw [Complex.exp_re]
+      have hre_eq : (γ (t : ℂ) i_cut).re = (w i_cut).re := by simp [γ]
+      have him_eq : (γ (t : ℂ) i_cut).im = t * (w i_cut).im := by simp [γ]
+      rw [hre_eq, him_eq]
+      have h_abs_le : |t * (w i_cut).im| ≤ |(w i_cut).im| := by
+        rw [abs_mul, abs_of_nonneg ht.1]
+        exact mul_le_of_le_one_left (abs_nonneg _) ht.2
+      have h_lt_pi : |(w i_cut).im| < Real.pi / 2 := hU_cut _ hw.1
+      have h_cos_ge : Real.cos (w i_cut).im ≤ Real.cos (t * (w i_cut).im) := by
+        rw [← Real.cos_abs (w i_cut).im, ← Real.cos_abs (t * (w i_cut).im)]
+        exact Real.strictAntiOn_cos.antitoneOn
+          ⟨abs_nonneg _, by linarith [Real.pi_pos]⟩
+          ⟨abs_nonneg _, by linarith [Real.pi_pos]⟩ h_abs_le
+      have h_gt : 2 * ε < Real.exp (w i_cut).re * Real.cos (w i_cut).im := by
+        rw [← Complex.exp_re]; exact hw.2
+      nlinarith [Real.exp_pos (w i_cut).re]
+  have h_open_pre : IsOpen (γ ⁻¹' V) := hV_open.preimage hγ_diff.continuous
+  have h_Icc_sub : (fun t : ℝ => (t : ℂ)) '' Set.Icc (0 : ℝ) 1 ⊆ γ ⁻¹' V := by
+    rintro _ ⟨t, ht, rfl⟩; exact hγ_seg t ht
+  have h_comp : IsCompact ((fun t : ℝ => (t : ℂ)) '' Set.Icc (0 : ℝ) 1) :=
+    isCompact_Icc.image Complex.continuous_ofReal
+  obtain ⟨η, hη_pos, hη_sub⟩ := h_comp.exists_thickening_subset_open h_open_pre h_Icc_sub
+  let S : Set ℂ := { ζ : ℂ | -(η / 2) < ζ.re ∧ ζ.re < 1 + η / 2 ∧ |ζ.im| < η / 2 }
+  have hS_open : IsOpen S :=
+    (isOpen_lt continuous_const Complex.continuous_re).inter
+      ((isOpen_lt Complex.continuous_re continuous_const).inter
+        (isOpen_lt (continuous_abs.comp Complex.continuous_im) continuous_const))
+  have hS_conv : Convex ℝ S := by
+    intro z₁ hz₁ z₂ hz₂ a b ha hb hab
+    refine ⟨?_, ?_, ?_⟩
+    · simp only [Complex.add_re, Complex.real_smul, Complex.mul_re, Complex.ofReal_re,
+        Complex.ofReal_im, zero_mul, sub_zero]
+      rcases eq_or_lt_of_le ha with rfl | ha' <;> nlinarith [hz₁.1, hz₂.1]
+    · simp only [Complex.add_re, Complex.real_smul, Complex.mul_re, Complex.ofReal_re,
+        Complex.ofReal_im, zero_mul, sub_zero]
+      rcases eq_or_lt_of_le ha with rfl | ha' <;> nlinarith [hz₁.2.1, hz₂.2.1]
+    · simp only [Complex.add_im, Complex.real_smul, Complex.mul_im, Complex.ofReal_re,
+        Complex.ofReal_im, zero_mul, add_zero]
+      have h1 : |a * z₁.im + b * z₂.im| ≤ a * |z₁.im| + b * |z₂.im| := by
+        calc |a * z₁.im + b * z₂.im| ≤ |a * z₁.im| + |b * z₂.im| := abs_add_le _ _
+          _ = a * |z₁.im| + b * |z₂.im| := by
+              rw [abs_mul, abs_mul, abs_of_nonneg ha, abs_of_nonneg hb]
+      rcases eq_or_lt_of_le ha with rfl | ha'
+      · simp only [zero_mul, zero_add] at hab ⊢; rw [hab, one_mul]; exact hz₂.2.2
+      · nlinarith [hz₁.2.2, hz₂.2.2]
+  have hγ_maps : Set.MapsTo γ S V := by
+    intro ζ hζ
+    apply hη_sub
+    rw [Metric.mem_thickening_iff]
+    let t : ℝ := max 0 (min 1 ζ.re)
+    have ht_Icc : t ∈ Set.Icc (0 : ℝ) 1 := ⟨le_max_left _ _, max_le zero_le_one (min_le_left _ _)⟩
+    refine ⟨(t : ℂ), ⟨t, ht_Icc, rfl⟩, ?_⟩
+    rw [dist_eq_norm]
+    have h_re_diff : |ζ.re - t| < η / 2 := by
+      dsimp only [t]
+      rcases le_total ζ.re 0 with h0 | h0
+      · rw [min_eq_right (h0.trans zero_le_one), max_eq_left h0, sub_zero, abs_of_nonpos h0]
+        linarith [hζ.1]
+      · rcases le_total ζ.re 1 with h1 | h1
+        · rw [min_eq_right h1, max_eq_right h0, sub_self, abs_zero]; linarith
+        · rw [min_eq_left h1, max_eq_right zero_le_one, abs_of_nonneg (by linarith)]
+          linarith [hζ.2.1]
+    have h_norm : ‖ζ - (t : ℂ)‖ ≤ |ζ.re - t| + |ζ.im| := by
+      have h_eq : ζ - (t : ℂ) = ((ζ.re - t : ℝ) : ℂ) + (ζ.im : ℂ) * I := by
+        apply Complex.ext <;> simp
+      rw [h_eq]
+      calc ‖((ζ.re - t : ℝ) : ℂ) + (ζ.im : ℂ) * I‖
+          ≤ ‖((ζ.re - t : ℝ) : ℂ)‖ + ‖(ζ.im : ℂ) * I‖ := norm_add_le _ _
+        _ = |ζ.re - t| + |ζ.im| := by
+            rw [norm_mul, Complex.norm_I, mul_one, Complex.norm_real, Complex.norm_real,
+              Real.norm_eq_abs, Real.norm_eq_abs]
+    linarith [hζ.2.2]
+  have hfγ : AnalyticOnNhd ℂ (F₁ ∘ γ) S :=
+    (Complex.analyticOnNhd_iff_differentiableOn hS_open).mpr
+      (hF₁.comp hγ_diff.differentiableOn hγ_maps)
+  have hgγ : AnalyticOnNhd ℂ (F₂ ∘ γ) S :=
+    (Complex.analyticOnNhd_iff_differentiableOn hS_open).mpr
+      (hF₂.comp hγ_diff.differentiableOn hγ_maps)
+  have hw_re_V : γ 0 ∈ V := hγ_seg 0 ⟨le_rfl, zero_le_one⟩
+  rcases Metric.isOpen_iff.mp hV_open (γ 0) hw_re_V with ⟨δ, hδ, hδ_sub⟩
+  have h_re_gt : Real.log (2 * ε) < (w i_cut).re := by
+    rw [Real.log_lt_iff_lt_exp (by positivity)]
+    have h0 := hw_re_V.2
+    have hγ0 : γ 0 i_cut = ((w i_cut).re : ℂ) := by simp [γ]
+    rw [hγ0, ← Complex.ofReal_exp, Complex.ofReal_re] at h0
+    exact h0
+  let r : ℝ := min (δ / 2) (((w i_cut).re - Real.log (2 * ε)) / 2)
+  have hr : 0 < r := lt_min (by positivity) (by linarith)
+  have h_poly_sub : Set.pi Set.univ (fun j => Metric.ball ((w j).re : ℂ) r) ⊆ V := by
+    intro z hz
+    apply hδ_sub
+    rw [Metric.mem_ball, dist_pi_lt_iff hδ]
+    intro j
+    have hγ0j : γ 0 j = ((w j).re : ℂ) := by simp [γ]
+    rw [hγ0j]
+    exact (Metric.mem_ball.mp (hz j (Set.mem_univ j))).trans_le
+      ((min_le_left _ _).trans (by linarith))
+  have h_eq_poly : ∀ z ∈ Set.pi Set.univ (fun j => Metric.ball ((w j).re : ℂ) r), F₁ z = F₂ z :=
+    holo_eqOn_polydisk_of_real_eq hr (hF₁.mono h_poly_sub) (hF₂.mono h_poly_sub) fun x hx => by
+      refine h_real x ?_
+      have hx' := (abs_lt.mp (hx i_cut)).1
+      have hr_le : r ≤ ((w i_cut).re - Real.log (2 * ε)) / 2 := min_le_right _ _
+      have h1 : Real.log (2 * ε) < x i_cut := by linarith
+      have h2 := Real.exp_lt_exp.mpr h1
+      rwa [Real.exp_log (by positivity)] at h2
+  have h_ev : (F₁ ∘ γ) =ᶠ[𝓝 (0 : ℂ)] (F₂ ∘ γ) := by
+    have h_poly_open : IsOpen (Set.pi Set.univ (fun j => Metric.ball ((w j).re : ℂ) r)) :=
+      isOpen_set_pi Set.finite_univ fun j _ => Metric.isOpen_ball
+    have h0_in : (0 : ℂ) ∈ γ ⁻¹' Set.pi Set.univ (fun j => Metric.ball ((w j).re : ℂ) r) := by
+      intro j _; simp [γ, Metric.mem_ball_self hr]
+    exact Filter.eventuallyEq_of_mem ((h_poly_open.preimage hγ_diff.continuous).mem_nhds h0_in)
+      fun ζ hζ => h_eq_poly (γ ζ) hζ
+  have h0_S : (0 : ℂ) ∈ S := by
+    simp only [S, Set.mem_setOf_eq, Complex.zero_re, Complex.zero_im, abs_zero]
+    exact ⟨by linarith, by linarith, half_pos hη_pos⟩
+  have h1_S : (1 : ℂ) ∈ S := by
+    simp only [S, Set.mem_setOf_eq, Complex.one_re, Complex.one_im, abs_zero]
+    exact ⟨by linarith, by linarith, half_pos hη_pos⟩
+  have h_at1 := hfγ.eqOn_of_preconnected_of_eventuallyEq hgγ hS_conv.isPreconnected h0_S h_ev h1_S
+  have hγ1 : γ 1 = w := by
+    ext j; dsimp [γ]; rw [one_mul, mul_comm I, Complex.re_add_im]
+  simpa only [Function.comp_apply, hγ1] using h_at1
+
+def osCutBox {d : ℕ} (i_cut : Fin d) (θ_L θ_cut θ_R : ℝ) : Set (Fin d → ℝ) :=
+  { y : Fin d → ℝ |
+    (∀ i : Fin d, i.val < i_cut.val → |y i| < θ_L) ∧
+    |y i_cut| < θ_cut ∧
+    (∀ i : Fin d, i_cut.val < i.val → |y i| < θ_R) }
+
+lemma isOpen_osCutBox {d : ℕ} (i_cut : Fin d) (θ_L θ_cut θ_R : ℝ) :
+    IsOpen (osCutBox i_cut θ_L θ_cut θ_R) := by
+  have h_eq : osCutBox i_cut θ_L θ_cut θ_R =
+      ⋂ i : Fin d, { y : Fin d → ℝ | |y i| <
+        if i.val < i_cut.val then θ_L else if i = i_cut then θ_cut else θ_R } := by
+    ext y
+    simp only [osCutBox, Set.mem_setOf_eq, Set.mem_iInter]
+    constructor
+    · rintro ⟨hL, hC, hR⟩ i
+      split_ifs with h1 h2
+      · exact hL i h1
+      · subst h2; exact hC
+      · exact hR i (by have : i.val ≠ i_cut.val := fun h => h2 (Fin.ext h); omega)
+    · intro h
+      refine ⟨fun i hi => ?_, ?_, fun i hi => ?_⟩
+      · have h' := h i; rwa [if_pos hi] at h'
+      · have h' := h i_cut; rwa [if_neg (lt_irrefl _), if_pos rfl] at h'
+      · have h' := h i
+        have hne : i ≠ i_cut := fun heq => by subst heq; omega
+        rwa [if_neg (not_lt.mpr hi.le), if_neg hne] at h'
+  rw [h_eq]
+  exact isOpen_iInter_of_finite fun i =>
+    isOpen_lt (continuous_abs.comp (continuous_apply i)) continuous_const
+
+lemma convex_osCutBox {d : ℕ} (i_cut : Fin d) (θ_L θ_cut θ_R : ℝ) :
+    Convex ℝ (osCutBox i_cut θ_L θ_cut θ_R) := by
+  have h_one : ∀ {a b x y θ : ℝ}, 0 ≤ a → 0 ≤ b → a + b = 1 → |x| < θ → |y| < θ →
+      |a * x + b * y| < θ := by
+    intro a b x y θ ha hb hab hx hy
+    calc |a * x + b * y|
+        ≤ |a * x| + |b * y| := abs_add_le _ _
+      _ = a * |x| + b * |y| := by rw [abs_mul, abs_mul, abs_of_nonneg ha, abs_of_nonneg hb]
+      _ < a * θ + b * θ := by
+          rcases eq_or_lt_of_le ha with rfl | ha'
+          · simp only [zero_mul, zero_add] at hab ⊢
+            rw [hab, one_mul, one_mul]; exact hy
+          · have h1 : a * |x| < a * θ := mul_lt_mul_of_pos_left hx ha'
+            have h2 : b * |y| ≤ b * θ := mul_le_mul_of_nonneg_left hy.le hb
+            linarith
+      _ = θ := by rw [← add_mul, hab, one_mul]
+  intro y₁ hy₁ y₂ hy₂ a b ha hb hab
+  refine ⟨fun i hi => h_one ha hb hab (hy₁.1 i hi) (hy₂.1 i hi),
+    h_one ha hb hab hy₁.2.1 hy₂.2.1,
+    fun i hi => h_one ha hb hab (hy₁.2.2 i hi) (hy₂.2.2 i hi)⟩
+
+lemma zero_mem_osCutBox {d : ℕ} (i_cut : Fin d) {θ_L θ_cut θ_R : ℝ}
+    (hL : 0 < θ_L) (hC : 0 < θ_cut) (hR : 0 < θ_R) :
+    (0 : Fin d → ℝ) ∈ osCutBox i_cut θ_L θ_cut θ_R := by
+  refine ⟨fun i _ => by simpa using hL, by simpa using hC, fun i _ => by simpa using hR⟩
+
+lemma os_cut_holomorphic_extension
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (M : ℕ) (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (S : Finset (Fin m)) (t : Fin m → ℝ) (ht : ∀ j ∉ S, 0 < t j)
+    (i_cut : Fin S.card)
+    {θ_L θ_cut θ_R B_L B_R : ℝ}
+    (hθL0 : 0 < θ_L) (hθC0 : 0 < θ_cut) (hθCpi : θ_cut < Real.pi / 2)
+    (hθR0 : 0 < θ_R) (hBL : 0 ≤ B_L) (hBR : 0 ≤ B_R)
+    (K_L : ℝ → (Fin i_cut.val → ℂ) → (Fin i_cut.val → ℂ) → ℂ)
+    (K_R : ℝ → (Fin (S.card - 1 - i_cut.val) → ℂ) → (Fin (S.card - 1 - i_cut.val) → ℂ) → ℂ)
+    (hKL_holo : ∀ ε : ℝ, 0 < ε →
+      DifferentiableOn ℂ (fun p : (Fin i_cut.val → ℂ) × (Fin i_cut.val → ℂ) => K_L ε p.1 p.2)
+        (TubeDomain (osBox θ_L) ×ˢ TubeDomain (osBox θ_L)))
+    (hKR_holo : ∀ ε : ℝ, 0 < ε →
+      DifferentiableOn ℂ
+        (fun p : (Fin (S.card - 1 - i_cut.val) → ℂ) × (Fin (S.card - 1 - i_cut.val) → ℂ) =>
+          K_R ε p.1 p.2)
+        (TubeDomain (osBox θ_R) ×ˢ TubeDomain (osBox θ_R)))
+    (hKL_bdd : ∀ ε : ℝ, 0 < ε → ∀ w₁ ∈ TubeDomain (osBox θ_L), ∀ w₂ ∈ TubeDomain (osBox θ_L),
+      ‖K_L ε w₁ w₂‖ ≤ B_L * (1 + (2 * ε)⁻¹) ^ M)
+    (hKR_bdd : ∀ ε : ℝ, 0 < ε → ∀ w₁ ∈ TubeDomain (osBox θ_R), ∀ w₂ ∈ TubeDomain (osBox θ_R),
+      ‖K_R ε w₁ w₂‖ ≤ B_R * (1 + (2 * ε)⁻¹) ^ M)
+    (hKL_real : ∀ (ε : ℝ) (hε : 0 < ε) (x₁ x₂ : Fin i_cut.val → ℝ),
+      let r : Fin m := S.orderEmbOfFin rfl i_cut
+      let L : ℕ := r.val + 1
+      let α_L : Fin L → ι := fun j => α ⟨r.val - j.val, by omega⟩
+      let x_sp_L : Fin L → Fin 3 → ℝ := fun j => x_sp ⟨r.val - j.val, by omega⟩
+      let mkXL : (Fin i_cut.val → ℝ) → posOrderedEuclidN L := fun uL =>
+        let u_full : Fin S.card → ℝ := fun i =>
+          if hi : i.val < i_cut.val then Real.exp (uL ⟨i.val, hi⟩) else 1
+        let t_L : Fin (L - 1) → ℝ := fun j =>
+          osSubstTimes S t u_full ⟨r.val - 1 - j.val, by omega⟩
+        ⟨osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) t_L ε ∘ finCongr (by omega), by
+          have h_pos : ∀ j : Fin (L - 1), 0 < t_L j := fun j =>
+            osSubstTimes_pos S ht (fun i => by dsimp [u_full]; split_ifs <;> positivity) _
+          have h_mem := osBuildPoints_mem_posOrderedEuclidN (L - 1) (x_sp_L ∘ finCongr (by omega))
+            h_pos hε
+          refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩
+      let Φ_L : (Fin i_cut.val → ℝ) → OSHilbert hOS.toReflectionPositiveData := fun uL =>
+        (∏ j : Fin i_cut.val, logTimeDamp (uL j : ℂ) ^ M) •
+          osLeftState hOS.toReflectionPositiveData L α_L (mkXL uL)
+      ⟪Φ_L x₁, Φ_L x₂⟫_ℂ = K_L ε (fun j => (x₁ j : ℂ)) (fun j => (x₂ j : ℂ)))
+    (hKR_real : ∀ (ε : ℝ) (hε : 0 < ε) (x₁ x₂ : Fin (S.card - 1 - i_cut.val) → ℝ),
+      let r : Fin m := S.orderEmbOfFin rfl i_cut
+      let R : ℕ := m - r.val
+      let α_R : Fin R → ι := fun j => α ⟨r.val + 1 + j.val, by omega⟩
+      let x_sp_R : Fin R → Fin 3 → ℝ := fun j => x_sp ⟨r.val + 1 + j.val, by omega⟩
+      let mkXR : (Fin (S.card - 1 - i_cut.val) → ℝ) → posOrderedEuclidN R := fun uR =>
+        let u_full : Fin S.card → ℝ := fun i =>
+          if hi : i_cut.val < i.val then Real.exp (uR ⟨i.val - i_cut.val - 1, by omega⟩) else 1
+        let t_R : Fin (R - 1) → ℝ := fun j =>
+          osSubstTimes S t u_full ⟨r.val + 1 + j.val, by omega⟩
+        ⟨osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R ε ∘ finCongr (by omega), by
+          have h_pos : ∀ j : Fin (R - 1), 0 < t_R j := fun j =>
+            osSubstTimes_pos S ht (fun i => by dsimp [u_full]; split_ifs <;> positivity) _
+          have h_mem := osBuildPoints_mem_posOrderedEuclidN (R - 1) (x_sp_R ∘ finCongr (by omega))
+            h_pos hε
+          refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩
+      let Φ_R : (Fin (S.card - 1 - i_cut.val) → ℝ) → OSHilbert hOS.toReflectionPositiveData :=
+        fun uR =>
+          (∏ j : Fin (S.card - 1 - i_cut.val), logTimeDamp (uR j : ℂ) ^ M) •
+            osBasis hOS.toReflectionPositiveData ⟨R, (α_R, mkXR uR)⟩
+      ⟪Φ_R x₁, Φ_R x₂⟫_ℂ = K_R ε (fun j => (x₁ j : ℂ)) (fun j => (x₂ j : ℂ))) :
+    ∃ F : (Fin S.card → ℂ) → ℂ,
+      DifferentiableOn ℂ F (TubeDomain (osCutBox i_cut θ_L θ_cut θ_R)) ∧
+      (∀ x : Fin S.card → ℝ,
+        F (fun i => (x i : ℂ)) =
+          (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) *
+            𝒮 (m + 1) α (osBuildPoints m x_sp (osSubstTimes S t (fun i => Real.exp (x i))) 0)) ∧
+      (∀ w ∈ TubeDomain (osCutBox i_cut θ_L θ_cut θ_R),
+        ‖F w‖ ≤ Real.sqrt (B_L * B_R) * (4 / Real.cos θ_cut) ^ M) := by
+  let U_cut : Set (Fin S.card → ℝ) := osCutBox i_cut θ_L θ_cut θ_R
+  have hU_open : IsOpen U_cut := isOpen_osCutBox i_cut θ_L θ_cut θ_R
+  have hU_conv : Convex ℝ U_cut := convex_osCutBox i_cut θ_L θ_cut θ_R
+  have hU_zero : (0 : Fin S.card → ℝ) ∈ U_cut := zero_mem_osCutBox i_cut hθL0 hθC0 hθR0
+  let r : Fin m := S.orderEmbOfFin rfl i_cut
+  let L : ℕ := r.val + 1
+  let R : ℕ := m - r.val
+  let α_L : Fin L → ι := fun j => α ⟨r.val - j.val, by omega⟩
+  let α_R : Fin R → ι := fun j => α ⟨r.val + 1 + j.val, by omega⟩
+  let x_sp_L : Fin L → Fin 3 → ℝ := fun j => x_sp ⟨r.val - j.val, by omega⟩
+  let x_sp_R : Fin R → Fin 3 → ℝ := fun j => x_sp ⟨r.val + 1 + j.val, by omega⟩
+  let projL : (Fin S.card → ℂ) → (Fin i_cut.val → ℂ) := fun w j => w ⟨j.val, by omega⟩
+  let projR : (Fin S.card → ℂ) → (Fin (S.card - 1 - i_cut.val) → ℂ) :=
+    fun w j => w ⟨i_cut.val + 1 + j.val, by omega⟩
+  have h_eps_ext : ∀ (ε : ℝ) (hε : 0 < ε),
+      ∃ F_ε : (Fin S.card → ℂ) → ℂ,
+        DifferentiableOn ℂ F_ε { w ∈ TubeDomain U_cut | 2 * ε < (Complex.exp (w i_cut)).re } ∧
+        (∀ x : Fin S.card → ℝ, 2 * ε < Real.exp (x i_cut) →
+          F_ε (fun i => (x i : ℂ)) =
+            (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) *
+              𝒮 (m + 1) α (osBuildPoints m x_sp (osSubstTimes S t (fun i => Real.exp (x i))) 0)) ∧
+        (∀ w ∈ TubeDomain U_cut, 2 * ε < (Complex.exp (w i_cut)).re →
+          ‖F_ε w‖ ≤ ‖logTimeDamp (w i_cut)‖ ^ M *
+            Real.sqrt (B_L * B_R) * (1 + (2 * ε)⁻¹) ^ M) := by
+    intro ε hε
+    let mkXL : (Fin i_cut.val → ℝ) → posOrderedEuclidN L := fun uL =>
+      let u_full : Fin S.card → ℝ := fun i =>
+        if hi : i.val < i_cut.val then Real.exp (uL ⟨i.val, hi⟩) else 1
+      let t_L : Fin (L - 1) → ℝ := fun j =>
+        osSubstTimes S t u_full ⟨r.val - 1 - j.val, by omega⟩
+      ⟨osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) t_L ε ∘ finCongr (by omega), by
+        have h_pos : ∀ j : Fin (L - 1), 0 < t_L j := fun j =>
+          osSubstTimes_pos S ht (fun i => by dsimp [u_full]; split_ifs <;> positivity) _
+        have h_mem := osBuildPoints_mem_posOrderedEuclidN (L - 1) (x_sp_L ∘ finCongr (by omega))
+          h_pos hε
+        refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩
+    let mkXR : (Fin (S.card - 1 - i_cut.val) → ℝ) → posOrderedEuclidN R := fun uR =>
+      let u_full : Fin S.card → ℝ := fun i =>
+        if hi : i_cut.val < i.val then Real.exp (uR ⟨i.val - i_cut.val - 1, by omega⟩) else 1
+      let t_R : Fin (R - 1) → ℝ := fun j =>
+        osSubstTimes S t u_full ⟨r.val + 1 + j.val, by omega⟩
+      ⟨osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R ε ∘ finCongr (by omega), by
+        have h_pos : ∀ j : Fin (R - 1), 0 < t_R j := fun j =>
+          osSubstTimes_pos S ht (fun i => by dsimp [u_full]; split_ifs <;> positivity) _
+        have h_mem := osBuildPoints_mem_posOrderedEuclidN (R - 1) (x_sp_R ∘ finCongr (by omega))
+          h_pos hε
+        refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩
+    let Φ_L : (Fin i_cut.val → ℝ) → OSHilbert hOS.toReflectionPositiveData := fun uL =>
+      (∏ j : Fin i_cut.val, logTimeDamp (uL j : ℂ) ^ M) •
+        osLeftState hOS.toReflectionPositiveData L α_L (mkXL uL)
+    let Φ_R : (Fin (S.card - 1 - i_cut.val) → ℝ) → OSHilbert hOS.toReflectionPositiveData :=
+      fun uR =>
+        (∏ j : Fin (S.card - 1 - i_cut.val), logTimeDamp (uR j : ℂ) ^ M) •
+          osBasis hOS.toReflectionPositiveData ⟨R, (α_R, mkXR uR)⟩
+    obtain ⟨Φ_L_ext, hΦL_cont, hΦL_real, hΦL_inner, _, hΦL_weak⟩ :=
+      hilbert_holomorphic_tube_of_kernel (isOpen_osBox θ_L) (convex_osBox θ_L)
+        (fun _ h => osBox_symm h) (zero_mem_osBox hθL0) Φ_L (K_L ε)
+        (hKL_holo ε hε) (hKL_real ε hε)
+    obtain ⟨Φ_R_ext, hΦR_cont, hΦR_real, hΦR_inner, _, hΦR_weak⟩ :=
+      hilbert_holomorphic_tube_of_kernel (isOpen_osBox θ_R) (convex_osBox θ_R)
+        (fun _ h => osBox_symm h) (zero_mem_osBox hθR0) Φ_R (K_R ε)
+        (hKR_holo ε hε) (hKR_real ε hε)
+    let V_ε : Set (Fin S.card → ℂ) :=
+      { w ∈ TubeDomain U_cut | 2 * ε < (Complex.exp (w i_cut)).re }
+    have hV_open : IsOpen V_ε :=
+      (isOpen_TubeDomain hU_open).inter
+        (isOpen_lt continuous_const
+          (Complex.continuous_re.comp (Complex.continuous_exp.comp (continuous_apply i_cut))))
+    let F_ε : (Fin S.card → ℂ) → ℂ := fun w =>
+      logTimeDamp (w i_cut) ^ M *
+        ⟪Φ_L_ext (fun j => star (projL w j)),
+          osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+            (Φ_R_ext (projR w))⟫_ℂ
+    have h_projL_maps : Set.MapsTo (fun w => fun j => star (projL w j))
+        V_ε (TubeDomain (osBox θ_L)) := by
+      intro w hw j
+      change |(star (w ⟨j.val, by omega⟩)).im| < θ_L
+      simpa using hw.1.1 ⟨j.val, by omega⟩ j.isLt
+    have h_projR_maps : Set.MapsTo projR V_ε (TubeDomain (osBox θ_R)) := by
+      intro w hw j
+      exact hw.1.2.2 ⟨i_cut.val + 1 + j.val, by omega⟩ (by dsimp; omega)
+    have hF_cont : ContinuousOn F_ε V_ε := by
+      have h_damp_cont : ContinuousOn (fun w : Fin S.card → ℂ => logTimeDamp (w i_cut) ^ M) V_ε :=
+        (differentiableOn_logTimeDamp.continuousOn.comp
+          (continuous_apply i_cut).continuousOn fun w hw => lt_trans hw.1.2.1 hθCpi).pow M
+      have h_L_cont : ContinuousOn (fun w : Fin S.card → ℂ =>
+          Φ_L_ext (fun j => star (projL w j))) V_ε :=
+        hΦL_cont.comp (continuous_pi fun j =>
+          Complex.continuous_conj.comp
+            (continuous_apply (⟨j.val, by omega⟩ : Fin S.card))).continuousOn
+          h_projL_maps
+      have h_R_cont : ContinuousOn (fun w : Fin S.card → ℂ => Φ_R_ext (projR w)) V_ε :=
+        hΦR_cont.comp (continuous_pi fun j =>
+          continuous_apply (⟨i_cut.val + 1 + j.val, by omega⟩ : Fin S.card)).continuousOn
+          h_projR_maps
+      have h_semi_cont : ContinuousOn (fun w : Fin S.card → ℂ =>
+          osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+            (Φ_R_ext (projR w))) V_ε := by
+        have h_unc := continuousOn_canonicalOSHolomorphicSemigroupTotal_uncurry
+          hOS.toReflectionPositiveData hOS.os1_translation
+          (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+            hOS.os1_translation hcluster)
+          hOS.os0_smooth
+        refine h_unc.comp (((Complex.continuous_exp.comp (continuous_apply i_cut)).sub
+          continuous_const).continuousOn.prodMk h_R_cont) fun w hw => ?_
+        refine ⟨?_, Set.mem_univ _⟩
+        change 0 ≤ (Complex.exp (w i_cut) - 2 * (ε : ℂ)).re
+        have hre := hw.2
+        simp only [Complex.sub_re, Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat,
+          Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+        linarith
+      exact h_damp_cont.mul (h_L_cont.inner h_semi_cont)
+    have hF_holo : DifferentiableOn ℂ F_ε V_ε := by
+      refine osgood_nd S.card hV_open F_ε hF_cont fun w₀ hw₀ k => ?_
+      by_cases hkL : k.val < i_cut.val
+      · have h_cut_eq : ∀ ζ : ℂ, Function.update w₀ k ζ i_cut = w₀ i_cut := fun ζ =>
+          Function.update_of_ne (fun h => by subst h; omega) _ _
+        have h_R_eq : ∀ ζ : ℂ, projR (Function.update w₀ k ζ) = projR w₀ := fun ζ => by
+          ext j; dsimp [projR]
+          exact Function.update_of_ne (fun h => by
+            have := congrArg Fin.val h; dsimp at this; omega) _ _
+        let v₀ := osClusterSemigroupTotal hOS hcluster (Complex.exp (w₀ i_cut) - 2 * (ε : ℂ))
+          (Φ_R_ext (projR w₀))
+        have h_eq : (fun ζ => F_ε (Function.update w₀ k ζ)) =
+            fun ζ => logTimeDamp (w₀ i_cut) ^ M *
+              star (⟪v₀, Φ_L_ext (fun j => star (projL (Function.update w₀ k ζ) j))⟫_ℂ) := by
+          ext ζ; dsimp only [F_ε, v₀]
+          rw [h_cut_eq, h_R_eq, Complex.star_def, inner_conj_symm]
+        rw [h_eq]
+        have h_conj_diff := differentiableOn_conj_comp_star (isOpen_osBox θ_L)
+          (fun _ h => osBox_symm h) (hΦL_weak v₀)
+        have h_proj_diff : Differentiable ℂ (fun ζ => projL (Function.update w₀ k ζ)) :=
+          differentiable_pi.mpr fun j => by
+            dsimp only [projL]
+            by_cases hjk : (⟨j.val, by omega⟩ : Fin S.card) = k
+            · rw [hjk]; simp only [Function.update_self]; exact differentiable_id
+            · simp only [Function.update_of_ne hjk]; exact differentiable_const _
+        have h_in_box : projL w₀ ∈ TubeDomain (osBox θ_L) := fun j =>
+          hw₀.1.1 ⟨j.val, by omega⟩ j.isLt
+        have h_da := (h_conj_diff _ h_in_box).differentiableAt
+          ((isOpen_TubeDomain (isOpen_osBox θ_L)).mem_nhds h_in_box)
+        have h_at : projL (Function.update w₀ k (w₀ k)) = projL w₀ := by
+          rw [Function.update_eq_self]
+        rw [← h_at] at h_da
+        exact (differentiableAt_const _).mul
+          (DifferentiableAt.comp
+            (g := fun w => star ⟪v₀, Φ_L_ext fun j => star (w j)⟫_ℂ)
+            (f := fun ζ => projL (Function.update w₀ k ζ))
+            (w₀ k) h_da h_proj_diff.differentiableAt)
+      · by_cases hkC : k = i_cut
+        · subst hkC
+          have h_L_eq : ∀ ζ : ℂ, projL (Function.update w₀ k ζ) = projL w₀ := fun ζ => by
+            ext j; dsimp [projL]
+            exact Function.update_of_ne (fun h => by
+              have := congrArg Fin.val h; dsimp at this; omega) _ _
+          have h_R_eq : ∀ ζ : ℂ, projR (Function.update w₀ k ζ) = projR w₀ := fun ζ => by
+            ext j; dsimp [projR]
+            exact Function.update_of_ne (fun h => by
+              have := congrArg Fin.val h; dsimp at this; omega) _ _
+          have h_eq : (fun ζ => F_ε (Function.update w₀ k ζ)) =
+              fun ζ => logTimeDamp ζ ^ M *
+                ⟪Φ_L_ext (fun j => star (projL w₀ j)),
+                  osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (ε : ℂ))
+                    (Φ_R_ext (projR w₀))⟫_ℂ := by
+            ext ζ; dsimp only [F_ε]
+            rw [Function.update_self, h_L_eq, h_R_eq]
+          rw [h_eq]
+          have h_damp_da : DifferentiableAt ℂ (fun ζ => logTimeDamp ζ ^ M) (w₀ k) :=
+            ((differentiableOn_logTimeDamp _ (lt_trans hw₀.1.2.1 hθCpi)).differentiableAt
+              ((isOpen_lt (continuous_abs.comp Complex.continuous_im) continuous_const).mem_nhds
+                (lt_trans hw₀.1.2.1 hθCpi))).pow M
+          have h_semi_da : DifferentiableAt ℂ
+              (fun ζ => osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (ε : ℂ)))
+              (w₀ k) := by
+            have h_re : 0 < (Complex.exp (w₀ k) - 2 * (ε : ℂ)).re := by
+              have hre := hw₀.2
+              simp only [Complex.sub_re, Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat,
+                Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+              linarith
+            have h_da := (differentiableOn_canonicalOSHolomorphicSemigroupTotal
+              hOS.toReflectionPositiveData hOS.os1_translation
+              (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+                hOS.os1_translation hcluster)
+              hOS.os0_smooth _ h_re).differentiableAt
+              ((isOpen_lt continuous_const Complex.continuous_re).mem_nhds h_re)
+            exact h_da.comp (w₀ k) (Complex.differentiable_exp.differentiableAt.sub
+              (differentiableAt_const _))
+          exact h_damp_da.mul ((innerSL ℂ _).differentiableAt.comp _
+            (h_semi_da.clm_apply (differentiableAt_const _)))
+        · have hkR : i_cut.val < k.val := by
+            have hne : k.val ≠ i_cut.val := fun h => hkC (Fin.ext h)
+            omega
+          have h_cut_eq : ∀ ζ : ℂ, Function.update w₀ k ζ i_cut = w₀ i_cut := fun ζ =>
+            Function.update_of_ne (fun h => hkC h.symm) _ _
+          have h_L_eq : ∀ ζ : ℂ, projL (Function.update w₀ k ζ) = projL w₀ := fun ζ => by
+            ext j; dsimp [projL]
+            exact Function.update_of_ne (fun h => by
+              have := congrArg Fin.val h; dsimp at this; omega) _ _
+          let T₀ := osClusterSemigroupTotal hOS hcluster (Complex.exp (w₀ i_cut) - 2 * (ε : ℂ))
+          let l₀ : OSHilbert hOS.toReflectionPositiveData →L[ℂ] ℂ :=
+            (innerSL ℂ (Φ_L_ext (fun j => star (projL w₀ j)))).comp T₀
+          have h_eq : (fun ζ => F_ε (Function.update w₀ k ζ)) =
+              fun ζ => logTimeDamp (w₀ i_cut) ^ M *
+                ⟪T₀.adjoint (Φ_L_ext (fun j => star (projL w₀ j))),
+                  Φ_R_ext (projR (Function.update w₀ k ζ))⟫_ℂ := by
+            ext ζ; dsimp only [F_ε, T₀]
+            rw [h_cut_eq, h_L_eq, ContinuousLinearMap.adjoint_inner_left]
+          rw [h_eq]
+          have h_proj_diff : Differentiable ℂ (fun ζ => projR (Function.update w₀ k ζ)) :=
+            differentiable_pi.mpr fun j => by
+              dsimp only [projR]
+              by_cases hjk : (⟨i_cut.val + 1 + j.val, by omega⟩ : Fin S.card) = k
+              · rw [hjk]; simp only [Function.update_self]; exact differentiable_id
+              · simp only [Function.update_of_ne hjk]; exact differentiable_const _
+          have h_in_box : projR w₀ ∈ TubeDomain (osBox θ_R) := h_projR_maps hw₀
+          have h_da := (hΦR_weak (T₀.adjoint (Φ_L_ext (fun j => star (projL w₀ j)))) _
+            h_in_box).differentiableAt
+            ((isOpen_TubeDomain (isOpen_osBox θ_R)).mem_nhds h_in_box)
+          have h_at : projR (Function.update w₀ k (w₀ k)) = projR w₀ := by
+            rw [Function.update_eq_self]
+          rw [← h_at] at h_da
+          exact (differentiableAt_const _).mul
+            (DifferentiableAt.comp
+              (g := fun w => ⟪T₀.adjoint (Φ_L_ext fun j => star (projL w₀ j)), Φ_R_ext w⟫_ℂ)
+              (f := fun ζ => projR (Function.update w₀ k ζ))
+              (w₀ k) h_da h_proj_diff.differentiableAt)
+    have hF_real : ∀ x : Fin S.card → ℝ, 2 * ε < Real.exp (x i_cut) →
+        F_ε (fun i => (x i : ℂ)) =
+          (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) *
+            𝒮 (m + 1) α (osBuildPoints m x_sp (osSubstTimes S t (fun i => Real.exp (x i))) 0) := by
+      intro x hx
+      dsimp only [F_ε]
+      have h_L_arg : (fun j => star (projL (fun i => (x i : ℂ)) j)) =
+          fun j => ((x ⟨j.val, by omega⟩ : ℝ) : ℂ) := by
+        ext j; simp [projL]
+      have h_R_arg : projR (fun i => (x i : ℂ)) =
+          fun j => ((x ⟨i_cut.val + 1 + j.val, by omega⟩ : ℝ) : ℂ) := rfl
+      rw [h_L_arg, h_R_arg, hΦL_real, hΦR_real]
+      dsimp only [Φ_L, Φ_R]
+      rw [map_smul, inner_smul_left, inner_smul_right]
+      have h_conj_L : (starRingEnd ℂ) (∏ j : Fin i_cut.val, logTimeDamp (x ⟨j.val,
+        by omega⟩ : ℂ) ^ M) =
+          ∏ j : Fin i_cut.val, logTimeDamp (x ⟨j.val, by omega⟩ : ℂ) ^ M := by
+        rw [map_prod]
+        refine Finset.prod_congr rfl fun j _ => ?_
+        rw [map_pow]
+        congr 1
+        dsimp [logTimeDamp]
+        rw [map_div₀, map_pow, map_add, map_one, ← Complex.ofReal_exp, Complex.conj_ofReal]
+      rw [h_conj_L]
+      have h_exp_sub : Complex.exp (x i_cut : ℂ) - 2 * (ε : ℂ) =
+          ((Real.exp (x i_cut) - 2 * ε : ℝ) : ℂ) := by
+        rw [← Complex.ofReal_exp]; push_cast; ring
+      rw [h_exp_sub]
+      let t_full : Fin m → ℝ := osSubstTimes S t (fun i => Real.exp (x i))
+      have ht_full : ∀ j : Fin m, 0 < t_full j :=
+        osSubstTimes_pos S ht (fun i => Real.exp_pos (x i))
+      have ht_r : t_full r = Real.exp (x i_cut) := osSubstTimes_orderEmbOfFin S t _ i_cut
+      have h_tL_eq : (fun j : Fin (L - 1) =>
+          osSubstTimes S t (fun i => if hi : i.val <
+            i_cut.val then Real.exp (x ⟨i.val, by omega⟩) else 1)
+            ⟨r.val - 1 - j.val, by omega⟩) =
+          fun j : Fin (L - 1) => t_full ⟨r.val - 1 - j.val, by omega⟩ := by
+        ext j
+        dsimp only [t_full, osSubstTimes]
+        by_cases hmem : (⟨r.val - 1 - j.val, by omega⟩ : Fin m) ∈ S
+        · rw [dif_pos hmem, dif_pos hmem]
+          let idx := (S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - j.val, by omega⟩, hmem⟩
+          have h_ord : S.orderEmbOfFin rfl idx = ⟨r.val - 1 - j.val, by omega⟩ := by
+            have := (S.orderIsoOfFin rfl).apply_symm_apply ⟨⟨r.val - 1 - j.val, by omega⟩, hmem⟩
+            exact congrArg Subtype.val this
+          have h_lt : idx < i_cut := by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+            change r.val - 1 - j.val < r.val
+            omega
+          change (if hi : idx.val < i_cut.val then Real.exp (x ⟨idx.val, by omega⟩) else 1) =
+            Real.exp (x idx)
+          rw [dif_pos (Fin.lt_def.mp h_lt)]
+        · rw [dif_neg hmem, dif_neg hmem]
+      have h_tR_eq : (fun j : Fin (R - 1) =>
+          osSubstTimes S t (fun i => if hi : i_cut.val < i.val then
+            Real.exp (x ⟨i_cut.val + 1 + (i.val - i_cut.val - 1), by omega⟩) else 1)
+            ⟨r.val + 1 + j.val, by omega⟩) =
+          fun j : Fin (R - 1) => t_full ⟨r.val + 1 + j.val, by omega⟩ := by
+        ext j
+        dsimp only [t_full, osSubstTimes]
+        by_cases hmem : (⟨r.val + 1 + j.val, by omega⟩ : Fin m) ∈ S
+        · rw [dif_pos hmem, dif_pos hmem]
+          let idx := (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + j.val, by omega⟩, hmem⟩
+          have h_ord : S.orderEmbOfFin rfl idx = ⟨r.val + 1 + j.val, by omega⟩ := by
+            have := (S.orderIsoOfFin rfl).apply_symm_apply ⟨⟨r.val + 1 + j.val, by omega⟩, hmem⟩
+            exact congrArg Subtype.val this
+          have h_gt : i_cut < idx := by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+            change r.val < r.val + 1 + j.val
+            omega
+          change (if hi : i_cut.val < idx.val then
+            Real.exp (x ⟨i_cut.val + 1 + (idx.val - i_cut.val - 1), by omega⟩) else 1) =
+            Real.exp (x idx)
+          rw [dif_pos (Fin.lt_def.mp h_gt)]
+          congr 2; ext; dsimp; omega
+        · rw [dif_neg hmem, dif_neg hmem]
+      have h_xL_eq : mkXL (fun j => x ⟨j.val, by omega⟩) =
+          ⟨osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega))
+            (fun j => t_full ⟨r.val - 1 - j.val, by omega⟩) ε ∘ finCongr (by omega), by
+            have h_mem := osBuildPoints_mem_posOrderedEuclidN (L - 1)
+              (x_sp_L ∘ finCongr (by omega))
+              (fun j : Fin (L - 1) => ht_full ⟨r.val - 1 - j.val, by omega⟩) hε
+            refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩ := by
+        refine Subtype.ext ?_
+        dsimp only [mkXL]
+        rw [h_tL_eq]
+      have h_xR_eq : mkXR (fun j => x ⟨i_cut.val + 1 + j.val, by omega⟩) =
+          ⟨osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega))
+            (fun j => t_full ⟨r.val + 1 + j.val, by omega⟩) ε ∘ finCongr (by omega), by
+            have h_mem := osBuildPoints_mem_posOrderedEuclidN (R - 1)
+              (x_sp_R ∘ finCongr (by omega))
+              (fun j : Fin (R - 1) => ht_full ⟨r.val + 1 + j.val, by omega⟩) hε
+            refine ⟨fun i => h_mem.1 (finCongr (by omega) i), fun i hi => ?_⟩
+            exact h_mem.2 (finCongr (by omega) i) (by dsimp; omega)⟩ := by
+        refine Subtype.ext ?_
+        dsimp only [mkXR]
+        rw [h_tR_eq]
+      rw [h_xL_eq, h_xR_eq, ← ht_r,
+        inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger hOS hcluster m r α x_sp ht_full hε
+          (by rwa [ht_r])]
+      have h_prod_split : (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) =
+          logTimeDamp (x i_cut : ℂ) ^ M *
+            (∏ j : Fin i_cut.val, logTimeDamp (x ⟨j.val, by omega⟩ : ℂ) ^ M) *
+            (∏ j : Fin (S.card - 1 - i_cut.val),
+              logTimeDamp (x ⟨i_cut.val + 1 + j.val, by omega⟩ : ℂ) ^ M) := by
+        have h_u : (Finset.univ : Finset (Fin S.card)) =
+            insert i_cut ((Finset.univ.filter fun i : Fin S.card => i.val < i_cut.val) ∪
+              (Finset.univ.filter fun i : Fin S.card => i_cut.val < i.val)) := by
+          ext i
+          simp only [Finset.mem_univ, Finset.mem_insert, Finset.mem_union, Finset.mem_filter,
+            true_and, Fin.ext_iff, true_iff]
+          omega
+        have h_not : i_cut ∉ (Finset.univ.filter fun i : Fin S.card => i.val < i_cut.val) ∪
+            (Finset.univ.filter fun i : Fin S.card => i_cut.val < i.val) := by
+          simp
+        have h_disj : Disjoint (Finset.univ.filter fun i : Fin S.card => i.val < i_cut.val)
+            (Finset.univ.filter fun i : Fin S.card => i_cut.val < i.val) := by
+          rw [Finset.disjoint_left]; intro i h1 h2; simp at h1 h2; omega
+        rw [h_u, Finset.prod_insert h_not, Finset.prod_union h_disj, mul_assoc]
+        congr 1
+        have h_pL : (∏ i : Fin S.card with i.val < i_cut.val, logTimeDamp (x i : ℂ) ^ M) =
+            ∏ j : Fin i_cut.val, logTimeDamp (x ⟨j.val, by omega⟩ : ℂ) ^ M := by
+          refine Finset.prod_bij (fun (i : Fin S.card) hi =>
+            (⟨i.val, (Finset.mem_filter.mp hi).2⟩ : Fin i_cut.val)) ?_ ?_ ?_ ?_
+          · intro _ _; exact Finset.mem_univ _
+          · intro i₁ _ i₂ _ h
+            have h1 : i₁.val = i₂.val := congrArg (Fin.val : Fin i_cut.val → ℕ) h
+            exact Fin.ext h1
+          · intro b _
+            refine ⟨⟨b.val, by omega⟩,
+              by simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact b.isLt,
+              by ext; rfl⟩
+          · intro i _; rfl
+        have h_pR : (∏ i : Fin S.card with i_cut.val < i.val, logTimeDamp (x i : ℂ) ^ M) =
+            ∏ j : Fin (S.card - 1 - i_cut.val),
+              logTimeDamp (x ⟨i_cut.val + 1 + j.val, by omega⟩ : ℂ) ^ M := by
+          refine Finset.prod_bij (fun (i : Fin S.card) hi =>
+            (⟨i.val - i_cut.val - 1, by simp at hi; omega⟩ : Fin (S.card - 1 - i_cut.val)))
+            ?_ ?_ ?_ ?_
+          · intro _ _; exact Finset.mem_univ _
+          · intro i₁ hi₁ i₂ hi₂ h
+            simp at hi₁ hi₂
+            have h1 := congrArg Fin.val h; dsimp at h1; ext; omega
+          · intro b _
+            refine ⟨⟨i_cut.val + 1 + b.val, by omega⟩,
+              by simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega,
+              by ext; dsimp; omega⟩
+          · intro i hi
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hi
+            have h_idx : i = ⟨i_cut.val + 1 + (i.val - i_cut.val - 1), by omega⟩ := by
+              ext; dsimp; omega
+            conv_lhs => rw [h_idx]
+        rw [h_pL, h_pR]
+      rw [h_prod_split]
+      ring
+    have hF_bdd : ∀ w ∈ TubeDomain U_cut, 2 * ε < (Complex.exp (w i_cut)).re →
+        ‖F_ε w‖ ≤ ‖logTimeDamp (w i_cut)‖ ^ M * Real.sqrt (B_L * B_R) * (1 + (2 * ε)⁻¹) ^ M := by
+      intro w hw hre
+      dsimp only [F_ε]
+      rw [norm_mul, norm_pow]
+      have h_in_le : ‖⟪Φ_L_ext (fun j => star (projL w j)),
+          osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+            (Φ_R_ext (projR w))⟫_ℂ‖ ≤
+          ‖Φ_L_ext (fun j => star (projL w j))‖ * ‖Φ_R_ext (projR w)‖ := by
+        calc ‖⟪Φ_L_ext (fun j => star (projL w j)),
+              osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+                (Φ_R_ext (projR w))⟫_ℂ‖
+            ≤ ‖Φ_L_ext (fun j => star (projL w j))‖ *
+                ‖osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+                  (Φ_R_ext (projR w))‖ := norm_inner_le_norm _ _
+          _ ≤ ‖Φ_L_ext (fun j => star (projL w j))‖ * ‖Φ_R_ext (projR w)‖ :=
+              mul_le_mul_of_nonneg_left
+                (norm_canonicalOSHolomorphicSemigroupTotal_apply_le _ _ _ _ _ _) (norm_nonneg _)
+      have h_L_norm : ‖Φ_L_ext (fun j => star (projL w j))‖ ^ 2 ≤ B_L * (1 + (2 * ε)⁻¹) ^ M := by
+        have h_sq : ‖Φ_L_ext (fun j => star (projL w j))‖ ^ 2 =
+            ‖⟪Φ_L_ext (fun j => star (projL w j)), Φ_L_ext (fun j => star (projL w j))⟫_ℂ‖ := by
+          rw [inner_self_eq_norm_sq_to_K]; simp
+        rw [h_sq, hΦL_inner _ (h_projL_maps ⟨hw, hre⟩) _ (h_projL_maps ⟨hw, hre⟩)]
+        have h_in_L : (fun j => star (star (projL w j))) ∈ TubeDomain (osBox θ_L) := fun j => by
+          simpa [projL] using hw.1 ⟨j.val, by omega⟩ j.isLt
+        exact hKL_bdd ε hε _ h_in_L _ (h_projL_maps ⟨hw, hre⟩)
+      have h_R_norm : ‖Φ_R_ext (projR w)‖ ^ 2 ≤ B_R * (1 + (2 * ε)⁻¹) ^ M := by
+        have h_sq : ‖Φ_R_ext (projR w)‖ ^ 2 = ‖⟪Φ_R_ext (projR w), Φ_R_ext (projR w)⟫_ℂ‖ := by
+          rw [inner_self_eq_norm_sq_to_K]; simp
+        rw [h_sq, hΦR_inner _ (h_projR_maps ⟨hw, hre⟩) _ (h_projR_maps ⟨hw, hre⟩)]
+        have h_in_Rs : (fun j => star (projR w j)) ∈ TubeDomain (osBox θ_R) := fun j => by
+          change |(star (projR w j)).im| < θ_R
+          simpa using hw.2.2 ⟨i_cut.val + 1 + j.val, by omega⟩ (by dsimp; omega)
+        exact hKR_bdd ε hε _ h_in_Rs _ (h_projR_maps ⟨hw, hre⟩)
+      have h_prod_norm : ‖Φ_L_ext (fun j => star (projL w j))‖ * ‖Φ_R_ext (projR w)‖ ≤
+          Real.sqrt (B_L * B_R) * (1 + (2 * ε)⁻¹) ^ M := by
+        have hL1 := Real.le_sqrt_of_sq_le h_L_norm
+        have hR1 := Real.le_sqrt_of_sq_le h_R_norm
+        calc ‖Φ_L_ext (fun j => star (projL w j))‖ * ‖Φ_R_ext (projR w)‖
+            ≤ Real.sqrt (B_L * (1 + (2 * ε)⁻¹) ^ M) * Real.sqrt (B_R * (1 + (2 * ε)⁻¹) ^ M) :=
+              mul_le_mul hL1 hR1 (norm_nonneg _) (Real.sqrt_nonneg _)
+          _ = Real.sqrt ((B_L * B_R) * ((1 + (2 * ε)⁻¹) ^ M) ^ 2) := by
+              rw [← Real.sqrt_mul (by positivity)]
+              congr 1; ring
+          _ = Real.sqrt (B_L * B_R) * (1 + (2 * ε)⁻¹) ^ M := by
+              rw [Real.sqrt_mul (by positivity), Real.sqrt_sq (by positivity)]
+      calc ‖logTimeDamp (w i_cut)‖ ^ M *
+            ‖⟪Φ_L_ext (fun j => star (projL w j)),
+              osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+                (Φ_R_ext (projR w))⟫_ℂ‖
+          ≤ ‖logTimeDamp (w i_cut)‖ ^ M * (Real.sqrt (B_L * B_R) * (1 + (2 * ε)⁻¹) ^ M) :=
+            mul_le_mul_of_nonneg_left (h_in_le.trans h_prod_norm) (by positivity)
+        _ = ‖logTimeDamp (w i_cut)‖ ^ M * Real.sqrt (B_L * B_R) * (1 + (2 * ε)⁻¹) ^ M := by ring
+    exact ⟨F_ε, hF_holo, hF_real, hF_bdd⟩
+  classical
+  let F_of : (ε : ℝ) → 0 < ε → (Fin S.card → ℂ) → ℂ := fun ε hε =>
+    Classical.choose (h_eps_ext ε hε)
+  have hF_of_spec : ∀ (ε : ℝ) (hε : 0 < ε),
+      DifferentiableOn ℂ (F_of ε hε)
+        { w ∈ TubeDomain U_cut | 2 * ε < (Complex.exp (w i_cut)).re } ∧
+      (∀ x : Fin S.card → ℝ, 2 * ε < Real.exp (x i_cut) →
+        F_of ε hε (fun i => (x i : ℂ)) =
+          (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) *
+            𝒮 (m + 1) α (osBuildPoints m x_sp (osSubstTimes S t (fun i => Real.exp (x i))) 0)) ∧
+      (∀ w ∈ TubeDomain U_cut, 2 * ε < (Complex.exp (w i_cut)).re →
+        ‖F_of ε hε w‖ ≤ ‖logTimeDamp (w i_cut)‖ ^ M *
+          Real.sqrt (B_L * B_R) * (1 + (2 * ε)⁻¹) ^ M) :=
+    fun ε hε => Classical.choose_spec (h_eps_ext ε hε)
+  have h_agree : ∀ (ε₁ ε₂ : ℝ) (hε₁ : 0 < ε₁) (hε₂ : 0 < ε₂) (w : Fin S.card → ℂ),
+      w ∈ TubeDomain U_cut → 2 * ε₁ < (Complex.exp (w i_cut)).re →
+      2 * ε₂ < (Complex.exp (w i_cut)).re →
+      F_of ε₁ hε₁ w = F_of ε₂ hε₂ w := by
+    intro ε₁ ε₂ hε₁ hε₂ w hw h1 h2
+    let ε := max ε₁ ε₂
+    have hε : 0 < ε := lt_of_lt_of_le hε₁ (le_max_left _ _)
+    have h_sub1 : { z ∈ TubeDomain U_cut | 2 * ε < (Complex.exp (z i_cut)).re } ⊆
+        { z ∈ TubeDomain U_cut | 2 * ε₁ < (Complex.exp (z i_cut)).re } :=
+      fun z hz => ⟨hz.1, lt_of_le_of_lt (by linarith [le_max_left ε₁ ε₂]) hz.2⟩
+    have h_sub2 : { z ∈ TubeDomain U_cut | 2 * ε < (Complex.exp (z i_cut)).re } ⊆
+        { z ∈ TubeDomain U_cut | 2 * ε₂ < (Complex.exp (z i_cut)).re } :=
+      fun z hz => ⟨hz.1, lt_of_le_of_lt (by linarith [le_max_right ε₁ ε₂]) hz.2⟩
+    refine os_cut_open_eqOn_of_real_eq hU_open hU_conv hU_zero i_cut
+      (fun y hy => lt_trans hy.2.1 hθCpi) hε
+      ((hF_of_spec ε₁ hε₁).1.mono h_sub1) ((hF_of_spec ε₂ hε₂).1.mono h_sub2)
+      (fun x hx => by
+        rw [(hF_of_spec ε₁ hε₁).2.1 x (lt_of_le_of_lt (by linarith [le_max_left ε₁ ε₂]) hx),
+            (hF_of_spec ε₂ hε₂).2.1 x (lt_of_le_of_lt (by linarith [le_max_right ε₁ ε₂]) hx)])
+      w ⟨hw, by dsimp [ε]; rw [mul_max_of_nonneg _ _ zero_le_two]; exact max_lt h1 h2⟩
+  let F : (Fin S.card → ℂ) → ℂ := fun w =>
+    if h : 0 < (Complex.exp (w i_cut)).re then
+      F_of ((Complex.exp (w i_cut)).re / 4) (by positivity) w
+    else 0
+  have hF_eq_of : ∀ (ε : ℝ) (hε : 0 < ε) (w : Fin S.card → ℂ),
+      w ∈ TubeDomain U_cut → 2 * ε < (Complex.exp (w i_cut)).re →
+      F w = F_of ε hε w := by
+    intro ε hε w hw hre
+    have hpos : 0 < (Complex.exp (w i_cut)).re := lt_trans (by positivity) hre
+    dsimp only [F]
+    rw [dif_pos hpos]
+    exact h_agree ((Complex.exp (w i_cut)).re / 4) ε (by positivity) hε w hw (by linarith) hre
+  refine ⟨F, ?_, ?_, ?_⟩
+  · intro w₀ hw₀
+    have hpos : 0 < (Complex.exp (w₀ i_cut)).re :=
+      (re_pos_iff_exists_exp _).mpr ⟨w₀ i_cut, lt_trans hw₀.2.1 hθCpi, rfl⟩
+    let ε₀ : ℝ := (Complex.exp (w₀ i_cut)).re / 4
+    have hε₀ : 0 < ε₀ := by positivity
+    let V₀ : Set (Fin S.card → ℂ) :=
+      { w ∈ TubeDomain U_cut | 2 * ε₀ < (Complex.exp (w i_cut)).re }
+    have hV₀_open : IsOpen V₀ :=
+      (isOpen_TubeDomain hU_open).inter
+        (isOpen_lt continuous_const
+          (Complex.continuous_re.comp (Complex.continuous_exp.comp (continuous_apply i_cut))))
+    have hw₀_V₀ : w₀ ∈ V₀ := ⟨hw₀, by dsimp [ε₀]; linarith⟩
+    have h_diff_V₀ : DifferentiableOn ℂ F V₀ :=
+      (hF_of_spec ε₀ hε₀).1.congr fun w hw => hF_eq_of ε₀ hε₀ w hw.1 hw.2
+    exact (h_diff_V₀.differentiableAt (hV₀_open.mem_nhds hw₀_V₀)).differentiableWithinAt
+  · intro x
+    have hx_in : (fun i => (x i : ℂ)) ∈ TubeDomain U_cut := by
+      change (fun i => ((x i : ℂ)).im) ∈ U_cut
+      have hz : (fun i : Fin S.card => ((x i : ℂ)).im) = 0 := by ext i; simp
+      rw [hz]; exact hU_zero
+    have hre : (Complex.exp (x i_cut : ℂ)).re = Real.exp (x i_cut) := by
+      rw [← Complex.ofReal_exp, Complex.ofReal_re]
+    let ε₀ : ℝ := Real.exp (x i_cut) / 4
+    have hε₀ : 0 < ε₀ := by positivity
+    rw [hF_eq_of ε₀ hε₀ _ hx_in (by rw [hre]; dsimp [ε₀]; linarith [Real.exp_pos (x i_cut)])]
+    exact (hF_of_spec ε₀ hε₀).2.1 x (by dsimp [ε₀]; linarith [Real.exp_pos (x i_cut)])
+  · intro w hw
+    have hpos : 0 < (Complex.exp (w i_cut)).re :=
+      (re_pos_iff_exists_exp _).mpr ⟨w i_cut, lt_trans hw.2.1 hθCpi, rfl⟩
+    let ε₀ : ℝ := (Complex.exp (w i_cut)).re / 4
+    have hε₀ : 0 < ε₀ := by positivity
+    rw [hF_eq_of ε₀ hε₀ w hw (by dsimp [ε₀]; linarith)]
+    have h_bd := (hF_of_spec ε₀ hε₀).2.2 w hw (by dsimp [ε₀]; linarith)
+    have h_damp_le : ‖logTimeDamp (w i_cut)‖ * (1 + (2 * ε₀)⁻¹) ≤ 4 / Real.cos θ_cut := by
+      have h_2eps : (2 * ε₀)⁻¹ = 2 * ((Complex.exp (w i_cut)).re)⁻¹ := by
+        dsimp [ε₀]; field_simp [hpos.ne']; ring
+      rw [h_2eps]
+      have h1 := one_add_exp_re_inv_mul_logTimeDamp_le hθCpi hw.2.1.le
+      have h2 : 1 + 2 * ((Complex.exp (w i_cut)).re)⁻¹ ≤
+          2 * (1 + ((Complex.exp (w i_cut)).re)⁻¹) := by linarith
+      calc ‖logTimeDamp (w i_cut)‖ * (1 + 2 * ((Complex.exp (w i_cut)).re)⁻¹)
+          ≤ 2 * (‖logTimeDamp (w i_cut)‖ * (1 + ((Complex.exp (w i_cut)).re)⁻¹)) := by
+            nlinarith [norm_nonneg (logTimeDamp (w i_cut))]
+        _ ≤ 2 * (2 / Real.cos θ_cut) := by linarith
+        _ = 4 / Real.cos θ_cut := by ring
+    calc ‖F_of ε₀ hε₀ w‖
+        ≤ ‖logTimeDamp (w i_cut)‖ ^ M * Real.sqrt (B_L * B_R) * (1 + (2 * ε₀)⁻¹) ^ M := h_bd
+      _ = Real.sqrt (B_L * B_R) * (‖logTimeDamp (w i_cut)‖ * (1 + (2 * ε₀)⁻¹)) ^ M := by
+          rw [mul_pow]; ring
+      _ ≤ Real.sqrt (B_L * B_R) * (4 / Real.cos θ_cut) ^ M :=
+          mul_le_mul_of_nonneg_left
+            (pow_le_pow_left₀ (by positivity) h_damp_le M) (Real.sqrt_nonneg _)
+
+lemma two_mul_factorial_mul_le (L R : ℕ) :
+    ((2 * L).factorial : ℝ) * ((2 * R).factorial : ℝ) ≤
+      (4 : ℝ) ^ (L + R) * (((L + R).factorial : ℝ) ^ 2) := by
+  have h_nat : (2 * L).factorial * (2 * R).factorial ≤ 4 ^ (L + R) * (L + R).factorial ^ 2 := by
+    have h1 : (2 * L).factorial * (2 * R).factorial ≤ (2 * L + 2 * R).factorial :=
+      Nat.le_of_dvd (Nat.factorial_pos _) (Nat.factorial_mul_factorial_dvd_factorial_add (2 *
+        L) (2 * R))
+    have h2 : 2 * L + 2 * R = (L + R) + (L + R) := by omega
+    rw [h2] at h1
+    have h3 : ((L + R) + (L + R)).factorial =
+        Nat.choose ((L + R) + (L + R)) (L + R) * (L + R).factorial * (L + R).factorial := by
+      have hc := Nat.add_choose_mul_factorial_mul_factorial (L + R) (L + R)
+      linarith
+    have h4 : Nat.choose ((L + R) + (L + R)) (L + R) ≤ 2 ^ ((L + R) + (L + R)) := by
+      calc Nat.choose ((L + R) + (L + R)) (L + R)
+          ≤ ∑ k ∈ Finset.range (((L + R) + (L + R)) + 1),
+              Nat.choose ((L + R) + (L + R)) k :=
+            Finset.single_le_sum (fun _ _ => Nat.zero_le _)
+              (Finset.mem_range.mpr (by omega))
+        _ = 2 ^ ((L + R) + (L + R)) := Nat.sum_range_choose _
+    have h5 : 2 ^ ((L + R) + (L + R)) = 4 ^ (L + R) := by
+      rw [← two_mul, pow_mul]; norm_num
+    rw [h5] at h4
+    calc (2 * L).factorial * (2 * R).factorial
+        ≤ ((L + R) + (L + R)).factorial := h1
+      _ = Nat.choose ((L + R) + (L + R)) (L + R) * ((L + R).factorial ^ 2) := by
+          rw [h3, sq, mul_assoc]
+      _ ≤ 4 ^ (L + R) * ((L + R).factorial ^ 2) :=
+          Nat.mul_le_mul_right _ h4
+  exact_mod_cast h_nat
+
+lemma inner_osLeftState_osLeftState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (j : ℕ) (α : Fin j → ι)
+    (x y : posOrderedEuclidN j) :
+    ⟪osLeftState D j α x, osLeftState D j α y⟫_ℂ =
+      ∑ γ : Fin j → ι, (∏ i : Fin j, S.C (α i) (γ i)) *
+        D.𝒮 (j + j) (osConcatIdx j j α γ) (osConcatPoint j j x.val y.val) := by
+  conv_lhs => rhs; unfold osLeftState
+  rw [inner_sum]
+  refine Finset.sum_congr rfl fun γ _ => ?_
+  rw [inner_smul_right, inner_osLeftState_osBasis]
+
+lemma inner_osBasis_osBasis_eq {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (D : OSReflectionPositiveData R S) (j : ℕ) (α : Fin j → ι)
+    (x y : posOrderedEuclidN j) :
+    ⟪osBasis D ⟨j, (α, x)⟩, osBasis D ⟨j, (α, y)⟩⟫_ℂ =
+      ∑ γ : Fin j → ι, (∏ i : Fin j, S.C (α i) (γ i)) *
+        D.𝒮 (j + j) (osConcatIdx j j γ α) (osConcatPoint j j x.val y.val) := by
+  rw [inner_osBasis]
+  rfl
+
+lemma fin_card_filter_lt {n : ℕ} (c : Fin n) :
+    (Finset.univ.filter fun a : Fin n => a < c).card = c.val := by
+  have h_eq : (Finset.univ.filter fun a : Fin n => a <
+    c).card = (Finset.univ : Finset (Fin c.val)).card := by
+    refine Finset.card_bij (fun (a : Fin n) ha =>
+      (⟨a.val, Fin.lt_def.mp (Finset.mem_filter.mp ha).2⟩ : Fin c.val)) ?_ ?_ ?_
+    · intro _ _; exact Finset.mem_univ _
+    · intro a₁ _ a₂ _ h; exact Fin.ext (congrArg (Fin.val : Fin c.val → ℕ) h)
+    · intro b _
+      refine ⟨⟨b.val, lt_trans b.isLt c.isLt⟩,
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, Fin.lt_def.mpr b.isLt⟩, by ext; rfl⟩
+  simpa using h_eq
+
+lemma orderIsoOfFin_symm_val_eq_card_filter_lt {α : Type*} [LinearOrder α]
+    (S : Finset α) {x : α} (hx : x ∈ S) :
+    ((S.orderIsoOfFin rfl).symm ⟨x, hx⟩).val = (S.filter fun a => a < x).card := by
+  have h_bi : (S.filter fun a => a < x).card =
+      (Finset.univ.filter fun a : Fin S.card => a < (S.orderIsoOfFin rfl).symm ⟨x, hx⟩).card := by
+    refine Finset.card_bij (fun a ha =>
+      (S.orderIsoOfFin rfl).symm ⟨a, (Finset.mem_filter.mp ha).1⟩) ?_ ?_ ?_
+    · intro a ha
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and] at ha ⊢
+      rw [← (S.orderIsoOfFin rfl).lt_iff_lt, (S.orderIsoOfFin rfl).apply_symm_apply,
+        (S.orderIsoOfFin rfl).apply_symm_apply]
+      exact ha.2
+    · intro a₁ _ a₂ _ h
+      exact congrArg Subtype.val ((S.orderIsoOfFin rfl).symm.injective h)
+    · intro b hb
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb
+      refine ⟨(S.orderIsoOfFin rfl b).val, Finset.mem_filter.mpr ⟨(S.orderIsoOfFin rfl b).2, ?_⟩,
+        ?_⟩
+      · have hlt := (S.orderIsoOfFin rfl).lt_iff_lt.mpr hb
+        rw [(S.orderIsoOfFin rfl).apply_symm_apply] at hlt
+        exact hlt
+      · exact (S.orderIsoOfFin rfl).symm_apply_apply b
+  rw [h_bi, fin_card_filter_lt]
+
+lemma orderIsoOfFin_symm_val_add_card_gt {α : Type*} [LinearOrder α]
+    (S : Finset α) {x : α} (hx : x ∈ S) :
+    ((S.orderIsoOfFin rfl).symm ⟨x, hx⟩).val + 1 + (S.filter fun a => x < a).card = S.card := by
+  rw [orderIsoOfFin_symm_val_eq_card_filter_lt S hx]
+  have h_u : S = insert x ((S.filter fun a => a < x) ∪ (S.filter fun a => x < a)) := by
+    ext a
+    simp only [Finset.mem_insert, Finset.mem_union, Finset.mem_filter]
+    constructor
+    · intro ha
+      rcases lt_trichotomy a x with hlt | rfl | hgt
+      · exact Or.inr (Or.inl ⟨ha, hlt⟩)
+      · exact Or.inl rfl
+      · exact Or.inr (Or.inr ⟨ha, hgt⟩)
+    · rintro (rfl | ⟨ha, _⟩ | ⟨ha, _⟩) <;> assumption
+  have h_not : x ∉ (S.filter fun a => a < x) ∪ (S.filter fun a => x < a) := by simp
+  have h_disj : Disjoint (S.filter fun a => a < x) (S.filter fun a => x < a) := by
+    rw [Finset.disjoint_left]; intro a h1 h2
+    exact lt_asymm (Finset.mem_filter.mp h1).2 (Finset.mem_filter.mp h2).2
+  have h_c := congrArg Finset.card h_u
+  rw [Finset.card_insert_of_notMem h_not, Finset.card_union_of_disjoint h_disj] at h_c
+  omega
+
+def OSDampedSubsetBound {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι} (_hOS : OSAxioms Rrep Sstr η 𝒮)
+    (M k_lim : ℕ) (θ K_bd B_bd : ℝ) : Prop :=
+  ∀ (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (S : Finset (Fin m)) (t : Fin m → ℝ),
+    S.card ≤ k_lim → (∀ j ∉ S, 0 < t j) →
+    ∃ F : (Fin S.card → ℂ) → ℂ,
+      DifferentiableOn ℂ F (TubeDomain (osBox θ)) ∧
+      (∀ x : Fin S.card → ℝ,
+        F (fun i => (x i : ℂ)) =
+          (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) *
+            𝒮 (m + 1) α
+              (osBuildPoints m x_sp (osSubstTimes S t (fun i => Real.exp (x i))) 0)) ∧
+      (∀ w ∈ TubeDomain (osBox θ),
+        ‖F w‖ ≤ K_bd * B_bd ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M) *
+          ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M)
+
+def osDoubledLeftS {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card) :
+    Finset (Fin (2 * ((S.orderEmbOfFin rfl i_cut).val + 1) - 1)) :=
+  let r := S.orderEmbOfFin rfl i_cut
+  Finset.univ.filter fun j : Fin (2 * (r.val + 1) - 1) =>
+    if h1 : j.val < r.val then (⟨j.val, by omega⟩ : Fin m) ∈ S
+    else if h2 : j.val = r.val then False
+    else (⟨r.val - 1 - (j.val - (r.val + 1)), by omega⟩ : Fin m) ∈ S
+
+lemma mem_osDoubledLeftS_of_lt {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card)
+    (j : Fin (2 * ((S.orderEmbOfFin rfl i_cut).val + 1) - 1))
+    (h1 : j.val < (S.orderEmbOfFin rfl i_cut).val) :
+    j ∈ osDoubledLeftS S i_cut ↔ (⟨j.val, by omega⟩ : Fin m) ∈ S := by
+  simp only [osDoubledLeftS, Finset.mem_filter, Finset.mem_univ, true_and, dif_pos h1]
+
+lemma notMem_osDoubledLeftS_mid {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card)
+    (j : Fin (2 * ((S.orderEmbOfFin rfl i_cut).val + 1) - 1))
+    (h2 : j.val = (S.orderEmbOfFin rfl i_cut).val) :
+    j ∉ osDoubledLeftS S i_cut := by
+  simp only [osDoubledLeftS, Finset.mem_filter, Finset.mem_univ, true_and]
+  rw [dif_neg (by omega), dif_pos h2]
+  exact not_false
+
+lemma mem_osDoubledLeftS_of_gt {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card)
+    (j : Fin (2 * ((S.orderEmbOfFin rfl i_cut).val + 1) - 1))
+    (h3 : (S.orderEmbOfFin rfl i_cut).val < j.val) :
+    j ∈ osDoubledLeftS S i_cut ↔
+      (⟨(S.orderEmbOfFin rfl i_cut).val - 1 - (j.val - ((S.orderEmbOfFin rfl i_cut).val + 1)),
+        by omega⟩ : Fin m) ∈ S := by
+  simp only [osDoubledLeftS, Finset.mem_filter, Finset.mem_univ, true_and]
+  rw [dif_neg (by omega), dif_neg (by omega)]
+
+lemma osDoubledLeftS_card {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card) :
+    (osDoubledLeftS S i_cut).card = 2 * i_cut.val := by
+  let r := S.orderEmbOfFin rfl i_cut
+  let L := r.val + 1
+  let m2 := 2 * L - 1
+  let S2 := osDoubledLeftS S i_cut
+  let S2L := S2.filter fun j : Fin m2 => j.val < r.val
+  let S2R := S2.filter fun j : Fin m2 => r.val < j.val
+  have h_union : S2 = S2L ∪ S2R := by
+    ext j
+    simp only [S2L, S2R, Finset.mem_union, Finset.mem_filter]
+    constructor
+    · intro h
+      rcases lt_trichotomy j.val r.val with h1 | h2 | h3
+      · exact Or.inl ⟨h, h1⟩
+      · exact absurd h (notMem_osDoubledLeftS_mid S i_cut j h2)
+      · exact Or.inr ⟨h, h3⟩
+    · rintro (⟨h, _⟩ | ⟨h, _⟩) <;> exact h
+  have h_disj : Disjoint S2L S2R := by
+    rw [Finset.disjoint_left]; intro j h1 h2
+    simp only [S2L, S2R, Finset.mem_filter] at h1 h2; omega
+  change S2.card = 2 * i_cut.val
+  rw [h_union, Finset.card_union_of_disjoint h_disj]
+  have h_cardL : S2L.card = i_cut.val := by
+    have h_eq : S2L.card = (Finset.univ : Finset (Fin i_cut.val)).card := by
+      refine Finset.card_bij (fun (j : Fin m2) hj =>
+        let hj_lt : j.val < r.val := (Finset.mem_filter.mp hj).2
+        let hj' : (⟨j.val, by omega⟩ : Fin m) ∈ S :=
+          (mem_osDoubledLeftS_of_lt S i_cut j hj_lt).mp (Finset.mem_filter.mp hj).1
+        let idx := (S.orderIsoOfFin rfl).symm ⟨⟨j.val, by omega⟩, hj'⟩
+        (⟨idx.val, by
+          have h_ord : S.orderEmbOfFin rfl idx = ⟨j.val, by omega⟩ :=
+            congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+          have h_lt : idx < i_cut := by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+            change j.val < r.val; exact hj_lt
+          exact Fin.lt_def.mp h_lt⟩ : Fin i_cut.val)) ?_ ?_ ?_
+      · intro _ _; exact Finset.mem_univ _
+      · intro j₁ hj₁ j₂ hj₂ h
+        have h1 : ((S.orderIsoOfFin rfl).symm ⟨⟨j₁.val, _⟩, _⟩ : Fin S.card) =
+            (S.orderIsoOfFin rfl).symm ⟨⟨j₂.val, _⟩, _⟩ :=
+          Fin.ext (congrArg (Fin.val : Fin i_cut.val → ℕ) h)
+        have h2 := (S.orderIsoOfFin rfl).symm.injective h1
+        exact Fin.ext (congrArg (fun a : S => a.val.val) h2)
+      · intro b _
+        let e := S.orderEmbOfFin rfl ⟨b.val, by omega⟩
+        have he_lt : e.val < r.val := by
+          have : (⟨b.val, by omega⟩ : Fin S.card) < i_cut := Fin.lt_def.mpr b.isLt
+          exact (S.orderEmbOfFin rfl).lt_iff_lt.mpr this
+        refine ⟨⟨e.val, by omega⟩, ?_, ?_⟩
+        · simp only [S2L, Finset.mem_filter]
+          exact ⟨(mem_osDoubledLeftS_of_lt S i_cut ⟨e.val, by omega⟩ he_lt).mpr
+            (S.orderEmbOfFin_mem rfl ⟨b.val, by omega⟩), he_lt⟩
+        · ext
+          dsimp only
+          have h_inv : (S.orderIsoOfFin rfl).symm ⟨e, S.orderEmbOfFin_mem rfl ⟨b.val, by omega⟩⟩ =
+              ⟨b.val, by omega⟩ := (S.orderIsoOfFin rfl).symm_apply_apply ⟨b.val, by omega⟩
+          exact congrArg Fin.val h_inv
+    simpa using h_eq
+  have h_cardR : S2R.card = i_cut.val := by
+    have h_eq : S2R.card = (Finset.univ : Finset (Fin i_cut.val)).card := by
+      refine Finset.card_bij (fun (j : Fin m2) hj =>
+        let hj_gt : r.val < j.val := (Finset.mem_filter.mp hj).2
+        let hj' : (⟨r.val - 1 - (j.val - (r.val + 1)), by omega⟩ : Fin m) ∈ S :=
+          (mem_osDoubledLeftS_of_gt S i_cut j hj_gt).mp (Finset.mem_filter.mp hj).1
+        let idx := (S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - (j.val - (r.val + 1)), by omega⟩, hj'⟩
+        (⟨idx.val, by
+          have h_ord : S.orderEmbOfFin rfl idx = ⟨r.val - 1 - (j.val - (r.val + 1)), by omega⟩ :=
+            congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+          have h_lt : idx < i_cut := by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+            change r.val - 1 - (j.val - (r.val + 1)) < r.val; omega
+          exact Fin.lt_def.mp h_lt⟩ : Fin i_cut.val)) ?_ ?_ ?_
+      · intro _ _; exact Finset.mem_univ _
+      · intro j₁ hj₁ j₂ hj₂ h
+        have hj1_gt : r.val < j₁.val := (Finset.mem_filter.mp hj₁).2
+        have hj2_gt : r.val < j₂.val := (Finset.mem_filter.mp hj₂).2
+        have h1 : ((S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - (j₁.val - (r.val + 1)), _⟩,
+          _⟩ : Fin S.card) =
+            (S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - (j₂.val - (r.val + 1)), _⟩, _⟩ :=
+          Fin.ext (congrArg (Fin.val : Fin i_cut.val → ℕ) h)
+        have h2 := (S.orderIsoOfFin rfl).symm.injective h1
+        have h3 : r.val - 1 - (j₁.val - (r.val + 1)) = r.val - 1 - (j₂.val - (r.val + 1)) :=
+          congrArg (fun a : S => a.val.val) h2
+        ext; omega
+      · intro b _
+        let e := S.orderEmbOfFin rfl ⟨b.val, by omega⟩
+        have he_lt : e.val < r.val := by
+          have : (⟨b.val, by omega⟩ : Fin S.card) < i_cut := Fin.lt_def.mpr b.isLt
+          exact (S.orderEmbOfFin rfl).lt_iff_lt.mpr this
+        refine ⟨⟨L + (r.val - 1 - e.val), by omega⟩, ?_, ?_⟩
+        · simp only [S2R, Finset.mem_filter]
+          refine ⟨(mem_osDoubledLeftS_of_gt S i_cut ⟨L + (r.val - 1 - e.val),
+            by omega⟩ (by dsimp [L]; omega)).mpr ?_,
+            by dsimp [L]; omega⟩
+          have h_eq_e : (⟨r.val - 1 - (L + (r.val - 1 - e.val) - (r.val + 1)),
+            by omega⟩ : Fin m) = e := by
+            ext; dsimp [L]; omega
+          rw [h_eq_e]
+          exact S.orderEmbOfFin_mem rfl ⟨b.val, by omega⟩
+        · ext
+          dsimp only
+          have h_eq_e : (⟨r.val - 1 - (L + (r.val - 1 - e.val) - (r.val + 1)),
+            by omega⟩ : Fin m) = e := by
+            ext; dsimp [L]; omega
+          have h_inv : (S.orderIsoOfFin rfl).symm
+              ⟨⟨r.val - 1 - (L + (r.val - 1 - e.val) - (r.val + 1)), by omega⟩, by
+                rw [h_eq_e]; exact S.orderEmbOfFin_mem rfl ⟨b.val, by omega⟩⟩ =
+              ⟨b.val, by omega⟩ := by
+            have h_sub : (⟨⟨r.val - 1 - (L + (r.val - 1 - e.val) - (r.val + 1)), by omega⟩, by
+                rw [h_eq_e]; exact S.orderEmbOfFin_mem rfl ⟨b.val, by omega⟩⟩ : S) =
+                ⟨e, S.orderEmbOfFin_mem rfl ⟨b.val, by omega⟩⟩ := Subtype.ext h_eq_e
+            rw [h_sub]
+            exact (S.orderIsoOfFin rfl).symm_apply_apply ⟨b.val, by omega⟩
+          exact congrArg Fin.val h_inv
+    simpa using h_eq
+  omega
+
+def osDoubledLeftT {m : ℕ} (S : Finset (Fin m)) (t : Fin m → ℝ) (i_cut : Fin S.card) (ε : ℝ) :
+    Fin (2 * ((S.orderEmbOfFin rfl i_cut).val + 1) - 1) → ℝ :=
+  let r := S.orderEmbOfFin rfl i_cut
+  fun j =>
+    if h1 : j.val < r.val then t ⟨j.val, by omega⟩
+    else if h2 : j.val = r.val then 2 * ε
+    else t ⟨r.val - 1 - (j.val - (r.val + 1)), by omega⟩
+
+lemma osDoubledLeftT_pos {m : ℕ} (S : Finset (Fin m)) {t : Fin m → ℝ}
+    (ht : ∀ j ∉ S, 0 < t j) (i_cut : Fin S.card) {ε : ℝ} (hε : 0 < ε) :
+    ∀ j ∉ osDoubledLeftS S i_cut, 0 < osDoubledLeftT S t i_cut ε j := by
+  let r := S.orderEmbOfFin rfl i_cut
+  intro j hj
+  dsimp only [osDoubledLeftT]
+  rcases lt_trichotomy j.val r.val with h1 | h2 | h3
+  · rw [dif_pos h1]
+    exact ht _ fun hmem => hj ((mem_osDoubledLeftS_of_lt S i_cut j h1).mpr hmem)
+  · rw [dif_neg (by omega), dif_pos h2]; positivity
+  · rw [dif_neg (by omega), dif_neg (by omega)]
+    exact ht _ fun hmem => hj ((mem_osDoubledLeftS_of_gt S i_cut j h3).mpr hmem)
+
+lemma osDoubledLeft_prod_compl {m : ℕ} (M : ℕ) (S : Finset (Fin m)) (t : Fin m → ℝ)
+    (i_cut : Fin S.card) (ε : ℝ) :
+    (∏ j ∈ (osDoubledLeftS S i_cut)ᶜ, (1 + (osDoubledLeftT S t i_cut ε j)⁻¹) ^ M) =
+      (1 + (2 * ε)⁻¹) ^ M *
+        (∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < (S.orderEmbOfFin rfl i_cut).val),
+          (1 + (t j)⁻¹) ^ M) ^ 2 := by
+  let r := S.orderEmbOfFin rfl i_cut
+  let m2 := 2 * (r.val + 1) - 1
+  let S2 := osDoubledLeftS S i_cut
+  let Cmid : Fin m2 := ⟨r.val, by omega⟩
+  have hCmid_mem : Cmid ∈ S2ᶜ := Finset.mem_compl.mpr (notMem_osDoubledLeftS_mid S i_cut Cmid rfl)
+  let CL := S2ᶜ.filter fun j : Fin m2 => j.val < r.val
+  let CR := S2ᶜ.filter fun j : Fin m2 => r.val < j.val
+  have h_part : S2ᶜ = insert Cmid (CL ∪ CR) := by
+    ext j
+    simp only [CL, CR, Finset.mem_insert, Finset.mem_union, Finset.mem_filter, Finset.mem_compl,
+      Fin.ext_iff, Cmid]
+    constructor
+    · intro hj
+      rcases lt_trichotomy j.val r.val with h1 | h2 | h3
+      · exact Or.inr (Or.inl ⟨hj, h1⟩)
+      · exact Or.inl h2
+      · exact Or.inr (Or.inr ⟨hj, h3⟩)
+    · rintro (h2 | ⟨hj, _⟩ | ⟨hj, _⟩)
+      · have hj_eq : j = Cmid := Fin.ext h2
+        rw [hj_eq]; exact Finset.mem_compl.mp hCmid_mem
+      · exact hj
+      · exact hj
+  have h_not : Cmid ∉ CL ∪ CR := by simp [CL, CR, Cmid]
+  have h_disj : Disjoint CL CR := by
+    rw [Finset.disjoint_left]; intro j h1 h2; simp [CL, CR] at h1 h2; omega
+  change (∏ j ∈ S2ᶜ, (1 + (osDoubledLeftT S t i_cut ε j)⁻¹) ^ M) = _
+  rw [h_part, Finset.prod_insert h_not, Finset.prod_union h_disj]
+  have h_mid_val : osDoubledLeftT S t i_cut ε Cmid = 2 * ε := by
+    dsimp only [osDoubledLeftT, Cmid]
+    rw [dif_neg (lt_irrefl _), dif_pos rfl]
+  rw [h_mid_val, sq]
+  congr 1
+  have h_pL : (∏ j ∈ CL, (1 + (osDoubledLeftT S t i_cut ε j)⁻¹) ^ M) =
+      ∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < r.val), (1 + (t j)⁻¹) ^ M := by
+    refine Finset.prod_bij (fun (j : Fin m2) hj =>
+      (⟨j.val, by simp [CL] at hj; omega⟩ : Fin m)) ?_ ?_ ?_ ?_
+    · intro j hj
+      simp only [CL, Finset.mem_filter, Finset.mem_compl] at hj ⊢
+      exact ⟨fun hmem => hj.1 ((mem_osDoubledLeftS_of_lt S i_cut j hj.2).mpr hmem), hj.2⟩
+    · intro j₁ _ j₂ _ h; exact Fin.ext (congrArg (Fin.val : Fin m → ℕ) h)
+    · intro b hb
+      simp only [Finset.mem_filter, Finset.mem_compl] at hb
+      refine ⟨⟨b.val, by omega⟩, ?_, by ext; rfl⟩
+      simp only [CL, Finset.mem_filter, Finset.mem_compl]
+      exact ⟨fun hmem => hb.1 ((mem_osDoubledLeftS_of_lt S i_cut ⟨b.val, by omega⟩ hb.2).mp hmem),
+        hb.2⟩
+    · intro j hj
+      simp only [CL, Finset.mem_filter] at hj
+      dsimp only [osDoubledLeftT]; rw [dif_pos hj.2]
+  have h_pR : (∏ j ∈ CR, (1 + (osDoubledLeftT S t i_cut ε j)⁻¹) ^ M) =
+      ∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < r.val), (1 + (t j)⁻¹) ^ M := by
+    refine Finset.prod_bij (fun (j : Fin m2) hj =>
+      (⟨r.val - 1 - (j.val - (r.val + 1)), by simp [CR] at hj; omega⟩ : Fin m)) ?_ ?_ ?_ ?_
+    · intro j hj
+      simp only [CR, Finset.mem_filter, Finset.mem_compl] at hj ⊢
+      exact ⟨fun hmem => hj.1 ((mem_osDoubledLeftS_of_gt S i_cut j hj.2).mpr hmem), by omega⟩
+    · intro j₁ hj₁ j₂ hj₂ h
+      simp only [CR, Finset.mem_filter] at hj₁ hj₂
+      have h1 : r.val - 1 - (j₁.val - (r.val + 1)) = r.val - 1 - (j₂.val - (r.val + 1)) :=
+        congrArg (Fin.val : Fin m → ℕ) h
+      ext; omega
+    · intro b hb
+      simp only [Finset.mem_filter, Finset.mem_compl] at hb
+      refine ⟨⟨(r.val + 1) + (r.val - 1 - b.val), by omega⟩, ?_, by ext; dsimp; omega⟩
+      simp only [CR, Finset.mem_filter, Finset.mem_compl]
+      refine ⟨fun hmem => hb.1 ?_, by omega⟩
+      have h_mem' := (mem_osDoubledLeftS_of_gt S i_cut ⟨(r.val + 1) + (r.val - 1 - b.val), by omega⟩
+        (by dsimp; omega)).mp hmem
+      have h_eq_b : (⟨r.val - 1 - ((r.val + 1) + (r.val - 1 - b.val) - (r.val + 1)),
+        by omega⟩ : Fin m) = b := by
+        ext; dsimp; omega
+      rwa [h_eq_b] at h_mem'
+    · intro j hj
+      simp only [CR, Finset.mem_filter] at hj
+      dsimp only [osDoubledLeftT]; rw [dif_neg (by omega), dif_neg (by omega)]
+  rw [h_pL, h_pR]
+
+lemma os_doubled_left_kernel_of_hyp
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    {M k_lim : ℕ} {θ K_bd B_bd : ℝ} (hK_nn : 0 ≤ K_bd) (hB_nn : 0 ≤ B_bd)
+    (hhyp : OSDampedSubsetBound hOS M k_lim θ K_bd B_bd)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (S : Finset (Fin m)) (t : Fin m → ℝ) (ht : ∀ j ∉ S, 0 < t j)
+    (i_cut : Fin S.card) (hcard : 2 * i_cut.val ≤ k_lim) :
+    let r : Fin m := S.orderEmbOfFin rfl i_cut
+    let L : ℕ := r.val + 1
+    let α_L : Fin L → ι := fun j => α ⟨r.val - j.val, by omega⟩
+    let x_sp_L : Fin L → Fin 3 → ℝ := fun j => x_sp ⟨r.val - j.val, by omega⟩
+    let B_L : ℝ := (osStarRowBound Sstr) ^ L * K_bd * B_bd ^ (2 * L) *
+      (((2 * L).factorial : ℝ) ^ M) *
+      (∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < r.val), (1 + (t j)⁻¹) ^ M) ^ 2
+    ∃ K_L : ℝ → (Fin i_cut.val → ℂ) → (Fin i_cut.val → ℂ) → ℂ,
+      (∀ ε : ℝ, 0 < ε →
+        DifferentiableOn ℂ (fun p : (Fin i_cut.val → ℂ) × (Fin i_cut.val → ℂ) => K_L ε p.1 p.2)
+          (TubeDomain (osBox θ) ×ˢ TubeDomain (osBox θ))) ∧
+      (∀ ε : ℝ, 0 < ε → ∀ w₁ ∈ TubeDomain (osBox θ), ∀ w₂ ∈ TubeDomain (osBox θ),
+        ‖K_L ε w₁ w₂‖ ≤ B_L * (1 + (2 * ε)⁻¹) ^ M) ∧
+      (∀ (ε : ℝ) (hε : 0 < ε) (x₁ x₂ : Fin i_cut.val → ℝ),
+        let mkXL : (Fin i_cut.val → ℝ) → posOrderedEuclidN L := fun uL =>
+          let u_full : Fin S.card → ℝ := fun i =>
+            if hi : i.val < i_cut.val then Real.exp (uL ⟨i.val, hi⟩) else 1
+          let t_L : Fin (L - 1) → ℝ := fun j =>
+            osSubstTimes S t u_full ⟨r.val - 1 - j.val, by omega⟩
+          ⟨osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) t_L ε ∘ finCongr (by omega), by
+            have h_pos : ∀ j : Fin (L - 1), 0 < t_L j := fun j =>
+              osSubstTimes_pos S ht (fun i => by dsimp [u_full]; split_ifs <;> positivity) _
+            have h_mem := osBuildPoints_mem_posOrderedEuclidN (L - 1)
+              (x_sp_L ∘ finCongr (by omega)) h_pos hε
+            refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩
+        let Φ_L : (Fin i_cut.val → ℝ) → OSHilbert hOS.toReflectionPositiveData := fun uL =>
+          (∏ j : Fin i_cut.val, logTimeDamp (uL j : ℂ) ^ M) •
+            osLeftState hOS.toReflectionPositiveData L α_L (mkXL uL)
+        ⟪Φ_L x₁, Φ_L x₂⟫_ℂ = K_L ε (fun j => (x₁ j : ℂ)) (fun j => (x₂ j : ℂ))) := by
+  intro r L α_L x_sp_L B_L
+  let m2 : ℕ := 2 * L - 1
+  have hm2 : m2 + 1 = L + L := by omega
+  let x_sp_2 : Fin (m2 + 1) → Fin 3 → ℝ :=
+    Fin.append (x_sp_L ∘ Fin.rev) x_sp_L ∘ finCongr hm2
+  let S2 : Finset (Fin m2) := osDoubledLeftS S i_cut
+  have hS2_card : S2.card = 2 * i_cut.val := osDoubledLeftS_card S i_cut
+  let t2 : ℝ → Fin m2 → ℝ := osDoubledLeftT S t i_cut
+  have ht2_pos : ∀ ε : ℝ, 0 < ε → ∀ j ∉ S2, 0 < t2 ε j :=
+    fun _ hε => osDoubledLeftT_pos S ht i_cut hε
+  have h_prod_compl : ∀ ε : ℝ,
+      (∏ j ∈ S2ᶜ, (1 + (t2 ε j)⁻¹) ^ M) =
+        (1 + (2 * ε)⁻¹) ^ M *
+          (∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < r.val), (1 + (t j)⁻¹) ^ M) ^ 2 :=
+    osDoubledLeft_prod_compl M S t i_cut
+  let comb : (Fin i_cut.val → ℂ) → (Fin i_cut.val → ℂ) → (Fin S2.card → ℂ) :=
+    fun w₁ w₂ k =>
+      if hk : k.val < i_cut.val then w₁ ⟨k.val, hk⟩
+      else w₂ ⟨2 * i_cut.val - 1 - k.val, by omega⟩
+  have h_comb_diff : Differentiable ℂ
+      (fun p : (Fin i_cut.val → ℂ) × (Fin i_cut.val → ℂ) => comb p.1 p.2) :=
+    differentiable_pi.mpr fun k => by
+      dsimp only [comb]
+      split_ifs with hk
+      · exact ((ContinuousLinearMap.proj (R := ℂ) (⟨k.val, hk⟩ : Fin i_cut.val)).comp
+          (ContinuousLinearMap.fst ℂ (Fin i_cut.val → ℂ) (Fin i_cut.val → ℂ))).differentiable
+      · exact ((ContinuousLinearMap.proj (R := ℂ)
+          (⟨2 * i_cut.val - 1 - k.val, by omega⟩ : Fin i_cut.val)).comp
+          (ContinuousLinearMap.snd ℂ (Fin i_cut.val → ℂ) (Fin i_cut.val → ℂ))).differentiable
+  have h_comb_maps : Set.MapsTo
+      (fun p : (Fin i_cut.val → ℂ) × (Fin i_cut.val → ℂ) => comb p.1 p.2)
+      (TubeDomain (osBox θ) ×ˢ TubeDomain (osBox θ)) (TubeDomain (osBox θ)) := by
+    intro p hp k
+    dsimp only [comb]
+    split_ifs with hk
+    · exact hp.1 ⟨k.val, hk⟩
+    · exact hp.2 ⟨2 * i_cut.val - 1 - k.val, by omega⟩
+  classical
+  let F_γ : (ε : ℝ) → (0 < ε) → (Fin L → ι) → (Fin S2.card → ℂ) → ℂ := fun ε hε γ =>
+    Classical.choose (hhyp m2 (osConcatIdx L L α_L γ ∘ finCongr hm2) x_sp_2 S2 (t2 ε)
+      (by omega) (ht2_pos ε hε))
+  have hF_γ_spec : ∀ (ε : ℝ) (hε : 0 < ε) (γ : Fin L → ι),
+      DifferentiableOn ℂ (F_γ ε hε γ) (TubeDomain (osBox θ)) ∧
+      (∀ x : Fin S2.card → ℝ,
+        F_γ ε hε γ (fun i => (x i : ℂ)) =
+          (∏ i : Fin S2.card, logTimeDamp (x i : ℂ) ^ M) *
+            𝒮 (m2 + 1) (osConcatIdx L L α_L γ ∘ finCongr hm2)
+              (osBuildPoints m2 x_sp_2 (osSubstTimes S2 (t2 ε) (fun i => Real.exp (x i))) 0)) ∧
+      (∀ w ∈ TubeDomain (osBox θ),
+        ‖F_γ ε hε γ w‖ ≤ K_bd * B_bd ^ (m2 + 1) * (((m2 + 1).factorial : ℝ) ^ M) *
+          ∏ j ∈ S2ᶜ, (1 + (t2 ε j)⁻¹) ^ M) :=
+    fun ε hε γ => Classical.choose_spec
+      (hhyp m2 (osConcatIdx L L α_L γ ∘ finCongr hm2) x_sp_2 S2 (t2 ε) (by omega) (ht2_pos ε hε))
+  let K_L : ℝ → (Fin i_cut.val → ℂ) → (Fin i_cut.val → ℂ) → ℂ := fun ε w₁ w₂ =>
+    if hε : 0 < ε then
+      ∑ γ : Fin L → ι, (∏ i : Fin L, Sstr.C (α_L i) (γ i)) * F_γ ε hε γ (comb w₁ w₂)
+    else 0
+  refine ⟨K_L, ?_, ?_, ?_⟩
+  · intro ε hε
+    have h_eq : (fun p : (Fin i_cut.val → ℂ) × (Fin i_cut.val → ℂ) => K_L ε p.1 p.2) =
+        fun p => ∑ γ : Fin L → ι, (∏ i : Fin L, Sstr.C (α_L i) (γ i)) *
+          F_γ ε hε γ (comb p.1 p.2) := by
+      ext p; simp [K_L, hε]
+    rw [h_eq]
+    refine DifferentiableOn.fun_sum fun γ _ => (differentiableOn_const _).mul ?_
+    exact (hF_γ_spec ε hε γ).1.comp h_comb_diff.differentiableOn h_comb_maps
+  · intro ε hε w₁ hw₁ w₂ hw₂
+    dsimp only [K_L]
+    rw [dif_pos hε]
+    let M_each : ℝ := K_bd * B_bd ^ (2 * L) * (((2 * L).factorial : ℝ) ^ M) *
+      ((1 + (2 * ε)⁻¹) ^ M *
+        (∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < r.val), (1 + (t j)⁻¹) ^ M) ^ 2)
+    have hM_nn : 0 ≤ M_each := by dsimp [M_each]; positivity
+    calc ‖∑ γ : Fin L → ι, (∏ i : Fin L, Sstr.C (α_L i) (γ i)) * F_γ ε hε γ (comb w₁ w₂)‖
+        ≤ ∑ γ : Fin L → ι, ‖(∏ i : Fin L, Sstr.C (α_L i) (γ i)) * F_γ ε hε γ (comb w₁ w₂)‖ :=
+          norm_sum_le _ _
+      _ ≤ ∑ γ : Fin L → ι, (∏ i : Fin L, ‖Sstr.C (α_L i) (γ i)‖) * M_each := by
+          refine Finset.sum_le_sum fun γ _ => ?_
+          rw [norm_mul, norm_prod]
+          refine mul_le_mul_of_nonneg_left ?_ (Finset.prod_nonneg fun _ _ => norm_nonneg _)
+          have hbd := (hF_γ_spec ε hε γ).2.2 (comb w₁ w₂) (h_comb_maps (x := (w₁, w₂)) ⟨hw₁, hw₂⟩)
+          rw [h_prod_compl ε] at hbd
+          have hm2_eq : m2 + 1 = 2 * L := by omega
+          simpa [M_each, hm2_eq] using hbd
+      _ = (∑ γ : Fin L → ι, ∏ i : Fin L, ‖Sstr.C (α_L i) (γ i)‖) * M_each := by
+          rw [← Finset.sum_mul]
+      _ ≤ (osStarRowBound Sstr) ^ L * M_each :=
+          mul_le_mul_of_nonneg_right (sum_prod_norm_starStructure_le Sstr L α_L) hM_nn
+      _ = B_L * (1 + (2 * ε)⁻¹) ^ M := by dsimp [B_L, M_each]; ring
+  · intro ε hε x₁ x₂
+    dsimp only [K_L]
+    rw [dif_pos hε]
+    rw [inner_smul_left, inner_smul_right, inner_osLeftState_osLeftState]
+    have h_conj_x1 : (starRingEnd ℂ) (∏ j : Fin i_cut.val, logTimeDamp (x₁ j : ℂ) ^ M) =
+        ∏ j : Fin i_cut.val, logTimeDamp (x₁ j : ℂ) ^ M := by
+      rw [map_prod]
+      refine Finset.prod_congr rfl fun j _ => ?_
+      rw [map_pow]; congr 1; dsimp [logTimeDamp]
+      rw [map_div₀, map_pow, map_add, map_one, ← Complex.ofReal_exp, Complex.conj_ofReal]
+    rw [h_conj_x1, Finset.mul_sum, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun γ _ => ?_
+    let x_comb : Fin S2.card → ℝ := fun k =>
+      if hk : k.val < i_cut.val then x₁ ⟨k.val, hk⟩
+      else x₂ ⟨2 * i_cut.val - 1 - k.val, by omega⟩
+    have h_comb_real : comb (fun j => (x₁ j : ℂ)) (fun j => (x₂ j : ℂ)) =
+        fun k => (x_comb k : ℂ) := by
+      ext k; dsimp only [comb, x_comb]; split_ifs <;> rfl
+    rw [h_comb_real, (hF_γ_spec ε hε γ).2.1 x_comb]
+    have h_prod_damp : (∏ k : Fin S2.card, logTimeDamp (x_comb k : ℂ) ^ M) =
+        (∏ j : Fin i_cut.val, logTimeDamp (x₁ j : ℂ) ^ M) *
+          (∏ j : Fin i_cut.val, logTimeDamp (x₂ j : ℂ) ^ M) := by
+      have h_u : (Finset.univ : Finset (Fin S2.card)) =
+          (Finset.univ.filter fun k : Fin S2.card => k.val < i_cut.val) ∪
+            (Finset.univ.filter fun k : Fin S2.card => i_cut.val ≤ k.val) := by
+        ext k; simp; omega
+      have h_disj : Disjoint (Finset.univ.filter fun k : Fin S2.card => k.val < i_cut.val)
+          (Finset.univ.filter fun k : Fin S2.card => i_cut.val ≤ k.val) := by
+        rw [Finset.disjoint_left]; intro k h1 h2; simp at h1 h2; omega
+      rw [h_u, Finset.prod_union h_disj]
+      refine congrArg₂ (· * ·) ?_ ?_
+      · refine Finset.prod_bij (fun (k : Fin S2.card) hk =>
+          (⟨k.val, (Finset.mem_filter.mp hk).2⟩ : Fin i_cut.val)) ?_ ?_ ?_ ?_
+        · intro _ _; exact Finset.mem_univ _
+        · intro k₁ _ k₂ _ h; exact Fin.ext (congrArg (Fin.val : Fin i_cut.val → ℕ) h)
+        · intro b _
+          refine ⟨⟨b.val, by omega⟩, by
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and]; exact b.isLt,
+            by ext; rfl⟩
+        · intro k hk
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+          dsimp only [x_comb]; rw [dif_pos hk]
+      · refine Finset.prod_bij (fun (k : Fin S2.card) hk =>
+          (⟨2 * i_cut.val - 1 - k.val, by simp at hk; omega⟩ : Fin i_cut.val)) ?_ ?_ ?_ ?_
+        · intro _ _; exact Finset.mem_univ _
+        · intro k₁ hk₁ k₂ hk₂ h
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk₁ hk₂
+          have h1 := congrArg (Fin.val : Fin i_cut.val → ℕ) h
+          dsimp at h1; ext; omega
+        · intro b _
+          refine ⟨⟨2 * i_cut.val - 1 - b.val, by omega⟩,
+            by simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega,
+            by ext; dsimp; omega⟩
+        · intro k hk
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+          dsimp only [x_comb]; rw [dif_neg (by omega)]
+    rw [h_prod_damp]
+    let u_full₁ : Fin S.card → ℝ := fun i =>
+      if hi : i.val < i_cut.val then Real.exp (x₁ ⟨i.val, hi⟩) else 1
+    let u_full₂ : Fin S.card → ℝ := fun i =>
+      if hi : i.val < i_cut.val then Real.exp (x₂ ⟨i.val, hi⟩) else 1
+    let tL₁ : Fin (L - 1) → ℝ := fun j => osSubstTimes S t u_full₁ ⟨r.val - 1 - j.val, by omega⟩
+    let tL₂ : Fin (L - 1) → ℝ := fun j => osSubstTimes S t u_full₂ ⟨r.val - 1 - j.val, by omega⟩
+    have h_t_eq : osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k)) =
+        (fun k : Fin (L + L - 1) =>
+          if hkL : k.val < L - 1 then tL₁ ⟨L - 2 - k.val, by omega⟩
+          else if hkM : k.val = L - 1 then ε + ε
+          else tL₂ ⟨k.val - L, by omega⟩) ∘ finCongr (by omega : m2 = L + L - 1) := by
+      ext j
+      rcases lt_trichotomy j.val r.val with h1 | h2 | h3
+      · have h1' : j.val < L - 1 := by dsimp [L]; omega
+        simp only [Function.comp_apply, finCongr_apply, Fin.val_cast, dif_pos h1', tL₁]
+        have h_idx_eq : (⟨r.val - 1 - (L - 2 - j.val), by omega⟩ : Fin m) = ⟨j.val, by omega⟩ := by
+          ext; dsimp [L]; omega
+        rw [h_idx_eq]
+        dsimp only [osSubstTimes]
+        by_cases hmem : (⟨j.val, by omega⟩ : Fin m) ∈ S
+        · have hj_S2 : j ∈ S2 := (mem_osDoubledLeftS_of_lt S i_cut j h1).mpr hmem
+          rw [dif_pos hj_S2, dif_pos hmem]
+          let idx := (S.orderIsoOfFin rfl).symm ⟨⟨j.val, by omega⟩, hmem⟩
+          have h_ord : S.orderEmbOfFin rfl idx = ⟨j.val, by omega⟩ :=
+            congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+          have h_lt : idx.val < i_cut.val := Fin.lt_def.mp (by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]; change j.val < r.val; exact h1)
+          have h_k2_val : ((S2.orderIsoOfFin rfl).symm ⟨j, hj_S2⟩).val = idx.val := by
+            rw [orderIsoOfFin_symm_val_eq_card_filter_lt S2 hj_S2,
+              orderIsoOfFin_symm_val_eq_card_filter_lt S hmem]
+            refine Finset.card_bij (fun (a : Fin m2) ha =>
+              (⟨a.val, by simp at ha; omega⟩ : Fin m)) ?_ ?_ ?_
+            · intro a ha
+              simp only [Finset.mem_filter] at ha ⊢
+              have ha_lt : a.val < r.val := lt_trans (Fin.lt_def.mp ha.2) h1
+              exact ⟨(mem_osDoubledLeftS_of_lt S i_cut a ha_lt).mp ha.1,
+                Fin.lt_def.mpr (Fin.lt_def.mp ha.2)⟩
+            · intro a₁ _ a₂ _ h; exact Fin.ext (congrArg (Fin.val : Fin m → ℕ) h)
+            · intro b hb
+              simp only [Finset.mem_filter] at hb
+              have hb_lt : b.val < j.val := Fin.lt_def.mp hb.2
+              refine ⟨⟨b.val, by omega⟩, ?_, by ext; rfl⟩
+              simp only [Finset.mem_filter]
+              exact ⟨(mem_osDoubledLeftS_of_lt S i_cut ⟨b.val,
+                by omega⟩ (lt_trans hb_lt h1)).mpr hb.1,
+                Fin.lt_def.mpr hb_lt⟩
+          dsimp only [x_comb, u_full₁]
+          rw [dif_pos (by omega), dif_pos h_lt]
+          congr 2; ext; exact h_k2_val
+        · have hj_not : j ∉ S2 := fun h => hmem ((mem_osDoubledLeftS_of_lt S i_cut j h1).mp h)
+          rw [dif_neg hj_not, dif_neg hmem]
+          dsimp only [t2, osDoubledLeftT]; rw [dif_pos h1]
+      · have h1' : ¬ j.val < L - 1 := by dsimp [L]; omega
+        have h2' : j.val = L - 1 := by dsimp [L]; omega
+        simp only [Function.comp_apply, finCongr_apply, Fin.val_cast, dif_neg h1', dif_pos h2']
+        have hj_not : j ∉ S2 := notMem_osDoubledLeftS_mid S i_cut j h2
+        rw [osSubstTimes_of_notMem _ _ _ hj_not]
+        dsimp only [t2, osDoubledLeftT]; rw [dif_neg (by omega), dif_pos h2]; ring
+      · have h1' : ¬ j.val < L - 1 := by dsimp [L]; omega
+        have h2' : j.val ≠ L - 1 := by dsimp [L]; omega
+        simp only [Function.comp_apply, finCongr_apply, Fin.val_cast, dif_neg h1', dif_neg h2', tL₂]
+        dsimp only [osSubstTimes]
+        by_cases hmem : (⟨r.val - 1 - (j.val - L), by omega⟩ : Fin m) ∈ S
+        · have hj_S2 : j ∈ S2 := (mem_osDoubledLeftS_of_gt S i_cut j h3).mpr hmem
+          rw [dif_pos hj_S2, dif_pos hmem]
+          let idx := (S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - (j.val - L), by omega⟩, hmem⟩
+          have h_ord : S.orderEmbOfFin rfl idx = ⟨r.val - 1 - (j.val - L), by omega⟩ :=
+            congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+          have h_lt : idx.val < i_cut.val := Fin.lt_def.mp (by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+            change r.val - 1 - (j.val - L) < r.val; dsimp [L]; omega)
+          have h_k2_val : ((S2.orderIsoOfFin rfl).symm ⟨j, hj_S2⟩).val =
+              2 * i_cut.val - 1 - idx.val := by
+            have h_gt_count := orderIsoOfFin_symm_val_add_card_gt S2 hj_S2
+            have h_rank_S : idx.val =
+                (S.filter fun a => a < ⟨r.val - 1 - (j.val - L), by omega⟩).card :=
+              orderIsoOfFin_symm_val_eq_card_filter_lt S hmem
+            have h_eq_card : (S2.filter fun a => j < a).card =
+                (S.filter fun a => a < ⟨r.val - 1 - (j.val - L), by omega⟩).card := by
+              refine Finset.card_bij (fun (a : Fin m2) ha =>
+                (⟨r.val - 1 - (a.val - L), by simp at ha; omega⟩ : Fin m)) ?_ ?_ ?_
+              · intro a ha
+                simp only [Finset.mem_filter] at ha ⊢
+                have ha_gt : r.val < a.val := lt_trans h3 (Fin.lt_def.mp ha.2)
+                exact ⟨(mem_osDoubledLeftS_of_gt S i_cut a ha_gt).mp ha.1,
+                  Fin.lt_def.mpr (by dsimp [L]; have := Fin.lt_def.mp ha.2; omega)⟩
+              · intro a₁ ha₁ a₂ ha₂ h
+                simp only [Finset.mem_filter] at ha₁ ha₂
+                have h1a := Fin.lt_def.mp ha₁.2
+                have h2a := Fin.lt_def.mp ha₂.2
+                have h_eq := congrArg (Fin.val : Fin m → ℕ) h; dsimp at h_eq; ext; omega
+              · intro b hb
+                simp only [Finset.mem_filter] at hb
+                have hb_lt : b.val < r.val - 1 - (j.val - L) := Fin.lt_def.mp hb.2
+                refine ⟨⟨L + (r.val - 1 - b.val), by omega⟩, ?_, by ext; dsimp; omega⟩
+                simp only [Finset.mem_filter]
+                refine ⟨(mem_osDoubledLeftS_of_gt S i_cut ⟨L + (r.val - 1 - b.val), by omega⟩
+                  (by dsimp [L]; omega)).mpr ?_, Fin.lt_def.mpr (by dsimp [L]; omega)⟩
+                have h_eq_b : (⟨r.val - 1 - (L + (r.val - 1 - b.val) - (r.val + 1)),
+                  by omega⟩ : Fin m) = b := by
+                  ext; dsimp [L]; omega
+                rw [h_eq_b]; exact hb.1
+            have h_bound := ((S2.orderIsoOfFin rfl).symm ⟨j, hj_S2⟩).isLt
+            omega
+          dsimp only [x_comb, u_full₂]
+          rw [dif_neg (by omega), dif_pos h_lt]
+          congr 2; ext; dsimp; omega
+        · have hj_not : j ∉ S2 := fun h => hmem ((mem_osDoubledLeftS_of_gt S i_cut j h3).mp h)
+          rw [dif_neg hj_not, dif_neg hmem]
+          dsimp only [t2, osDoubledLeftT]; rw [dif_neg (by omega), dif_neg (by omega)]
+    have h_concat := osConcatPoint_osBuildPoints_eq_shift L L (by omega) (by omega)
+      x_sp_L tL₁ ε x_sp_L tL₂ ε
+    dsimp only at h_concat
+    have h_pos_all : ∀ k : Fin m2, 0 < osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k)) k :=
+      osSubstTimes_pos S2 (ht2_pos ε hε) (fun _ => Real.exp_pos _)
+    have h_S_eq : 𝒮 (L + L) (osConcatIdx L L α_L γ)
+        (osConcatPoint L L
+          (osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) tL₁ ε ∘ finCongr (by omega))
+          (osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) tL₂ ε ∘ finCongr (by omega))) =
+        𝒮 (m2 + 1) (osConcatIdx L L α_L γ ∘ finCongr hm2)
+          (osBuildPoints m2 x_sp_2 (osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k))) 0) := by
+      rw [h_concat, ← schwinger_congr_n 𝒮 hm2 (osConcatIdx L L α_L γ)]
+      have h_pts_eq : (osBuildPoints (L + L - 1)
+          (Fin.append (x_sp_L ∘ Fin.rev) x_sp_L ∘ finCongr (by omega))
+          (fun k => if hkL : k.val < L - 1 then tL₁ ⟨L - 2 - k.val, by omega⟩
+            else if hkM : k.val = L - 1 then ε + ε
+            else tL₂ ⟨k.val - L, by omega⟩)
+          (-(ε + ∑ j : Fin (L - 1), tL₁ j)) ∘ finCongr (by omega : L + L = L + L - 1 + 1)) ∘
+          finCongr hm2 =
+          osBuildPoints m2 x_sp_2 (osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k)))
+            (-(ε + ∑ j : Fin (L - 1), tL₁ j)) := by
+        ext i μ
+        refine Fin.cases ?_ (fun ν => ?_) μ
+        · simp only [Function.comp_apply, osBuildPoints_zero_coord, h_t_eq]
+          congr 1
+          refine Finset.sum_bij (fun (k : Fin (L + L - 1)) _ => finCongr (by omega : L + L - 1 =
+            m2) k)
+            ?_ ?_ ?_ ?_
+          · intro k hk; simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk ⊢; exact hk
+          · intro k₁ _ k₂ _ h; exact (finCongr (by omega : L + L - 1 = m2)).injective h
+          · intro b hb
+            refine ⟨finCongr (by omega : m2 = L + L - 1) b,
+              by simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢; exact hb,
+              by ext; rfl⟩
+          · intro k _; simp
+        · rfl
+      rw [h_pts_eq]
+      exact schwinger_osBuildPoints_shift hOS m2 (osConcatIdx L L α_L γ ∘ finCongr hm2) x_sp_2
+        h_pos_all 0 (-(ε + ∑ j : Fin (L - 1), tL₁ j))
+    have h_S_eq' : hOS.toReflectionPositiveData.𝒮 (L + L) (osConcatIdx L L α_L γ)
+        (osConcatPoint L L
+          (osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) tL₁ ε ∘ finCongr (by omega))
+          (osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) tL₂ ε ∘ finCongr (by omega))) =
+        𝒮 (m2 + 1) (osConcatIdx L L α_L γ ∘ finCongr hm2)
+          (osBuildPoints m2 x_sp_2 (osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k))) 0) :=
+      h_S_eq
+    change (∏ j, logTimeDamp ↑(x₁ j) ^ M) *
+      ((∏ j, logTimeDamp ↑(x₂ j) ^ M) *
+        ((∏ i, Sstr.C (α_L i) (γ i)) *
+          hOS.toReflectionPositiveData.𝒮 (L + L) (osConcatIdx L L α_L γ)
+            (osConcatPoint L L
+              (osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) tL₁ ε ∘ finCongr (by omega))
+              (osBuildPoints (L -
+                1) (x_sp_L ∘ finCongr (by omega)) tL₂ ε ∘ finCongr (by omega))))) = _
+    rw [h_S_eq']
+    ring
+def osDoubledRightS {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card) :
+    Finset (Fin (2 * (m - (S.orderEmbOfFin rfl i_cut).val) - 1)) :=
+  let r := S.orderEmbOfFin rfl i_cut
+  let R := m - r.val
+  Finset.univ.filter fun j : Fin (2 * R - 1) =>
+    if h1 : j.val < R - 1 then (⟨r.val + 1 + (R - 2 - j.val), by omega⟩ : Fin m) ∈ S
+    else if h2 : j.val = R - 1 then False
+    else (⟨r.val + 1 + (j.val - R), by omega⟩ : Fin m) ∈ S
+
+lemma mem_osDoubledRightS_of_lt {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card)
+    (j : Fin (2 * (m - (S.orderEmbOfFin rfl i_cut).val) - 1))
+    (h1 : j.val < m - (S.orderEmbOfFin rfl i_cut).val - 1) :
+    j ∈ osDoubledRightS S i_cut ↔
+      (⟨(S.orderEmbOfFin rfl i_cut).val + 1 + (m - (S.orderEmbOfFin rfl i_cut).val - 2 - j.val),
+        by omega⟩ : Fin m) ∈ S := by
+  simp only [osDoubledRightS, Finset.mem_filter, Finset.mem_univ, true_and, dif_pos h1]
+
+lemma notMem_osDoubledRightS_mid {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card)
+    (j : Fin (2 * (m - (S.orderEmbOfFin rfl i_cut).val) - 1))
+    (h2 : j.val = m - (S.orderEmbOfFin rfl i_cut).val - 1) :
+    j ∉ osDoubledRightS S i_cut := by
+  simp only [osDoubledRightS, Finset.mem_filter, Finset.mem_univ, true_and]
+  rw [dif_neg (by omega), dif_pos h2]
+  exact not_false
+
+lemma mem_osDoubledRightS_of_gt {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card)
+    (j : Fin (2 * (m - (S.orderEmbOfFin rfl i_cut).val) - 1))
+    (h3 : m - (S.orderEmbOfFin rfl i_cut).val - 1 < j.val) :
+    j ∈ osDoubledRightS S i_cut ↔
+      (⟨(S.orderEmbOfFin rfl i_cut).val + 1 + (j.val - (m - (S.orderEmbOfFin rfl i_cut).val)),
+        by omega⟩ : Fin m) ∈ S := by
+  simp only [osDoubledRightS, Finset.mem_filter, Finset.mem_univ, true_and]
+  rw [dif_neg (by omega), dif_neg (by omega)]
+
+lemma osDoubledRightS_card {m : ℕ} (S : Finset (Fin m)) (i_cut : Fin S.card) :
+    (osDoubledRightS S i_cut).card = 2 * (S.card - 1 - i_cut.val) := by
+  let r := S.orderEmbOfFin rfl i_cut
+  let R := m - r.val
+  let m2 := 2 * R - 1
+  let dR := S.card - 1 - i_cut.val
+  let S2 := osDoubledRightS S i_cut
+  let S2L := S2.filter fun j : Fin m2 => j.val < R - 1
+  let S2R := S2.filter fun j : Fin m2 => R - 1 < j.val
+  have h_union : S2 = S2L ∪ S2R := by
+    ext j
+    simp only [S2L, S2R, Finset.mem_union, Finset.mem_filter]
+    constructor
+    · intro h
+      rcases lt_trichotomy j.val (R - 1) with h1 | h2 | h3
+      · exact Or.inl ⟨h, h1⟩
+      · exact absurd h (notMem_osDoubledRightS_mid S i_cut j h2)
+      · exact Or.inr ⟨h, h3⟩
+    · rintro (⟨h, _⟩ | ⟨h, _⟩) <;> exact h
+  have h_disj : Disjoint S2L S2R := by
+    rw [Finset.disjoint_left]; intro j h1 h2
+    simp only [S2L, S2R, Finset.mem_filter] at h1 h2; omega
+  change S2.card = 2 * dR
+  rw [h_union, Finset.card_union_of_disjoint h_disj]
+  have h_cardL : S2L.card = dR := by
+    have h_eq : S2L.card = (Finset.univ : Finset (Fin dR)).card := by
+      refine Finset.card_bij (fun (j : Fin m2) hj =>
+        let hj_lt : j.val < R - 1 := (Finset.mem_filter.mp hj).2
+        let hj' : (⟨r.val + 1 + (R - 2 - j.val), by omega⟩ : Fin m) ∈ S :=
+          (mem_osDoubledRightS_of_lt S i_cut j hj_lt).mp (Finset.mem_filter.mp hj).1
+        let idx := (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + (R - 2 - j.val), by omega⟩, hj'⟩
+        (⟨idx.val - i_cut.val - 1, by
+          have h_ord : S.orderEmbOfFin rfl idx = ⟨r.val + 1 + (R - 2 - j.val), by omega⟩ :=
+            congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+          have h_gt : i_cut < idx := by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+            change r.val < r.val + 1 + (R - 2 - j.val); omega
+          have := Fin.lt_def.mp h_gt
+          have := idx.isLt
+          dsimp [dR]; omega⟩ : Fin dR)) ?_ ?_ ?_
+      · intro _ _; exact Finset.mem_univ _
+      · intro j₁ hj₁ j₂ hj₂ h
+        have hj1_lt : j₁.val < R - 1 := (Finset.mem_filter.mp hj₁).2
+        have hj2_lt : j₂.val < R - 1 := (Finset.mem_filter.mp hj₂).2
+        have h_gt1 : i_cut.val < ((S.orderIsoOfFin rfl).symm
+            ⟨⟨r.val + 1 + (R - 2 - j₁.val), by omega⟩,
+              (mem_osDoubledRightS_of_lt S i_cut j₁ hj1_lt).mp (Finset.mem_filter.mp hj₁).1⟩).val :=
+          Fin.lt_def.mp (by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt]
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm
+                ⟨⟨r.val + 1 + (R - 2 - j₁.val), by omega⟩,
+                  (mem_osDoubledRightS_of_lt S i_cut j₁ hj1_lt).mp (Finset.mem_filter.mp hj₁).1⟩) =
+                ⟨r.val + 1 + (R - 2 - j₁.val), by omega⟩ :=
+              congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            change r < (S.orderEmbOfFin rfl _)
+            rw [h_o]; change r.val < r.val + 1 + (R - 2 - j₁.val); omega)
+        have h_gt2 : i_cut.val < ((S.orderIsoOfFin rfl).symm
+            ⟨⟨r.val + 1 + (R - 2 - j₂.val), by omega⟩,
+              (mem_osDoubledRightS_of_lt S i_cut j₂ hj2_lt).mp (Finset.mem_filter.mp hj₂).1⟩).val :=
+          Fin.lt_def.mp (by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt]
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm
+                ⟨⟨r.val + 1 + (R - 2 - j₂.val), by omega⟩,
+                  (mem_osDoubledRightS_of_lt S i_cut j₂ hj2_lt).mp (Finset.mem_filter.mp hj₂).1⟩) =
+                ⟨r.val + 1 + (R - 2 - j₂.val), by omega⟩ :=
+              congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            change r < (S.orderEmbOfFin rfl _)
+            rw [h_o]; change r.val < r.val + 1 + (R - 2 - j₂.val); omega)
+        have hv : _ = _ := congrArg (Fin.val : Fin dR → ℕ) h
+        dsimp only at hv
+        have h1 : ((S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + (R - 2 - j₁.val), _⟩, _⟩ : Fin S.card) =
+            (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + (R - 2 - j₂.val), _⟩, _⟩ :=
+          Fin.ext (by omega)
+        have h2 := (S.orderIsoOfFin rfl).symm.injective h1
+        have h3 : r.val + 1 + (R - 2 - j₁.val) = r.val + 1 + (R - 2 - j₂.val) :=
+          congrArg (fun a : S => a.val.val) h2
+        ext; omega
+      · intro b _
+        let e := S.orderEmbOfFin rfl ⟨i_cut.val + 1 + b.val, by omega⟩
+        have he_gt : r.val < e.val := by
+          have : i_cut < (⟨i_cut.val + 1 + b.val, by omega⟩ : Fin S.card) :=
+            Fin.lt_def.mpr (by dsimp; omega)
+          exact (S.orderEmbOfFin rfl).lt_iff_lt.mpr this
+        refine ⟨⟨R - 2 - (e.val - (r.val + 1)), by dsimp [R]; omega⟩, ?_, ?_⟩
+        · simp only [S2L, Finset.mem_filter]
+          refine ⟨(mem_osDoubledRightS_of_lt S i_cut ⟨R - 2 - (e.val - (r.val + 1)),
+            by dsimp [R]; omega⟩
+            (by dsimp [R]; omega)).mpr ?_, by dsimp [R]; omega⟩
+          have h_eq_e : (⟨r.val + 1 + (R - 2 - (R - 2 - (e.val - (r.val + 1)))),
+            by omega⟩ : Fin m) = e := by
+            ext; dsimp [R]; omega
+          rw [h_eq_e]; exact S.orderEmbOfFin_mem rfl _
+        · ext
+          dsimp only
+          have h_eq_e : (⟨r.val + 1 + (R - 2 - (R - 2 - (e.val - (r.val + 1)))),
+            by omega⟩ : Fin m) = e := by
+            ext; dsimp [R]; omega
+          have h_inv : (S.orderIsoOfFin rfl).symm
+              ⟨⟨r.val + 1 + (R - 2 - (R - 2 - (e.val - (r.val + 1)))), by omega⟩, by
+                rw [h_eq_e]; exact S.orderEmbOfFin_mem rfl _⟩ =
+              ⟨i_cut.val + 1 + b.val, by omega⟩ := by
+            have h_sub : (⟨⟨r.val + 1 + (R - 2 - (R - 2 - (e.val - (r.val + 1)))), by omega⟩, by
+                rw [h_eq_e]; exact S.orderEmbOfFin_mem rfl _⟩ : S) =
+                ⟨e, S.orderEmbOfFin_mem rfl _⟩ := Subtype.ext h_eq_e
+            rw [h_sub]
+            exact (S.orderIsoOfFin rfl).symm_apply_apply _
+          have hv := congrArg Fin.val h_inv
+          dsimp only at hv; omega
+    simpa using h_eq
+  have h_cardR : S2R.card = dR := by
+    have h_eq : S2R.card = (Finset.univ : Finset (Fin dR)).card := by
+      refine Finset.card_bij (fun (j : Fin m2) hj =>
+        let hj_gt : R - 1 < j.val := (Finset.mem_filter.mp hj).2
+        let hj' : (⟨r.val + 1 + (j.val - R), by omega⟩ : Fin m) ∈ S :=
+          (mem_osDoubledRightS_of_gt S i_cut j hj_gt).mp (Finset.mem_filter.mp hj).1
+        let idx := (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + (j.val - R), by omega⟩, hj'⟩
+        (⟨idx.val - i_cut.val - 1, by
+          have h_ord : S.orderEmbOfFin rfl idx = ⟨r.val + 1 + (j.val - R), by omega⟩ :=
+            congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+          have h_gt : i_cut < idx := by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+            change r.val < r.val + 1 + (j.val - R); omega
+          have := Fin.lt_def.mp h_gt
+          have := idx.isLt
+          dsimp [dR]; omega⟩ : Fin dR)) ?_ ?_ ?_
+      · intro _ _; exact Finset.mem_univ _
+      · intro j₁ hj₁ j₂ hj₂ h
+        have hj1_gt : R - 1 < j₁.val := (Finset.mem_filter.mp hj₁).2
+        have hj2_gt : R - 1 < j₂.val := (Finset.mem_filter.mp hj₂).2
+        have h_gt1 : i_cut.val < ((S.orderIsoOfFin rfl).symm
+            ⟨⟨r.val + 1 + (j₁.val - R), by omega⟩,
+              (mem_osDoubledRightS_of_gt S i_cut j₁ hj1_gt).mp (Finset.mem_filter.mp hj₁).1⟩).val :=
+          Fin.lt_def.mp (by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt]
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm
+                ⟨⟨r.val + 1 + (j₁.val - R), by omega⟩,
+                  (mem_osDoubledRightS_of_gt S i_cut j₁ hj1_gt).mp (Finset.mem_filter.mp hj₁).1⟩) =
+                ⟨r.val + 1 + (j₁.val - R), by omega⟩ :=
+              congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            change r < (S.orderEmbOfFin rfl _)
+            rw [h_o]; change r.val < r.val + 1 + (j₁.val - R); omega)
+        have h_gt2 : i_cut.val < ((S.orderIsoOfFin rfl).symm
+            ⟨⟨r.val + 1 + (j₂.val - R), by omega⟩,
+              (mem_osDoubledRightS_of_gt S i_cut j₂ hj2_gt).mp (Finset.mem_filter.mp hj₂).1⟩).val :=
+          Fin.lt_def.mp (by
+            rw [← (S.orderEmbOfFin rfl).lt_iff_lt]
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm
+                ⟨⟨r.val + 1 + (j₂.val - R), by omega⟩,
+                  (mem_osDoubledRightS_of_gt S i_cut j₂ hj2_gt).mp (Finset.mem_filter.mp hj₂).1⟩) =
+                ⟨r.val + 1 + (j₂.val - R), by omega⟩ :=
+              congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            change r < (S.orderEmbOfFin rfl _)
+            rw [h_o]; change r.val < r.val + 1 + (j₂.val - R); omega)
+        have hv : _ = _ := congrArg (Fin.val : Fin dR → ℕ) h
+        dsimp only at hv
+        have h1 : ((S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + (j₁.val - R), _⟩, _⟩ : Fin S.card) =
+            (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + (j₂.val - R), _⟩, _⟩ :=
+          Fin.ext (by omega)
+        have h2 := (S.orderIsoOfFin rfl).symm.injective h1
+        have h3 : r.val + 1 + (j₁.val - R) = r.val + 1 + (j₂.val - R) :=
+          congrArg (fun a : S => a.val.val) h2
+        ext; omega
+      · intro b _
+        let e := S.orderEmbOfFin rfl ⟨i_cut.val + 1 + b.val, by omega⟩
+        have he_gt : r.val < e.val := by
+          have : i_cut < (⟨i_cut.val + 1 + b.val, by omega⟩ : Fin S.card) :=
+            Fin.lt_def.mpr (by dsimp; omega)
+          exact (S.orderEmbOfFin rfl).lt_iff_lt.mpr this
+        refine ⟨⟨R + (e.val - (r.val + 1)), by dsimp [R]; omega⟩, ?_, ?_⟩
+        · simp only [S2R, Finset.mem_filter]
+          refine ⟨(mem_osDoubledRightS_of_gt S i_cut ⟨R + (e.val - (r.val + 1)),
+            by dsimp [R]; omega⟩
+            (by dsimp [R]; omega)).mpr ?_, by dsimp [R]; omega⟩
+          have h_eq_e : (⟨r.val + 1 + (R + (e.val - (r.val + 1)) - R), by omega⟩ : Fin m) = e := by
+            ext; dsimp [R]; omega
+          rw [h_eq_e]; exact S.orderEmbOfFin_mem rfl _
+        · ext
+          dsimp only
+          have h_eq_e : (⟨r.val + 1 + (R + (e.val - (r.val + 1)) - R), by omega⟩ : Fin m) = e := by
+            ext; dsimp [R]; omega
+          have h_inv : (S.orderIsoOfFin rfl).symm
+              ⟨⟨r.val + 1 + (R + (e.val - (r.val + 1)) - R), by omega⟩, by
+                rw [h_eq_e]; exact S.orderEmbOfFin_mem rfl _⟩ =
+              ⟨i_cut.val + 1 + b.val, by omega⟩ := by
+            have h_sub : (⟨⟨r.val + 1 + (R + (e.val - (r.val + 1)) - R), by omega⟩, by
+                rw [h_eq_e]; exact S.orderEmbOfFin_mem rfl _⟩ : S) =
+                ⟨e, S.orderEmbOfFin_mem rfl _⟩ := Subtype.ext h_eq_e
+            rw [h_sub]
+            exact (S.orderIsoOfFin rfl).symm_apply_apply _
+          have hv := congrArg Fin.val h_inv
+          dsimp only at hv; omega
+    simpa using h_eq
+  omega
+
+def osDoubledRightT {m : ℕ} (S : Finset (Fin m)) (t : Fin m → ℝ) (i_cut : Fin S.card) (ε : ℝ) :
+    Fin (2 * (m - (S.orderEmbOfFin rfl i_cut).val) - 1) → ℝ :=
+  let r := S.orderEmbOfFin rfl i_cut
+  let R := m - r.val
+  fun j =>
+    if h1 : j.val < R - 1 then t ⟨r.val + 1 + (R - 2 - j.val), by omega⟩
+    else if h2 : j.val = R - 1 then 2 * ε
+    else t ⟨r.val + 1 + (j.val - R), by omega⟩
+
+lemma osDoubledRightT_pos {m : ℕ} (S : Finset (Fin m)) {t : Fin m → ℝ}
+    (ht : ∀ j ∉ S, 0 < t j) (i_cut : Fin S.card) {ε : ℝ} (hε : 0 < ε) :
+    ∀ j ∉ osDoubledRightS S i_cut, 0 < osDoubledRightT S t i_cut ε j := by
+  let r := S.orderEmbOfFin rfl i_cut
+  let R := m - r.val
+  intro j hj
+  dsimp only [osDoubledRightT]
+  rcases lt_trichotomy j.val (R - 1) with h1 | h2 | h3
+  · rw [dif_pos h1]
+    exact ht _ fun hmem => hj ((mem_osDoubledRightS_of_lt S i_cut j h1).mpr hmem)
+  · rw [dif_neg (by omega), dif_pos h2]; positivity
+  · rw [dif_neg (by omega), dif_neg (by omega)]
+    exact ht _ fun hmem => hj ((mem_osDoubledRightS_of_gt S i_cut j h3).mpr hmem)
+
+lemma osDoubledRight_prod_compl {m : ℕ} (M : ℕ) (S : Finset (Fin m)) (t : Fin m → ℝ)
+    (i_cut : Fin S.card) (ε : ℝ) :
+    (∏ j ∈ (osDoubledRightS S i_cut)ᶜ, (1 + (osDoubledRightT S t i_cut ε j)⁻¹) ^ M) =
+      (1 + (2 * ε)⁻¹) ^ M *
+        (∏ j ∈ Sᶜ.filter (fun j : Fin m => (S.orderEmbOfFin rfl i_cut).val < j.val),
+          (1 + (t j)⁻¹) ^ M) ^ 2 := by
+  let r := S.orderEmbOfFin rfl i_cut
+  let R := m - r.val
+  let m2 := 2 * R - 1
+  let S2 := osDoubledRightS S i_cut
+  let Cmid : Fin m2 := ⟨R - 1, by dsimp [R]; omega⟩
+  have hCmid_mem : Cmid ∈ S2ᶜ := Finset.mem_compl.mpr (notMem_osDoubledRightS_mid S i_cut Cmid rfl)
+  let CL := S2ᶜ.filter fun j : Fin m2 => j.val < R - 1
+  let CR := S2ᶜ.filter fun j : Fin m2 => R - 1 < j.val
+  have h_part : S2ᶜ = insert Cmid (CL ∪ CR) := by
+    ext j
+    simp only [CL, CR, Finset.mem_insert, Finset.mem_union, Finset.mem_filter, Finset.mem_compl,
+      Fin.ext_iff, Cmid]
+    constructor
+    · intro hj
+      rcases lt_trichotomy j.val (R - 1) with h1 | h2 | h3
+      · exact Or.inr (Or.inl ⟨hj, h1⟩)
+      · exact Or.inl h2
+      · exact Or.inr (Or.inr ⟨hj, h3⟩)
+    · rintro (h2 | ⟨hj, _⟩ | ⟨hj, _⟩)
+      · have hj_eq : j = Cmid := Fin.ext h2
+        rw [hj_eq]; exact Finset.mem_compl.mp hCmid_mem
+      · exact hj
+      · exact hj
+  have h_not : Cmid ∉ CL ∪ CR := by simp [CL, CR, Cmid]
+  have h_disj : Disjoint CL CR := by
+    rw [Finset.disjoint_left]; intro j h1 h2; simp [CL, CR] at h1 h2; omega
+  change (∏ j ∈ S2ᶜ, (1 + (osDoubledRightT S t i_cut ε j)⁻¹) ^ M) = _
+  rw [h_part, Finset.prod_insert h_not, Finset.prod_union h_disj]
+  have h_mid_val : osDoubledRightT S t i_cut ε Cmid = 2 * ε := by
+    dsimp only [osDoubledRightT, Cmid]
+    rw [dif_neg (lt_irrefl _), dif_pos rfl]
+  rw [h_mid_val, sq]
+  congr 1
+  have h_pL : (∏ j ∈ CL, (1 + (osDoubledRightT S t i_cut ε j)⁻¹) ^ M) =
+      ∏ j ∈ Sᶜ.filter (fun j : Fin m => r.val < j.val), (1 + (t j)⁻¹) ^ M := by
+    refine Finset.prod_bij (fun (j : Fin m2) hj =>
+      (⟨r.val + 1 + (R - 2 - j.val), by simp [CL] at hj; dsimp [R]; omega⟩ : Fin m)) ?_ ?_ ?_ ?_
+    · intro j hj
+      simp only [CL, Finset.mem_filter, Finset.mem_compl] at hj ⊢
+      exact ⟨fun hmem => hj.1 ((mem_osDoubledRightS_of_lt S i_cut j hj.2).mpr hmem), by omega⟩
+    · intro j₁ hj₁ j₂ hj₂ h
+      simp only [CL, Finset.mem_filter] at hj₁ hj₂
+      have h1 : r.val + 1 + (R - 2 - j₁.val) = r.val + 1 + (R - 2 - j₂.val) :=
+        congrArg (Fin.val : Fin m → ℕ) h
+      ext; omega
+    · intro b hb
+      simp only [Finset.mem_filter, Finset.mem_compl] at hb
+      refine ⟨⟨R - 2 - (b.val - (r.val + 1)), by dsimp [R]; omega⟩, ?_, by ext; dsimp [R]; omega⟩
+      simp only [CL, Finset.mem_filter, Finset.mem_compl]
+      refine ⟨fun hmem => hb.1 ?_, by dsimp [R]; omega⟩
+      have h_mem' := (mem_osDoubledRightS_of_lt S i_cut
+        ⟨R - 2 - (b.val - (r.val + 1)), by dsimp [R]; omega⟩ (by dsimp [R]; omega)).mp hmem
+      have h_eq_b : (⟨r.val + 1 + (R - 2 - (R - 2 - (b.val - (r.val + 1)))), by omega⟩ : Fin m) =
+        b := by
+        ext; dsimp [R]; omega
+      rwa [h_eq_b] at h_mem'
+    · intro j hj
+      simp only [CL, Finset.mem_filter] at hj
+      dsimp only [osDoubledRightT]; rw [dif_pos hj.2]
+  have h_pR : (∏ j ∈ CR, (1 + (osDoubledRightT S t i_cut ε j)⁻¹) ^ M) =
+      ∏ j ∈ Sᶜ.filter (fun j : Fin m => r.val < j.val), (1 + (t j)⁻¹) ^ M := by
+    refine Finset.prod_bij (fun (j : Fin m2) hj =>
+      (⟨r.val + 1 + (j.val - R), by simp [CR] at hj; dsimp [R]; omega⟩ : Fin m)) ?_ ?_ ?_ ?_
+    · intro j hj
+      simp only [CR, Finset.mem_filter, Finset.mem_compl] at hj ⊢
+      exact ⟨fun hmem => hj.1 ((mem_osDoubledRightS_of_gt S i_cut j hj.2).mpr hmem), by omega⟩
+    · intro j₁ hj₁ j₂ hj₂ h
+      simp only [CR, Finset.mem_filter] at hj₁ hj₂
+      have h1 : r.val + 1 + (j₁.val - R) = r.val + 1 + (j₂.val - R) :=
+        congrArg (Fin.val : Fin m → ℕ) h
+      ext; omega
+    · intro b hb
+      simp only [Finset.mem_filter, Finset.mem_compl] at hb
+      refine ⟨⟨R + (b.val - (r.val + 1)), by dsimp [R]; omega⟩, ?_, by ext; dsimp [R]; omega⟩
+      simp only [CR, Finset.mem_filter, Finset.mem_compl]
+      refine ⟨fun hmem => hb.1 ?_, by dsimp [R]; omega⟩
+      have h_mem' := (mem_osDoubledRightS_of_gt S i_cut
+        ⟨R + (b.val - (r.val + 1)), by dsimp [R]; omega⟩ (by dsimp [R]; omega)).mp hmem
+      have h_eq_b : (⟨r.val + 1 + (R + (b.val - (r.val + 1)) - R), by omega⟩ : Fin m) = b := by
+        ext; dsimp [R]; omega
+      rwa [h_eq_b] at h_mem'
+    · intro j hj
+      simp only [CR, Finset.mem_filter] at hj
+      dsimp only [osDoubledRightT]; rw [dif_neg (by omega), dif_neg (by omega)]
+  rw [h_pL, h_pR]
+
+lemma osDoubledRight_t_eq {m : ℕ} (S : Finset (Fin m)) (t : Fin m → ℝ)
+    (i_cut : Fin S.card) (ε : ℝ) (x₁ x₂ : Fin (S.card - 1 - i_cut.val) → ℝ) :
+    let r := S.orderEmbOfFin rfl i_cut
+    let R := m - r.val
+    let dR := S.card - 1 - i_cut.val
+    let m2 := 2 * R - 1
+    let S2 := osDoubledRightS S i_cut
+    let t2 := osDoubledRightT S t i_cut ε
+    let x_comb : Fin S2.card → ℝ := fun k =>
+      if hk : k.val < dR then x₁ ⟨dR - 1 - k.val, by omega⟩
+      else x₂ ⟨k.val - dR, by
+        have hsc := osDoubledRightS_card S i_cut
+        change S2.card = 2 * dR at hsc
+        omega⟩
+    let u_full₁ : Fin S.card → ℝ := fun i =>
+      if hi : i_cut.val < i.val then Real.exp (x₁ ⟨i.val - i_cut.val - 1, by omega⟩) else 1
+    let u_full₂ : Fin S.card → ℝ := fun i =>
+      if hi : i_cut.val < i.val then Real.exp (x₂ ⟨i.val - i_cut.val - 1, by omega⟩) else 1
+    let tR₁ : Fin (R - 1) → ℝ := fun j => osSubstTimes S t u_full₁ ⟨r.val + 1 + j.val, by omega⟩
+    let tR₂ : Fin (R - 1) → ℝ := fun j => osSubstTimes S t u_full₂ ⟨r.val + 1 + j.val, by omega⟩
+    osSubstTimes S2 t2 (fun k => Real.exp (x_comb k)) =
+      (fun k : Fin (R + R - 1) =>
+        if hkL : k.val < R - 1 then tR₁ ⟨R - 2 - k.val, by omega⟩
+        else if hkM : k.val = R - 1 then ε + ε
+        else tR₂ ⟨k.val - R, by omega⟩) ∘ finCongr (by dsimp [m2, R]; omega : m2 = R + R - 1) := by
+  intro r R dR m2 S2 t2 x_comb u_full₁ u_full₂ tR₁ tR₂
+  have hS2_card : S2.card = 2 * dR := osDoubledRightS_card S i_cut
+  ext j
+  rcases lt_trichotomy j.val (R - 1) with h1 | h2 | h3
+  · simp only [Function.comp_apply, finCongr_apply, Fin.val_cast, dif_pos h1, tR₁]
+    dsimp only [osSubstTimes]
+    by_cases hmem : (⟨r.val + 1 + (R - 2 - j.val), by omega⟩ : Fin m) ∈ S
+    · have hj_S2 : j ∈ S2 := (mem_osDoubledRightS_of_lt S i_cut j h1).mpr hmem
+      rw [dif_pos hj_S2, dif_pos hmem]
+      let idx := (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + (R - 2 - j.val), by omega⟩, hmem⟩
+      have h_ord : S.orderEmbOfFin rfl idx = ⟨r.val + 1 + (R - 2 - j.val), by omega⟩ :=
+        congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+      have h_gt : i_cut.val < idx.val := Fin.lt_def.mp (by
+        rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+        change r.val < r.val + 1 + (R - 2 - j.val); omega)
+      have h_k2_val : ((S2.orderIsoOfFin rfl).symm ⟨j, hj_S2⟩).val =
+          dR - 1 - (idx.val - i_cut.val - 1) := by
+        rw [orderIsoOfFin_symm_val_eq_card_filter_lt S2 hj_S2]
+        have h_gt_S := orderIsoOfFin_symm_val_add_card_gt S hmem
+        have h_eq_card : (S2.filter fun a => a < j).card =
+            (S.filter fun a => ⟨r.val + 1 + (R - 2 - j.val), by omega⟩ < a).card := by
+          refine Finset.card_bij (fun (a : Fin m2) ha =>
+            (⟨r.val + 1 + (R - 2 - a.val), by simp at ha; dsimp [R]; omega⟩ : Fin m)) ?_ ?_ ?_
+          · intro a ha
+            simp only [Finset.mem_filter] at ha ⊢
+            have ha_lt : a.val < R - 1 := lt_trans (Fin.lt_def.mp ha.2) h1
+            exact ⟨(mem_osDoubledRightS_of_lt S i_cut a ha_lt).mp ha.1,
+              Fin.lt_def.mpr (by have := Fin.lt_def.mp ha.2; dsimp [R]; omega)⟩
+          · intro a₁ ha₁ a₂ ha₂ h
+            simp only [Finset.mem_filter] at ha₁ ha₂
+            have h1a := Fin.lt_def.mp ha₁.2
+            have h2a := Fin.lt_def.mp ha₂.2
+            have h_eq := congrArg (Fin.val : Fin m → ℕ) h; dsimp at h_eq; ext; omega
+          · intro b hb
+            simp only [Finset.mem_filter] at hb
+            have hb_gt : r.val + 1 + (R - 2 - j.val) < b.val := Fin.lt_def.mp hb.2
+            refine ⟨⟨R - 2 - (b.val - (r.val + 1)), by dsimp [R]; omega⟩, ?_,
+              by ext; dsimp [R]; omega⟩
+            simp only [Finset.mem_filter]
+            refine ⟨(mem_osDoubledRightS_of_lt S i_cut
+              ⟨R - 2 - (b.val - (r.val + 1)), by dsimp [R]; omega⟩ (by dsimp [R]; omega)).mpr ?_,
+              Fin.lt_def.mpr (by dsimp [R]; omega)⟩
+            have h_eq_b : (⟨r.val + 1 + (R - 2 - (R - 2 - (b.val - (r.val + 1)))),
+              by omega⟩ : Fin m) = b := by
+              ext; dsimp [R]; omega
+            rw [h_eq_b]; exact hb.1
+        have h_idx_lt := idx.isLt
+        dsimp only [idx] at h_gt_S h_gt h_idx_lt ⊢
+        dsimp only [dR]; omega
+      dsimp only [x_comb, u_full₁]
+      rw [dif_pos (by have := idx.isLt; dsimp [dR]; omega), dif_pos h_gt]
+      congr 2; ext; dsimp [dR]; have := idx.isLt; omega
+    · have hj_not : j ∉ S2 := fun h => hmem ((mem_osDoubledRightS_of_lt S i_cut j h1).mp h)
+      rw [dif_neg hj_not, dif_neg hmem]
+      dsimp only [t2, osDoubledRightT]; rw [dif_pos h1]
+  · simp only [Function.comp_apply, finCongr_apply, Fin.val_cast, dif_neg (by omega : ¬ j.val <
+      R - 1),
+      dif_pos h2]
+    have hj_not : j ∉ S2 := notMem_osDoubledRightS_mid S i_cut j h2
+    rw [osSubstTimes_of_notMem _ _ _ hj_not]
+    dsimp only [t2, osDoubledRightT]; rw [dif_neg (by omega), dif_pos h2]; ring
+  · simp only [Function.comp_apply, finCongr_apply, Fin.val_cast,
+      dif_neg (by omega : ¬ j.val < R - 1), dif_neg (by omega : j.val ≠ R - 1), tR₂]
+    dsimp only [osSubstTimes]
+    by_cases hmem : (⟨r.val + 1 + (j.val - R), by omega⟩ : Fin m) ∈ S
+    · have hj_S2 : j ∈ S2 := (mem_osDoubledRightS_of_gt S i_cut j h3).mpr hmem
+      rw [dif_pos hj_S2, dif_pos hmem]
+      let idx := (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + (j.val - R), by omega⟩, hmem⟩
+      have h_ord : S.orderEmbOfFin rfl idx = ⟨r.val + 1 + (j.val - R), by omega⟩ :=
+        congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+      have h_gt : i_cut.val < idx.val := Fin.lt_def.mp (by
+        rw [← (S.orderEmbOfFin rfl).lt_iff_lt, h_ord]
+        change r.val < r.val + 1 + (j.val - R); omega)
+      have h_k2_val : ((S2.orderIsoOfFin rfl).symm ⟨j, hj_S2⟩).val =
+          dR + (idx.val - i_cut.val - 1) := by
+        have h_gt_S2 := orderIsoOfFin_symm_val_add_card_gt S2 hj_S2
+        have h_gt_S := orderIsoOfFin_symm_val_add_card_gt S hmem
+        have h_eq_card : (S2.filter fun a => j < a).card =
+            (S.filter fun a => ⟨r.val + 1 + (j.val - R), by omega⟩ < a).card := by
+          refine Finset.card_bij (fun (a : Fin m2) ha =>
+            (⟨r.val + 1 + (a.val - R), by simp at ha; dsimp [R]; omega⟩ : Fin m)) ?_ ?_ ?_
+          · intro a ha
+            simp only [Finset.mem_filter] at ha ⊢
+            have ha_gt : R - 1 < a.val := lt_trans h3 (Fin.lt_def.mp ha.2)
+            exact ⟨(mem_osDoubledRightS_of_gt S i_cut a ha_gt).mp ha.1,
+              Fin.lt_def.mpr (by have := Fin.lt_def.mp ha.2; dsimp [R]; omega)⟩
+          · intro a₁ ha₁ a₂ ha₂ h
+            simp only [Finset.mem_filter] at ha₁ ha₂
+            have h1a := Fin.lt_def.mp ha₁.2
+            have h2a := Fin.lt_def.mp ha₂.2
+            have h_eq := congrArg (Fin.val : Fin m → ℕ) h; dsimp at h_eq; ext; omega
+          · intro b hb
+            simp only [Finset.mem_filter] at hb
+            have hb_gt : r.val + 1 + (j.val - R) < b.val := Fin.lt_def.mp hb.2
+            refine ⟨⟨R + (b.val - (r.val + 1)), by dsimp [R]; omega⟩, ?_,
+              by ext; dsimp [R]; omega⟩
+            simp only [Finset.mem_filter]
+            refine ⟨(mem_osDoubledRightS_of_gt S i_cut
+              ⟨R + (b.val - (r.val + 1)), by dsimp [R]; omega⟩ (by dsimp [R]; omega)).mpr ?_,
+              Fin.lt_def.mpr (by dsimp [R]; omega)⟩
+            have h_eq_b : (⟨r.val + 1 + (R + (b.val - (r.val + 1)) - R), by omega⟩ : Fin m) =
+              b := by
+              ext; dsimp [R]; omega
+            rw [h_eq_b]; exact hb.1
+        have h_idx_lt := idx.isLt
+        dsimp only [idx] at h_gt_S h_gt h_idx_lt ⊢
+        dsimp only [dR]; omega
+      dsimp only [x_comb, u_full₂]
+      rw [dif_neg (by omega), dif_pos h_gt]
+      congr 2; ext; dsimp; omega
+    · have hj_not : j ∉ S2 := fun h => hmem ((mem_osDoubledRightS_of_gt S i_cut j h3).mp h)
+      rw [dif_neg hj_not, dif_neg hmem]
+      dsimp only [t2, osDoubledRightT]; rw [dif_neg (by omega), dif_neg (by omega)]
+
+lemma os_doubled_right_kernel_of_hyp
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    {M k_lim : ℕ} {θ K_bd B_bd : ℝ} (hK_nn : 0 ≤ K_bd) (hB_nn : 0 ≤ B_bd)
+    (hhyp : OSDampedSubsetBound hOS M k_lim θ K_bd B_bd)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (S : Finset (Fin m)) (t : Fin m → ℝ) (ht : ∀ j ∉ S, 0 < t j)
+    (i_cut : Fin S.card) (hcard : 2 * (S.card - 1 - i_cut.val) ≤ k_lim) :
+    let r : Fin m := S.orderEmbOfFin rfl i_cut
+    let R : ℕ := m - r.val
+    let α_R : Fin R → ι := fun j => α ⟨r.val + 1 + j.val, by omega⟩
+    let x_sp_R : Fin R → Fin 3 → ℝ := fun j => x_sp ⟨r.val + 1 + j.val, by omega⟩
+    let B_R : ℝ := (osStarRowBound Sstr) ^ R * K_bd * B_bd ^ (2 * R) *
+      (((2 * R).factorial : ℝ) ^ M) *
+      (∏ j ∈ Sᶜ.filter (fun j : Fin m => r.val < j.val), (1 + (t j)⁻¹) ^ M) ^ 2
+    ∃ K_R : ℝ → (Fin (S.card - 1 - i_cut.val) → ℂ) → (Fin (S.card - 1 - i_cut.val) → ℂ) → ℂ,
+      (∀ ε : ℝ, 0 < ε →
+        DifferentiableOn ℂ
+          (fun p : (Fin (S.card - 1 - i_cut.val) → ℂ) × (Fin (S.card - 1 - i_cut.val) → ℂ) =>
+            K_R ε p.1 p.2)
+          (TubeDomain (osBox θ) ×ˢ TubeDomain (osBox θ))) ∧
+      (∀ ε : ℝ, 0 < ε → ∀ w₁ ∈ TubeDomain (osBox θ), ∀ w₂ ∈ TubeDomain (osBox θ),
+        ‖K_R ε w₁ w₂‖ ≤ B_R * (1 + (2 * ε)⁻¹) ^ M) ∧
+      (∀ (ε : ℝ) (hε : 0 < ε) (x₁ x₂ : Fin (S.card - 1 - i_cut.val) → ℝ),
+        let mkXR : (Fin (S.card - 1 - i_cut.val) → ℝ) → posOrderedEuclidN R := fun uR =>
+          let u_full : Fin S.card → ℝ := fun i =>
+            if hi : i_cut.val < i.val then Real.exp (uR ⟨i.val - i_cut.val - 1, by omega⟩) else 1
+          let t_R : Fin (R - 1) → ℝ := fun j =>
+            osSubstTimes S t u_full ⟨r.val + 1 + j.val, by omega⟩
+          ⟨osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) t_R ε ∘ finCongr (by omega), by
+            have h_pos : ∀ j : Fin (R - 1), 0 < t_R j := fun j =>
+              osSubstTimes_pos S ht (fun i => by dsimp [u_full]; split_ifs <;> positivity) _
+            have h_mem := osBuildPoints_mem_posOrderedEuclidN (R - 1)
+              (x_sp_R ∘ finCongr (by omega)) h_pos hε
+            refine ⟨fun i => h_mem.1 (finCongr (by omega) i),
+              fun i hi => h_mem.2 (finCongr (by omega) i) (by dsimp; omega)⟩⟩
+        let Φ_R : (Fin (S.card - 1 - i_cut.val) → ℝ) → OSHilbert hOS.toReflectionPositiveData :=
+          fun uR =>
+            (∏ j : Fin (S.card - 1 - i_cut.val), logTimeDamp (uR j : ℂ) ^ M) •
+              osBasis hOS.toReflectionPositiveData ⟨R, (α_R, mkXR uR)⟩
+        ⟪Φ_R x₁, Φ_R x₂⟫_ℂ = K_R ε (fun j => (x₁ j : ℂ)) (fun j => (x₂ j : ℂ))) := by
+  intro r R α_R x_sp_R B_R
+  let dR : ℕ := S.card - 1 - i_cut.val
+  let m2 : ℕ := 2 * R - 1
+  have hm2 : m2 + 1 = R + R := by dsimp [m2, R]; omega
+  let x_sp_2 : Fin (m2 + 1) → Fin 3 → ℝ :=
+    Fin.append (x_sp_R ∘ Fin.rev) x_sp_R ∘ finCongr hm2
+  let S2 : Finset (Fin m2) := osDoubledRightS S i_cut
+  have hS2_card : S2.card = 2 * dR := osDoubledRightS_card S i_cut
+  let t2 : ℝ → Fin m2 → ℝ := osDoubledRightT S t i_cut
+  have ht2_pos : ∀ ε : ℝ, 0 < ε → ∀ j ∉ S2, 0 < t2 ε j :=
+    fun _ hε => osDoubledRightT_pos S ht i_cut hε
+  have h_prod_compl : ∀ ε : ℝ,
+      (∏ j ∈ S2ᶜ, (1 + (t2 ε j)⁻¹) ^ M) =
+        (1 + (2 * ε)⁻¹) ^ M *
+          (∏ j ∈ Sᶜ.filter (fun j : Fin m => r.val < j.val), (1 + (t j)⁻¹) ^ M) ^ 2 :=
+    osDoubledRight_prod_compl M S t i_cut
+  let comb : (Fin dR → ℂ) → (Fin dR → ℂ) → (Fin S2.card → ℂ) :=
+    fun w₁ w₂ k =>
+      if hk : k.val < dR then w₁ ⟨dR - 1 - k.val, by omega⟩
+      else w₂ ⟨k.val - dR, by omega⟩
+  have h_comb_diff : Differentiable ℂ
+      (fun p : (Fin dR → ℂ) × (Fin dR → ℂ) => comb p.1 p.2) :=
+    differentiable_pi.mpr fun k => by
+      dsimp only [comb]
+      split_ifs with hk
+      · exact ((ContinuousLinearMap.proj (R := ℂ) (⟨dR - 1 - k.val, by omega⟩ : Fin dR)).comp
+          (ContinuousLinearMap.fst ℂ (Fin dR → ℂ) (Fin dR → ℂ))).differentiable
+      · exact ((ContinuousLinearMap.proj (R := ℂ) (⟨k.val - dR, by omega⟩ : Fin dR)).comp
+          (ContinuousLinearMap.snd ℂ (Fin dR → ℂ) (Fin dR → ℂ))).differentiable
+  have h_comb_maps : Set.MapsTo
+      (fun p : (Fin dR → ℂ) × (Fin dR → ℂ) => comb p.1 p.2)
+      (TubeDomain (osBox θ) ×ˢ TubeDomain (osBox θ)) (TubeDomain (osBox θ)) := by
+    intro p hp k
+    dsimp only [comb]
+    split_ifs with hk
+    · exact hp.1 ⟨dR - 1 - k.val, by omega⟩
+    · exact hp.2 ⟨k.val - dR, by omega⟩
+  classical
+  let F_γ : (ε : ℝ) → (0 < ε) → (Fin R → ι) → (Fin S2.card → ℂ) → ℂ := fun ε hε γ =>
+    Classical.choose (hhyp m2 (osConcatIdx R R γ α_R ∘ finCongr hm2) x_sp_2 S2 (t2 ε)
+      (by omega) (ht2_pos ε hε))
+  have hF_γ_spec : ∀ (ε : ℝ) (hε : 0 < ε) (γ : Fin R → ι),
+      DifferentiableOn ℂ (F_γ ε hε γ) (TubeDomain (osBox θ)) ∧
+      (∀ x : Fin S2.card → ℝ,
+        F_γ ε hε γ (fun i => (x i : ℂ)) =
+          (∏ i : Fin S2.card, logTimeDamp (x i : ℂ) ^ M) *
+            𝒮 (m2 + 1) (osConcatIdx R R γ α_R ∘ finCongr hm2)
+              (osBuildPoints m2 x_sp_2 (osSubstTimes S2 (t2 ε) (fun i => Real.exp (x i))) 0)) ∧
+      (∀ w ∈ TubeDomain (osBox θ),
+        ‖F_γ ε hε γ w‖ ≤ K_bd * B_bd ^ (m2 + 1) * (((m2 + 1).factorial : ℝ) ^ M) *
+          ∏ j ∈ S2ᶜ, (1 + (t2 ε j)⁻¹) ^ M) :=
+    fun ε hε γ => Classical.choose_spec
+      (hhyp m2 (osConcatIdx R R γ α_R ∘ finCongr hm2) x_sp_2 S2 (t2 ε) (by omega) (ht2_pos ε hε))
+  let K_R : ℝ → (Fin dR → ℂ) → (Fin dR → ℂ) → ℂ := fun ε w₁ w₂ =>
+    if hε : 0 < ε then
+      ∑ γ : Fin R → ι, (∏ i : Fin R, Sstr.C (α_R i) (γ i)) * F_γ ε hε γ (comb w₁ w₂)
+    else 0
+  refine ⟨K_R, ?_, ?_, ?_⟩
+  · intro ε hε
+    have h_eq : (fun p : (Fin dR → ℂ) × (Fin dR → ℂ) => K_R ε p.1 p.2) =
+        fun p => ∑ γ : Fin R → ι, (∏ i : Fin R, Sstr.C (α_R i) (γ i)) *
+          F_γ ε hε γ (comb p.1 p.2) := by
+      ext p; simp [K_R, hε]
+    rw [h_eq]
+    refine DifferentiableOn.fun_sum fun γ _ => (differentiableOn_const _).mul ?_
+    exact (hF_γ_spec ε hε γ).1.comp h_comb_diff.differentiableOn h_comb_maps
+  · intro ε hε w₁ hw₁ w₂ hw₂
+    dsimp only [K_R]
+    rw [dif_pos hε]
+    let M_each : ℝ := K_bd * B_bd ^ (2 * R) * (((2 * R).factorial : ℝ) ^ M) *
+      ((1 + (2 * ε)⁻¹) ^ M *
+        (∏ j ∈ Sᶜ.filter (fun j : Fin m => r.val < j.val), (1 + (t j)⁻¹) ^ M) ^ 2)
+    have hM_nn : 0 ≤ M_each := by dsimp [M_each]; positivity
+    calc ‖∑ γ : Fin R → ι, (∏ i : Fin R, Sstr.C (α_R i) (γ i)) * F_γ ε hε γ (comb w₁ w₂)‖
+        ≤ ∑ γ : Fin R → ι, ‖(∏ i : Fin R, Sstr.C (α_R i) (γ i)) * F_γ ε hε γ (comb w₁ w₂)‖ :=
+          norm_sum_le _ _
+      _ ≤ ∑ γ : Fin R → ι, (∏ i : Fin R, ‖Sstr.C (α_R i) (γ i)‖) * M_each := by
+          refine Finset.sum_le_sum fun γ _ => ?_
+          rw [norm_mul, norm_prod]
+          refine mul_le_mul_of_nonneg_left ?_ (Finset.prod_nonneg fun _ _ => norm_nonneg _)
+          have hbd := (hF_γ_spec ε hε γ).2.2 (comb w₁ w₂) (h_comb_maps (x := (w₁, w₂)) ⟨hw₁, hw₂⟩)
+          rw [h_prod_compl ε] at hbd
+          have hm2_eq : m2 + 1 = 2 * R := by dsimp [m2, R]; omega
+          simpa [M_each, hm2_eq] using hbd
+      _ = (∑ γ : Fin R → ι, ∏ i : Fin R, ‖Sstr.C (α_R i) (γ i)‖) * M_each := by
+          rw [← Finset.sum_mul]
+      _ ≤ (osStarRowBound Sstr) ^ R * M_each :=
+          mul_le_mul_of_nonneg_right (sum_prod_norm_starStructure_le Sstr R α_R) hM_nn
+      _ = B_R * (1 + (2 * ε)⁻¹) ^ M := by dsimp [B_R, M_each]; ring
+  · intro ε hε x₁ x₂
+    dsimp only [K_R]
+    rw [dif_pos hε]
+    rw [inner_smul_left, inner_smul_right, inner_osBasis_osBasis_eq]
+    have h_conj_x1 : (starRingEnd ℂ) (∏ j : Fin dR, logTimeDamp (x₁ j : ℂ) ^ M) =
+        ∏ j : Fin dR, logTimeDamp (x₁ j : ℂ) ^ M := by
+      rw [map_prod]
+      refine Finset.prod_congr rfl fun j _ => ?_
+      rw [map_pow]; congr 1; dsimp [logTimeDamp]
+      rw [map_div₀, map_pow, map_add, map_one, ← Complex.ofReal_exp, Complex.conj_ofReal]
+    rw [h_conj_x1, Finset.mul_sum, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun γ _ => ?_
+    let x_comb : Fin S2.card → ℝ := fun k =>
+      if hk : k.val < dR then x₁ ⟨dR - 1 - k.val, by omega⟩
+      else x₂ ⟨k.val - dR, by omega⟩
+    have h_comb_real : comb (fun j => (x₁ j : ℂ)) (fun j => (x₂ j : ℂ)) =
+        fun k => (x_comb k : ℂ) := by
+      ext k; dsimp only [comb, x_comb]; split_ifs <;> rfl
+    rw [h_comb_real, (hF_γ_spec ε hε γ).2.1 x_comb]
+    have h_prod_damp : (∏ k : Fin S2.card, logTimeDamp (x_comb k : ℂ) ^ M) =
+        (∏ j : Fin dR, logTimeDamp (x₁ j : ℂ) ^ M) *
+          (∏ j : Fin dR, logTimeDamp (x₂ j : ℂ) ^ M) := by
+      have h_u : (Finset.univ : Finset (Fin S2.card)) =
+          (Finset.univ.filter fun k : Fin S2.card => k.val < dR) ∪
+            (Finset.univ.filter fun k : Fin S2.card => dR ≤ k.val) := by
+        ext k; simp; omega
+      have h_disj : Disjoint (Finset.univ.filter fun k : Fin S2.card => k.val < dR)
+          (Finset.univ.filter fun k : Fin S2.card => dR ≤ k.val) := by
+        rw [Finset.disjoint_left]; intro k h1 h2; simp at h1 h2; omega
+      rw [h_u, Finset.prod_union h_disj]
+      refine congrArg₂ (· * ·) ?_ ?_
+      · refine Finset.prod_bij (fun (k : Fin S2.card) hk =>
+          (⟨dR - 1 - k.val, by simp at hk; omega⟩ : Fin dR)) ?_ ?_ ?_ ?_
+        · intro _ _; exact Finset.mem_univ _
+        · intro k₁ hk₁ k₂ hk₂ h
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk₁ hk₂
+          have h1 := congrArg (Fin.val : Fin dR → ℕ) h
+          dsimp at h1; ext; omega
+        · intro b _
+          refine ⟨⟨dR - 1 - b.val, by omega⟩,
+            by simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega,
+            by ext; dsimp; omega⟩
+        · intro k hk
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+          dsimp only [x_comb]; rw [dif_pos hk]
+      · refine Finset.prod_bij (fun (k : Fin S2.card) hk =>
+          (⟨k.val - dR, by simp at hk; omega⟩ : Fin dR)) ?_ ?_ ?_ ?_
+        · intro _ _; exact Finset.mem_univ _
+        · intro k₁ hk₁ k₂ hk₂ h
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk₁ hk₂
+          have h1 := congrArg (Fin.val : Fin dR → ℕ) h
+          dsimp at h1; ext; omega
+        · intro b _
+          refine ⟨⟨dR + b.val, by omega⟩,
+            by simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega,
+            by ext; dsimp; omega⟩
+        · intro k hk
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+          dsimp only [x_comb]; rw [dif_neg (by omega)]
+    rw [h_prod_damp]
+    let u_full₁ : Fin S.card → ℝ := fun i =>
+      if hi : i_cut.val < i.val then Real.exp (x₁ ⟨i.val - i_cut.val - 1, by omega⟩) else 1
+    let u_full₂ : Fin S.card → ℝ := fun i =>
+      if hi : i_cut.val < i.val then Real.exp (x₂ ⟨i.val - i_cut.val - 1, by omega⟩) else 1
+    let tR₁ : Fin (R - 1) → ℝ := fun j => osSubstTimes S t u_full₁ ⟨r.val + 1 + j.val, by omega⟩
+    let tR₂ : Fin (R - 1) → ℝ := fun j => osSubstTimes S t u_full₂ ⟨r.val + 1 + j.val, by omega⟩
+    have h_t_eq := osDoubledRight_t_eq S t i_cut ε x₁ x₂
+    dsimp only at h_t_eq
+    have h_concat := osConcatPoint_osBuildPoints_eq_shift R R (by dsimp [R]; omega)
+      (by dsimp [R]; omega) x_sp_R tR₁ ε x_sp_R tR₂ ε
+    dsimp only at h_concat
+    have h_pos_all : ∀ k : Fin m2, 0 < osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k)) k :=
+      osSubstTimes_pos S2 (ht2_pos ε hε) (fun _ => Real.exp_pos _)
+    have h_S_eq : 𝒮 (R + R) (osConcatIdx R R γ α_R)
+        (osConcatPoint R R
+          (osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) tR₁ ε ∘ finCongr (by omega))
+          (osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) tR₂ ε ∘ finCongr (by omega))) =
+        𝒮 (m2 + 1) (osConcatIdx R R γ α_R ∘ finCongr hm2)
+          (osBuildPoints m2 x_sp_2 (osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k))) 0) := by
+      rw [h_concat, ← schwinger_congr_n 𝒮 hm2 (osConcatIdx R R γ α_R)]
+      have h_pts_eq : (osBuildPoints (R + R - 1)
+          (Fin.append (x_sp_R ∘ Fin.rev) x_sp_R ∘ finCongr (by omega))
+          (fun k => if hkL : k.val < R - 1 then tR₁ ⟨R - 2 - k.val, by omega⟩
+            else if hkM : k.val = R - 1 then ε + ε
+            else tR₂ ⟨k.val - R, by omega⟩)
+          (-(ε + ∑ j : Fin (R - 1), tR₁ j)) ∘ finCongr (by omega : R + R = R + R - 1 + 1)) ∘
+          finCongr hm2 =
+          osBuildPoints m2 x_sp_2 (osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k)))
+            (-(ε + ∑ j : Fin (R - 1), tR₁ j)) := by
+        ext i μ
+        refine Fin.cases ?_ (fun ν => ?_) μ
+        · simp only [Function.comp_apply, osBuildPoints_zero_coord]
+          congr 1
+          refine Finset.sum_bij (fun (k : Fin (R + R - 1)) _ => finCongr (by omega : R + R - 1 =
+            m2) k)
+            ?_ ?_ ?_ ?_
+          · intro k hk; simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk ⊢; exact hk
+          · intro k₁ _ k₂ _ h; exact (finCongr (by omega : R + R - 1 = m2)).injective h
+          · intro b hb
+            refine ⟨finCongr (by omega : m2 = R + R - 1) b,
+              by simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢; exact hb,
+              by ext; rfl⟩
+          · intro k _
+            exact (congrFun h_t_eq (finCongr (by omega : R + R - 1 = m2) k)).symm
+        · rfl
+      rw [h_pts_eq]
+      exact schwinger_osBuildPoints_shift hOS m2 (osConcatIdx R R γ α_R ∘ finCongr hm2) x_sp_2
+        h_pos_all 0 (-(ε + ∑ j : Fin (R - 1), tR₁ j))
+    have h_S_eq' : hOS.toReflectionPositiveData.𝒮 (R + R) (osConcatIdx R R γ α_R)
+        (osConcatPoint R R
+          (osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) tR₁ ε ∘ finCongr (by omega))
+          (osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) tR₂ ε ∘ finCongr (by omega))) =
+        𝒮 (m2 + 1) (osConcatIdx R R γ α_R ∘ finCongr hm2)
+          (osBuildPoints m2 x_sp_2 (osSubstTimes S2 (t2 ε) (fun k => Real.exp (x_comb k))) 0) :=
+      h_S_eq
+    change (∏ j, logTimeDamp ↑(x₁ j) ^ M) *
+      ((∏ j, logTimeDamp ↑(x₂ j) ^ M) *
+        ((∏ i, Sstr.C (α_R i) (γ i)) *
+          hOS.toReflectionPositiveData.𝒮 (R + R) (osConcatIdx R R γ α_R)
+            (osConcatPoint R R
+              (osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) tR₁ ε ∘ finCongr (by omega))
+              (osBuildPoints (R -
+                1) (x_sp_R ∘ finCongr (by omega)) tR₂ ε ∘ finCongr (by omega))))) = _
+    rw [h_S_eq']
+    ring
+
+lemma continuous_osBasis_of_continuous_points
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι} (hOS : OSAxioms Rrep Sstr η 𝒮)
+    {X : Type*} [TopologicalSpace X]
+    (L : ℕ) (α : Fin L → ι) (p : X → Fin L → Fin 4 → ℝ)
+    (hp_cont : Continuous p) (hp_mem : ∀ x, p x ∈ posOrderedEuclidN L) :
+    Continuous (fun x => osBasis hOS.toReflectionPositiveData ⟨L, (α, ⟨p x, hp_mem x⟩)⟩) := by
+  let g : X → OSHilbert hOS.toReflectionPositiveData := fun x =>
+    osBasis hOS.toReflectionPositiveData ⟨L, (α, ⟨p x, hp_mem x⟩)⟩
+  have h_concat_cont : Continuous
+      (fun q : X × X => osConcatPoint L L (p q.1) (p q.2)) := by
+    refine continuous_pi fun i => continuous_pi fun μ => ?_
+    by_cases hi : i.val < L
+    · have hi_eq : i = Fin.castAdd L ⟨i.val, hi⟩ := by ext; rfl
+      have h_eq : (fun q : X × X => osConcatPoint L L (p q.1) (p q.2) i μ) =
+          fun q => euclidTimeReflect (p q.1 (Fin.rev ⟨i.val, hi⟩)) μ := by
+        ext q
+        conv_lhs => rw [hi_eq]
+        rw [osConcatPoint_castAdd]
+      rw [h_eq]
+      dsimp only [euclidTimeReflect]
+      split_ifs
+      · exact (((continuous_apply (0 : Fin 4) : Continuous fun v : Fin 4 → ℝ => v 0).comp
+          ((continuous_apply (Fin.rev (⟨i.val, hi⟩ : Fin L)) :
+            Continuous fun f : Fin L → Fin 4 → ℝ => f (Fin.rev ⟨i.val, hi⟩)))).comp
+          (hp_cont.comp continuous_fst)).neg
+      · exact ((continuous_apply μ : Continuous fun v : Fin 4 → ℝ => v μ).comp
+          ((continuous_apply (Fin.rev (⟨i.val, hi⟩ : Fin L)) :
+            Continuous fun f : Fin L → Fin 4 → ℝ => f (Fin.rev ⟨i.val, hi⟩)))).comp
+          (hp_cont.comp continuous_fst)
+    · have hi_eq : i = Fin.natAdd L ⟨i.val - L, by omega⟩ := by ext; dsimp; omega
+      have h_eq : (fun q : X × X => osConcatPoint L L (p q.1) (p q.2) i μ) =
+          fun q => p q.2 ⟨i.val - L, by omega⟩ μ := by
+        ext q
+        conv_lhs => rw [hi_eq]
+        rw [osConcatPoint_natAdd]
+      rw [h_eq]
+      exact ((continuous_apply μ : Continuous fun v : Fin 4 → ℝ => v μ).comp
+        ((continuous_apply (⟨i.val - L, by omega⟩ : Fin L) :
+          Continuous fun f : Fin L → Fin 4 → ℝ => f ⟨i.val - L, by omega⟩))).comp
+        (hp_cont.comp continuous_snd)
+  have h_inner_cont : Continuous (fun q : X × X => ⟪g q.1, g q.2⟫_ℂ) := by
+    have h_eq : (fun q : X × X => ⟪g q.1, g q.2⟫_ℂ) =
+        fun q : X × X => ∑ γ : Fin L → ι, (∏ i : Fin L, Sstr.C (α i) (γ i)) *
+          𝒮 (L + L) (osConcatIdx L L γ α) (osConcatPoint L L (p q.1) (p q.2)) := by
+      ext q
+      dsimp only [g]
+      rw [inner_osBasis_osBasis_eq]
+      rfl
+    rw [h_eq]
+    refine continuous_finsetSum Finset.univ fun γ _ => continuous_const.mul ?_
+    exact (hOS.os0_smooth (L + L) (osConcatIdx L L γ α)).continuousOn.comp_continuous h_concat_cont
+      fun q => osConcatPoint_mem_orderedEuclidN L L (hp_mem q.1) (hp_mem q.2)
+  rw [continuous_iff_continuousAt]
+  intro x₀
+  change ContinuousAt g x₀
+  rw [ContinuousAt, tendsto_iff_norm_sub_tendsto_zero, Metric.tendsto_nhds]
+  intro ε hε
+  let φ : X → ℂ := fun x => ⟪g x, g x⟫_ℂ - ⟪g x, g x₀⟫_ℂ - ⟪g x₀, g x⟫_ℂ + ⟪g x₀, g x₀⟫_ℂ
+  have hφ_cont : Continuous φ :=
+    (((h_inner_cont.comp (continuous_id.prodMk continuous_id)).sub
+      (h_inner_cont.comp (continuous_id.prodMk continuous_const))).sub
+      (h_inner_cont.comp (continuous_const.prodMk continuous_id))).add continuous_const
+  have hφ0 : φ x₀ = 0 := by dsimp [φ]; ring
+  have h_ev : ∀ᶠ x in 𝓝 x₀, ‖φ x‖ < ε ^ 2 := by
+    have h_ball : Metric.ball (0 : ℂ) (ε ^ 2) ∈ 𝓝 (φ x₀) := by
+      rw [hφ0]; exact Metric.ball_mem_nhds 0 (by positivity)
+    filter_upwards [hφ_cont.continuousAt.tendsto.eventually h_ball] with x hx
+    simpa [Metric.mem_ball, dist_zero_right] using hx
+  filter_upwards [h_ev] with x hx
+  have h_nsq : ‖g x - g x₀‖ ^ 2 = ‖φ x‖ := by
+    have h_eq : ⟪g x - g x₀, g x - g x₀⟫_ℂ = φ x := by
+      dsimp only [φ]
+      rw [inner_sub_left, inner_sub_right, inner_sub_right]
+      ring
+    rw [← h_eq, inner_self_eq_norm_sq_to_K]; simp
+  rw [Real.dist_eq, sub_zero, abs_of_nonneg (norm_nonneg _)]
+  nlinarith [norm_nonneg (g x - g x₀), h_nsq]
+
+lemma continuous_osLeftState_of_continuous_points
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι} (hOS : OSAxioms Rrep Sstr η 𝒮)
+    {X : Type*} [TopologicalSpace X]
+    (L : ℕ) (α : Fin L → ι) (p : X → Fin L → Fin 4 → ℝ)
+    (hp_cont : Continuous p) (hp_mem : ∀ x, p x ∈ posOrderedEuclidN L) :
+    Continuous (fun x => osLeftState hOS.toReflectionPositiveData L α ⟨p x, hp_mem x⟩) := by
+  unfold osLeftState
+  exact continuous_finsetSum Finset.univ fun γ _ =>
+    (continuous_const : Continuous fun _ : X => ∏ i : Fin L, Sstr.C (α i) (γ i)).smul
+      (continuous_osBasis_of_continuous_points hOS L γ p hp_cont hp_mem)
+
+lemma os_stage0_cut_norm_le
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι} (hOS : OSAxioms Rrep Sstr η 𝒮)
+    {C_lg A_lg : ℝ} {M : ℕ} (hC_ge1 : 1 ≤ C_lg) (hA_ge1 : 1 ≤ A_lg)
+    (hlg : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
+      ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
+        ∏ k : Fin (n - 1), (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ M)
+    (m : ℕ) (r : Fin m) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (t_all : Fin m → ℝ) (ht_all : ∀ j : Fin m, 0 < t_all j) {ε₀ : ℝ} (hε₀ : 0 < ε₀) :
+    let L : ℕ := r.val + 1
+    let R : ℕ := m - r.val
+    let α_L : Fin L → ι := fun j => α ⟨r.val - j.val, by omega⟩
+    let α_R : Fin R → ι := fun j => α ⟨r.val + 1 + j.val, by omega⟩
+    let x_sp_L : Fin L → Fin 3 → ℝ := fun j => x_sp ⟨r.val - j.val, by omega⟩
+    let x_sp_R : Fin R → Fin 3 → ℝ := fun j => x_sp ⟨r.val + 1 + j.val, by omega⟩
+    let pL : Fin L → Fin 4 → ℝ :=
+      osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega))
+        (fun j => t_all ⟨r.val - 1 - j.val, by omega⟩) ε₀ ∘ finCongr (by omega)
+    let pR : Fin R → Fin 4 → ℝ :=
+      osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega))
+        (fun j => t_all ⟨r.val + 1 + j.val, by omega⟩) ε₀ ∘ finCongr (by omega)
+    ∀ (hpL : pL ∈ posOrderedEuclidN L) (hpR : pR ∈ posOrderedEuclidN R),
+      ‖osLeftState hOS.toReflectionPositiveData L α_L ⟨pL, hpL⟩‖ *
+        ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨pR, hpR⟩)⟩‖ ≤
+        C_lg * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+          (((m + 1).factorial : ℝ) ^ M) * (1 + (2 * ε₀)⁻¹) ^ M *
+          (∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M) := by
+  intro L R α_L α_R x_sp_L x_sp_R pL pR hpL hpR
+  have h_L_sq : ‖osLeftState hOS.toReflectionPositiveData L α_L ⟨pL, hpL⟩‖ ^ 2 ≤
+      (osStarRowBound Sstr) ^ L * C_lg * A_lg ^ (2 * L) * (((2 * L).factorial : ℝ) ^ M) *
+        (1 + (2 * ε₀)⁻¹) ^ M *
+        (∏ j : Fin (L - 1), (1 + (t_all ⟨j.val, by omega⟩)⁻¹) ^ M) ^ 2 := by
+    have h_raw : ‖osLeftState hOS.toReflectionPositiveData L α_L ⟨pL, hpL⟩‖ ^ 2 ≤
+        (osStarRowBound Sstr) ^ L *
+          (C_lg * A_lg ^ (2 * L) * (((2 * L).factorial : ℝ) ^ M) *
+            (1 + (2 * ε₀)⁻¹) ^ M *
+            (∏ j : Fin (L - 1), (1 + (t_all ⟨j.val, by omega⟩)⁻¹) ^ M) ^ 2) := by
+      refine norm_sq_osLeftState_le hOS.toReflectionPositiveData L α_L _ (by
+        have h_pr : 0 ≤ ∏ j : Fin (L - 1), (1 + (t_all ⟨j.val, by omega⟩)⁻¹) ^ M :=
+          Finset.prod_nonneg fun j _ => pow_nonneg (by
+            have := ht_all ⟨j.val, by omega⟩; positivity) M
+        positivity) ?_
+      intro γ₁
+      let tL := fun j : Fin (L - 1) => t_all ⟨r.val - 1 - j.val, by omega⟩
+      have h_concat := osConcatPoint_osBuildPoints_eq_shift L L (by omega) (by omega)
+        x_sp_L tL ε₀ x_sp_L tL ε₀
+      dsimp only at h_concat
+      have h_ord := osConcatPoint_mem_orderedEuclidN L L hpL hpL
+      have h_bd := hlg (L + L) (osConcatIdx L L α_L γ₁) _ h_ord
+      have h_prod_eq : (∏ k : Fin (L + L - 1),
+          (1 + (osConcatPoint L L pL pL ⟨k.val + 1, by omega⟩ 0 -
+            osConcatPoint L L pL pL ⟨k.val, by omega⟩ 0)⁻¹) ^ M) =
+          (1 + (2 * ε₀)⁻¹) ^ M * (∏ j : Fin (L - 1), (1 + (t_all ⟨j.val,
+            by omega⟩)⁻¹) ^ M) ^ 2 := by
+        have h_diff : ∀ k : Fin (L + L - 1),
+            osConcatPoint L L pL pL ⟨k.val + 1, by omega⟩ 0 -
+              osConcatPoint L L pL pL ⟨k.val, by omega⟩ 0 =
+            if hkL : k.val < L - 1 then t_all ⟨k.val, by omega⟩
+            else if hkM : k.val = L - 1 then 2 * ε₀
+            else t_all ⟨r.val - 1 - (k.val - L), by omega⟩ := by
+          intro k
+          change osConcatPoint L L (osBuildPoints (L -
+            1) (x_sp_L ∘ finCongr (by omega)) tL ε₀ ∘ finCongr (by omega))
+            (osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega)) tL ε₀ ∘ finCongr (by omega))
+            ⟨k.val + 1, by omega⟩ 0 - _ = _
+          rw [h_concat]
+          have hd := osBuildPoints_time_diff (L + L - 1)
+            (Fin.append (x_sp_L ∘ Fin.rev) x_sp_L ∘ finCongr (by omega))
+            (fun j : Fin (L + L - 1) =>
+              if hjL : j.val < L - 1 then tL ⟨L - 2 - j.val, by omega⟩
+              else if hjM : j.val = L - 1 then ε₀ + ε₀
+              else tL ⟨j.val - L, by omega⟩)
+            (-(ε₀ + ∑ j : Fin (L - 1), tL j)) k
+          have h_lhs : (osBuildPoints (L + L - 1) _ _ _ ∘ finCongr (by omega : L + L =
+            L + L - 1 + 1))
+              ⟨k.val + 1, by omega⟩ 0 -
+              (osBuildPoints (L + L - 1) _ _ _ ∘ finCongr (by omega : L + L = L + L - 1 + 1))
+              ⟨k.val, by omega⟩ 0 =
+              (if hkL : k.val < L - 1 then tL ⟨L - 2 - k.val, by omega⟩
+              else if hkM : k.val = L - 1 then ε₀ + ε₀
+              else tL ⟨k.val - L, by omega⟩) := hd
+          rw [h_lhs]
+          split_ifs with h1 h2
+          · dsimp only [tL]; congr 1; ext; dsimp [L]; omega
+          · ring
+          · rfl
+        simp_rw [h_diff]
+        let Cmid : Fin (L + L - 1) := ⟨L - 1, by omega⟩
+        have h_u : (Finset.univ : Finset (Fin (L + L - 1))) =
+            insert Cmid ((Finset.univ.filter fun k : Fin (L + L - 1) => k.val < L - 1) ∪
+              (Finset.univ.filter fun k : Fin (L + L - 1) => L ≤ k.val)) := by
+          ext k; simp only [Finset.mem_univ, Finset.mem_insert, Finset.mem_union,
+            Finset.mem_filter, true_and, Fin.ext_iff, Cmid, true_iff]; omega
+        have h_not : Cmid ∉ (Finset.univ.filter fun k : Fin (L + L - 1) => k.val < L - 1) ∪
+            (Finset.univ.filter fun k : Fin (L + L - 1) => L ≤ k.val) := by
+          simp [Cmid]; omega
+        have h_disj : Disjoint (Finset.univ.filter fun k : Fin (L + L - 1) => k.val < L - 1)
+            (Finset.univ.filter fun k : Fin (L + L - 1) => L ≤ k.val) := by
+          rw [Finset.disjoint_left]; intro k h1 h2; simp at h1 h2; omega
+        rw [h_u, Finset.prod_insert h_not, Finset.prod_union h_disj]
+        have h_mid : (if hkL : Cmid.val < L - 1 then t_all ⟨Cmid.val, by omega⟩
+            else if hkM : Cmid.val = L - 1 then 2 * ε₀
+            else t_all ⟨r.val - 1 - (Cmid.val - L), by omega⟩) = 2 * ε₀ := by
+          simp [Cmid]
+        rw [h_mid, sq]
+        congr 1
+        refine congrArg₂ (· * ·) ?_ ?_
+        · refine Finset.prod_bij (fun (k : Fin (L + L - 1)) hk =>
+            (⟨k.val, (Finset.mem_filter.mp hk).2⟩ : Fin (L - 1))) ?_ ?_ ?_ ?_
+          · intro _ _; exact Finset.mem_univ _
+          · intro k₁ _ k₂ _ h; exact Fin.ext (congrArg (Fin.val : Fin (L - 1) → ℕ) h)
+          · intro b _; refine ⟨⟨b.val, by omega⟩, by simp, by ext; rfl⟩
+          · intro k hk; rw [dif_pos (Finset.mem_filter.mp hk).2]
+        · refine Finset.prod_bij (fun (k : Fin (L + L - 1)) hk =>
+            (⟨r.val - 1 - (k.val - L), by simp at hk; dsimp [L]; omega⟩ : Fin (L - 1))) ?_ ?_ ?_ ?_
+          · intro _ _; exact Finset.mem_univ _
+          · intro k₁ hk₁ k₂ hk₂ h
+            simp at hk₁ hk₂
+            have h1 := congrArg (Fin.val : Fin (L - 1) → ℕ) h; dsimp at h1; ext; omega
+          · intro b _; refine ⟨⟨L + (r.val - 1 - b.val), by dsimp [L]; omega⟩,
+              by simp, by ext; dsimp [L]; omega⟩
+          · intro k hk; simp at hk; rw [dif_neg (by omega), dif_neg (by omega)]
+      rw [h_prod_eq] at h_bd
+      have h2L : L + L = 2 * L := by omega
+      have h_eq : C_lg * A_lg ^ (L + L) * ((L + L).factorial : ℝ) ^ M *
+          ((1 + (2 * ε₀)⁻¹) ^ M * (∏ j : Fin (L - 1), (1 + (t_all ⟨j.val, by omega⟩)⁻¹) ^ M) ^ 2) =
+          C_lg * A_lg ^ (2 * L) * ((2 * L).factorial : ℝ) ^ M *
+            (1 + (2 * ε₀)⁻¹) ^ M * (∏ j : Fin (L - 1), (1 + (t_all ⟨j.val,
+              by omega⟩)⁻¹) ^ M) ^ 2 := by
+        rw [h2L]; ring
+      exact h_bd.trans_eq h_eq
+    linarith [h_raw]
+  have h_R_sq : ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨pR, hpR⟩)⟩‖ ^ 2 ≤
+      (osStarRowBound Sstr) ^ R * C_lg * A_lg ^ (2 * R) * (((2 * R).factorial : ℝ) ^ M) *
+        (1 + (2 * ε₀)⁻¹) ^ M *
+        (∏ j : Fin (R - 1), (1 + (t_all ⟨r.val + 1 + j.val, by omega⟩)⁻¹) ^ M) ^ 2 := by
+    have h_raw : ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨pR, hpR⟩)⟩‖ ^ 2 ≤
+        (osStarRowBound Sstr) ^ R *
+          (C_lg * A_lg ^ (2 * R) * (((2 * R).factorial : ℝ) ^ M) *
+            (1 + (2 * ε₀)⁻¹) ^ M *
+            (∏ j : Fin (R - 1), (1 + (t_all ⟨r.val + 1 + j.val, by omega⟩)⁻¹) ^ M) ^ 2) := by
+      refine norm_sq_osBasis_le hOS.toReflectionPositiveData R α_R _ (by
+        have h_pr : 0 ≤ ∏ j : Fin (R - 1), (1 + (t_all ⟨r.val + 1 + j.val, by omega⟩)⁻¹) ^ M :=
+          Finset.prod_nonneg fun j _ =>
+            pow_nonneg (by have := ht_all ⟨r.val + 1 + j.val, by omega⟩; positivity) M
+        positivity) ?_
+      intro γ₁
+      let tR := fun j : Fin (R - 1) => t_all ⟨r.val + 1 + j.val, by omega⟩
+      have h_concat := osConcatPoint_osBuildPoints_eq_shift R R (by dsimp [R]; omega)
+        (by dsimp [R]; omega) x_sp_R tR ε₀ x_sp_R tR ε₀
+      dsimp only at h_concat
+      have h_ord := osConcatPoint_mem_orderedEuclidN R R hpR hpR
+      have h_bd := hlg (R + R) (osConcatIdx R R γ₁ α_R) _ h_ord
+      have h_prod_eq : (∏ k : Fin (R + R - 1),
+          (1 + (osConcatPoint R R pR pR ⟨k.val + 1, by omega⟩ 0 -
+            osConcatPoint R R pR pR ⟨k.val, by omega⟩ 0)⁻¹) ^ M) =
+          (1 + (2 * ε₀)⁻¹) ^ M * (∏ j : Fin (R - 1), (1 + (t_all ⟨r.val + 1 + j.val,
+            by omega⟩)⁻¹) ^ M) ^ 2 := by
+        have h_diff : ∀ k : Fin (R + R - 1),
+            osConcatPoint R R pR pR ⟨k.val + 1, by omega⟩ 0 -
+              osConcatPoint R R pR pR ⟨k.val, by omega⟩ 0 =
+            if hkL : k.val < R - 1 then t_all ⟨r.val + 1 + (R - 2 - k.val), by omega⟩
+            else if hkM : k.val = R - 1 then 2 * ε₀
+            else t_all ⟨r.val + 1 + (k.val - R), by omega⟩ := by
+          intro k
+          change osConcatPoint R R (osBuildPoints (R -
+            1) (x_sp_R ∘ finCongr (by omega)) tR ε₀ ∘ finCongr (by omega))
+            (osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega)) tR ε₀ ∘ finCongr (by omega))
+            ⟨k.val + 1, by omega⟩ 0 - _ = _
+          rw [h_concat]
+          have hd := osBuildPoints_time_diff (R + R - 1)
+            (Fin.append (x_sp_R ∘ Fin.rev) x_sp_R ∘ finCongr (by omega))
+            (fun j : Fin (R + R - 1) =>
+              if hjL : j.val < R - 1 then tR ⟨R - 2 - j.val, by omega⟩
+              else if hjM : j.val = R - 1 then ε₀ + ε₀
+              else tR ⟨j.val - R, by omega⟩)
+            (-(ε₀ + ∑ j : Fin (R - 1), tR j)) k
+          have h_lhs : (osBuildPoints (R + R - 1) _ _ _ ∘ finCongr (by omega : R + R =
+            R + R - 1 + 1))
+              ⟨k.val + 1, by omega⟩ 0 -
+              (osBuildPoints (R + R - 1) _ _ _ ∘ finCongr (by omega : R + R = R + R - 1 + 1))
+              ⟨k.val, by omega⟩ 0 =
+              (if hkL : k.val < R - 1 then tR ⟨R - 2 - k.val, by omega⟩
+              else if hkM : k.val = R - 1 then ε₀ + ε₀
+              else tR ⟨k.val - R, by omega⟩) := hd
+          rw [h_lhs]
+          split_ifs with h1 h2
+          · rfl
+          · ring
+          · rfl
+        simp_rw [h_diff]
+        let Cmid : Fin (R + R - 1) := ⟨R - 1, by dsimp [R]; omega⟩
+        have h_u : (Finset.univ : Finset (Fin (R + R - 1))) =
+            insert Cmid ((Finset.univ.filter fun k : Fin (R + R - 1) => k.val < R - 1) ∪
+              (Finset.univ.filter fun k : Fin (R + R - 1) => R ≤ k.val)) := by
+          ext k; simp only [Finset.mem_univ, Finset.mem_insert, Finset.mem_union,
+            Finset.mem_filter, true_and, Fin.ext_iff, Cmid, true_iff]; dsimp [R]; omega
+        have h_not : Cmid ∉ (Finset.univ.filter fun k : Fin (R + R - 1) => k.val < R - 1) ∪
+            (Finset.univ.filter fun k : Fin (R + R - 1) => R ≤ k.val) := by
+          simp [Cmid]; dsimp [R]; omega
+        have h_disj : Disjoint (Finset.univ.filter fun k : Fin (R + R - 1) => k.val < R - 1)
+            (Finset.univ.filter fun k : Fin (R + R - 1) => R ≤ k.val) := by
+          rw [Finset.disjoint_left]; intro k h1 h2; simp at h1 h2; omega
+        rw [h_u, Finset.prod_insert h_not, Finset.prod_union h_disj]
+        have h_mid : (if hkL : Cmid.val <
+          R - 1 then t_all ⟨r.val + 1 + (R - 2 - Cmid.val), by omega⟩
+            else if hkM : Cmid.val = R - 1 then 2 * ε₀
+            else t_all ⟨r.val + 1 + (Cmid.val - R), by omega⟩) = 2 * ε₀ := by
+          simp [Cmid]
+        rw [h_mid, sq]
+        congr 1
+        refine congrArg₂ (· * ·) ?_ ?_
+        · refine Finset.prod_bij (fun (k : Fin (R + R - 1)) hk =>
+            (⟨R - 2 - k.val, by simp at hk; dsimp [R]; omega⟩ : Fin (R - 1))) ?_ ?_ ?_ ?_
+          · intro _ _; exact Finset.mem_univ _
+          · intro k₁ hk₁ k₂ hk₂ h
+            simp at hk₁ hk₂
+            have h1 := congrArg (Fin.val : Fin (R - 1) → ℕ) h; dsimp at h1; ext; omega
+          · intro b _; refine ⟨⟨R - 2 - b.val, by dsimp [R]; omega⟩,
+              by simp; dsimp [R]; omega, by ext; dsimp [R]; omega⟩
+          · intro k hk; rw [dif_pos (Finset.mem_filter.mp hk).2]
+        · refine Finset.prod_bij (fun (k : Fin (R + R - 1)) hk =>
+            (⟨k.val - R, by simp at hk; dsimp [R]; omega⟩ : Fin (R - 1))) ?_ ?_ ?_ ?_
+          · intro _ _; exact Finset.mem_univ _
+          · intro k₁ hk₁ k₂ hk₂ h
+            simp at hk₁ hk₂
+            have h1 := congrArg (Fin.val : Fin (R - 1) → ℕ) h; dsimp at h1; ext; omega
+          · intro b _; refine ⟨⟨R + b.val, by dsimp [R]; omega⟩,
+              by simp, by ext; dsimp [R]; omega⟩
+          · intro k hk; simp at hk; rw [dif_neg (by omega), dif_neg (by omega)]
+      rw [h_prod_eq] at h_bd
+      have h2R : R + R = 2 * R := by omega
+      have h_eq : C_lg * A_lg ^ (R + R) * ((R + R).factorial : ℝ) ^ M *
+          ((1 + (2 * ε₀)⁻¹) ^ M * (∏ j : Fin (R - 1), (1 + (t_all ⟨r.val + 1 + j.val,
+            by omega⟩)⁻¹) ^ M) ^ 2) =
+          C_lg * A_lg ^ (2 * R) * ((2 * R).factorial : ℝ) ^ M *
+            (1 + (2 * ε₀)⁻¹) ^ M * (∏ j : Fin (R - 1), (1 + (t_all ⟨r.val + 1 + j.val,
+              by omega⟩)⁻¹) ^ M) ^ 2 := by
+        rw [h2R]; ring
+      exact h_bd.trans_eq h_eq
+    linarith [h_raw]
+  have hLR : L + R = m + 1 := by dsimp [L, R]; omega
+  have h_fact := two_mul_factorial_mul_le L R
+  rw [hLR] at h_fact
+  have h_factM : (((2 * L).factorial : ℝ) ^ M) * (((2 * R).factorial : ℝ) ^ M) ≤
+      ((2 : ℝ) ^ M) ^ (2 * (m + 1)) * ((((m + 1).factorial : ℝ) ^ M) ^ 2) := by
+    have h1 := pow_le_pow_left₀ (by positivity) h_fact M
+    rw [mul_pow, mul_pow] at h1
+    calc ((2 * L).factorial : ℝ) ^ M * ((2 * R).factorial : ℝ) ^ M
+        ≤ ((4 : ℝ) ^ (m + 1)) ^ M * (((m + 1).factorial : ℝ) ^ 2) ^ M := h1
+      _ = ((2 : ℝ) ^ M) ^ (2 * (m + 1)) * (((m + 1).factorial : ℝ) ^ M) ^ 2 := by
+          have h4 : (4 : ℝ) = (2 : ℝ) ^ 2 := by norm_num
+          rw [h4, ← pow_mul, ← pow_mul, ← pow_mul, ← pow_mul, ← pow_mul]
+          exact congrArg₂ (· * ·) (congrArg _ (by ring)) (congrArg _ (by ring))
+  have h_pr_split : (∏ j : Fin (L - 1), (1 + (t_all ⟨j.val, by omega⟩)⁻¹) ^ M) *
+      (∏ j : Fin (R - 1), (1 + (t_all ⟨r.val + 1 + j.val, by omega⟩)⁻¹) ^ M) =
+      ∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M := by
+    have h_u : Finset.univ.erase r =
+        (Finset.univ.filter fun j : Fin m => j.val < r.val) ∪
+          (Finset.univ.filter fun j : Fin m => r.val < j.val) := by
+      ext j; simp only [Finset.mem_erase, Finset.mem_univ, and_true, Finset.mem_union,
+        Finset.mem_filter, true_and]; omega
+    have h_disj : Disjoint (Finset.univ.filter fun j : Fin m => j.val < r.val)
+        (Finset.univ.filter fun j : Fin m => r.val < j.val) := by
+      rw [Finset.disjoint_left]; intro j h1 h2; simp at h1 h2; omega
+    rw [h_u, Finset.prod_union h_disj]
+    refine congrArg₂ (· * ·) ?_ ?_
+    · refine Finset.prod_bij (fun (j : Fin (L - 1)) _ => (⟨j.val, by omega⟩ : Fin m))
+        ?_ ?_ ?_ ?_
+      · intro j _; exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by dsimp [L]; exact j.isLt⟩
+      · intro j₁ _ j₂ _ h; exact Fin.ext (congrArg (Fin.val : Fin m → ℕ) h)
+      · intro b hb; simp at hb; refine ⟨⟨b.val, by dsimp [L]; omega⟩, Finset.mem_univ _,
+          by ext; rfl⟩
+      · intro j _; rfl
+    · refine Finset.prod_bij (fun (j : Fin (R - 1)) _ => (⟨r.val + 1 + j.val, by omega⟩ : Fin m))
+        ?_ ?_ ?_ ?_
+      · intro j _; simp only [Finset.mem_filter, Finset.mem_univ, true_and]; omega
+      · intro j₁ _ j₂ _ h
+        have h1 := congrArg (Fin.val : Fin m → ℕ) h; dsimp at h1; ext; omega
+      · intro b hb; simp at hb
+        refine ⟨⟨b.val - r.val - 1, by dsimp [R]; omega⟩, Finset.mem_univ _, by ext; dsimp; omega⟩
+      · intro j _; rfl
+  have h_SR_ge1 := one_le_osStarRowBound Sstr
+  have h_SR_sq : (osStarRowBound Sstr) ^ (m + 1) ≤ ((osStarRowBound Sstr) ^ (m + 1)) ^ 2 := by
+    rw [sq]; exact le_mul_of_one_le_right (by positivity) (one_le_pow₀ h_SR_ge1)
+  have h_sq_prod : (‖osLeftState hOS.toReflectionPositiveData L α_L ⟨pL, hpL⟩‖ *
+      ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨pR, hpR⟩)⟩‖) ^ 2 ≤
+      (C_lg * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+        (((m + 1).factorial : ℝ) ^ M) * (1 + (2 * ε₀)⁻¹) ^ M *
+        (∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M)) ^ 2 := by
+    rw [mul_pow]
+    have h_m := mul_le_mul h_L_sq h_R_sq (sq_nonneg _) (by
+      have h_pr : 0 ≤ ∏ j : Fin (L - 1), (1 + (t_all ⟨j.val, by omega⟩)⁻¹) ^ M :=
+        Finset.prod_nonneg fun j _ => pow_nonneg (by have := ht_all ⟨j.val, by omega⟩; positivity) M
+      positivity)
+    have h_rw_2m : 2 * (m + 1) = 2 * L + 2 * R := by omega
+    have h_lhs_rw :
+        ((osStarRowBound Sstr) ^ L * C_lg * A_lg ^ (2 * L) * ((2 * L).factorial : ℝ) ^ M *
+          (1 + (2 * ε₀)⁻¹) ^ M *
+          (∏ j : Fin (L - 1), (1 + (t_all ⟨j.val, by omega⟩)⁻¹) ^ M) ^ 2) *
+        ((osStarRowBound Sstr) ^ R * C_lg * A_lg ^ (2 * R) * ((2 * R).factorial : ℝ) ^ M *
+          (1 + (2 * ε₀)⁻¹) ^ M *
+          (∏ j : Fin (R - 1), (1 + (t_all ⟨r.val + 1 + j.val, by omega⟩)⁻¹) ^ M) ^ 2) =
+        C_lg ^ 2 * (osStarRowBound Sstr) ^ (m + 1) * A_lg ^ (2 * (m + 1)) *
+          (((2 * L).factorial : ℝ) ^ M * ((2 * R).factorial : ℝ) ^ M) *
+          ((1 + (2 * ε₀)⁻¹) ^ M) ^ 2 *
+          (∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M) ^ 2 := by
+      rw [← h_pr_split, mul_pow, h_rw_2m, ← hLR, pow_add (osStarRowBound Sstr) L R,
+        pow_add A_lg (2 * L) (2 * R)]
+      ring
+    rw [h_lhs_rw] at h_m
+    calc ‖osLeftState hOS.toReflectionPositiveData L α_L ⟨pL, hpL⟩‖ ^ 2 *
+          ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨pR, hpR⟩)⟩‖ ^ 2
+        ≤ C_lg ^ 2 * (osStarRowBound Sstr) ^ (m + 1) * A_lg ^ (2 * (m + 1)) *
+            (((2 * L).factorial : ℝ) ^ M * ((2 * R).factorial : ℝ) ^ M) *
+            ((1 + (2 * ε₀)⁻¹) ^ M) ^ 2 *
+            (∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M) ^ 2 := h_m
+      _ ≤ C_lg ^ 2 * ((osStarRowBound Sstr) ^ (m + 1)) ^ 2 * A_lg ^ (2 * (m + 1)) *
+            (((2 : ℝ) ^ M) ^ (2 * (m + 1)) * (((m + 1).factorial : ℝ) ^ M) ^ 2) *
+            ((1 + (2 * ε₀)⁻¹) ^ M) ^ 2 *
+            (∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M) ^ 2 := by
+          refine mul_le_mul_of_nonneg_right ?_ (sq_nonneg _)
+          refine mul_le_mul_of_nonneg_right ?_ (sq_nonneg _)
+          refine mul_le_mul ?_ h_factM (by positivity) (by positivity)
+          refine mul_le_mul_of_nonneg_right ?_ (by positivity)
+          exact mul_le_mul_of_nonneg_left h_SR_sq (by positivity)
+      _ = (C_lg * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ M) * (1 + (2 * ε₀)⁻¹) ^ M *
+            (∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M)) ^ 2 := by
+          rw [mul_pow, mul_pow, mul_pow, mul_pow, mul_pow, mul_pow, mul_pow, mul_pow,
+            ← pow_mul A_lg, ← pow_mul ((2 : ℝ) ^ M), mul_comm (m + 1) 2]
+          ring
+  have h_rhs_nn : 0 ≤ C_lg * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+      (((m + 1).factorial : ℝ) ^ M) * (1 + (2 * ε₀)⁻¹) ^ M *
+      (∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M) := by
+    have h_pr_nn : 0 ≤ ∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M :=
+      Finset.prod_nonneg fun j _ => pow_nonneg (by have := ht_all j; positivity) M
+    positivity
+  nlinarith [sq_nonneg (‖osLeftState hOS.toReflectionPositiveData L α_L ⟨pL, hpL⟩‖ *
+    ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨pR, hpR⟩)⟩‖ -
+    (C_lg * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+      (((m + 1).factorial : ℝ) ^ M) * (1 + (2 * ε₀)⁻¹) ^ M *
+      (∏ j ∈ Finset.univ.erase r, (1 + (t_all j)⁻¹) ^ M)))]
+
+lemma os_stage0_flat_tube
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    {C_lg A_lg : ℝ} {M : ℕ} (hC_ge1 : 1 ≤ C_lg) (hA_ge1 : 1 ≤ A_lg)
+    (hlg : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
+      ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
+        ∏ k : Fin (n - 1), (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ M)
+    (k : ℕ) :
+    OSDampedSubsetBound hOS M (2 * k + 2) (osThetaSeq (2 * k + 2) 0)
+      (C_lg * (8 : ℝ) ^ M) (osStarRowBound Sstr * A_lg * (4 : ℝ) ^ M) := by
+  intro m α x_sp S t hS_le ht
+  let C0 : ℝ := C_lg * (8 : ℝ) ^ M
+  let A0 : ℝ := osStarRowBound Sstr * A_lg * (4 : ℝ) ^ M
+  let B_all : ℝ := C0 * A0 ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M) *
+    ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M
+  have hB_nn : 0 ≤ B_all := by
+    have hSR := one_le_osStarRowBound Sstr
+    have h_pr : 0 ≤ ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M :=
+      Finset.prod_nonneg fun j hj => pow_nonneg (by
+        have hpos := ht j (Finset.mem_compl.mp hj); positivity) M
+    dsimp [B_all, C0, A0]; positivity
+  let f₀ : (Fin S.card → ℝ) → ℂ := fun x =>
+    (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) *
+      𝒮 (m + 1) α (osBuildPoints m x_sp (osSubstTimes S t (fun i => Real.exp (x i))) 0)
+  have hf₀_cont : Continuous f₀ := by
+    have h_damp : Continuous (fun x : Fin S.card →
+      ℝ => ∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) :=
+      continuous_finsetProd Finset.univ fun i _ =>
+        ((differentiableOn_logTimeDamp.continuousOn.comp_continuous
+          (Complex.continuous_ofReal.comp (continuous_apply i))) fun x => by
+            simp [Real.pi_pos]).pow M
+    have h_pts : Continuous (fun x : Fin S.card → ℝ =>
+        osBuildPoints m x_sp (osSubstTimes S t (fun i => Real.exp (x i))) 0) := by
+      refine continuous_pi fun i => continuous_pi fun μ => ?_
+      refine Fin.cases ?_ (fun ν => continuous_const) μ
+      simp only [osBuildPoints_zero_coord]
+      refine continuous_const.add (continuous_finsetSum _ fun j _ => ?_)
+      dsimp only [osSubstTimes]
+      split_ifs
+      · exact Real.continuous_exp.comp (continuous_apply _)
+      · exact continuous_const
+    exact h_damp.mul ((hOS.os0_smooth (m + 1) α).continuousOn.comp_continuous h_pts
+      fun x => osBuildPoints_mem_orderedEuclidN m x_sp
+        (osSubstTimes_pos S ht fun i => Real.exp_pos (x i)) 0)
+  have h_one_cut : ∀ (i_cut : Fin S.card),
+      ∃ fb : (Fin S.card → ℂ) → ℂ,
+        ContinuousOn fb (FlatStrip S.card (Real.pi / 4) i_cut) ∧
+        (∀ x : Fin S.card → ℝ, fb (fun j => (x j : ℂ)) = f₀ x) ∧
+        (∀ z ∈ FlatStrip S.card (Real.pi / 4) i_cut, ‖fb z‖ ≤ B_all) ∧
+        (∀ x : Fin S.card → ℝ,
+          DifferentiableOn ℂ (fun w => fb (Function.update (fun j => (x j : ℂ)) i_cut w))
+            { w : ℂ | |w.im| < Real.pi / 4 }) := by
+    intro i_cut
+    let r : Fin m := S.orderEmbOfFin rfl i_cut
+    let L : ℕ := r.val + 1
+    let R : ℕ := m - r.val
+    let α_L : Fin L → ι := fun j => α ⟨r.val - j.val, by omega⟩
+    let α_R : Fin R → ι := fun j => α ⟨r.val + 1 + j.val, by omega⟩
+    let x_sp_L : Fin L → Fin 3 → ℝ := fun j => x_sp ⟨r.val - j.val, by omega⟩
+    let x_sp_R : Fin R → Fin 3 → ℝ := fun j => x_sp ⟨r.val + 1 + j.val, by omega⟩
+    let mk_t : (Fin S.card → ℂ) → Fin m → ℝ := fun z =>
+      osSubstTimes S t (fun i => Real.exp (z i).re)
+    have h_mkt_pos : ∀ z : Fin S.card → ℂ, ∀ j : Fin m, 0 < mk_t z j := fun z =>
+      osSubstTimes_pos S ht fun i => Real.exp_pos _
+    let mk_pL : ℝ → (Fin S.card → ℂ) → Fin L → Fin 4 → ℝ := fun ε z =>
+      osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega))
+        (fun j => mk_t z ⟨r.val - 1 - j.val, by omega⟩) ε ∘ finCongr (by omega)
+    let mk_pR : ℝ → (Fin S.card → ℂ) → Fin R → Fin 4 → ℝ := fun ε z =>
+      osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega))
+        (fun j => mk_t z ⟨r.val + 1 + j.val, by omega⟩) ε ∘ finCongr (by omega)
+    have h_pL_mem : ∀ ε : ℝ, 0 < ε → ∀ z, mk_pL ε z ∈ posOrderedEuclidN L := by
+      intro ε hε z
+      have hm := osBuildPoints_mem_posOrderedEuclidN (L - 1) (x_sp_L ∘ finCongr (by omega))
+        (fun j : Fin (L - 1) => h_mkt_pos z ⟨r.val - 1 - j.val, by omega⟩) hε
+      exact ⟨fun i => hm.1 _, fun i hi => hm.2 _ (by dsimp; omega)⟩
+    have h_pR_mem : ∀ ε : ℝ, 0 < ε → ∀ z, mk_pR ε z ∈ posOrderedEuclidN R := by
+      intro ε hε z
+      have hm := osBuildPoints_mem_posOrderedEuclidN (R - 1) (x_sp_R ∘ finCongr (by omega))
+        (fun j : Fin (R - 1) => h_mkt_pos z ⟨r.val + 1 + j.val, by omega⟩) hε
+      exact ⟨fun i => hm.1 (finCongr (by omega) i),
+        fun i hi => hm.2 (finCongr (by omega) i) (by dsimp; omega)⟩
+    have h_pL_cont : ∀ ε : ℝ, Continuous (mk_pL ε) := fun ε => by
+      refine continuous_pi fun i => continuous_pi fun μ => ?_
+      refine Fin.cases ?_ (fun ν => continuous_const) μ
+      simp only [mk_pL, Function.comp_apply, osBuildPoints_zero_coord]
+      refine continuous_const.add (continuous_finsetSum _ fun j _ => ?_)
+      dsimp only [mk_t, osSubstTimes]
+      split_ifs
+      · exact Real.continuous_exp.comp (Complex.continuous_re.comp (continuous_apply _))
+      · exact continuous_const
+    have h_pR_cont : ∀ ε : ℝ, Continuous (mk_pR ε) := fun ε => by
+      refine continuous_pi fun i => continuous_pi fun μ => ?_
+      refine Fin.cases ?_ (fun ν => continuous_const) μ
+      simp only [mk_pR, Function.comp_apply, osBuildPoints_zero_coord]
+      refine continuous_const.add (continuous_finsetSum _ fun j _ => ?_)
+      dsimp only [mk_t, osSubstTimes]
+      split_ifs
+      · exact Real.continuous_exp.comp (Complex.continuous_re.comp (continuous_apply _))
+      · exact continuous_const
+    let fb_eps : (ε : ℝ) → (0 < ε) → (Fin S.card → ℂ) → ℂ := fun ε hε z =>
+      (∏ i : Fin S.card, logTimeDamp (z i) ^ M) *
+        ⟪osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε z, h_pL_mem ε hε z⟩,
+          osClusterSemigroupTotal hOS hcluster (Complex.exp (z i_cut) - 2 * (ε : ℂ))
+            (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε z, h_pR_mem ε hε z⟩)⟩)⟫_ℂ
+    have h_fb_eps_agree : ∀ (ε₁ ε₂ : ℝ) (hε₁ : 0 < ε₁) (hε₂ : 0 < ε₂) (z : Fin S.card → ℂ),
+        |(z i_cut).im| < Real.pi / 4 →
+        2 * ε₁ < (Complex.exp (z i_cut)).re → 2 * ε₂ < (Complex.exp (z i_cut)).re →
+        fb_eps ε₁ hε₁ z = fb_eps ε₂ hε₂ z := by
+      intro ε₁ ε₂ hε₁ hε₂ z him h1 h2
+      let ε := max ε₁ ε₂
+      have hε : 0 < ε := lt_of_lt_of_le hε₁ (le_max_left _ _)
+      let V : Set ℂ := { w : ℂ | |w.im| < Real.pi / 4 ∧ 2 * ε < (Complex.exp w).re }
+      let g₁ : ℂ → ℂ := fun w => fb_eps ε₁ hε₁ (Function.update z i_cut w)
+      let g₂ : ℂ → ℂ := fun w => fb_eps ε₂ hε₂ (Function.update z i_cut w)
+      have h_upd_pL : ∀ (e : ℝ) (w : ℂ), mk_pL e (Function.update z i_cut w) = mk_pL e z := by
+        intro e w; ext i μ
+        refine Fin.cases ?_ (fun ν => rfl) μ
+        simp only [mk_pL, Function.comp_apply, osBuildPoints_zero_coord]
+        congr 1; refine Finset.sum_congr rfl fun j _ => ?_
+        dsimp only [mk_t, osSubstTimes]
+        split_ifs with hmem
+        · have hne : (S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - j.val, by omega⟩, hmem⟩ ≠ i_cut := by
+            intro heq
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - j.val,
+              by omega⟩, hmem⟩) =
+                ⟨r.val - 1 - j.val, by omega⟩ :=
+                  congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            rw [heq] at h_o
+            have hv := congrArg Fin.val h_o; dsimp at hv; omega
+          rw [Function.update_of_ne hne]
+        · rfl
+      have h_upd_pR : ∀ (e : ℝ) (w : ℂ), mk_pR e (Function.update z i_cut w) = mk_pR e z := by
+        intro e w; ext i μ
+        refine Fin.cases ?_ (fun ν => rfl) μ
+        simp only [mk_pR, Function.comp_apply, osBuildPoints_zero_coord]
+        congr 1; refine Finset.sum_congr rfl fun j _ => ?_
+        dsimp only [mk_t, osSubstTimes]
+        split_ifs with hmem
+        · have hne : (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + j.val, by omega⟩, hmem⟩ ≠ i_cut := by
+            intro heq
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + j.val,
+              by omega⟩, hmem⟩) =
+                ⟨r.val + 1 + j.val, by omega⟩ :=
+                  congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            rw [heq] at h_o
+            have hv := congrArg Fin.val h_o; dsimp at hv; omega
+          rw [Function.update_of_ne hne]
+        · rfl
+      have h_diff_g : ∀ (e : ℝ) (he : 0 < e), e ≤ ε →
+          DifferentiableOn ℂ (fun w => fb_eps e he (Function.update z i_cut w)) V := by
+        intro e he hle w hw
+        have h_eq : (fun ζ => fb_eps e he (Function.update z i_cut ζ)) =
+            fun ζ => (∏ i ∈ Finset.univ.erase i_cut, logTimeDamp (z i) ^ M) *
+              (logTimeDamp ζ ^ M *
+                ⟪osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL e z, h_pL_mem e he z⟩,
+                  osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (e : ℂ))
+                    (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR e z,
+                      h_pR_mem e he z⟩)⟩)⟫_ℂ) := by
+          ext ζ; dsimp only [fb_eps]
+          have hL_sub : (⟨mk_pL e (Function.update z i_cut ζ),
+            h_pL_mem e he _⟩ : posOrderedEuclidN L) =
+              ⟨mk_pL e z, h_pL_mem e he z⟩ := Subtype.ext (h_upd_pL e ζ)
+          have hR_sub : (⟨mk_pR e (Function.update z i_cut ζ),
+            h_pR_mem e he _⟩ : posOrderedEuclidN R) =
+              ⟨mk_pR e z, h_pR_mem e he z⟩ := Subtype.ext (h_upd_pR e ζ)
+          rw [hL_sub, hR_sub, Function.update_self]
+          have h_p : (∏ i : Fin S.card, logTimeDamp (Function.update z i_cut ζ i) ^ M) =
+              logTimeDamp ζ ^ M * ∏ i ∈ Finset.univ.erase i_cut, logTimeDamp (z i) ^ M := by
+            rw [← Finset.mul_prod_erase Finset.univ _ (Finset.mem_univ i_cut), Function.update_self]
+            congr 1
+            refine Finset.prod_congr rfl fun i hi => by
+              rw [Function.update_of_ne (Finset.ne_of_mem_erase hi)]
+          rw [h_p]; ring
+        rw [h_eq]
+        have h_w_pi : |w.im| < Real.pi / 2 := lt_trans hw.1 (by linarith [Real.pi_pos])
+        have h_damp_da : DifferentiableAt ℂ (fun ζ => logTimeDamp ζ ^ M) w :=
+          ((differentiableOn_logTimeDamp w h_w_pi).differentiableAt
+            ((isOpen_lt (continuous_abs.comp Complex.continuous_im) continuous_const).mem_nhds
+              h_w_pi)).pow M
+        have h_re : 0 < (Complex.exp w - 2 * (e : ℂ)).re := by
+          have hre := hw.2
+          simp only [Complex.sub_re, Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat,
+            Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+          linarith
+        have h_semi_da : DifferentiableAt ℂ
+            (fun ζ => osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (e : ℂ))) w :=
+          ((differentiableOn_canonicalOSHolomorphicSemigroupTotal
+            hOS.toReflectionPositiveData hOS.os1_translation
+            (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+              hOS.os1_translation hcluster)
+            hOS.os0_smooth _ h_re).differentiableAt
+            ((isOpen_lt continuous_const Complex.continuous_re).mem_nhds h_re)).comp w
+            (Complex.differentiable_exp.differentiableAt.sub (differentiableAt_const _))
+        exact ((differentiableAt_const _).mul (h_damp_da.mul
+          ((innerSL ℂ _).differentiableAt.comp _
+            (h_semi_da.clm_apply (differentiableAt_const _))))).differentiableWithinAt
+      have h_eq_V : ∀ w ∈ V, g₁ w = g₂ w := by
+        let G₁ : (Fin 1 → ℂ) → ℂ := fun u => g₁ (u 0)
+        let G₂ : (Fin 1 → ℂ) → ℂ := fun u => g₂ (u 0)
+        have hG1 : DifferentiableOn ℂ G₁
+            { u ∈ TubeDomain (osBox (Real.pi / 4)) | 2 * ε < (Complex.exp (u 0)).re } :=
+          (h_diff_g ε₁ hε₁ (le_max_left _ _)).comp (differentiable_apply 0).differentiableOn
+            fun u hu => ⟨hu.1 0, hu.2⟩
+        have hG2 : DifferentiableOn ℂ G₂
+            { u ∈ TubeDomain (osBox (Real.pi / 4)) | 2 * ε < (Complex.exp (u 0)).re } :=
+          (h_diff_g ε₂ hε₂ (le_max_right _ _)).comp (differentiable_apply 0).differentiableOn
+            fun u hu => ⟨hu.1 0, hu.2⟩
+        have h_real_G : ∀ x : Fin 1 → ℝ, 2 * ε < Real.exp (x 0) →
+            G₁ (fun j => (x j : ℂ)) = G₂ (fun j => (x j : ℂ)) := by
+          intro x hx
+          dsimp only [G₁, G₂, g₁, g₂, fb_eps]
+          congr 1
+          let t_u : Fin m → ℝ := mk_t (Function.update z i_cut (x 0 : ℂ))
+          have ht_u : ∀ j : Fin m, 0 < t_u j := h_mkt_pos _
+          have ht_u_r : t_u r = Real.exp (x 0) := by
+            dsimp only [t_u, mk_t]
+            rw [osSubstTimes_orderEmbOfFin, Function.update_self, Complex.ofReal_re]
+          have h_exp_c : ∀ e : ℝ,
+            Complex.exp (Function.update z i_cut (x 0 : ℂ) i_cut) - 2 * (e : ℂ) =
+              ((t_u r - 2 * e : ℝ) : ℂ) := fun e => by
+            rw [Function.update_self, ← Complex.ofReal_exp, ht_u_r]; push_cast; ring
+          rw [h_exp_c ε₁, h_exp_c ε₂]
+          rw [inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger hOS hcluster m r α x_sp
+            ht_u hε₁
+              (by rw [ht_u_r]; linarith [le_max_left ε₁ ε₂]),
+            inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger hOS hcluster m r α x_sp ht_u
+              hε₂
+              (by rw [ht_u_r]; linarith [le_max_right ε₁ ε₂])]
+        intro w hw
+        have h_at := os_cut_open_eqOn_of_real_eq (isOpen_osBox (Real.pi / 4))
+          (convex_osBox (Real.pi / 4)) (zero_mem_osBox (by positivity)) (0 : Fin 1)
+          (fun y hy => lt_trans (hy 0) (by linarith [Real.pi_pos])) hε hG1 hG2 h_real_G
+          (fun _ => w) ⟨fun _ => hw.1, hw.2⟩
+        exact h_at
+      have hz_V : z i_cut ∈ V :=
+        ⟨him, by dsimp [ε]; rw [mul_max_of_nonneg _ _ zero_le_two]; exact max_lt h1 h2⟩
+      have h_at := h_eq_V (z i_cut) hz_V
+      simpa [g₁, g₂, Function.update_eq_self] using h_at
+    let fb : (Fin S.card → ℂ) → ℂ := fun z =>
+      if h : 0 < (Complex.exp (z i_cut)).re then
+        fb_eps ((Complex.exp (z i_cut)).re / 4) (by positivity) z
+      else 0
+    have hfb_eq_eps : ∀ (ε : ℝ) (hε : 0 < ε) (z : Fin S.card → ℂ),
+        |(z i_cut).im| < Real.pi / 4 → 2 * ε < (Complex.exp (z i_cut)).re →
+        fb z = fb_eps ε hε z := by
+      intro ε hε z him hre
+      have hpos : 0 < (Complex.exp (z i_cut)).re := lt_trans (by positivity) hre
+      dsimp only [fb]; rw [dif_pos hpos]
+      exact h_fb_eps_agree _ ε (by positivity) hε z him (by linarith) hre
+    refine ⟨fb, ?_, ?_, ?_, ?_⟩
+    · intro z₀ hz₀
+      have hpos : 0 < (Complex.exp (z₀ i_cut)).re :=
+        (re_pos_iff_exists_exp _).mpr ⟨z₀ i_cut, lt_trans hz₀.1 (by linarith [Real.pi_pos]), rfl⟩
+      let ε₀ : ℝ := (Complex.exp (z₀ i_cut)).re / 4
+      have hε₀ : 0 < ε₀ := by positivity
+      let W : Set (Fin S.card → ℂ) :=
+        { z | |(z i_cut).im| < Real.pi / 4 ∧ 2 * ε₀ < (Complex.exp (z i_cut)).re }
+      have hW_open : IsOpen W :=
+        (isOpen_lt (continuous_abs.comp (Complex.continuous_im.comp (continuous_apply i_cut)))
+          continuous_const).inter
+          (isOpen_lt continuous_const
+            (Complex.continuous_re.comp (Complex.continuous_exp.comp (continuous_apply i_cut))))
+      have hz₀_W : z₀ ∈ W := ⟨hz₀.1, by dsimp [ε₀]; linarith⟩
+      have h_c_inter : ContinuousOn fb (FlatStrip S.card (Real.pi / 4) i_cut ∩ W) := by
+        have h_damp : ContinuousOn (fun z : Fin S.card → ℂ =>
+            ∏ i : Fin S.card, logTimeDamp (z i) ^ M)
+            (FlatStrip S.card (Real.pi / 4) i_cut ∩ W) := by
+          refine continuousOn_finsetProd Finset.univ fun i _ => ?_
+          refine (differentiableOn_logTimeDamp.continuousOn.comp
+            (continuous_apply i).continuousOn fun z hz => ?_).pow M
+          change |(z i).im| < Real.pi / 2
+          by_cases hi : i = i_cut
+          · subst hi; exact lt_trans hz.1.1 (by linarith [Real.pi_pos])
+          · rw [hz.1.2 i hi, abs_zero]; positivity
+        have h_L_c : ContinuousOn (fun z =>
+            osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε₀ z, h_pL_mem ε₀ hε₀ z⟩)
+            (FlatStrip S.card (Real.pi / 4) i_cut ∩ W) :=
+          (continuous_osLeftState_of_continuous_points hOS L α_L (mk_pL ε₀)
+            (h_pL_cont ε₀) (fun z => h_pL_mem ε₀ hε₀ z)).continuousOn
+        have h_R_c : ContinuousOn (fun z =>
+            osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z, h_pR_mem ε₀ hε₀ z⟩)⟩)
+            (FlatStrip S.card (Real.pi / 4) i_cut ∩ W) :=
+          (continuous_osBasis_of_continuous_points hOS R α_R (mk_pR ε₀)
+            (h_pR_cont ε₀) (fun z => h_pR_mem ε₀ hε₀ z)).continuousOn
+        have h_semi_c : ContinuousOn (fun z =>
+            osClusterSemigroupTotal hOS hcluster (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
+              (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z, h_pR_mem ε₀ hε₀ z⟩)⟩))
+            (FlatStrip S.card (Real.pi / 4) i_cut ∩ W) := by
+          refine (continuousOn_canonicalOSHolomorphicSemigroupTotal_uncurry
+            hOS.toReflectionPositiveData hOS.os1_translation
+            (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+              hOS.os1_translation hcluster)
+            hOS.os0_smooth).comp
+            (((Complex.continuous_exp.comp (continuous_apply i_cut)).sub
+              continuous_const).continuousOn.prodMk h_R_c) fun z hz => ⟨?_, Set.mem_univ _⟩
+          change 0 ≤ (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ)).re
+          have hre := hz.2.2
+          simp only [Complex.sub_re, Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat,
+            Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+          linarith
+        exact (h_damp.mul (h_L_c.inner h_semi_c)).congr fun z hz =>
+          hfb_eq_eps ε₀ hε₀ z hz.1.1 hz.2.2
+      exact (h_c_inter z₀ ⟨hz₀, hz₀_W⟩).mono_of_mem_nhdsWithin
+        (Filter.inter_mem self_mem_nhdsWithin (nhdsWithin_le_nhds (hW_open.mem_nhds hz₀_W)))
+    · intro x
+      have hre : (Complex.exp (x i_cut : ℂ)).re = Real.exp (x i_cut) := by
+        rw [← Complex.ofReal_exp, Complex.ofReal_re]
+      let ε₀ : ℝ := Real.exp (x i_cut) / 4
+      have hε₀ : 0 < ε₀ := by positivity
+      rw [hfb_eq_eps ε₀ hε₀ (fun j => (x j : ℂ)) (by simp [Real.pi_pos])
+        (by rw [hre]; dsimp [ε₀]; linarith [Real.exp_pos (x i_cut)])]
+      dsimp only [fb_eps, f₀]
+      congr 1
+      let t_x : Fin m → ℝ := osSubstTimes S t (fun i => Real.exp (x i))
+      have ht_x : ∀ j : Fin m, 0 < t_x j := osSubstTimes_pos S ht fun i => Real.exp_pos (x i)
+      have h_mkt_eq : mk_t (fun j => (x j : ℂ)) = t_x := by
+        ext j; simp [mk_t, t_x]
+      have h_tx_r : t_x r = Real.exp (x i_cut) := osSubstTimes_orderEmbOfFin S t _ i_cut
+      have h_exp_c : Complex.exp (x i_cut : ℂ) - 2 * (ε₀ : ℂ) = ((t_x r - 2 * ε₀ : ℝ) : ℂ) := by
+        rw [← Complex.ofReal_exp, h_tx_r]
+        push_cast; ring
+      have h_pL_eq : (⟨mk_pL ε₀ (fun j => (x j : ℂ)), h_pL_mem ε₀ hε₀ _⟩ : posOrderedEuclidN L) =
+          ⟨osBuildPoints (L - 1) (x_sp_L ∘ finCongr (by omega))
+            (fun j => t_x ⟨r.val - 1 - j.val, by omega⟩) ε₀ ∘ finCongr (by omega), by
+            have hm := osBuildPoints_mem_posOrderedEuclidN (L - 1) (x_sp_L ∘ finCongr (by omega))
+              (fun j : Fin (L - 1) => ht_x ⟨r.val - 1 - j.val, by omega⟩) hε₀
+            exact ⟨fun i => hm.1 _, fun i hi => hm.2 _ (by dsimp; omega)⟩⟩ := by
+        refine Subtype.ext ?_; dsimp only [mk_pL]; rw [h_mkt_eq]
+      have h_pR_eq : (⟨mk_pR ε₀ (fun j => (x j : ℂ)), h_pR_mem ε₀ hε₀ _⟩ : posOrderedEuclidN R) =
+          ⟨osBuildPoints (R - 1) (x_sp_R ∘ finCongr (by omega))
+            (fun j => t_x ⟨r.val + 1 + j.val, by omega⟩) ε₀ ∘ finCongr (by omega), by
+            have hm := osBuildPoints_mem_posOrderedEuclidN (R - 1) (x_sp_R ∘ finCongr (by omega))
+              (fun j : Fin (R - 1) => ht_x ⟨r.val + 1 + j.val, by omega⟩) hε₀
+            exact ⟨fun i => hm.1 (finCongr (by omega) i),
+              fun i hi => hm.2 (finCongr (by omega) i) (by dsimp; omega)⟩⟩ := by
+        refine Subtype.ext ?_; dsimp only [mk_pR]; rw [h_mkt_eq]
+      rw [h_exp_c, h_pL_eq, h_pR_eq]
+      exact inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger hOS hcluster m r α x_sp ht_x
+        hε₀
+        (by rw [h_tx_r]; dsimp [ε₀]; linarith [Real.exp_pos (x i_cut)])
+    · intro z hz
+      have hpos : 0 < (Complex.exp (z i_cut)).re :=
+        (re_pos_iff_exists_exp _).mpr ⟨z i_cut, lt_trans hz.1 (by linarith [Real.pi_pos]), rfl⟩
+      let ε₀ : ℝ := (Complex.exp (z i_cut)).re / 4
+      have hε₀ : 0 < ε₀ := by positivity
+      rw [hfb_eq_eps ε₀ hε₀ z hz.1 (by dsimp [ε₀]; linarith)]
+      dsimp only [fb_eps]
+      rw [norm_mul, norm_prod]
+      have h_in_le : ‖⟪osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε₀ z,
+        h_pL_mem ε₀ hε₀ z⟩,
+          osClusterSemigroupTotal hOS hcluster (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
+            (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z, h_pR_mem ε₀ hε₀ z⟩)⟩)⟫_ℂ‖ ≤
+          ‖osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε₀ z, h_pL_mem ε₀ hε₀ z⟩‖ *
+          ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z, h_pR_mem ε₀ hε₀ z⟩)⟩‖ :=
+        (norm_inner_le_norm _ _).trans (mul_le_mul_of_nonneg_left
+          (norm_canonicalOSHolomorphicSemigroupTotal_apply_le _ _ _ _ _ _) (norm_nonneg _))
+      have h_sqrt_le : ‖osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε₀ z,
+        h_pL_mem ε₀ hε₀ z⟩‖ *
+          ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z, h_pR_mem ε₀ hε₀ z⟩)⟩‖ ≤
+          C_lg * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ M) * (1 + (2 * ε₀)⁻¹) ^ M *
+            (∏ j ∈ Finset.univ.erase r, (1 + (mk_t z j)⁻¹) ^ M) :=
+        os_stage0_cut_norm_le hOS hC_ge1 hA_ge1 hlg m r α x_sp (mk_t z) (h_mkt_pos z) hε₀
+          (h_pL_mem ε₀ hε₀ z) (h_pR_mem ε₀ hε₀ z)
+      have h_erase_split : (∏ j ∈ Finset.univ.erase r, (1 + (mk_t z j)⁻¹) ^ M) =
+          (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) *
+            ∏ i ∈ Finset.univ.erase i_cut, (1 + (Real.exp (z i).re)⁻¹) ^ M := by
+        have h_u : Finset.univ.erase r = Sᶜ ∪ (S.erase r) := by
+          ext j; simp only [Finset.mem_erase, Finset.mem_univ, and_true, Finset.mem_union,
+            Finset.mem_compl]
+          by_cases hmem : j ∈ S
+          · simp [hmem]
+          · have hne : j ≠ r := fun h => hmem (h ▸ S.orderEmbOfFin_mem rfl i_cut)
+            simp [hmem, hne]
+        have h_disj : Disjoint Sᶜ (S.erase r) := by
+          rw [Finset.disjoint_left]; intro j h1 h2
+          exact Finset.mem_compl.mp h1 (Finset.mem_of_mem_erase h2)
+        rw [h_u, Finset.prod_union h_disj]
+        refine congrArg₂ (· * ·) ?_ ?_
+        · refine Finset.prod_congr rfl fun j hj => ?_
+          have h_eq : mk_t z j = t j := osSubstTimes_of_notMem S t _ (Finset.mem_compl.mp hj)
+          rw [h_eq]
+        · refine Finset.prod_bij (fun (j : Fin m) hj =>
+            (S.orderIsoOfFin rfl).symm ⟨j, Finset.mem_of_mem_erase hj⟩) ?_ ?_ ?_ ?_
+          · intro j hj
+            simp only [Finset.mem_erase, Finset.mem_univ, and_true]
+            intro heq
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm ⟨j,
+              Finset.mem_of_mem_erase hj⟩) = j :=
+              congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            rw [heq] at h_o
+            exact (Finset.mem_erase.mp hj).1 h_o.symm
+          · intro j₁ _ j₂ _ h
+            exact congrArg Subtype.val ((S.orderIsoOfFin rfl).symm.injective h)
+          · intro b hb
+            refine ⟨S.orderEmbOfFin rfl b, Finset.mem_erase.mpr ⟨?_, S.orderEmbOfFin_mem rfl b⟩,
+              (S.orderIsoOfFin rfl).symm_apply_apply b⟩
+            intro heq
+            exact (Finset.mem_erase.mp hb).1 ((S.orderEmbOfFin rfl).injective heq)
+          · intro j hj
+            have hmem := Finset.mem_of_mem_erase hj
+            dsimp only [mk_t, osSubstTimes]
+            rw [dif_pos hmem]
+      have h_damp_cut : ‖logTimeDamp (z i_cut)‖ * (1 + (2 * ε₀)⁻¹) ≤ 8 := by
+        have h_2eps : (2 * ε₀)⁻¹ = 2 * ((Complex.exp (z i_cut)).re)⁻¹ := by
+          dsimp [ε₀]; field_simp [hpos.ne']; ring
+        rw [h_2eps]
+        have h1 := one_add_exp_re_inv_mul_logTimeDamp_le (α := Real.pi / 4)
+          (by linarith [Real.pi_pos]) hz.1.le
+        have hcos : (1 / 2 : ℝ) ≤ Real.cos (Real.pi / 4) := by
+          rw [Real.cos_pi_div_four]
+          have hsq : (1 : ℝ) ≤ Real.sqrt 2 := by
+            rw [Real.le_sqrt (by norm_num) (by norm_num)]; norm_num
+          linarith
+        have hdiv : 2 / Real.cos (Real.pi / 4) ≤ 4 := by
+          rw [div_le_iff₀ (by linarith)]; linarith
+        nlinarith [norm_nonneg (logTimeDamp (z i_cut))]
+      have h_damp_rest : (∏ i ∈ Finset.univ.erase i_cut,
+            ‖logTimeDamp (z i) ^ M‖ * (1 + (Real.exp (z i).re)⁻¹) ^ M) ≤
+          ((2 : ℝ) ^ M) ^ (m + 1) := by
+        have h_each : ∀ i ∈ Finset.univ.erase i_cut,
+            ‖logTimeDamp (z i) ^ M‖ * (1 + (Real.exp (z i).re)⁻¹) ^ M ≤ (2 : ℝ) ^ M := by
+          intro i hi
+          have him0 : (z i).im = 0 := hz.2 i (Finset.ne_of_mem_erase hi)
+          have hz_eq : z i = ((z i).re : ℂ) := by apply Complex.ext <;> simp [him0]
+          rw [norm_pow, ← mul_pow]
+          refine pow_le_pow_left₀ (by positivity) ?_ M
+          have h1 := norm_logTimeDamp_mul_le (w := z i) (by rw [him0, abs_zero]; positivity)
+          have hnorm_e : ‖Complex.exp (z i)‖ = Real.exp (z i).re := Complex.norm_exp (z i)
+          rw [hnorm_e] at h1
+          nlinarith [norm_nonneg (logTimeDamp (z i)), Real.exp_pos (z i).re]
+        calc (∏ i ∈ Finset.univ.erase i_cut,
+          ‖logTimeDamp (z i) ^ M‖ * (1 + (Real.exp (z i).re)⁻¹) ^ M)
+            ≤ ∏ _i ∈ Finset.univ.erase i_cut, (2 : ℝ) ^ M :=
+              Finset.prod_le_prod (fun _ _ => by positivity) h_each
+          _ = ((2 : ℝ) ^ M) ^ (Finset.univ.erase i_cut).card := Finset.prod_const _
+          _ ≤ ((2 : ℝ) ^ M) ^ (m + 1) := by
+              refine pow_le_pow_right₀ (one_le_pow₀ (by norm_num)) ?_
+              have h1 : (Finset.univ.erase i_cut).card ≤ S.card := by
+                calc (Finset.univ.erase i_cut).card ≤ (Finset.univ : Finset (Fin S.card)).card :=
+                      Finset.card_le_card (Finset.erase_subset _ _)
+                  _ = S.card := Fintype.card_fin _
+              have h2 : S.card ≤ m := by
+                calc S.card ≤ (Finset.univ : Finset (Fin m)).card :=
+                  Finset.card_le_card (Finset.subset_univ _)
+                  _ = m := Fintype.card_fin _
+              omega
+      have h_prod_damp_split : (∏ i : Fin S.card, ‖logTimeDamp (z i) ^ M‖) =
+          ‖logTimeDamp (z i_cut)‖ ^ M * ∏ i ∈ Finset.univ.erase i_cut, ‖logTimeDamp (z i) ^ M‖ := by
+        rw [← Finset.mul_prod_erase Finset.univ _ (Finset.mem_univ i_cut), norm_pow]
+      rw [h_prod_damp_split]
+      calc (‖logTimeDamp (z i_cut)‖ ^ M * ∏ i ∈ Finset.univ.erase i_cut, ‖logTimeDamp (z i) ^ M‖) *
+            ‖⟪osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε₀ z, h_pL_mem ε₀ hε₀ z⟩,
+              osClusterSemigroupTotal hOS hcluster (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
+                (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z,
+                  h_pR_mem ε₀ hε₀ z⟩)⟩)⟫_ℂ‖
+          ≤ (‖logTimeDamp (z i_cut)‖ ^ M * ∏ i ∈ Finset.univ.erase i_cut, ‖logTimeDamp (z i) ^ M‖) *
+              (C_lg * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+                (((m + 1).factorial : ℝ) ^ M) * (1 + (2 * ε₀)⁻¹) ^ M *
+                ((∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) *
+                  ∏ i ∈ Finset.univ.erase i_cut, (1 + (Real.exp (z i).re)⁻¹) ^ M)) := by
+            rw [← h_erase_split]
+            exact mul_le_mul_of_nonneg_left (h_in_le.trans h_sqrt_le) (by positivity)
+        _ = C_lg * (‖logTimeDamp (z i_cut)‖ * (1 + (2 * ε₀)⁻¹)) ^ M *
+              (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+              (∏ i ∈ Finset.univ.erase i_cut,
+                ‖logTimeDamp (z i) ^ M‖ * (1 + (Real.exp (z i).re)⁻¹) ^ M) *
+              (((m + 1).factorial : ℝ) ^ M) * (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) := by
+            rw [mul_pow (‖logTimeDamp (z i_cut)‖) (1 + (2 * ε₀)⁻¹) M, Finset.prod_mul_distrib]; ring
+        _ ≤ C_lg * (8 : ℝ) ^ M * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+              ((2 : ℝ) ^ M) ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M) *
+              (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) := by
+            have h_pr_compl_nn : 0 ≤ ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M :=
+              Finset.prod_nonneg fun j hj => pow_nonneg (by
+                have := ht j (Finset.mem_compl.mp hj); positivity) M
+            refine mul_le_mul_of_nonneg_right ?_ h_pr_compl_nn
+            refine mul_le_mul_of_nonneg_right ?_ (by positivity)
+            have hSR := one_le_osStarRowBound Sstr
+            refine mul_le_mul ?_ h_damp_rest (Finset.prod_nonneg fun _ _ => by positivity) (by
+              positivity)
+            refine mul_le_mul_of_nonneg_right ?_ (by positivity)
+            exact mul_le_mul_of_nonneg_left (pow_le_pow_left₀ (by positivity) h_damp_cut M) (by
+              positivity)
+        _ = B_all := by
+            dsimp [B_all, C0, A0]
+            have h_mp : (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+                ((2 : ℝ) ^ M) ^ (m + 1) =
+                (osStarRowBound Sstr * A_lg * (4 : ℝ) ^ M) ^ (m + 1) := by
+              rw [← mul_pow]
+              congr 1
+              rw [mul_assoc, ← mul_pow]
+              norm_num
+            calc C_lg * (8 : ℝ) ^ M * (osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+                  ((2 : ℝ) ^ M) ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M) *
+                  (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M)
+                = C_lg * (8 : ℝ) ^ M *
+                    ((osStarRowBound Sstr * A_lg * (2 : ℝ) ^ M) ^ (m + 1) *
+                      ((2 : ℝ) ^ M) ^ (m + 1)) *
+                    (((m + 1).factorial : ℝ) ^ M) * (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) := by ring
+              _ = C_lg * (8 : ℝ) ^ M * (osStarRowBound Sstr * A_lg * (4 : ℝ) ^ M) ^ (m + 1) *
+                    (((m + 1).factorial : ℝ) ^ M) * (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) := by
+                  rw [h_mp]
+    · intro x w₀ hw₀
+      have hpos : 0 < (Complex.exp w₀).re :=
+        (re_pos_iff_exists_exp _).mpr ⟨w₀, lt_trans hw₀ (by linarith [Real.pi_pos]), rfl⟩
+      let ε₀ : ℝ := (Complex.exp w₀).re / 4
+      have hε₀ : 0 < ε₀ := by positivity
+      let V₀ : Set ℂ := { w : ℂ | |w.im| < Real.pi / 4 ∧ 2 * ε₀ < (Complex.exp w).re }
+      have hV₀_open : IsOpen V₀ :=
+        (isOpen_lt (continuous_abs.comp Complex.continuous_im) continuous_const).inter
+          (isOpen_lt continuous_const (Complex.continuous_re.comp Complex.continuous_exp))
+      have hw₀_V₀ : w₀ ∈ V₀ := ⟨hw₀, by dsimp [ε₀]; linarith⟩
+      have h_upd_pL : ∀ w : ℂ, mk_pL ε₀ (Function.update (fun j => (x j : ℂ)) i_cut w) =
+          mk_pL ε₀ (fun j => (x j : ℂ)) := by
+        intro w; ext i μ
+        refine Fin.cases ?_ (fun ν => rfl) μ
+        simp only [mk_pL, Function.comp_apply, osBuildPoints_zero_coord]
+        congr 1; refine Finset.sum_congr rfl fun j _ => ?_
+        dsimp only [mk_t, osSubstTimes]
+        split_ifs with hmem
+        · have hne : (S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - j.val, by omega⟩, hmem⟩ ≠ i_cut := by
+            intro heq
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm ⟨⟨r.val - 1 - j.val,
+              by omega⟩, hmem⟩) =
+                ⟨r.val - 1 - j.val, by omega⟩ :=
+                  congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            rw [heq] at h_o; have hv := congrArg Fin.val h_o; dsimp at hv; omega
+          rw [Function.update_of_ne hne]
+        · rfl
+      have h_upd_pR : ∀ w : ℂ, mk_pR ε₀ (Function.update (fun j => (x j : ℂ)) i_cut w) =
+          mk_pR ε₀ (fun j => (x j : ℂ)) := by
+        intro w; ext i μ
+        refine Fin.cases ?_ (fun ν => rfl) μ
+        simp only [mk_pR, Function.comp_apply, osBuildPoints_zero_coord]
+        congr 1; refine Finset.sum_congr rfl fun j _ => ?_
+        dsimp only [mk_t, osSubstTimes]
+        split_ifs with hmem
+        · have hne : (S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + j.val, by omega⟩, hmem⟩ ≠ i_cut := by
+            intro heq
+            have h_o : S.orderEmbOfFin rfl ((S.orderIsoOfFin rfl).symm ⟨⟨r.val + 1 + j.val,
+              by omega⟩, hmem⟩) =
+                ⟨r.val + 1 + j.val, by omega⟩ :=
+                  congrArg Subtype.val ((S.orderIsoOfFin rfl).apply_symm_apply _)
+            rw [heq] at h_o; have hv := congrArg Fin.val h_o; dsimp at hv; omega
+          rw [Function.update_of_ne hne]
+        · rfl
+      have h_diff_V₀ : DifferentiableOn ℂ
+          (fun w => fb (Function.update (fun j => (x j : ℂ)) i_cut w)) V₀ := by
+        refine DifferentiableOn.congr (f := fun w =>
+            (∏ i ∈ Finset.univ.erase i_cut, logTimeDamp (x i : ℂ) ^ M) *
+              (logTimeDamp w ^ M *
+                ⟪osLeftState hOS.toReflectionPositiveData L α_L
+                    ⟨mk_pL ε₀ (fun j => (x j : ℂ)), h_pL_mem ε₀ hε₀ _⟩,
+                  osClusterSemigroupTotal hOS hcluster (Complex.exp w - 2 * (ε₀ : ℂ))
+                    (osBasis hOS.toReflectionPositiveData
+                      ⟨R, (α_R, ⟨mk_pR ε₀ (fun j => (x j : ℂ)), h_pR_mem ε₀ hε₀ _⟩)⟩)⟫_ℂ)) ?_ ?_
+        · intro w hw
+          have h_w_pi : |w.im| < Real.pi / 2 := lt_trans hw.1 (by linarith [Real.pi_pos])
+          have h_damp_da : DifferentiableAt ℂ (fun ζ => logTimeDamp ζ ^ M) w :=
+            ((differentiableOn_logTimeDamp w h_w_pi).differentiableAt
+              ((isOpen_lt (continuous_abs.comp Complex.continuous_im) continuous_const).mem_nhds
+                h_w_pi)).pow M
+          have h_re : 0 < (Complex.exp w - 2 * (ε₀ : ℂ)).re := by
+            have hre := hw.2
+            simp only [Complex.sub_re, Complex.mul_re, Complex.re_ofNat, Complex.im_ofNat,
+              Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
+            linarith
+          have h_semi_da : DifferentiableAt ℂ
+              (fun ζ => osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (ε₀ : ℂ))) w :=
+            ((differentiableOn_canonicalOSHolomorphicSemigroupTotal
+              hOS.toReflectionPositiveData hOS.os1_translation
+              (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
+                hOS.os1_translation hcluster)
+              hOS.os0_smooth _ h_re).differentiableAt
+              ((isOpen_lt continuous_const Complex.continuous_re).mem_nhds h_re)).comp w
+              (Complex.differentiable_exp.differentiableAt.sub (differentiableAt_const _))
+          exact ((differentiableAt_const _).mul (h_damp_da.mul
+            ((innerSL ℂ _).differentiableAt.comp _
+              (h_semi_da.clm_apply (differentiableAt_const _))))).differentiableWithinAt
+        · intro w hw
+          rw [hfb_eq_eps ε₀ hε₀ _ (by simpa using hw.1) (by simpa using hw.2)]
+          dsimp only [fb_eps]
+          have hL_sub : (⟨mk_pL ε₀ (Function.update (fun j => (x j : ℂ)) i_cut w),
+            h_pL_mem ε₀ hε₀ _⟩ :
+              posOrderedEuclidN L) = ⟨mk_pL ε₀ (fun j => (x j : ℂ)), h_pL_mem ε₀ hε₀ _⟩ :=
+            Subtype.ext (h_upd_pL w)
+          have hR_sub : (⟨mk_pR ε₀ (Function.update (fun j => (x j : ℂ)) i_cut w),
+            h_pR_mem ε₀ hε₀ _⟩ :
+              posOrderedEuclidN R) = ⟨mk_pR ε₀ (fun j => (x j : ℂ)), h_pR_mem ε₀ hε₀ _⟩ :=
+            Subtype.ext (h_upd_pR w)
+          rw [hL_sub, hR_sub, Function.update_self]
+          have h_p : (∏ i : Fin S.card,
+            logTimeDamp (Function.update (fun j => (x j : ℂ)) i_cut w i) ^ M) =
+              logTimeDamp w ^ M * ∏ i ∈ Finset.univ.erase i_cut, logTimeDamp (x i : ℂ) ^ M := by
+            rw [← Finset.mul_prod_erase Finset.univ _ (Finset.mem_univ i_cut), Function.update_self]
+            congr 1
+            refine Finset.prod_congr rfl fun i hi => by
+              rw [Function.update_of_ne (Finset.ne_of_mem_erase hi)]
+          rw [h_p]; ring
+      exact (h_diff_V₀.differentiableAt (hV₀_open.mem_nhds hw₀_V₀)).differentiableWithinAt
+  classical
+  let f_br : Fin S.card → (Fin S.card → ℂ) → ℂ := fun i_cut => Classical.choose (h_one_cut i_cut)
+  have hf_br_spec : ∀ i_cut : Fin S.card,
+      ContinuousOn (f_br i_cut) (FlatStrip S.card (Real.pi / 4) i_cut) ∧
+      (∀ x : Fin S.card → ℝ, f_br i_cut (fun j => (x j : ℂ)) = f₀ x) ∧
+      (∀ z ∈ FlatStrip S.card (Real.pi / 4) i_cut, ‖f_br i_cut z‖ ≤ B_all) ∧
+      (∀ x : Fin S.card → ℝ,
+        DifferentiableOn ℂ (fun w => f_br i_cut (Function.update (fun j => (x j : ℂ)) i_cut w))
+          { w : ℂ | |w.im| < Real.pi / 4 }) :=
+    fun i_cut => Classical.choose_spec (h_one_cut i_cut)
+  have hf₀_bdd : ∀ x : Fin S.card → ℝ, ‖f₀ x‖ ≤ B_all := by
+    intro x
+    by_cases h0 : S.card = 0
+    · dsimp only [f₀]
+      have h_p1 : (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) = 1 :=
+        Finset.prod_eq_one fun i _ => absurd i.isLt (by omega)
+      rw [h_p1, one_mul]
+      have hS_empty : S = ∅ := Finset.card_eq_zero.mp h0
+      have ht_all : ∀ j : Fin m, 0 < t j := fun j => ht j (by simp [hS_empty])
+      have h_sub_eq : osSubstTimes S t (fun i => Real.exp (x i)) = t := by
+        ext j; exact osSubstTimes_of_notMem S t _ (by simp [hS_empty])
+      rw [h_sub_eq]
+      have h_bd := hlg (m + 1) α (osBuildPoints m x_sp t 0)
+        (osBuildPoints_mem_orderedEuclidN m x_sp ht_all 0)
+      have h_diff_eq : (∏ k : Fin m, (1 + (osBuildPoints m x_sp t 0 ⟨k.val + 1, by omega⟩ 0 -
+          osBuildPoints m x_sp t 0 ⟨k.val, by omega⟩ 0)⁻¹) ^ M) =
+          ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := by
+        have hSc : Sᶜ = Finset.univ := by simp [hS_empty]
+        rw [hSc]
+        refine Finset.prod_congr rfl fun j _ => by rw [osBuildPoints_time_diff]
+      have h_bd' : ‖𝒮 (m + 1) α (osBuildPoints m x_sp t 0)‖ ≤
+          C_lg * A_lg ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M) *
+            ∏ k : Fin m, (1 + (osBuildPoints m x_sp t 0 ⟨k.val + 1, by omega⟩ 0 -
+              osBuildPoints m x_sp t 0 ⟨k.val, by omega⟩ 0)⁻¹) ^ M := h_bd
+      rw [h_diff_eq] at h_bd'
+      have hSR := one_le_osStarRowBound Sstr
+      have hC0_ge : C_lg ≤ C0 := le_mul_of_one_le_right (by positivity) (one_le_pow₀ (by norm_num))
+      have hA0_ge : A_lg ≤ A0 := by
+        dsimp [A0]
+        have h1 : A_lg ≤ osStarRowBound Sstr * A_lg := le_mul_of_one_le_left (by positivity) hSR
+        exact h1.trans (le_mul_of_one_le_right (by positivity) (one_le_pow₀ (by norm_num)))
+      have h_pr_nn : 0 ≤ ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M :=
+        Finset.prod_nonneg fun j _ => pow_nonneg (by have := ht_all j; positivity) M
+      exact h_bd'.trans (mul_le_mul_of_nonneg_right
+        (mul_le_mul_of_nonneg_right
+          (mul_le_mul hC0_ge (pow_le_pow_left₀ (by positivity) hA0_ge (m +
+            1)) (by positivity) (by positivity))
+          (by positivity)) h_pr_nn)
+    · let i0 : Fin S.card := ⟨0, by omega⟩
+      rw [← (hf_br_spec i0).2.1 x]
+      exact (hf_br_spec i0).2.2.1 _ ⟨by simp [Real.pi_pos], fun j _ => by simp⟩
+  obtain ⟨F, hF_holo, hF_bdd, hF_real, _⟩ :=
+    malgrange_zerner_flat_tube S.card (α := Real.pi / 4) (M := B_all)
+      (by positivity) hB_nn f₀ f_br hf₀_cont hf₀_bdd
+      (fun m' x => (hf_br_spec m').2.1 x)
+      (fun m' => (hf_br_spec m').1)
+      (fun m' z hz => (hf_br_spec m').2.2.1 z hz)
+      (fun m' x => (hf_br_spec m').2.2.2 x)
+  have h_box_sub : TubeDomain (osBox (osThetaSeq (2 * k + 2) 0)) ⊆
+      TubeDomain (Octahedron S.card (Real.pi / 4)) := by
+    intro w hw
+    change ∑ i : Fin S.card, |(w i).im| < Real.pi / 4
+    rw [osThetaSeq_even_zero] at hw
+    have h_sum_le : ∑ i : Fin S.card, |(w i).im| ≤
+        ∑ _i : Fin S.card, (Real.pi / (4 * (2 * (k : ℝ) + 3))) :=
+      Finset.sum_le_sum fun i _ => (hw i).le
+    rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul] at h_sum_le
+    have h_card_lt : (S.card : ℝ) < 2 * (k : ℝ) + 3 := by
+      have : S.card ≤ 2 * k + 2 := hS_le
+      exact_mod_cast (by omega : S.card < 2 * k + 3)
+    have h_strict : (S.card : ℝ) * (Real.pi / (4 * (2 * (k : ℝ) + 3))) < Real.pi / 4 := by
+      have hden : 0 < 4 * (2 * (k : ℝ) + 3) := by positivity
+      have h1 : (S.card : ℝ) * Real.pi < (2 * (k : ℝ) + 3) * Real.pi :=
+        mul_lt_mul_of_pos_right h_card_lt Real.pi_pos
+      calc (S.card : ℝ) * (Real.pi / (4 * (2 * (k : ℝ) + 3)))
+          = ((S.card : ℝ) * Real.pi) / (4 * (2 * (k : ℝ) + 3)) := by ring
+        _ < ((2 * (k : ℝ) + 3) * Real.pi) / (4 * (2 * (k : ℝ) + 3)) :=
+            div_lt_div_of_pos_right h1 hden
+        _ = Real.pi / 4 := by
+            have hne : (2 * (k : ℝ) + 3) ≠ 0 := by positivity
+            field_simp [hne]
+    exact lt_of_le_of_lt h_sum_le h_strict
+  exact ⟨F, hF_holo.mono h_box_sub, hF_real, fun w hw => hF_bdd w (h_box_sub hw)⟩
+
+lemma osThetaSeq_zero_ge (m : ℕ) : Real.pi / (4 * ((m : ℝ) + 1)) ≤ osThetaSeq m 0 := by
+  induction m with
+  | zero => dsimp [osThetaSeq]; norm_num; linarith [Real.pi_pos]
+  | succ m ihm =>
+    cases m with
+    | zero => dsimp [osThetaSeq]; norm_num; linarith [Real.pi_pos]
+    | succ m =>
+      dsimp [osThetaSeq]
+      split_ifs
+      · dsimp [osThetaSeqAvg]; push_cast; ring_nf; exact le_rfl
+      · have hd : 4 * ((↑(m + 1) : ℝ) + 1) ≤ 4 * ((↑(m + 2) : ℝ) + 1) := by push_cast; linarith
+        exact (div_le_div_of_nonneg_left Real.pi_pos.le (by positivity) hd).trans ihm
+
+lemma osThetaSeq_mono_p (j q : ℕ) : osThetaSeq j q ≤ osThetaSeq j (q + 1) := by
+  induction j generalizing q with
+  | zero =>
+    dsimp [osThetaSeq]
+    have hpow : (2⁻¹ : ℝ) ^ (q + 1) ≤ (2⁻¹ : ℝ) ^ q :=
+      pow_le_pow_of_le_one (by positivity) (by norm_num) (Nat.le_succ q)
+    nlinarith [Real.pi_pos]
+  | succ j ihj =>
+    cases j with
+    | zero =>
+      dsimp [osThetaSeq]
+      have hpow : (2⁻¹ : ℝ) ^ (q + 1) ≤ (2⁻¹ : ℝ) ^ q :=
+        pow_le_pow_of_le_one (by positivity) (by norm_num) (Nat.le_succ q)
+      nlinarith [Real.pi_pos]
+    | succ j =>
+      dsimp [osThetaSeq]
+      split_ifs
+      · induction q with
+        | zero =>
+          dsimp [osThetaSeqAvg]
+          have h1 := osThetaSeq_zero_ge (j + 1)
+          have hd : 4 * ((↑(j + 1) : ℝ) + 1) ≤ 4 * ((j : ℝ) + 3) := by push_cast; linarith
+          have h0 : Real.pi / (4 * ((j : ℝ) + 3)) ≤ osThetaSeq (j + 1) 0 :=
+            (div_le_div_of_nonneg_left Real.pi_pos.le (by positivity) hd).trans h1
+          linarith
+        | succ q ihq =>
+          dsimp [osThetaSeqAvg] at ihq ⊢
+          linarith [ihj q, ihq]
+      · exact ihj q
+
+lemma osThetaSeq_antitone_k (k p : ℕ) : osThetaSeq (k + 1) p ≤ osThetaSeq k p := by
+  induction k generalizing p with
+  | zero => exact le_rfl
+  | succ k ih =>
+    dsimp [osThetaSeq]
+    split_ifs
+    · induction p with
+      | zero =>
+        dsimp [osThetaSeqAvg]
+        have h1 := osThetaSeq_zero_ge (k + 1)
+        have hd : 4 * ((↑(k + 1) : ℝ) + 1) ≤ 4 * ((k : ℝ) + 3) := by push_cast; linarith
+        exact (div_le_div_of_nonneg_left Real.pi_pos.le (by positivity) hd).trans h1
+      | succ p ihp =>
+        dsimp [osThetaSeqAvg]
+        linarith [ihp, osThetaSeq_mono_p (k + 1) p]
+    · exact le_rfl
+
+lemma symm_osCutBox {d : ℕ} (i_cut : Fin d) (θ_L θ_cut θ_R : ℝ) :
+    ∀ y ∈ osCutBox i_cut θ_L θ_cut θ_R, -y ∈ osCutBox i_cut θ_L θ_cut θ_R := by
+  intro y hy
+  refine ⟨fun i hi => by simpa using hy.1 i hi, by simpa using hy.2.1,
+    fun i hi => by simpa using hy.2.2 i hi⟩
+
+lemma osBox_subset_osCutBox {d : ℕ} (i_cut : Fin d) (θ : ℝ) :
+    osBox θ ⊆ osCutBox i_cut θ θ θ := by
+  intro y hy
+  exact ⟨fun i _ => hy i, hy i_cut, fun i _ => hy i⟩
+
+lemma osBox_subset_midpoint_osCutBox {d : ℕ} (i_A i_B : Fin d)
+    (h_adj : i_A.val + 1 = i_B.val) {θ₁ θ₂ : ℝ} (hθ₁ : 0 < θ₁) (hθ₂ : 0 < θ₂) :
+    osBox ((θ₁ + θ₂) / 2) ⊆
+      MidpointSet (osCutBox i_A θ₁ θ₁ θ₂) (osCutBox i_B θ₂ θ₁ θ₁) := by
+  intro y hy
+  have hsum : 0 < θ₁ + θ₂ := by linarith
+  let c₁ : ℝ := θ₁ / (θ₁ + θ₂)
+  let c₂ : ℝ := θ₂ / (θ₁ + θ₂)
+  have hc_sum : c₁ + c₂ = 1 := by dsimp [c₁, c₂]; field_simp [hsum.ne']
+  let yA : Fin d → ℝ := fun i => if i.val ≤ i_A.val then c₁ * (2 * y i) else c₂ * (2 * y i)
+  let yB : Fin d → ℝ := fun i => if i.val ≤ i_A.val then c₂ * (2 * y i) else c₁ * (2 * y i)
+  have h_bd1 : ∀ i : Fin d, |c₁ * (2 * y i)| < θ₁ := by
+    intro i
+    have hyi : |y i| < (θ₁ + θ₂) / 2 := hy i
+    rw [abs_mul, abs_of_pos (by dsimp [c₁]; positivity), abs_mul,
+      abs_of_pos (two_pos : (0 : ℝ) < 2)]
+    dsimp [c₁]
+    have h2 : 2 * |y i| < θ₁ + θ₂ := by linarith
+    calc θ₁ / (θ₁ + θ₂) * (2 * |y i|)
+        < θ₁ / (θ₁ + θ₂) * (θ₁ + θ₂) := mul_lt_mul_of_pos_left h2 (by positivity)
+      _ = θ₁ := div_mul_cancel₀ θ₁ hsum.ne'
+  have h_bd2 : ∀ i : Fin d, |c₂ * (2 * y i)| < θ₂ := by
+    intro i
+    have hyi : |y i| < (θ₁ + θ₂) / 2 := hy i
+    rw [abs_mul, abs_of_pos (by dsimp [c₂]; positivity), abs_mul,
+      abs_of_pos (two_pos : (0 : ℝ) < 2)]
+    dsimp [c₂]
+    have h2 : 2 * |y i| < θ₁ + θ₂ := by linarith
+    calc θ₂ / (θ₁ + θ₂) * (2 * |y i|)
+        < θ₂ / (θ₁ + θ₂) * (θ₁ + θ₂) := mul_lt_mul_of_pos_left h2 (by positivity)
+      _ = θ₂ := div_mul_cancel₀ θ₂ hsum.ne'
+  refine ⟨yA, ?_, yB, ?_, ?_⟩
+  · refine ⟨fun i hi => ?_, ?_, fun i hi => ?_⟩
+    · dsimp [yA]; rw [if_pos (le_of_lt hi)]; exact h_bd1 i
+    · dsimp [yA]; rw [if_pos le_rfl]; exact h_bd1 i_A
+    · dsimp [yA]; rw [if_neg (not_le.mpr hi)]; exact h_bd2 i
+  · refine ⟨fun i hi => ?_, ?_, fun i hi => ?_⟩
+    · dsimp [yB]; rw [if_pos (by omega)]; exact h_bd2 i
+    · dsimp [yB]; rw [if_neg (by omega)]; exact h_bd1 i_B
+    · dsimp [yB]; rw [if_neg (by omega)]; exact h_bd1 i
+  · ext i
+    simp only [Pi.smul_apply, Pi.add_apply, smul_eq_mul, yA, yB]
+    split_ifs <;> (dsimp [c₁, c₂]; field_simp [hsum.ne']; try ring)
+
+lemma os_cut_step_of_hyps
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    {M k_L k_R : ℕ} {θ_L θ_cut θ_R K_L K_R B_L B_R : ℝ}
+    (hθL0 : 0 < θ_L) (hθC0 : 0 < θ_cut) (hθCpi : θ_cut < Real.pi / 2) (hθR0 : 0 < θ_R)
+    (hKL_nn : 0 ≤ K_L) (hKR_nn : 0 ≤ K_R) (hBL_ge1 : 1 ≤ B_L) (hBR_ge1 : 1 ≤ B_R)
+    (hhyp_L : OSDampedSubsetBound hOS M k_L θ_L K_L B_L)
+    (hhyp_R : OSDampedSubsetBound hOS M k_R θ_R K_R B_R)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+    (S : Finset (Fin m)) (t : Fin m → ℝ) (ht : ∀ j ∉ S, 0 < t j)
+    (i_cut : Fin S.card)
+    (hL_card : 2 * i_cut.val ≤ k_L)
+    (hR_card : 2 * (S.card - 1 - i_cut.val) ≤ k_R) :
+    ∃ F : (Fin S.card → ℂ) → ℂ,
+      DifferentiableOn ℂ F (TubeDomain (osCutBox i_cut θ_L θ_cut θ_R)) ∧
+      (∀ x : Fin S.card → ℝ,
+        F (fun i => (x i : ℂ)) =
+          (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) *
+            𝒮 (m + 1) α
+              (osBuildPoints m x_sp (osSubstTimes S t (fun i => Real.exp (x i))) 0)) ∧
+      (∀ w ∈ TubeDomain (osCutBox i_cut θ_L θ_cut θ_R),
+        ‖F w‖ ≤
+          (Real.sqrt (K_L * K_R) * (4 / Real.cos θ_cut) ^ M) *
+            (osStarRowBound Sstr * max B_L B_R * (2 : ℝ) ^ M) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ M) *
+            ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) := by
+  let r : Fin m := S.orderEmbOfFin rfl i_cut
+  let L : ℕ := r.val + 1
+  let R : ℕ := m - r.val
+  have hLR : L + R = m + 1 := by dsimp [L, R]; omega
+  obtain ⟨K_L_ker, hKL_holo, hKL_bdd, hKL_real⟩ :=
+    os_doubled_left_kernel_of_hyp hOS hKL_nn (by linarith) hhyp_L m α x_sp S t ht i_cut hL_card
+  obtain ⟨K_R_ker, hKR_holo, hKR_bdd, hKR_real⟩ :=
+    os_doubled_right_kernel_of_hyp hOS hKR_nn (by linarith) hhyp_R m α x_sp S t ht i_cut hR_card
+  let B_L_val : ℝ := (osStarRowBound Sstr) ^ L * K_L * B_L ^ (2 * L) *
+    (((2 * L).factorial : ℝ) ^ M) *
+    (∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < r.val), (1 + (t j)⁻¹) ^ M) ^ 2
+  let B_R_val : ℝ := (osStarRowBound Sstr) ^ R * K_R * B_R ^ (2 * R) *
+    (((2 * R).factorial : ℝ) ^ M) *
+    (∏ j ∈ Sᶜ.filter (fun j : Fin m => r.val < j.val), (1 + (t j)⁻¹) ^ M) ^ 2
+  have hSR_ge1 := one_le_osStarRowBound Sstr
+  have hBL_val_nn : 0 ≤ B_L_val := by
+    have h_pr : 0 ≤ (∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < r.val),
+        (1 + (t j)⁻¹) ^ M) ^ 2 := sq_nonneg _
+    dsimp [B_L_val]; positivity
+  have hBR_val_nn : 0 ≤ B_R_val := by
+    have h_pr : 0 ≤ (∏ j ∈ Sᶜ.filter (fun j : Fin m => r.val < j.val),
+        (1 + (t j)⁻¹) ^ M) ^ 2 := sq_nonneg _
+    dsimp [B_R_val]; positivity
+  obtain ⟨F, hF_holo, hF_real, hF_bdd⟩ :=
+    os_cut_holomorphic_extension hOS hcluster M m α x_sp S t ht i_cut
+      hθL0 hθC0 hθCpi hθR0 hBL_val_nn hBR_val_nn
+      K_L_ker K_R_ker hKL_holo hKR_holo hKL_bdd hKR_bdd hKL_real hKR_real
+  refine ⟨F, hF_holo, hF_real, fun w hw => ?_⟩
+  have h_prod_compl : (∏ j ∈ Sᶜ.filter (fun j : Fin m => j.val < r.val), (1 + (t j)⁻¹) ^ M) *
+      (∏ j ∈ Sᶜ.filter (fun j : Fin m => r.val < j.val), (1 + (t j)⁻¹) ^ M) =
+      ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := by
+    have hr_mem : r ∈ S := S.orderEmbOfFin_mem rfl i_cut
+    have h_u : Sᶜ = Sᶜ.filter (fun j : Fin m => j.val < r.val) ∪
+        Sᶜ.filter (fun j : Fin m => r.val < j.val) := by
+      ext j
+      simp only [Finset.mem_union, Finset.mem_filter, Finset.mem_compl]
+      constructor
+      · intro hj
+        have hne : j.val ≠ r.val := fun heq => hj (by have hjr : j = r := Fin.ext heq; rwa [hjr])
+        rcases lt_or_gt_of_ne hne with hlt | hgt
+        · exact Or.inl ⟨hj, hlt⟩
+        · exact Or.inr ⟨hj, hgt⟩
+      · rintro (⟨hj, _⟩ | ⟨hj, _⟩) <;> exact hj
+    have h_disj : Disjoint (Sᶜ.filter (fun j : Fin m => j.val < r.val))
+        (Sᶜ.filter (fun j : Fin m => r.val < j.val)) := by
+      rw [Finset.disjoint_left]; intro j h1 h2; simp at h1 h2; omega
+    rw [← Finset.prod_union h_disj, ← h_u]
+  have h_fact := two_mul_factorial_mul_le L R
+  rw [hLR] at h_fact
+  have h_factM : (((2 * L).factorial : ℝ) ^ M) * (((2 * R).factorial : ℝ) ^ M) ≤
+      ((2 : ℝ) ^ M) ^ (2 * (m + 1)) * ((((m + 1).factorial : ℝ) ^ M) ^ 2) := by
+    have h1 := pow_le_pow_left₀ (by positivity) h_fact M
+    rw [mul_pow, mul_pow] at h1
+    calc ((2 * L).factorial : ℝ) ^ M * ((2 * R).factorial : ℝ) ^ M
+        ≤ ((4 : ℝ) ^ (m + 1)) ^ M * (((m + 1).factorial : ℝ) ^ 2) ^ M := h1
+      _ = ((2 : ℝ) ^ M) ^ (2 * (m + 1)) * (((m + 1).factorial : ℝ) ^ M) ^ 2 := by
+          have h4 : (4 : ℝ) = (2 : ℝ) ^ 2 := by norm_num
+          rw [h4, ← pow_mul, ← pow_mul, ← pow_mul, ← pow_mul, ← pow_mul]
+          exact congrArg₂ (· * ·) (congrArg _ (by ring)) (congrArg _ (by ring))
+  let B_max : ℝ := max B_L B_R
+  have hBmax_ge1 : 1 ≤ B_max := le_trans hBL_ge1 (le_max_left _ _)
+  have h_B_pow : B_L ^ (2 * L) * B_R ^ (2 * R) ≤ B_max ^ (2 * (m + 1)) := by
+    have h1 : B_L ^ (2 * L) ≤ B_max ^ (2 * L) :=
+      pow_le_pow_left₀ (by linarith) (le_max_left _ _) _
+    have h2 : B_R ^ (2 * R) ≤ B_max ^ (2 * R) :=
+      pow_le_pow_left₀ (by linarith) (le_max_right _ _) _
+    have h_exp : 2 * L + 2 * R = 2 * (m + 1) := by omega
+    calc B_L ^ (2 * L) * B_R ^ (2 * R)
+        ≤ B_max ^ (2 * L) * B_max ^ (2 * R) := mul_le_mul h1 h2 (by positivity) (by positivity)
+      _ = B_max ^ (2 * (m + 1)) := by rw [← pow_add, h_exp]
+  have h_SR_sq : (osStarRowBound Sstr) ^ (m + 1) ≤ ((osStarRowBound Sstr) ^ (m + 1)) ^ 2 := by
+    rw [sq]; exact le_mul_of_one_le_right (by positivity) (one_le_pow₀ hSR_ge1)
+  have h_prod_le : B_L_val * B_R_val ≤
+      (Real.sqrt (K_L * K_R) * (osStarRowBound Sstr * B_max * (2 : ℝ) ^ M) ^ (m + 1) *
+        (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) ^ 2 := by
+    have h_rw : B_L_val * B_R_val =
+        (K_L * K_R) * (osStarRowBound Sstr) ^ (m + 1) * (B_L ^ (2 * L) * B_R ^ (2 * R)) *
+          (((2 * L).factorial : ℝ) ^ M * ((2 * R).factorial : ℝ) ^ M) *
+          (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) ^ 2 := by
+      dsimp only [B_L_val, B_R_val]
+      rw [← h_prod_compl, mul_pow, ← hLR, pow_add (osStarRowBound Sstr) L R]
+      ring
+    rw [h_rw]
+    calc (K_L * K_R) * (osStarRowBound Sstr) ^ (m + 1) * (B_L ^ (2 * L) * B_R ^ (2 * R)) *
+            (((2 * L).factorial : ℝ) ^ M * ((2 * R).factorial : ℝ) ^ M) *
+            (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) ^ 2
+        ≤ (K_L * K_R) * ((osStarRowBound Sstr) ^ (m + 1)) ^ 2 * B_max ^ (2 * (m + 1)) *
+            (((2 : ℝ) ^ M) ^ (2 * (m + 1)) * (((m + 1).factorial : ℝ) ^ M) ^ 2) *
+            (∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) ^ 2 := by
+          refine mul_le_mul_of_nonneg_right ?_ (sq_nonneg _)
+          refine mul_le_mul ?_ h_factM (by positivity) (by positivity)
+          refine mul_le_mul ?_ h_B_pow (by positivity) (by positivity)
+          exact mul_le_mul_of_nonneg_left h_SR_sq (mul_nonneg hKL_nn hKR_nn)
+      _ = (Real.sqrt (K_L * K_R) * (osStarRowBound Sstr * B_max * (2 : ℝ) ^ M) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) ^ 2 := by
+          rw [mul_pow, mul_pow, mul_pow, Real.sq_sqrt (mul_nonneg hKL_nn hKR_nn),
+            mul_pow, mul_pow, mul_pow, mul_pow, ← pow_mul B_max, ← pow_mul ((2 : ℝ) ^ M),
+            mul_comm (m + 1) 2]
+          ring
+  have h_sqrt_le : Real.sqrt (B_L_val * B_R_val) ≤
+      Real.sqrt (K_L * K_R) * (osStarRowBound Sstr * B_max * (2 : ℝ) ^ M) ^ (m + 1) *
+        (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := by
+    have h_pr_nn : 0 ≤ ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M :=
+      Finset.prod_nonneg fun j hj => pow_nonneg (by
+        have hpos := ht j (Finset.mem_compl.mp hj); positivity) M
+    calc Real.sqrt (B_L_val * B_R_val)
+        ≤ Real.sqrt ((Real.sqrt (K_L * K_R) *
+            (osStarRowBound Sstr * B_max * (2 : ℝ) ^ M) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) ^ 2) :=
+          Real.sqrt_le_sqrt h_prod_le
+      _ = Real.sqrt (K_L * K_R) * (osStarRowBound Sstr * B_max * (2 : ℝ) ^ M) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M :=
+          Real.sqrt_sq (by positivity)
+  have h_cos_pos : 0 < Real.cos θ_cut :=
+    Real.cos_pos_of_mem_Ioo ⟨by linarith, hθCpi⟩
+  have h_pow_nn : 0 ≤ (4 / Real.cos θ_cut) ^ M := by positivity
+  calc ‖F w‖
+      ≤ Real.sqrt (B_L_val * B_R_val) * (4 / Real.cos θ_cut) ^ M := hF_bdd w hw
+    _ ≤ (Real.sqrt (K_L * K_R) * (osStarRowBound Sstr * B_max * (2 : ℝ) ^ M) ^ (m + 1) *
+          (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M) *
+          (4 / Real.cos θ_cut) ^ M :=
+        mul_le_mul_of_nonneg_right h_sqrt_le h_pow_nn
+    _ = (Real.sqrt (K_L * K_R) * (4 / Real.cos θ_cut) ^ M) *
+          (osStarRowBound Sstr * B_max * (2 : ℝ) ^ M) ^ (m + 1) *
+          (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := by ring
+
+def OSDampedSubsetHyp
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮) (M k : ℕ) : Prop :=
+  ∃ (C_k A_k E_k : ℝ) (D_k : ℕ),
+    1 ≤ C_k ∧ 1 ≤ A_k ∧ 1 ≤ E_k ∧
+    ∀ p : ℕ,
+      OSDampedSubsetBound hOS M k (osThetaSeq k p)
+        (C_k * (2 : ℝ) ^ (D_k * p)) (A_k * E_k ^ p)
+
+lemma osDampedSubsetBound_mono
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    {hOS : OSAxioms Rrep Sstr η 𝒮} {M k₁ k₂ : ℕ} {θ₁ θ₂ K₁ K₂ B₁ B₂ : ℝ}
+    (hk : k₂ ≤ k₁) (hθ : θ₂ ≤ θ₁) (hK : K₁ ≤ K₂) (hB : B₁ ≤ B₂)
+    (hK1 : 0 ≤ K₁) (hB1 : 0 ≤ B₁)
+    (hhyp : OSDampedSubsetBound hOS M k₁ θ₁ K₁ B₁) :
+    OSDampedSubsetBound hOS M k₂ θ₂ K₂ B₂ := by
+  intro m α x_sp S t hS ht
+  obtain ⟨F, hF_holo, hF_real, hF_bdd⟩ := hhyp m α x_sp S t (le_trans hS hk) ht
+  have hsub : TubeDomain (osBox (d := S.card) θ₂) ⊆ TubeDomain (osBox (d := S.card) θ₁) :=
+    fun w hw i => lt_of_lt_of_le (hw i) hθ
+  refine ⟨F, hF_holo.mono hsub, hF_real, fun w hw => ?_⟩
+  have h_pr_nn : 0 ≤ ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M :=
+    Finset.prod_nonneg fun j hj => pow_nonneg (by
+      have hpos := ht j (Finset.mem_compl.mp hj); positivity) M
+  calc ‖F w‖
+      ≤ K₁ * B₁ ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M) *
+          ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := hF_bdd w (hsub hw)
+    _ ≤ K₂ * B₂ ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M) *
+          ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := by
+        refine mul_le_mul_of_nonneg_right ?_ h_pr_nn
+        refine mul_le_mul_of_nonneg_right ?_ (by positivity)
+        exact mul_le_mul hK (pow_le_pow_left₀ hB1 hB _) (by positivity) (by linarith)
+
+lemma osDampedSubsetH_base
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    {C_lg A_lg : ℝ} {M : ℕ} (hC_ge1 : 1 ≤ C_lg) (hA_ge1 : 1 ≤ A_lg)
+    (hlg : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
+      ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
+        ∏ k : Fin (n - 1),
+          (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ M) :
+    OSDampedSubsetHyp hOS M 0 := by
+  refine ⟨C_lg, A_lg, 1, 0, hC_ge1, hA_ge1, le_rfl, fun p m α x_sp S t hS ht => ?_⟩
+  have hS_empty : S = ∅ := Finset.card_eq_zero.mp (Nat.eq_zero_of_le_zero hS)
+  let c0 : ℂ := 𝒮 (m + 1) α (osBuildPoints m x_sp t 0)
+  refine ⟨fun _ => c0, differentiableOn_const c0, fun x => ?_, fun w _ => ?_⟩
+  · have h_prod_one : (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) = 1 := by
+      have hcard : S.card = 0 := Nat.eq_zero_of_le_zero hS
+      rw [Finset.prod_eq_one]; intro i _; exact (Fin.elim0 (hcard ▸ i))
+    have h_subst : osSubstTimes S t (fun i => Real.exp (x i)) = t := by
+      ext j; dsimp [osSubstTimes]; rw [dif_neg (by rw [hS_empty]; simp)]
+    rw [h_prod_one, one_mul, h_subst]
+  · have ht_all : ∀ j : Fin m, 0 < t j := fun j => ht j (by rw [hS_empty]; simp)
+    have h_ord := osBuildPoints_mem_orderedEuclidN m x_sp ht_all 0
+    have h_bd := hlg (m + 1) α (osBuildPoints m x_sp t 0) h_ord
+    have h_prod_eq : (∏ k : Fin (m + 1 - 1),
+        (1 + (osBuildPoints m x_sp t 0 ⟨k.val + 1, by omega⟩ 0 -
+          osBuildPoints m x_sp t 0 ⟨k.val, by omega⟩ 0)⁻¹) ^ M) =
+        ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := by
+      have hSc : Sᶜ = Finset.univ := by rw [hS_empty]; simp
+      rw [hSc]
+      refine Finset.prod_bij (fun (k : Fin (m + 1 - 1)) _ => (⟨k.val, by omega⟩ : Fin m))
+        (fun _ _ => Finset.mem_univ _)
+        (fun k₁ _ k₂ _ h => Fin.ext (congrArg (Fin.val : Fin m → ℕ) h))
+        (fun b _ => ⟨⟨b.val, by omega⟩, Finset.mem_univ _, by ext; rfl⟩)
+        fun k _ => ?_
+      have hd := osBuildPoints_time_diff m x_sp t 0 ⟨k.val, by omega⟩
+      dsimp only at hd
+      rw [hd]
+    rw [h_prod_eq] at h_bd
+    simpa [c0] using h_bd
+
+lemma osDampedSubsetH_odd_step
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    {M k : ℕ} (ih : OSDampedSubsetHyp hOS M (2 * k)) :
+    OSDampedSubsetHyp hOS M (2 * k + 1) := by
+  rcases ih with ⟨C_k, A_k, E_k, D_k, hCk, hAk, hEk, h_bd⟩
+  have hSR := one_le_osStarRowBound Sstr
+  let C_odd : ℝ := C_k * (8 : ℝ) ^ M
+  let A_odd : ℝ := osStarRowBound Sstr * A_k * (2 : ℝ) ^ M
+  let D_odd : ℕ := D_k + M
+  have hCodd : 1 ≤ C_odd := by
+    dsimp [C_odd]; exact one_le_mul_of_one_le_of_one_le hCk (one_le_pow₀ (by norm_num))
+  have hAodd : 1 ≤ A_odd := by
+    dsimp [A_odd]
+    have h1 : 1 ≤ osStarRowBound Sstr * A_k := one_le_mul_of_one_le_of_one_le hSR hAk
+    exact one_le_mul_of_one_le_of_one_le h1 (one_le_pow₀ (by norm_num))
+  refine ⟨C_odd, A_odd, E_k, D_odd, hCodd, hAodd, hEk, fun p m α x_sp S t hS ht => ?_⟩
+  rw [osThetaSeq_odd k p]
+  by_cases hle : S.card ≤ 2 * k
+  · have h_mon := osDampedSubsetBound_mono (k₁ := 2 * k) (k₂ := 2 * k) le_rfl le_rfl
+      (K₂ := C_odd * (2 : ℝ) ^ (D_odd * p)) (B₂ := A_odd * E_k ^ p)
+      (by
+        dsimp [C_odd, D_odd]
+        have h1 : C_k ≤ C_k * (8 : ℝ) ^ M :=
+          le_mul_of_one_le_right (by linarith) (one_le_pow₀ (by norm_num))
+        have h2 : (2 : ℝ) ^ (D_k * p) ≤ (2 : ℝ) ^ ((D_k + M) * p) :=
+          pow_le_pow_right₀ (by norm_num) (Nat.mul_le_mul_right p (Nat.le_add_right D_k M))
+        exact mul_le_mul h1 h2 (by positivity) (by positivity))
+      (by
+        dsimp [A_odd]
+        have h1 : A_k ≤ osStarRowBound Sstr * A_k * (2 : ℝ) ^ M := by
+          have h1a : A_k ≤ osStarRowBound Sstr * A_k := le_mul_of_one_le_left (by linarith) hSR
+          exact h1a.trans (le_mul_of_one_le_right (by positivity) (one_le_pow₀ (by norm_num)))
+        exact mul_le_mul_of_nonneg_right h1 (by positivity))
+      (by positivity) (by positivity) (h_bd p)
+    exact h_mon m α x_sp S t hle ht
+  · have hcard : S.card = 2 * k + 1 := by omega
+    let i_cut : Fin S.card := ⟨k, by omega⟩
+    let θ := osThetaSeq (2 * k) p
+    have hθ_pos : 0 < θ := osThetaSeq_pos (2 * k) p
+    have hθ_lt : θ < Real.pi / 2 := osThetaSeq_lt_pi_div_two (2 * k) p
+    have hK_nn : 0 ≤ C_k * (2 : ℝ) ^ (D_k * p) := by positivity
+    have hB_ge1 : 1 ≤ A_k * E_k ^ p := one_le_mul_of_one_le_of_one_le hAk (one_le_pow₀ hEk)
+    obtain ⟨F, hF_holo, hF_real, hF_bdd⟩ :=
+      os_cut_step_of_hyps hOS hcluster hθ_pos hθ_pos hθ_lt hθ_pos hK_nn hK_nn hB_ge1 hB_ge1
+        (h_bd p) (h_bd p) m α x_sp S t ht i_cut (by dsimp [i_cut]; omega)
+        (by dsimp [i_cut]; omega)
+    have hsub : TubeDomain (osBox θ) ⊆ TubeDomain (osCutBox i_cut θ θ θ) :=
+      fun w hw => osBox_subset_osCutBox i_cut θ hw
+    refine ⟨F, hF_holo.mono hsub, hF_real, fun w hw => ?_⟩
+    have h_cos := osThetaSeq_cos_ge (2 * k) p
+    have h_cos_pos : 0 < Real.cos θ := Real.cos_pos_of_mem_Ioo ⟨by linarith, hθ_lt⟩
+    have h_div_le : 4 / Real.cos θ ≤ 8 * (2 : ℝ) ^ p := by
+      have h1 : 4 / Real.cos θ ≤ 4 / ((2⁻¹ : ℝ) ^ (p + 1)) :=
+        div_le_div_of_nonneg_left (by norm_num) (by positivity) h_cos
+      have h2 : (4 : ℝ) / ((2⁻¹ : ℝ) ^ (p + 1)) = 8 * (2 : ℝ) ^ p := by
+        rw [inv_pow, div_inv_eq_mul, pow_succ]; ring
+      linarith
+    have h_pow_le : (4 / Real.cos θ) ^ M ≤ (8 : ℝ) ^ M * (2 : ℝ) ^ (M * p) := by
+      have h1 := pow_le_pow_left₀ (by positivity) h_div_le M
+      rw [mul_pow, ← pow_mul, mul_comm p M] at h1
+      exact h1
+    have h_K_le : Real.sqrt ((C_k * (2 : ℝ) ^ (D_k * p)) * (C_k * (2 : ℝ) ^ (D_k * p))) *
+        (4 / Real.cos θ) ^ M ≤ C_odd * (2 : ℝ) ^ (D_odd * p) := by
+      rw [Real.sqrt_mul_self hK_nn]
+      calc (C_k * (2 : ℝ) ^ (D_k * p)) * (4 / Real.cos θ) ^ M
+          ≤ (C_k * (2 : ℝ) ^ (D_k * p)) * ((8 : ℝ) ^ M * (2 : ℝ) ^ (M * p)) :=
+            mul_le_mul_of_nonneg_left h_pow_le hK_nn
+        _ = C_odd * (2 : ℝ) ^ (D_odd * p) := by
+            dsimp [C_odd, D_odd]; rw [add_mul, pow_add]; ring
+    have h_B_eq : osStarRowBound Sstr * max (A_k * E_k ^ p) (A_k * E_k ^ p) * (2 : ℝ) ^ M =
+        A_odd * E_k ^ p := by
+      rw [max_self]; dsimp [A_odd]; ring
+    have h_pr_nn : 0 ≤ ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M :=
+      Finset.prod_nonneg fun j hj => pow_nonneg (by
+        have hpos := ht j (Finset.mem_compl.mp hj); positivity) M
+    calc ‖F w‖
+        ≤ (Real.sqrt ((C_k * (2 : ℝ) ^ (D_k * p)) * (C_k * (2 : ℝ) ^ (D_k * p))) *
+            (4 / Real.cos θ) ^ M) *
+            (osStarRowBound Sstr * max (A_k * E_k ^ p) (A_k * E_k ^ p) * (2 : ℝ) ^ M) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := hF_bdd w (hsub hw)
+      _ ≤ (C_odd * (2 : ℝ) ^ (D_odd * p)) * (A_odd * E_k ^ p) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := by
+          rw [h_B_eq]
+          refine mul_le_mul_of_nonneg_right ?_ h_pr_nn
+          refine mul_le_mul_of_nonneg_right ?_ (by positivity)
+          exact mul_le_mul_of_nonneg_right h_K_le (by positivity)
+
+lemma osDampedSubsetH_even_step
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    {C_lg A_lg : ℝ} {M : ℕ} (hC_ge1 : 1 ≤ C_lg) (hA_ge1 : 1 ≤ A_lg)
+    (hlg : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
+      ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
+        ∏ k : Fin (n - 1),
+          (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ M)
+    {k : ℕ} (ih : OSDampedSubsetHyp hOS M (2 * k + 1)) :
+    OSDampedSubsetHyp hOS M (2 * k + 2) := by
+  rcases ih with ⟨C_o, A_o, E_o, D_o, hCo, hAo, hEo, h_odd⟩
+  have hSR := one_le_osStarRowBound Sstr
+  let C_init : ℝ := C_lg * (8 : ℝ) ^ M
+  let A_init : ℝ := osStarRowBound Sstr * A_lg * (4 : ℝ) ^ M
+  let C_e : ℝ := max C_init (C_o * ((8 : ℝ) ^ M) ^ 2)
+  let A_e : ℝ := max A_init A_o
+  let E_e : ℝ := E_o * osStarRowBound Sstr * (2 : ℝ) ^ M
+  let D_e : ℕ := D_o + 2 * M
+  have hCinit_ge1 : 1 ≤ C_init :=
+    one_le_mul_of_one_le_of_one_le hC_ge1 (one_le_pow₀ (by norm_num))
+  have hAinit_ge1 : 1 ≤ A_init :=
+    one_le_mul_of_one_le_of_one_le
+      (one_le_mul_of_one_le_of_one_le hSR hA_ge1) (one_le_pow₀ (by norm_num))
+  have hCe : 1 ≤ C_e := le_trans hCinit_ge1 (le_max_left _ _)
+  have hAe : 1 ≤ A_e := le_trans hAinit_ge1 (le_max_left _ _)
+  have hEe : 1 ≤ E_e :=
+    one_le_mul_of_one_le_of_one_le
+      (one_le_mul_of_one_le_of_one_le hEo hSR) (one_le_pow₀ (by norm_num))
+  have hCo_le_Ce : C_o ≤ C_e := by
+    have h1 : C_o ≤ C_o * ((8 : ℝ) ^ M) ^ 2 :=
+      le_mul_of_one_le_right (by linarith) (one_le_pow₀ (one_le_pow₀ (by norm_num)))
+    exact h1.trans (le_max_right _ _)
+  have hAo_le_Ae : A_o ≤ A_e := le_max_right _ _
+  have hEo_le_Ee : E_o ≤ E_e := by
+    dsimp [E_e]
+    have h1 : E_o ≤ E_o * osStarRowBound Sstr := le_mul_of_one_le_right (by linarith) hSR
+    exact h1.trans (le_mul_of_one_le_right (by positivity) (one_le_pow₀ (by norm_num)))
+  refine ⟨C_e, A_e, E_e, D_e, hCe, hAe, hEe, ?_⟩
+  intro p
+  induction p with
+  | zero =>
+    have h0 := os_stage0_flat_tube hOS hcluster hC_ge1 hA_ge1 hlg k
+    have h_mon := osDampedSubsetBound_mono (k₁ := 2 * k + 2) (k₂ := 2 * k + 2) le_rfl le_rfl
+      (K₂ := C_e * (2 : ℝ) ^ (D_e * 0)) (B₂ := A_e * E_e ^ 0)
+      (by simp only [mul_zero, pow_zero, mul_one]; exact le_max_left _ _)
+      (by simp only [pow_zero, mul_one]; exact le_max_left _ _)
+      (by positivity) (by positivity) h0
+    exact h_mon
+  | succ p ihp =>
+    intro m α x_sp S t hS ht
+    by_cases hle : S.card ≤ 2 * k + 1
+    · have h_mon := osDampedSubsetBound_mono (k₁ := 2 * k + 1) (k₂ := 2 * k + 1) le_rfl
+        (osThetaSeq_antitone_k (2 * k + 1) (p + 1))
+        (K₂ := C_e * (2 : ℝ) ^ (D_e * (p + 1))) (B₂ := A_e * E_e ^ (p + 1))
+        (mul_le_mul hCo_le_Ce
+          (pow_le_pow_right₀ (by norm_num) (Nat.mul_le_mul_right (p + 1) (Nat.le_add_right D_o _)))
+          (by positivity) (by linarith))
+        (mul_le_mul hAo_le_Ae (pow_le_pow_left₀ (by linarith) hEo_le_Ee _)
+          (by positivity) (by linarith))
+        (by positivity) (by positivity) (h_odd (p + 1))
+      exact h_mon m α x_sp S t hle ht
+    · have hcard : S.card = 2 * k + 2 := by omega
+      let i_A : Fin S.card := ⟨k, by omega⟩
+      let i_B : Fin S.card := ⟨k + 1, by omega⟩
+      let θ₁ := osThetaSeq (2 * k + 1) p
+      let θ₂ := osThetaSeq (2 * k + 2) p
+      have hθ₁_pos : 0 < θ₁ := osThetaSeq_pos (2 * k + 1) p
+      have hθ₁_lt : θ₁ < Real.pi / 2 := osThetaSeq_lt_pi_div_two (2 * k + 1) p
+      have hθ₂_pos : 0 < θ₂ := osThetaSeq_pos (2 * k + 2) p
+      let Ko : ℝ := C_o * (2 : ℝ) ^ (D_o * p)
+      let Ke : ℝ := C_e * (2 : ℝ) ^ (D_e * p)
+      let Bo : ℝ := A_o * E_o ^ p
+      let Be : ℝ := A_e * E_e ^ p
+      have hKo_nn : 0 ≤ Ko := by dsimp [Ko]; positivity
+      have hKe_nn : 0 ≤ Ke := by dsimp [Ke]; positivity
+      have hBo_ge1 : 1 ≤ Bo := one_le_mul_of_one_le_of_one_le hAo (one_le_pow₀ hEo)
+      have hBe_ge1 : 1 ≤ Be := one_le_mul_of_one_le_of_one_le hAe (one_le_pow₀ hEe)
+      obtain ⟨F_A, hFA_holo, hFA_real, hFA_bdd⟩ :=
+        os_cut_step_of_hyps hOS hcluster hθ₁_pos hθ₁_pos hθ₁_lt hθ₂_pos
+          hKo_nn hKe_nn hBo_ge1 hBe_ge1 (h_odd p) ihp m α x_sp S t ht i_A
+          (by dsimp [i_A]; omega) (by dsimp [i_A]; omega)
+      obtain ⟨F_B, hFB_holo, hFB_real, hFB_bdd⟩ :=
+        os_cut_step_of_hyps hOS hcluster hθ₂_pos hθ₁_pos hθ₁_lt hθ₁_pos
+          hKe_nn hKo_nn hBe_ge1 hBo_ge1 ihp (h_odd p) m α x_sp S t ht i_B
+          (by dsimp [i_B]; omega) (by dsimp [i_B]; omega)
+      let M_bd : ℝ := C_e * (2 : ℝ) ^ (D_e * (p + 1)) * (A_e * E_e ^ (p + 1)) ^ (m + 1) *
+        (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M
+      have h_pr_nn : 0 ≤ ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M :=
+        Finset.prod_nonneg fun j hj => pow_nonneg (by
+          have hpos := ht j (Finset.mem_compl.mp hj); positivity) M
+      have hM_nn : 0 ≤ M_bd := by dsimp [M_bd]; positivity
+      have h_cos := osThetaSeq_cos_ge (2 * k + 1) p
+      have h_cos_pos : 0 < Real.cos θ₁ := Real.cos_pos_of_mem_Ioo ⟨by linarith, hθ₁_lt⟩
+      have h_div_le : 4 / Real.cos θ₁ ≤ 8 * (2 : ℝ) ^ p := by
+        have h1 : 4 / Real.cos θ₁ ≤ 4 / ((2⁻¹ : ℝ) ^ (p + 1)) :=
+          div_le_div_of_nonneg_left (by norm_num) (by positivity) h_cos
+        have h2 : (4 : ℝ) / ((2⁻¹ : ℝ) ^ (p + 1)) = 8 * (2 : ℝ) ^ p := by
+          rw [inv_pow, div_inv_eq_mul, pow_succ]; ring
+        linarith
+      have h_pow_le : (4 / Real.cos θ₁) ^ M ≤ (8 : ℝ) ^ M * (2 : ℝ) ^ (M * p) := by
+        have h1 := pow_le_pow_left₀ (by positivity) h_div_le M
+        rw [mul_pow, ← pow_mul, mul_comm p M] at h1
+        exact h1
+      have h_K_step : Real.sqrt (Ko * Ke) * (4 / Real.cos θ₁) ^ M ≤
+          C_e * (2 : ℝ) ^ (D_e * (p + 1)) := by
+        have h_sq_le : (Ko * Ke) * ((8 : ℝ) ^ M * (2 : ℝ) ^ (M * p)) ^ 2 ≤
+            (C_e * (2 : ℝ) ^ (D_e * p)) ^ 2 := by
+          have hC_sq : C_o * ((8 : ℝ) ^ M) ^ 2 ≤ C_e := le_max_right _ _
+          have h_exp : D_o * p + D_e * p + 2 * (M * p) = 2 * (D_e * p) := by
+            dsimp [D_e]; ring
+          calc (Ko * Ke) * ((8 : ℝ) ^ M * (2 : ℝ) ^ (M * p)) ^ 2
+              = (C_o * ((8 : ℝ) ^ M) ^ 2) * C_e *
+                  ((2 : ℝ) ^ (D_o * p) * (2 : ℝ) ^ (D_e * p) * ((2 : ℝ) ^ (M * p)) ^ 2) := by
+                dsimp [Ko, Ke]; ring
+            _ = (C_o * ((8 : ℝ) ^ M) ^ 2) * C_e * (2 : ℝ) ^ (2 * (D_e * p)) := by
+                rw [← pow_mul (2 : ℝ) (M * p) 2, mul_comm (M * p) 2, ← pow_add, ← pow_add, h_exp]
+            _ ≤ C_e * C_e * (2 : ℝ) ^ (2 * (D_e * p)) := by
+                refine mul_le_mul_of_nonneg_right ?_ (by positivity)
+                exact mul_le_mul_of_nonneg_right hC_sq (by linarith)
+            _ = (C_e * (2 : ℝ) ^ (D_e * p)) ^ 2 := by
+                rw [mul_pow, ← pow_mul, mul_comm (D_e * p) 2]; ring
+        have h_sqrt : Real.sqrt (Ko * Ke) * ((8 : ℝ) ^ M * (2 : ℝ) ^ (M * p)) ≤
+            C_e * (2 : ℝ) ^ (D_e * p) := by
+          have h_lhs : Real.sqrt (Ko * Ke) * ((8 : ℝ) ^ M * (2 : ℝ) ^ (M * p)) =
+              Real.sqrt ((Ko * Ke) * ((8 : ℝ) ^ M * (2 : ℝ) ^ (M * p)) ^ 2) := by
+            rw [Real.sqrt_mul (mul_nonneg hKo_nn hKe_nn), Real.sqrt_sq (by positivity)]
+          rw [h_lhs]
+          calc Real.sqrt ((Ko * Ke) * ((8 : ℝ) ^ M * (2 : ℝ) ^ (M * p)) ^ 2)
+              ≤ Real.sqrt ((C_e * (2 : ℝ) ^ (D_e * p)) ^ 2) := Real.sqrt_le_sqrt h_sq_le
+            _ = C_e * (2 : ℝ) ^ (D_e * p) := Real.sqrt_sq (by positivity)
+        have h_mono_p : C_e * (2 : ℝ) ^ (D_e * p) ≤ C_e * (2 : ℝ) ^ (D_e * (p + 1)) :=
+          mul_le_mul_of_nonneg_left
+            (pow_le_pow_right₀ (by norm_num) (Nat.mul_le_mul_left D_e (Nat.le_succ p)))
+            (by linarith)
+        calc Real.sqrt (Ko * Ke) * (4 / Real.cos θ₁) ^ M
+            ≤ Real.sqrt (Ko * Ke) * ((8 : ℝ) ^ M * (2 : ℝ) ^ (M * p)) :=
+              mul_le_mul_of_nonneg_left h_pow_le (Real.sqrt_nonneg _)
+          _ ≤ C_e * (2 : ℝ) ^ (D_e * p) := h_sqrt
+          _ ≤ C_e * (2 : ℝ) ^ (D_e * (p + 1)) := h_mono_p
+      have hBo_le_Be : Bo ≤ Be :=
+        mul_le_mul hAo_le_Ae (pow_le_pow_left₀ (by linarith) hEo_le_Ee _)
+          (by positivity) (by linarith)
+      have h_B_step : osStarRowBound Sstr * max Bo Be * (2 : ℝ) ^ M ≤ A_e * E_e ^ (p + 1) := by
+        rw [max_eq_right hBo_le_Be]
+        have h1 : osStarRowBound Sstr * (2 : ℝ) ^ M ≤ E_e := by
+          dsimp [E_e]
+          have h_eq : E_o * osStarRowBound Sstr * (2 : ℝ) ^ M =
+              E_o * (osStarRowBound Sstr * (2 : ℝ) ^ M) := by ring
+          rw [h_eq]; exact le_mul_of_one_le_left (by positivity) hEo
+        calc osStarRowBound Sstr * Be * (2 : ℝ) ^ M
+            = A_e * E_e ^ p * (osStarRowBound Sstr * (2 : ℝ) ^ M) := by dsimp [Be]; ring
+          _ ≤ A_e * E_e ^ p * E_e := mul_le_mul_of_nonneg_left h1 (by positivity)
+          _ = A_e * E_e ^ (p + 1) := by rw [pow_succ]; ring
+      have hFA_M : ∀ w ∈ TubeDomain (osCutBox i_A θ₁ θ₁ θ₂), ‖F_A w‖ ≤ M_bd := by
+        intro w hw
+        calc ‖F_A w‖
+            ≤ (Real.sqrt (Ko * Ke) * (4 / Real.cos θ₁) ^ M) *
+                (osStarRowBound Sstr * max Bo Be * (2 : ℝ) ^ M) ^ (m + 1) *
+                (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := hFA_bdd w hw
+          _ ≤ M_bd := by
+              dsimp [M_bd]
+              refine mul_le_mul_of_nonneg_right ?_ h_pr_nn
+              refine mul_le_mul_of_nonneg_right ?_ (by positivity)
+              exact mul_le_mul h_K_step (pow_le_pow_left₀ (by positivity) h_B_step _)
+                (by positivity) (by positivity)
+      have hFB_M : ∀ w ∈ TubeDomain (osCutBox i_B θ₂ θ₁ θ₁), ‖F_B w‖ ≤ M_bd := by
+        intro w hw
+        calc ‖F_B w‖
+            ≤ (Real.sqrt (Ke * Ko) * (4 / Real.cos θ₁) ^ M) *
+                (osStarRowBound Sstr * max Be Bo * (2 : ℝ) ^ M) ^ (m + 1) *
+                (((m + 1).factorial : ℝ) ^ M) * ∏ j ∈ Sᶜ, (1 + (t j)⁻¹) ^ M := hFB_bdd w hw
+          _ ≤ M_bd := by
+              rw [mul_comm Ke Ko, max_comm Be Bo]
+              dsimp [M_bd]
+              refine mul_le_mul_of_nonneg_right ?_ h_pr_nn
+              refine mul_le_mul_of_nonneg_right ?_ (by positivity)
+              exact mul_le_mul h_K_step (pow_le_pow_left₀ (by positivity) h_B_step _)
+                (by positivity) (by positivity)
+      let U_A := osCutBox i_A θ₁ θ₁ θ₂
+      let U_B := osCutBox i_B θ₂ θ₁ θ₁
+      have hA_open : IsOpen U_A := isOpen_osCutBox i_A θ₁ θ₁ θ₂
+      have hB_open : IsOpen U_B := isOpen_osCutBox i_B θ₂ θ₁ θ₁
+      have hA_conv : Convex ℝ U_A := convex_osCutBox i_A θ₁ θ₁ θ₂
+      have hB_conv : Convex ℝ U_B := convex_osCutBox i_B θ₂ θ₁ θ₁
+      have hA_zero : (0 : Fin S.card → ℝ) ∈ U_A := zero_mem_osCutBox i_A hθ₁_pos hθ₁_pos hθ₂_pos
+      have hB_zero : (0 : Fin S.card → ℝ) ∈ U_B := zero_mem_osCutBox i_B hθ₂_pos hθ₁_pos hθ₁_pos
+      have h_agree : ∀ z ∈ TubeDomain (U_A ∩ U_B), F_A z = F_B z := by
+        obtain ⟨δ, hδ_pos, hδ_sub⟩ :=
+          Metric.isOpen_iff.mp (hA_open.inter hB_open) 0 ⟨hA_zero, hB_zero⟩
+        have h_star : ∀ y ∈ U_A ∩ U_B, ∀ s ∈ Set.Icc (0 : ℝ) 1, s • y ∈ U_A ∩ U_B := by
+          intro y hy s hs
+          have h_eq : s • y = (1 - s) • (0 : Fin S.card → ℝ) + s • y := by rw [smul_zero, zero_add]
+          rw [h_eq]
+          exact ⟨hA_conv hA_zero hy.1 (by linarith [hs.2]) hs.1 (by ring),
+            hB_conv hB_zero hy.2 (by linarith [hs.2]) hs.1 (by ring)⟩
+        have h_ball : Set.EqOn F_A F_B (TubeDomain (Metric.ball 0 δ)) := by
+          intro w hw
+          have h_ball_sub : Set.pi Set.univ (fun j : Fin S.card => Metric.ball ((w j).re : ℂ) δ) ⊆
+              TubeDomain (Metric.ball 0 δ) := by
+            intro z hz
+            rw [TubeDomain, Set.mem_setOf_eq, Metric.mem_ball, dist_zero_right]
+            rw [pi_norm_lt_iff hδ_pos]
+            intro j
+            have hzj : ‖z j - ((w j).re : ℂ)‖ < δ := by
+              simpa [Metric.mem_ball, dist_eq_norm] using hz j (Set.mem_univ j)
+            have h_im : |(z j).im| ≤ ‖z j - ((w j).re : ℂ)‖ := by
+              have h1 := Complex.abs_im_le_norm (z j - ((w j).re : ℂ))
+              simpa using h1
+            exact h_im.trans_lt hzj
+          have hw_in : w ∈ Set.pi Set.univ
+              (fun j : Fin S.card => Metric.ball ((w j).re : ℂ) δ) := by
+            intro j _
+            rw [Metric.mem_ball, dist_eq_norm]
+            have h_eq : w j - ((w j).re : ℂ) = ((w j).im : ℂ) * Complex.I := by
+              apply Complex.ext <;> simp
+            rw [h_eq, norm_mul, Complex.norm_real, Complex.norm_I, mul_one, Real.norm_eq_abs]
+            have hw' : ‖(fun k => (w k).im)‖ < δ := by
+              simpa [TubeDomain, Metric.mem_ball, dist_zero_right] using hw
+            exact ((norm_le_pi_norm (fun k => (w k).im) j).trans_lt hw')
+          exact holo_eqOn_polydisk_of_real_eq hδ_pos
+            (hFA_holo.mono (h_ball_sub.trans fun z hz => (hδ_sub hz).1))
+            (hFB_holo.mono (h_ball_sub.trans fun z hz => (hδ_sub hz).2))
+            (fun x _ => by rw [hFA_real x, hFB_real x]) w hw_in
+        exact tubeDomain_eqOn_of_starShaped (hA_open.inter hB_open) hδ_pos h_star
+          (hFA_holo.mono fun _ h => h.1) (hFB_holo.mono fun _ h => h.2) h_ball
+      obtain ⟨F, hF_holo, hF_bdd, hF_inter, _, _⟩ :=
+        symmetric_tube_midpoint_extension hA_open hB_open hA_conv hB_conv
+          (symm_osCutBox i_A θ₁ θ₁ θ₂) (symm_osCutBox i_B θ₂ θ₁ θ₁)
+          hA_zero hB_zero hM_nn hFA_holo hFB_holo hFA_M hFB_M h_agree
+      have h_mid_sub : TubeDomain (osBox (osThetaSeq (2 * k + 2) (p + 1))) ⊆
+          TubeDomain (MidpointSet U_A U_B) := by
+        rw [osThetaSeq_even_succ k p]
+        exact fun w hw => osBox_subset_midpoint_osCutBox i_A i_B (by dsimp [i_A, i_B])
+          hθ₁_pos hθ₂_pos hw
+      refine ⟨F, hF_holo.mono h_mid_sub, fun x => ?_, fun w hw => hF_bdd w (h_mid_sub hw)⟩
+      have hx_in : (fun i => (x i : ℂ)) ∈ TubeDomain (U_A ∩ U_B) := by
+        change (fun i => ((x i : ℂ)).im) ∈ U_A ∩ U_B
+        have h_zero : (fun i : Fin S.card => ((x i : ℂ)).im) = 0 := by ext i; simp
+        rw [h_zero]; exact ⟨hA_zero, hB_zero⟩
+      rw [hF_inter _ hx_in, hFA_real x]
+
+theorem osDampedSubsetH_induction
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    {C_lg A_lg : ℝ} {M : ℕ} (hC_ge1 : 1 ≤ C_lg) (hA_ge1 : 1 ≤ A_lg)
+    (hlg : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
+      ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
+        ∏ k : Fin (n - 1),
+          (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ M)
+    (k : ℕ) :
+    OSDampedSubsetHyp hOS M k := by
+  have h_even : ∀ q : ℕ, OSDampedSubsetHyp hOS M (2 * q) := by
+    intro q
+    induction q with
+    | zero => exact osDampedSubsetH_base hOS hC_ge1 hA_ge1 hlg
+    | succ q ih =>
+      have h_odd := osDampedSubsetH_odd_step hOS hcluster ih
+      exact osDampedSubsetH_even_step hOS hcluster hC_ge1 hA_ge1 hlg h_odd
+  rcases Nat.even_or_odd k with ⟨q, rfl⟩ | ⟨q, rfl⟩
+  · have h_eq : q + q = 2 * q := by omega
+    rw [h_eq]; exact h_even q
+  · exact osDampedSubsetH_odd_step hOS hcluster (h_even q)
+
+end Phase2CutAndInduction
+
+section Phase2MultiTimeOfLinearGrowth
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+lemma osThetaSeq_mono_p_le (k : ℕ) {p₁ p₂ : ℕ} (h : p₁ ≤ p₂) :
+    osThetaSeq k p₁ ≤ osThetaSeq k p₂ := by
+  induction h with
+  | refl => exact le_rfl
+  | step _ ih => exact ih.trans (osThetaSeq_mono_p k _)
+
+lemma exists_poly_le_exp_three_halves (m : ℕ) :
+    ∃ K : ℝ, 1 ≤ K ∧ ∀ p : ℕ, ((p + 1 : ℝ) ^ m) ≤ K * (3 / 2 : ℝ) ^ p := by
+  let r : ℝ := (3 / 2 : ℝ) ^ ((1 : ℝ) / ((m + 1 : ℕ) : ℝ))
+  have hr_gt1 : 1 < r := by
+    dsimp [r]
+    exact Real.one_lt_rpow (by norm_num) (by positivity)
+  let δ : ℝ := min 1 (r - 1)
+  have hδ_pos : 0 < δ := lt_min zero_lt_one (by linarith)
+  have hδ_le1 : δ ≤ 1 := min_le_left _ _
+  have hδ_ler : 1 + δ ≤ r := by linarith [min_le_right (1 : ℝ) (r - 1)]
+  have h_lin : ∀ p : ℕ, (p + 1 : ℝ) ≤ δ⁻¹ * r ^ p := by
+    intro p
+    have hbern : 1 + (p : ℝ) * δ ≤ (1 + δ) ^ p := one_add_mul_le_pow (by linarith) p
+    have hpow : (1 + δ) ^ p ≤ r ^ p := pow_le_pow_left₀ (by linarith) hδ_ler p
+    have h1 : δ * ((p : ℝ) + 1) ≤ 1 + (p : ℝ) * δ := by nlinarith
+    have h2 : δ * ((p : ℝ) + 1) ≤ r ^ p := h1.trans (hbern.trans hpow)
+    calc (p + 1 : ℝ) = δ⁻¹ * (δ * ((p : ℝ) + 1)) := by field_simp [hδ_pos.ne']
+      _ ≤ δ⁻¹ * r ^ p := mul_le_mul_of_nonneg_left h2 (by positivity)
+  have hδ_inv_ge1 : 1 ≤ δ⁻¹ := (one_le_inv₀ hδ_pos).mpr hδ_le1
+  refine ⟨(δ⁻¹) ^ (m + 1), one_le_pow₀ hδ_inv_ge1, fun p => ?_⟩
+  have h_pow_r : (r ^ p) ^ (m + 1) = (3 / 2 : ℝ) ^ p := by
+    rw [← pow_mul, mul_comm p (m + 1), pow_mul]
+    congr 1
+    dsimp [r]
+    rw [← Real.rpow_natCast, ← Real.rpow_mul (by norm_num)]
+    have hne : ((m + 1 : ℕ) : ℝ) ≠ 0 := by positivity
+    rw [one_div_mul_cancel hne, Real.rpow_one]
+  have h1 : ((p + 1 : ℝ) ^ m) ≤ ((p + 1 : ℝ) ^ (m + 1)) := by
+    have hp1 : (1 : ℝ) ≤ (p + 1 : ℝ) := by linarith [Nat.cast_nonneg (α := ℝ) p]
+    exact pow_le_pow_right₀ hp1 (Nat.le_succ m)
+  have h2 := pow_le_pow_left₀ (by positivity) (h_lin p) (m + 1)
+  rw [mul_pow, h_pow_r] at h2
+  exact h1.trans h2
+
+lemma exists_osThetaSeq_defect_geom (m : ℕ) :
+    ∃ K : ℝ, 1 ≤ K ∧
+      ∀ p : ℕ, Real.pi / 2 - osThetaSeq m p ≤ K * (3 / 4 : ℝ) ^ p := by
+  obtain ⟨K₀, hK₀, hpoly⟩ := exists_poly_le_exp_three_halves m
+  refine ⟨max 1 ((Real.pi / 2) * K₀), le_max_left _ _, fun p => ?_⟩
+  have hdef := osThetaSeq_defect_le m p
+  have h_prod : ((p + 1 : ℝ) ^ m) * (2⁻¹ : ℝ) ^ p ≤ K₀ * (3 / 4 : ℝ) ^ p := by
+    calc ((p + 1 : ℝ) ^ m) * (2⁻¹ : ℝ) ^ p
+        ≤ (K₀ * (3 / 2 : ℝ) ^ p) * (2⁻¹ : ℝ) ^ p :=
+          mul_le_mul_of_nonneg_right (hpoly p) (by positivity)
+      _ = K₀ * ((3 / 2 : ℝ) * 2⁻¹) ^ p := by rw [mul_assoc, ← mul_pow]
+      _ = K₀ * (3 / 4 : ℝ) ^ p := by norm_num
+  calc Real.pi / 2 - osThetaSeq m p
+      ≤ (Real.pi / 2) * ((p + 1 : ℝ) ^ m) * (2⁻¹ : ℝ) ^ p := hdef
+    _ = (Real.pi / 2) * (((p + 1 : ℝ) ^ m) * (2⁻¹ : ℝ) ^ p) := by ring
+    _ ≤ (Real.pi / 2) * (K₀ * (3 / 4 : ℝ) ^ p) :=
+        mul_le_mul_of_nonneg_left h_prod (by positivity)
+    _ = ((Real.pi / 2) * K₀) * (3 / 4 : ℝ) ^ p := by ring
+    _ ≤ max 1 ((Real.pi / 2) * K₀) * (3 / 4 : ℝ) ^ p :=
+        mul_le_mul_of_nonneg_right (le_max_right _ _) (by positivity)
+
+lemma exists_osThetaSeq_gt (m : ℕ) {θ : ℝ} (hθ : θ < Real.pi / 2) :
+    ∃ p : ℕ, θ < osThetaSeq m p := by
+  obtain ⟨K, hK, hgeom⟩ := exists_osThetaSeq_defect_geom m
+  have hδ : 0 < Real.pi / 2 - θ := by linarith
+  have hlim : Tendsto (fun p : ℕ => K * (3 / 4 : ℝ) ^ p) atTop (𝓝 (K * 0)) :=
+    (tendsto_pow_atTop_nhds_zero_of_lt_one (by norm_num) (by norm_num)).const_mul K
+  rw [mul_zero] at hlim
+  have hev := (tendsto_order.mp hlim).2 (Real.pi / 2 - θ) hδ
+  rcases Filter.eventually_atTop.mp hev with ⟨p, hp⟩
+  exact ⟨p, by linarith [hgeom p, hp p le_rfl]⟩
+
+lemma orderIsoOfFin_univ_val (m : ℕ) (i : Fin (Finset.univ : Finset (Fin m)).card) :
+    ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl i).val = i.val := by
+  have h_le : ∀ k : ℕ, (hk : k < (Finset.univ : Finset (Fin m)).card) →
+      ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl ⟨k, hk⟩).val = k := by
+    intro k
+    induction k with
+    | zero =>
+      intro hk
+      by_contra hne
+      have hpos : 0 < ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl ⟨0, hk⟩).val := by omega
+      let z : Fin m := ⟨0, by simp at hk; omega⟩
+      let idx := (Finset.univ : Finset (Fin m)).orderIsoOfFin rfl |>.symm ⟨z, Finset.mem_univ z⟩
+      have h_app : (Finset.univ : Finset (Fin m)).orderEmbOfFin rfl idx = z :=
+        congrArg Subtype.val (((Finset.univ : Finset (Fin m)).orderIsoOfFin rfl).apply_symm_apply _)
+      have h_lt : idx < ⟨0, hk⟩ := by
+        rw [← ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl).lt_iff_lt, h_app]
+        exact hpos
+      have : idx.val < 0 := h_lt
+      omega
+    | succ k ih =>
+      intro hk
+      have hk' : k < (Finset.univ : Finset (Fin m)).card := by omega
+      have hprev := ih hk'
+      have hgt : k < ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl ⟨k + 1, hk⟩).val := by
+        have hlt : (⟨k, hk'⟩ : Fin (Finset.univ : Finset (Fin m)).card) < ⟨k + 1, hk⟩ :=
+          Fin.lt_def.mpr (by dsimp; omega)
+        have h1 := ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl).lt_iff_lt.mpr hlt
+        change ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl ⟨k, hk'⟩).val < _ at h1
+        rw [hprev] at h1; exact h1
+      by_contra hne
+      have hge : k + 1 < ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl ⟨k + 1, hk⟩).val := by
+        omega
+      let z : Fin m := ⟨k + 1, by simp at hk; omega⟩
+      let idx := (Finset.univ : Finset (Fin m)).orderIsoOfFin rfl |>.symm ⟨z, Finset.mem_univ z⟩
+      have h_app : (Finset.univ : Finset (Fin m)).orderEmbOfFin rfl idx = z :=
+        congrArg Subtype.val (((Finset.univ : Finset (Fin m)).orderIsoOfFin rfl).apply_symm_apply _)
+      have h_lt1 : (⟨k, hk'⟩ : Fin (Finset.univ : Finset (Fin m)).card) < idx := by
+        rw [← ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl).lt_iff_lt, h_app]
+        change ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl ⟨k, hk'⟩).val < z.val
+        rw [hprev]; dsimp [z]; omega
+      have h_lt2 : idx < ⟨k + 1, hk⟩ := by
+        rw [← ((Finset.univ : Finset (Fin m)).orderEmbOfFin rfl).lt_iff_lt, h_app]
+        exact hge
+      have : k < idx.val ∧ idx.val < k + 1 := ⟨h_lt1, h_lt2⟩
+      omega
+  exact h_le i.val i.isLt
+
+lemma osSubstTimes_univ_eq (m : ℕ) (t : Fin m → ℝ)
+    (u : Fin (Finset.univ : Finset (Fin m)).card → ℝ) (j : Fin m) :
+    osSubstTimes Finset.univ t u j = u ⟨j.val, by simp⟩ := by
+  dsimp only [osSubstTimes]
+  rw [dif_pos (Finset.mem_univ j)]
+  congr 1
+  ext
+  have h1 := orderIsoOfFin_univ_val m
+    (((Finset.univ : Finset (Fin m)).orderIsoOfFin rfl).symm ⟨j, Finset.mem_univ j⟩)
+  have h2 : (Finset.univ : Finset (Fin m)).orderEmbOfFin rfl
+      (((Finset.univ : Finset (Fin m)).orderIsoOfFin rfl).symm ⟨j, Finset.mem_univ j⟩) = j :=
+    congrArg Subtype.val (((Finset.univ : Finset (Fin m)).orderIsoOfFin rfl).apply_symm_apply _)
+  rw [h2] at h1
+  exact h1.symm
+
+lemma osBox_eqOn_of_real_eq {d : ℕ} {θ : ℝ} (hθ : 0 < θ) {F₁ F₂ : (Fin d → ℂ) → ℂ}
+    (hF₁ : DifferentiableOn ℂ F₁ (TubeDomain (osBox θ)))
+    (hF₂ : DifferentiableOn ℂ F₂ (TubeDomain (osBox θ)))
+    (h_real : ∀ x : Fin d → ℝ, F₁ (fun i => (x i : ℂ)) = F₂ (fun i => (x i : ℂ))) :
+    Set.EqOn F₁ F₂ (TubeDomain (osBox θ)) := by
+  have hU_open : IsOpen (osBox (d := d) θ) := isOpen_osBox θ
+  have hU_conv : Convex ℝ (osBox (d := d) θ) := convex_osBox θ
+  have h0_mem : (0 : Fin d → ℝ) ∈ osBox (d := d) θ := zero_mem_osBox hθ
+  obtain ⟨δ, hδ_pos, hδ_sub⟩ := Metric.isOpen_iff.mp hU_open 0 h0_mem
+  have h_star : ∀ y ∈ osBox (d := d) θ, ∀ s ∈ Set.Icc (0 : ℝ) 1, s • y ∈ osBox (d := d) θ := by
+    intro y hy s hs
+    have h_eq : s • y = (1 - s) • (0 : Fin d → ℝ) + s • y := by rw [smul_zero, zero_add]
+    rw [h_eq]
+    exact hU_conv h0_mem hy (by linarith [hs.2]) hs.1 (by ring)
+  have h_ball : Set.EqOn F₁ F₂ (TubeDomain (Metric.ball 0 δ)) := by
+    intro w hw
+    have h_ball_sub : Set.pi Set.univ (fun j : Fin d => Metric.ball ((w j).re : ℂ) δ) ⊆
+        TubeDomain (Metric.ball 0 δ) := by
+      intro z hz
+      rw [TubeDomain, Set.mem_setOf_eq, Metric.mem_ball, dist_zero_right]
+      rw [pi_norm_lt_iff hδ_pos]
+      intro j
+      have hzj : ‖z j - ((w j).re : ℂ)‖ < δ := by
+        simpa [Metric.mem_ball, dist_eq_norm] using hz j (Set.mem_univ j)
+      have h_im : |(z j).im| ≤ ‖z j - ((w j).re : ℂ)‖ := by
+        simpa using Complex.abs_im_le_norm (z j - ((w j).re : ℂ))
+      exact h_im.trans_lt hzj
+    have hw_in : w ∈ Set.pi Set.univ (fun j : Fin d => Metric.ball ((w j).re : ℂ) δ) := by
+      intro j _
+      rw [Metric.mem_ball, dist_eq_norm]
+      have h_eq : w j - ((w j).re : ℂ) = ((w j).im : ℂ) * Complex.I := by
+        apply Complex.ext <;> simp
+      rw [h_eq, norm_mul, Complex.norm_real, Complex.norm_I, mul_one, Real.norm_eq_abs]
+      have hw' : ‖(fun k => (w k).im)‖ < δ := by
+        simpa [TubeDomain, Metric.mem_ball, dist_zero_right] using hw
+      exact (norm_le_pi_norm (fun k => (w k).im) j).trans_lt hw'
+    exact holo_eqOn_polydisk_of_real_eq hδ_pos
+      (hF₁.mono (h_ball_sub.trans fun z hz => hδ_sub hz))
+      (hF₂.mono (h_ball_sub.trans fun z hz => hδ_sub hz))
+      (fun x _ => h_real x) w hw_in
+  exact tubeDomain_eqOn_of_starShaped hU_open hδ_pos h_star hF₁ hF₂ h_ball
+
+lemma osDampedMultiTimeH_exists
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    ∃ (M : ℕ) (F_damped : ∀ (m : ℕ), (Fin (m + 1) → ι) → (Fin (m + 1) → Fin 3 → ℝ) →
+        (Fin m → ℂ) → ℂ),
+      (∀ m α x_sp, DifferentiableOn ℂ (F_damped m α x_sp) (TubeDomain (osBox (Real.pi / 2)))) ∧
+      (∀ m α x_sp (x : Fin m → ℝ),
+        F_damped m α x_sp (fun j => (x j : ℂ)) =
+          (∏ j : Fin m, logTimeDamp (x j : ℂ) ^ M) *
+            𝒮 (m + 1) α (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0)) ∧
+      (∀ m, ∃ (C_m A_m E_m : ℝ) (D_m : ℕ), 1 ≤ C_m ∧ 1 ≤ A_m ∧ 1 ≤ E_m ∧
+        ∀ (p : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+          (w : Fin m → ℂ), w ∈ TubeDomain (osBox (osThetaSeq m p)) →
+          ‖F_damped m α x_sp w‖ ≤
+            C_m * (2 : ℝ) ^ (D_m * p) * (A_m * E_m ^ p) ^ (m + 1) *
+              (((m + 1).factorial : ℝ) ^ M)) := by
+  classical
+  rcases hlg with ⟨C_raw, A_lg, M, hC_raw, hA_lg, hlg_bd⟩
+  let C_lg : ℝ := max C_raw 1
+  have hC_lg : 1 ≤ C_lg := le_max_right _ _
+  have hlg' : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
+      ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
+        ∏ k : Fin (n - 1),
+          (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ M := by
+    intro n α x hx
+    have h1 := hlg_bd n α x hx
+    have h_pr_nn : 0 ≤ ∏ k : Fin (n - 1),
+        (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ M :=
+      Finset.prod_nonneg fun k _ => pow_nonneg (by
+        have hk : k.val < n - 1 := k.isLt
+        have hlt : x ⟨k.val, by omega⟩ 0 < x ⟨k.val + 1, by omega⟩ 0 :=
+          hx ⟨k.val, by omega⟩ (by dsimp; omega)
+        have hdiff : 0 < x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0 := by linarith
+        positivity) M
+    exact h1.trans (mul_le_mul_of_nonneg_right
+      (mul_le_mul_of_nonneg_right
+        (mul_le_mul_of_nonneg_right (le_max_left _ _) (by positivity))
+        (by positivity)) h_pr_nn)
+  have h_hyp : ∀ m : ℕ, OSDampedSubsetHyp hOS M m :=
+    fun m => osDampedSubsetH_induction hOS hcluster hC_lg hA_lg hlg' m
+  let getC : ℕ → ℝ := fun m => Classical.choose (h_hyp m)
+  let getA : ℕ → ℝ := fun m => Classical.choose (Classical.choose_spec (h_hyp m))
+  let getE : ℕ → ℝ := fun
+    m => Classical.choose (Classical.choose_spec (Classical.choose_spec (h_hyp m)))
+  let getD : ℕ → ℕ := fun m =>
+    Classical.choose (Classical.choose_spec (Classical.choose_spec (Classical.choose_spec (h_hyp
+      m))))
+  have h_get_spec : ∀ m, 1 ≤ getC m ∧ 1 ≤ getA m ∧ 1 ≤ getE m ∧
+      ∀ p : ℕ, OSDampedSubsetBound hOS M m (osThetaSeq m p)
+        (getC m * (2 : ℝ) ^ (getD m * p)) (getA m * (getE m) ^ p) := fun m =>
+    Classical.choose_spec (Classical.choose_spec (Classical.choose_spec (Classical.choose_spec
+      (h_hyp m))))
+  let F_stage : ∀ (m : ℕ), (Fin (m + 1) → ι) → (Fin (m + 1) → Fin 3 → ℝ) → ℕ → (Fin m → ℂ) → ℂ :=
+    fun m α x_sp p w =>
+      Classical.choose ((h_get_spec m).2.2.2 p m α x_sp Finset.univ (fun _ => 1)
+        (by simp) (fun j hj => by simp at hj)) (fun i => w (finCongr (Finset.card_fin m) i))
+  have h_stage_holo : ∀ m α x_sp p,
+      DifferentiableOn ℂ (F_stage m α x_sp p) (TubeDomain (osBox (osThetaSeq m p))) := by
+    intro m α x_sp p
+    have hsp := Classical.choose_spec ((h_get_spec m).2.2.2 p m α x_sp Finset.univ (fun _ => 1)
+      (by simp) (fun j hj => by simp at hj))
+    have h_lin : Differentiable ℂ (fun w : Fin m → ℂ =>
+        fun i : Fin (Finset.univ : Finset (Fin m)).card => w (finCongr (Finset.card_fin m) i)) :=
+      differentiable_pi.mpr fun i => differentiable_apply _
+    exact hsp.1.comp h_lin.differentiableOn fun w hw i => hw (finCongr (Finset.card_fin m) i)
+  have h_stage_real : ∀ m α x_sp p (x : Fin m → ℝ),
+      F_stage m α x_sp p (fun j => (x j : ℂ)) =
+        (∏ j : Fin m, logTimeDamp (x j : ℂ) ^ M) *
+          𝒮 (m + 1) α (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0) := by
+    intro m α x_sp p x
+    have hsp := Classical.choose_spec ((h_get_spec m).2.2.2 p m α x_sp Finset.univ (fun _ => 1)
+      (by simp) (fun j hj => by simp at hj))
+    have h1 := hsp.2.1 (fun i => x (finCongr (Finset.card_fin m) i))
+    dsimp only [F_stage]
+    rw [h1]
+    refine congrArg₂ (· * ·) ?_ ?_
+    · exact Finset.prod_bij (fun i _ => finCongr (Finset.card_fin m) i)
+        (fun _ _ => Finset.mem_univ _)
+        (fun _ _ _ _ h => (finCongr (Finset.card_fin m)).injective h)
+        (fun b _ => ⟨(finCongr (Finset.card_fin m)).symm b, Finset.mem_univ _, by ext; rfl⟩)
+        (fun _ _ => rfl)
+    · congr 1
+      have h_sub : osSubstTimes Finset.univ (fun _ => 1)
+          (fun i => Real.exp (x (finCongr (Finset.card_fin m) i))) =
+          fun j => Real.exp (x j) := by
+        ext j
+        rw [osSubstTimes_univ_eq]
+        rfl
+      rw [h_sub]
+  have h_stage_bdd : ∀ m α x_sp p (w : Fin m → ℂ),
+      w ∈ TubeDomain (osBox (osThetaSeq m p)) →
+      ‖F_stage m α x_sp p w‖ ≤
+        getC m * (2 : ℝ) ^ (getD m * p) * (getA m * (getE m) ^ p) ^ (m + 1) *
+          (((m + 1).factorial : ℝ) ^ M) := by
+    intro m α x_sp p w hw
+    have hsp := Classical.choose_spec ((h_get_spec m).2.2.2 p m α x_sp Finset.univ (fun _ => 1)
+      (by simp) (fun j hj => by simp at hj))
+    have h_bd := hsp.2.2 (fun i => w (finCongr (Finset.card_fin m) i))
+      (fun i => hw (finCongr (Finset.card_fin m) i))
+    exact h_bd.trans_eq (by simp)
+  have h_stage_agree : ∀ m α x_sp p₁ p₂ (w : Fin m → ℂ),
+      w ∈ TubeDomain (osBox (osThetaSeq m p₁)) →
+      w ∈ TubeDomain (osBox (osThetaSeq m p₂)) →
+      F_stage m α x_sp p₁ w = F_stage m α x_sp p₂ w := by
+    intro m α x_sp p₁ p₂ w hw₁ hw₂
+    rcases le_total p₁ p₂ with hle | hle
+    · have hsub : TubeDomain (osBox (d := m) (osThetaSeq m p₁)) ⊆
+          TubeDomain (osBox (d := m) (osThetaSeq m p₂)) :=
+        fun z hz i => lt_of_lt_of_le (hz i) (osThetaSeq_mono_p_le m hle)
+      exact osBox_eqOn_of_real_eq (osThetaSeq_pos m p₁)
+        (h_stage_holo m α x_sp p₁) ((h_stage_holo m α x_sp p₂).mono hsub)
+        (fun x => by rw [h_stage_real, h_stage_real]) hw₁
+    · have hsub : TubeDomain (osBox (d := m) (osThetaSeq m p₂)) ⊆
+          TubeDomain (osBox (d := m) (osThetaSeq m p₁)) :=
+        fun z hz i => lt_of_lt_of_le (hz i) (osThetaSeq_mono_p_le m hle)
+      exact (osBox_eqOn_of_real_eq (osThetaSeq_pos m p₂)
+        (h_stage_holo m α x_sp p₂) ((h_stage_holo m α x_sp p₁).mono hsub)
+        (fun x => by rw [h_stage_real, h_stage_real]) hw₂).symm
+  let F_damped : ∀ (m : ℕ), (Fin (m + 1) → ι) → (Fin (m + 1) → Fin 3 → ℝ) → (Fin m → ℂ) → ℂ :=
+    fun m α x_sp w =>
+      if h : ∃ p : ℕ, w ∈ TubeDomain (osBox (osThetaSeq m p)) then
+        F_stage m α x_sp (Classical.choose h) w
+      else 0
+  have h_Fd_eq : ∀ m α x_sp p (w : Fin m → ℂ),
+      w ∈ TubeDomain (osBox (osThetaSeq m p)) →
+      F_damped m α x_sp w = F_stage m α x_sp p w := by
+    intro m α x_sp p w hw
+    have hex : ∃ q : ℕ, w ∈ TubeDomain (osBox (osThetaSeq m q)) := ⟨p, hw⟩
+    dsimp only [F_damped]
+    rw [dif_pos hex]
+    exact h_stage_agree m α x_sp (Classical.choose hex) p w (Classical.choose_spec hex) hw
+  have h_cover : ∀ m (w : Fin m → ℂ), w ∈ TubeDomain (osBox (Real.pi / 2)) →
+      ∃ p : ℕ, w ∈ TubeDomain (osBox (osThetaSeq m p)) := by
+    intro m w hw
+    by_cases hm : m = 0
+    · subst hm; exact ⟨0, fun i => Fin.elim0 i⟩
+    · have hne : (Finset.univ : Finset (Fin m)).Nonempty :=
+        ⟨⟨0, Nat.pos_of_ne_zero hm⟩, Finset.mem_univ _⟩
+      let θ_max : ℝ := Finset.sup' Finset.univ hne fun i => |(w i).im|
+      have h_lt : θ_max < Real.pi / 2 := (Finset.sup'_lt_iff hne).mpr fun i _ => hw i
+      obtain ⟨p, hp⟩ := exists_osThetaSeq_gt m h_lt
+      exact ⟨p,
+        fun i => lt_of_le_of_lt (Finset.le_sup' (fun j => |(w j).im|) (Finset.mem_univ i)) hp⟩
+  refine ⟨M, F_damped, ?_, ?_, ?_⟩
+  · intro m α x_sp w₀ hw₀
+    obtain ⟨p, hp⟩ := h_cover m w₀ hw₀
+    have h_open : IsOpen (TubeDomain (osBox (d := m) (osThetaSeq m p))) :=
+      isOpen_TubeDomain (isOpen_osBox _)
+    have h_da : DifferentiableAt ℂ (F_stage m α x_sp p) w₀ :=
+      (h_stage_holo m α x_sp p w₀ hp).differentiableAt (h_open.mem_nhds hp)
+    have h_ev : F_damped m α x_sp =ᶠ[𝓝 w₀] F_stage m α x_sp p :=
+      Filter.eventually_of_mem (h_open.mem_nhds hp) fun w hw => h_Fd_eq m α x_sp p w hw
+    exact (h_da.congr_of_eventuallyEq h_ev).differentiableWithinAt
+  · intro m α x_sp x
+    have hx_in : (fun j : Fin m => (x j : ℂ)) ∈ TubeDomain (osBox (osThetaSeq m 0)) := by
+      intro j; simp [osThetaSeq_pos m 0]
+    rw [h_Fd_eq m α x_sp 0 _ hx_in, h_stage_real]
+  · intro m
+    refine ⟨getC m, getA m, getE m, getD m, (h_get_spec m).1, (h_get_spec m).2.1,
+      (h_get_spec m).2.2.1, fun p α x_sp w hw => ?_⟩
+    rw [h_Fd_eq m α x_sp p w hw]
+    exact h_stage_bdd m α x_sp p w hw
+
+noncomputable def osLinearGrowthM
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) : ℕ :=
+  Classical.choose (osDampedMultiTimeH_exists hOS hcluster hlg)
+
+noncomputable def osDampedMultiTimeH
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    ∀ (m : ℕ), (Fin (m + 1) → ι) → (Fin (m + 1) → Fin 3 → ℝ) → (Fin m → ℂ) → ℂ :=
+  Classical.choose (Classical.choose_spec (osDampedMultiTimeH_exists hOS hcluster hlg))
+
+lemma osDampedMultiTimeH_holo
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ) :
+    DifferentiableOn ℂ (osDampedMultiTimeH hOS hcluster hlg m α x_sp)
+      (TubeDomain (osBox (Real.pi / 2))) :=
+  (Classical.choose_spec (Classical.choose_spec
+    (osDampedMultiTimeH_exists hOS hcluster hlg))).1 m α x_sp
+
+lemma osDampedMultiTimeH_real
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮)
+    (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ) (x : Fin m → ℝ) :
+    osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun j => (x j : ℂ)) =
+      (∏ j : Fin m, logTimeDamp (x j : ℂ) ^ osLinearGrowthM hOS hcluster hlg) *
+        𝒮 (m + 1) α (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0) :=
+  (Classical.choose_spec (Classical.choose_spec
+    (osDampedMultiTimeH_exists hOS hcluster hlg))).2.1 m α x_sp x
+
+lemma osDampedMultiTimeH_stage_bound
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) (m : ℕ) :
+    ∃ (C_m A_m E_m : ℝ) (D_m : ℕ), 1 ≤ C_m ∧ 1 ≤ A_m ∧ 1 ≤ E_m ∧
+      ∀ (p : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
+        (w : Fin m → ℂ), w ∈ TubeDomain (osBox (osThetaSeq m p)) →
+        ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w‖ ≤
+          C_m * (2 : ℝ) ^ (D_m * p) * (A_m * E_m ^ p) ^ (m + 1) *
+            (((m + 1).factorial : ℝ) ^ osLinearGrowthM hOS hcluster hlg) :=
+  (Classical.choose_spec (Classical.choose_spec
+    (osDampedMultiTimeH_exists hOS hcluster hlg))).2.2 m
+
+lemma complex_log_im_abs_lt_pi_div_two {z : ℂ} (hz : 0 < z.re) :
+    |(Complex.log z).im| < Real.pi / 2 := by
+  rw [Complex.log_im]
+  exact Complex.abs_arg_lt_pi_div_two_iff.mpr (Or.inl hz)
+
+lemma logTimeDamp_log_ne_zero {z : ℂ} (hz : 0 < z.re) :
+    logTimeDamp (Complex.log z) ≠ 0 := by
+  have hz_ne : z ≠ 0 := fun h => by rw [h] at hz; simp at hz
+  dsimp [logTimeDamp]
+  rw [Complex.exp_log hz_ne]
+  have h1 : (1 : ℂ) + z ≠ 0 := by
+    intro h
+    have hre := congrArg Complex.re h
+    simp at hre
+    linarith
+  exact div_ne_zero hz_ne (pow_ne_zero 2 h1)
+
+lemma norm_inv_logTimeDamp_log_le {z : ℂ} (hz : 0 < z.re) :
+    ‖(logTimeDamp (Complex.log z))⁻¹‖ ≤ (1 + (z.re)⁻¹ + ‖z‖) ^ 3 := by
+  have hz_ne : z ≠ 0 := fun h => by rw [h] at hz; simp at hz
+  dsimp [logTimeDamp]
+  rw [Complex.exp_log hz_ne, inv_div, norm_div, norm_pow]
+  have hre_le : z.re ≤ ‖z‖ := (le_abs_self _).trans (Complex.abs_re_le_norm z)
+  have hnorm_pos : 0 < ‖z‖ := lt_of_lt_of_le hz hre_le
+  have hinv_le : ‖z‖⁻¹ ≤ (z.re)⁻¹ := inv_anti₀ hz hre_le
+  have h1z : ‖(1 : ℂ) + z‖ ≤ 1 + ‖z‖ := by
+    calc ‖(1 : ℂ) + z‖ ≤ ‖(1 : ℂ)‖ + ‖z‖ := norm_add_le _ _
+      _ = 1 + ‖z‖ := by simp
+  have hA : 1 + ‖z‖ ≤ 1 + (z.re)⁻¹ + ‖z‖ := by linarith [inv_pos.mpr hz]
+  have hB : (z.re)⁻¹ ≤ 1 + (z.re)⁻¹ + ‖z‖ := by linarith [norm_nonneg z]
+  calc ‖(1 : ℂ) + z‖ ^ 2 / ‖z‖
+      = ‖(1 : ℂ) + z‖ ^ 2 * ‖z‖⁻¹ := div_eq_mul_inv _ _
+    _ ≤ (1 + ‖z‖) ^ 2 * (z.re)⁻¹ :=
+        mul_le_mul (pow_le_pow_left₀ (norm_nonneg _) h1z 2) hinv_le (by positivity) (by positivity)
+    _ ≤ (1 + (z.re)⁻¹ + ‖z‖) ^ 2 * (1 + (z.re)⁻¹ + ‖z‖) :=
+        mul_le_mul (pow_le_pow_left₀ (by positivity) hA 2) hB (by positivity) (by positivity)
+    _ = (1 + (z.re)⁻¹ + ‖z‖) ^ 3 := by ring
+
+noncomputable def osMultiTimeH_of_linearGrowth
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    ∀ (n : ℕ) (_ : Fin n → ι) (_ : Fin n → Fin 3 → ℝ) (_ : Fin (n - 1) → ℂ), ℂ
+  | 0, α, _, _ => 𝒮 0 α 0
+  | m + 1, α, x_sp, τ =>
+      if _hτ : ∀ k : Fin m, 0 < (τ k).re then
+        (∏ k : Fin m, logTimeDamp (Complex.log (τ k)) ^ osLinearGrowthM hOS hcluster hlg)⁻¹ *
+          osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))
+      else 0
+
+theorem differentiableOn_osMultiTimeH_of_linearGrowth
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮)
+    (n : ℕ) (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ) :
+    DifferentiableOn ℂ (osMultiTimeH_of_linearGrowth hOS hcluster hlg n α x_sp)
+      {τ : Fin (n - 1) → ℂ | ∀ k, 0 < (τ k).re} := by
+  cases n with
+  | zero => exact differentiableOn_const _
+  | succ m =>
+    let U : Set (Fin m → ℂ) := {τ : Fin m → ℂ | ∀ k, 0 < (τ k).re}
+    let M := osLinearGrowthM hOS hcluster hlg
+    have h_log_diff : DifferentiableOn ℂ (fun τ : Fin m → ℂ => fun k => Complex.log (τ k)) U := by
+      intro τ hτ
+      exact differentiableWithinAt_pi.mpr fun k =>
+        (Complex.differentiableAt_log (Or.inl (hτ k))).comp_differentiableWithinAt τ
+          (f := fun x : Fin m → ℂ => x k) (differentiable_apply k τ).differentiableWithinAt
+    have h_log_maps : Set.MapsTo (fun τ : Fin m → ℂ => fun k => Complex.log (τ k))
+        U (TubeDomain (osBox (Real.pi / 2))) := fun τ hτ k =>
+      complex_log_im_abs_lt_pi_div_two (hτ k)
+    have h_damp_diff : DifferentiableOn ℂ
+        (fun τ : Fin m → ℂ => ∏ k : Fin m, logTimeDamp (Complex.log (τ k)) ^ M) U := by
+      intro τ hτ
+      have h_each : ∀ k : Fin m, DifferentiableWithinAt ℂ
+          (fun τ : Fin m → ℂ => logTimeDamp (Complex.log (τ k)) ^ M) U τ := by
+        intro k
+        have h1 : DifferentiableWithinAt ℂ (fun τ : Fin m → ℂ => Complex.log (τ k)) U τ :=
+          (Complex.differentiableAt_log (Or.inl (hτ k))).comp_differentiableWithinAt τ
+            (f := fun x : Fin m → ℂ => x k) (differentiable_apply k τ).differentiableWithinAt
+        have h2 : DifferentiableAt ℂ logTimeDamp (Complex.log (τ k)) :=
+          (differentiableOn_logTimeDamp (Complex.log (τ k))
+            (complex_log_im_abs_lt_pi_div_two (hτ k))).differentiableAt
+            ((isOpen_lt (continuous_abs.comp Complex.continuous_im) continuous_const).mem_nhds
+              (complex_log_im_abs_lt_pi_div_two (hτ k)))
+        exact (h2.comp_differentiableWithinAt τ h1).pow M
+      have h_prod : ∀ s : Finset (Fin m), DifferentiableWithinAt ℂ
+          (fun τ : Fin m → ℂ => ∏ k ∈ s, logTimeDamp (Complex.log (τ k)) ^ M) U τ := by
+        intro s
+        induction s using Finset.cons_induction with
+        | empty => simp only [Finset.prod_empty]; exact differentiableWithinAt_const 1
+        | cons a s' ha ih =>
+          simp only [Finset.prod_cons]
+          exact (h_each a).mul ih
+      exact h_prod Finset.univ
+    have h_inv_diff : DifferentiableOn ℂ
+        (fun τ : Fin m → ℂ => (∏ k : Fin m, logTimeDamp (Complex.log (τ k)) ^ M)⁻¹) U := by
+      intro τ hτ
+      refine (h_damp_diff τ hτ).inv ?_
+      exact Finset.prod_ne_zero_iff.mpr fun k _ => pow_ne_zero M (logTimeDamp_log_ne_zero (hτ k))
+    have h_comp : DifferentiableOn ℂ
+        (fun τ : Fin m → ℂ =>
+          osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))) U :=
+      (osDampedMultiTimeH_holo hOS hcluster hlg m α x_sp).comp h_log_diff h_log_maps
+    exact (h_inv_diff.mul h_comp).congr fun τ hτ => by
+      have hτ' : ∀ k : Fin m, 0 < (τ k).re := hτ
+      change (if _hτ : ∀ k : Fin m, 0 < (τ k).re then _ else 0) = _
+      rw [dif_pos hτ']
+      rfl
+
+theorem osMultiTimeH_of_linearGrowth_real_eq_schwinger
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (_ : x ∈ orderedEuclidN n),
+      osMultiTimeH_of_linearGrowth hOS hcluster hlg n α (fun i => spatialPart (x i))
+        (fun k : Fin (n - 1) =>
+          ((x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0 : ℝ) : ℂ)) =
+        𝒮 n α x
+  | 0, α, x, _ => by
+      dsimp [osMultiTimeH_of_linearGrowth]
+      congr 1
+      exact Subsingleton.elim 0 x
+  | m + 1, α, x, hx => by
+      let dt : Fin m → ℝ := fun k => x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0
+      have hdt_pos : ∀ k : Fin m, 0 < dt k := fun k => by
+        have hk := k.isLt
+        have hlt := hx ⟨k.val, by omega⟩ (by dsimp; omega)
+        dsimp [dt]; linarith
+      have hτ_pos : ∀ k : Fin m, 0 < ((dt k : ℝ) : ℂ).re := fun k => by simpa using hdt_pos k
+      change osMultiTimeH_of_linearGrowth hOS hcluster hlg (m + 1) α (fun i => spatialPart (x i))
+          (fun k : Fin m => ((dt k : ℝ) : ℂ)) = 𝒮 (m + 1) α x
+      dsimp only [osMultiTimeH_of_linearGrowth]
+      rw [dif_pos hτ_pos]
+      have hlog : ∀ k : Fin m, Complex.log ((dt k : ℝ) : ℂ) = ((Real.log (dt k) : ℝ) : ℂ) :=
+        fun k => (Complex.ofReal_log (hdt_pos k).le).symm
+      simp_rw [hlog]
+      rw [osDampedMultiTimeH_real hOS hcluster hlg]
+      have h_exp : (fun k : Fin m => Real.exp (Real.log (dt k))) = dt := by
+        ext k; exact Real.exp_log (hdt_pos k)
+      rw [h_exp]
+      have h_ne : (∏ k : Fin m, logTimeDamp ((Real.log (dt k) : ℝ) : ℂ) ^
+          osLinearGrowthM hOS hcluster hlg) ≠ 0 := by
+        refine Finset.prod_ne_zero_iff.mpr fun k _ => pow_ne_zero _ ?_
+        have h1 := logTimeDamp_log_ne_zero (hτ_pos k)
+        rwa [← Complex.ofReal_log (hdt_pos k).le] at h1
+      rw [inv_mul_cancel_left₀ h_ne]
+      have h_shift := schwinger_osBuildPoints_shift hOS m α
+        (fun i => spatialPart (x i)) hdt_pos 0 (x 0 0)
+      rw [← h_shift]
+      congr 1
+      exact osBuildPoints_eq_of_ordered (x := x)
+
+theorem osMultiTimeH_of_linearGrowth_spatial_shift
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    ∀ (n : ℕ) (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ)
+      (τ : Fin (n - 1) → ℂ) (a : Fin 3 → ℝ),
+      osMultiTimeH_of_linearGrowth hOS hcluster hlg n α (fun i => x_sp i + a) τ =
+        osMultiTimeH_of_linearGrowth hOS hcluster hlg n α x_sp τ
+  | 0, _, _, _, _ => rfl
+  | m + 1, α, x_sp, τ, a => by
+      dsimp only [osMultiTimeH_of_linearGrowth]
+      split_ifs with hτ
+      · congr 1
+        refine osBox_eqOn_of_real_eq (by positivity : (0 : ℝ) < Real.pi / 2)
+          (osDampedMultiTimeH_holo hOS hcluster hlg m α (fun i => x_sp i + a))
+          (osDampedMultiTimeH_holo hOS hcluster hlg m α x_sp)
+          (fun x => ?_) (fun k => complex_log_im_abs_lt_pi_div_two (hτ k))
+        rw [osDampedMultiTimeH_real, osDampedMultiTimeH_real]
+        congr 1
+        have h_pts : osBuildPoints m (fun i => x_sp i + a) (fun j => Real.exp (x j)) 0 =
+            fun i => osBuildPoints m x_sp (fun j => Real.exp (x j)) 0 i + euclidSpatialVec a := by
+          ext i μ
+          refine Fin.cases ?_ (fun ν => ?_) μ
+          · simp [osBuildPoints_zero_coord, euclidSpatialVec]
+          · simp [osBuildPoints, euclidSpatialVec, Pi.add_apply]
+        rw [h_pts]
+        exact hOS.os1_translation (m + 1) α _
+          (osBuildPoints_mem_orderedEuclidN m x_sp (fun j => Real.exp_pos (x j)) 0)
+          (euclidSpatialVec a)
+      · rfl
+
+theorem osMultiTimeH_of_linearGrowth_spinorRot
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    ∀ (n : ℕ) (U : Geometry.PolarDecomposition.SU2) (α : Fin n → ι)
+      (x_sp : Fin n → Fin 3 → ℝ) (τ : Fin (n - 1) → ℂ),
+      osMultiTimeH_of_linearGrowth hOS hcluster hlg n α
+          (fun i => euclidSpatialRot U (x_sp i)) τ =
+        ∑ β : Fin n → ι,
+          (∏ i : Fin n, osSpinorRotMatrix Rrep U (α i) (β i)) *
+            osMultiTimeH_of_linearGrowth hOS hcluster hlg n β x_sp τ
+  | 0, U, α, _, _ => by
+      dsimp [osMultiTimeH_of_linearGrowth]
+      rw [Finset.univ_unique, Finset.sum_singleton]
+      have h_prod : (∏ i : Fin 0, osSpinorRotMatrix Rrep U (α i) ((default : Fin 0 → ι) i)) = 1 :=
+        Finset.prod_eq_one (fun i _ => Fin.elim0 i)
+      have h_eq : (default : Fin 0 → ι) = α := Subsingleton.elim _ _
+      rw [h_prod, one_mul, h_eq]
+  | m + 1, U, α, x_sp, τ => by
+      dsimp only [osMultiTimeH_of_linearGrowth]
+      split_ifs with hτ
+      · have h_rhs_holo : DifferentiableOn ℂ
+            (fun w : Fin m → ℂ =>
+              ∑ β : Fin (m + 1) → ι,
+                (∏ i : Fin (m + 1), osSpinorRotMatrix Rrep U (α i) (β i)) *
+                  osDampedMultiTimeH hOS hcluster hlg m β x_sp w)
+            (TubeDomain (osBox (Real.pi / 2))) := by
+          intro w hw
+          refine DifferentiableWithinAt.fun_sum fun β _ => ?_
+          exact (differentiableWithinAt_const _).mul
+            (osDampedMultiTimeH_holo hOS hcluster hlg m β x_sp w hw)
+        have h_eq := osBox_eqOn_of_real_eq (by positivity : (0 : ℝ) < Real.pi / 2)
+          (osDampedMultiTimeH_holo hOS hcluster hlg m α (fun i => euclidSpatialRot U (x_sp i)))
+          h_rhs_holo
+          (fun x => ?_) (fun k => complex_log_im_abs_lt_pi_div_two (hτ k))
+        · rw [h_eq, Finset.mul_sum]
+          refine Finset.sum_congr rfl fun β _ => ?_; ring
+        · rw [osDampedMultiTimeH_real]
+          have h_pts : osBuildPoints m (fun i => euclidSpatialRot U (x_sp i))
+              (fun j => Real.exp (x j)) 0 =
+              fun i => euclidRotApply U (su2Conj U)
+                (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0 i) := by
+            ext i μ
+            have h_decomp : ∀ (v : Fin 4 → ℝ),
+                v = euclidTimeVec (v 0) + euclidSpatialVec (spatialPart v) := by
+              intro v; ext ν; refine Fin.cases ?_ (fun j => ?_) ν
+              · simp [euclidTimeVec, euclidSpatialVec]
+              · simp [euclidTimeVec, euclidSpatialVec, spatialPart]
+            have h_rot_vec : euclidRotApply U (su2Conj U)
+                (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0 i) =
+                euclidTimeVec (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0 i 0) +
+                euclidSpatialVec (euclidSpatialRot U (x_sp i)) := by
+              conv_lhs => rw [h_decomp (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0 i)]
+              rw [euclidRotApply_add, euclidRotApply_su2Conj_euclidTimeVec]
+              have hsp : spatialPart (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0 i) =
+                  x_sp i := by
+                ext j; simp [spatialPart, osBuildPoints]
+              rw [hsp, euclidRotApply_su2Conj_euclidSpatialVec]
+            rw [h_rot_vec]
+            refine Fin.cases ?_ (fun ν => ?_) μ
+            · simp [osBuildPoints_zero_coord, euclidTimeVec, euclidSpatialVec]
+            · simp [osBuildPoints, euclidTimeVec, euclidSpatialVec]
+          rw [h_pts]
+          have h_rotN_eq : euclidRotN (m + 1) U (su2Conj U)
+              (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0) =
+              fun i => euclidRotApply U (su2Conj U)
+                (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0 i) := by
+            ext i μ; simp only [euclidRotN, euclidRotOfSU2_mulVec]
+          have h_rot := hOS.os1_rotation (m + 1) U (su2Conj U) _
+            (osBuildPoints_mem_orderedEuclidN m x_sp (fun j => Real.exp_pos (x j)) 0)
+            (by
+              rw [h_rotN_eq, ← h_pts]
+              exact osBuildPoints_mem_orderedEuclidN m _ (fun j => Real.exp_pos (x j)) 0) α
+          have h_rot' : 𝒮 (m + 1) α
+              (fun i => euclidRotApply U (su2Conj U)
+                (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0 i)) =
+              ∑ β : Fin (m + 1) → ι,
+                (∏ i : Fin (m + 1), osSpinorRotMatrix Rrep U (α i) (β i)) *
+                  𝒮 (m + 1) β (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0) := by
+            rw [← h_rotN_eq]
+            simpa only [osSpinorRotMatrix] using h_rot
+          rw [h_rot', Finset.mul_sum]
+          refine Finset.sum_congr rfl fun β _ => ?_
+          rw [osDampedMultiTimeH_real]; ring
+      · symm
+        exact Finset.sum_eq_zero fun _ _ => mul_zero _
+
+theorem exists_osMultiTimeH_of_linearGrowth_growth_bound
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    ∀ (n : ℕ), ∃ (C_n : ℝ) (M_n : ℕ), 0 ≤ C_n ∧
+      ∀ (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ) (τ : Fin (n - 1) → ℂ),
+        (∀ k : Fin (n - 1), 0 < (τ k).re) →
+        ‖osMultiTimeH_of_linearGrowth hOS hcluster hlg n α x_sp τ‖ ≤
+          C_n * ∏ k : Fin (n - 1), (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ M_n
+  | 0 => by
+      refine ⟨‖𝒮 0 Fin.elim0 0‖, 0, norm_nonneg _, fun α x_sp τ _ => ?_⟩
+      dsimp [osMultiTimeH_of_linearGrowth]
+      have hα : α = Fin.elim0 := Subsingleton.elim _ _
+      have h_prod : (∏ k : Fin 0, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ 0) = 1 :=
+        Finset.prod_eq_one fun k _ => Fin.elim0 k
+      rw [hα, h_prod, mul_one]
+  | m + 1 => by
+      let M := osLinearGrowthM hOS hcluster hlg
+      obtain ⟨C_m, A_m, E_m, D_m, hCm, hAm, hEm, h_stage⟩ :=
+        osDampedMultiTimeH_stage_bound hOS hcluster hlg m
+      obtain ⟨K_m, hKm, h_def⟩ := exists_osThetaSeq_defect_geom m
+      let B_base : ℝ := (2 : ℝ) ^ D_m * E_m ^ (m + 1)
+      have hB_ge1 : 1 ≤ B_base :=
+        one_le_mul_of_one_le_of_one_le (one_le_pow₀ (by norm_num)) (one_le_pow₀ hEm)
+      have hlog43_pos : 0 < Real.log (4 / 3 : ℝ) := Real.log_pos (by norm_num)
+      let Q : ℕ := Nat.ceil (Real.log B_base / Real.log (4 / 3 : ℝ))
+      have hB_le_pow : B_base ≤ (4 / 3 : ℝ) ^ Q := by
+        have h1 : Real.log B_base ≤ Real.log (4 / 3 : ℝ) * (Q : ℝ) := by
+          have hc :=
+            (div_le_iff₀ hlog43_pos).mp (Nat.le_ceil (Real.log B_base / Real.log (4 / 3 : ℝ)))
+          linarith
+        have h2 := Real.exp_le_exp.mpr h1
+        rw [Real.exp_log (by linarith), ← Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 4 / 3),
+          Real.rpow_natCast] at h2
+        exact h2
+      let C_n : ℝ := C_m * A_m ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M) *
+        ((8 / 3 : ℝ) * K_m) ^ Q
+      let M_n : ℕ := 3 * M + 2 * Q
+      refine ⟨C_n, M_n, by dsimp [C_n]; positivity, fun α x_sp τ hτ => ?_⟩
+      have hτ' : ∀ k : Fin m, 0 < (τ k).re := hτ
+      change ‖if _hτ : ∀ k : Fin m, 0 < (τ k).re then _ else 0‖ ≤ _
+      rw [dif_pos hτ', norm_mul]
+      let P_τ : ℝ := ∏ k : Fin m, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ 2
+      have h_one_le_prod : ∀ s : Finset (Fin m), 1 ≤ ∏ k ∈ s, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ 2 := by
+        intro s
+        induction s using Finset.cons_induction with
+        | empty => simp
+        | cons a s' ha ih =>
+          rw [Finset.prod_cons]
+          have ha1 : 1 ≤ (1 + ((τ a).re)⁻¹ + ‖τ a‖) ^ 2 :=
+            one_le_pow₀ (by have := hτ' a; linarith [inv_pos.mpr this, norm_nonneg (τ a)])
+          exact one_le_mul_of_one_le_of_one_le ha1 ih
+      have hP_ge1 : 1 ≤ P_τ := h_one_le_prod Finset.univ
+      have h_margin : ∀ k : Fin m, P_τ⁻¹ ≤ Real.pi / 2 - |(Complex.log (τ k)).im| := by
+        intro k
+        have hk := hτ' k
+        have hne : τ k ≠ 0 := fun h => by rw [h] at hk; simp at hk
+        have h_cos_eq : Real.cos (Complex.log (τ k)).im = (τ k).re / ‖τ k‖ := by
+          have hexp : (Complex.exp (Complex.log (τ k))).re = (τ k).re := by
+            rw [Complex.exp_log hne]
+          rw [Complex.exp_re, Complex.log_re, Real.exp_log (norm_pos_iff.mpr hne)] at hexp
+          exact (eq_div_iff (norm_pos_iff.mpr hne).ne').mpr (by linarith)
+        have h_cos_le : Real.cos (Complex.log (τ k)).im ≤
+          Real.pi / 2 - |(Complex.log (τ k)).im| := by
+          have h1 : Real.cos (Complex.log (τ k)).im =
+              Real.sin (Real.pi / 2 - |(Complex.log (τ k)).im|) := by
+            rw [Real.sin_pi_div_two_sub, Real.cos_abs]
+          rw [h1]
+          have hnn : 0 ≤ Real.pi / 2 - |(Complex.log (τ k)).im| :=
+            (sub_pos.mpr (complex_log_im_abs_lt_pi_div_two hk)).le
+          exact Real.sin_le hnn
+        have h_term_le : (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ 2 ≤ P_τ := by
+          dsimp [P_τ]
+          rw [← Finset.mul_prod_erase Finset.univ _ (Finset.mem_univ k)]
+          exact le_mul_of_one_le_right (sq_nonneg _) (h_one_le_prod (Finset.univ.erase k))
+        have h_norm_div : ‖τ k‖ / (τ k).re ≤ (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ 2 := by
+          have hA : ‖τ k‖ ≤ 1 + ((τ k).re)⁻¹ + ‖τ k‖ := by linarith [inv_pos.mpr hk]
+          have hB : ((τ k).re)⁻¹ ≤ 1 + ((τ k).re)⁻¹ + ‖τ k‖ := by linarith [norm_nonneg (τ k)]
+          calc ‖τ k‖ / (τ k).re = ‖τ k‖ * ((τ k).re)⁻¹ := div_eq_mul_inv _ _
+            _ ≤ (1 + ((τ k).re)⁻¹ + ‖τ k‖) * (1 + ((τ k).re)⁻¹ + ‖τ k‖) :=
+                mul_le_mul hA hB (by positivity) (by positivity)
+            _ = (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ 2 := (sq _).symm
+        have h_inv_le : P_τ⁻¹ ≤ (τ k).re / ‖τ k‖ := by
+          have hnorm_pos : 0 < ‖τ k‖ := norm_pos_iff.mpr hne
+          have h1 : P_τ⁻¹ ≤ (‖τ k‖ / (τ k).re)⁻¹ :=
+            inv_anti₀ (div_pos hnorm_pos hk) (h_norm_div.trans h_term_le)
+          rwa [inv_div] at h1
+        exact h_inv_le.trans (h_cos_eq ▸ h_cos_le)
+      let p₀ : ℕ := Nat.ceil (Real.log (2 * K_m * P_τ) / Real.log (4 / 3 : ℝ))
+      have h_pow_ge : 2 * K_m * P_τ ≤ (4 / 3 : ℝ) ^ p₀ := by
+        have h1 : Real.log (2 * K_m * P_τ) ≤ Real.log (4 / 3 : ℝ) * (p₀ : ℝ) := by
+          have hc :=
+            (div_le_iff₀ hlog43_pos).mp (Nat.le_ceil (Real.log (2 * K_m *
+              P_τ) / Real.log (4 / 3 : ℝ)))
+          linarith
+        have h2 := Real.exp_le_exp.mpr h1
+        rw [Real.exp_log (by positivity), ← Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 4 / 3),
+          Real.rpow_natCast] at h2
+        exact h2
+      have h_pow_le : (4 / 3 : ℝ) ^ p₀ ≤ (8 / 3 : ℝ) * K_m * P_τ := by
+        have h_arg_nn : 0 ≤ Real.log (2 * K_m * P_τ) / Real.log (4 / 3 : ℝ) := by
+          refine div_nonneg (Real.log_nonneg ?_) hlog43_pos.le
+          have hKP : 1 ≤ K_m * P_τ := one_le_mul_of_one_le_of_one_le hKm hP_ge1
+          linarith
+        have h_ceil_lt : (p₀ : ℝ) < Real.log (2 * K_m * P_τ) / Real.log (4 / 3 : ℝ) + 1 :=
+          Nat.ceil_lt_add_one h_arg_nn
+        have h1 : Real.log (4 / 3 : ℝ) * (p₀ : ℝ) ≤
+            Real.log (2 * K_m * P_τ) + Real.log (4 / 3 : ℝ) := by
+          have hm := (mul_lt_mul_of_pos_right h_ceil_lt hlog43_pos).le
+          rw [add_mul, div_mul_cancel₀ _ hlog43_pos.ne', one_mul] at hm
+          linarith
+        have h2 := Real.exp_le_exp.mpr h1
+        rw [← Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 4 / 3), Real.rpow_natCast,
+          Real.exp_add, Real.exp_log (by positivity), Real.exp_log (by norm_num)] at h2
+        linarith
+      have h_in_box : (fun k => Complex.log (τ k)) ∈ TubeDomain (osBox (osThetaSeq m p₀)) := by
+        intro k
+        have h1 : K_m * (3 / 4 : ℝ) ^ p₀ ≤ (2 * P_τ)⁻¹ := by
+          have hinv : (3 / 4 : ℝ) ^ p₀ = ((4 / 3 : ℝ) ^ p₀)⁻¹ := by
+            rw [← inv_pow]; norm_num
+          rw [hinv]
+          have h2 : ((4 / 3 : ℝ) ^ p₀)⁻¹ ≤ (2 * K_m * P_τ)⁻¹ :=
+            inv_anti₀ (by positivity) h_pow_ge
+          calc K_m * ((4 / 3 : ℝ) ^ p₀)⁻¹
+              ≤ K_m * (2 * K_m * P_τ)⁻¹ := mul_le_mul_of_nonneg_left h2 (by linarith)
+            _ = (2 * P_τ)⁻¹ := by
+                have hK_ne : K_m ≠ 0 := by linarith
+                have hP_ne : P_τ ≠ 0 := by linarith
+                field_simp [hK_ne, hP_ne]
+        have h2 : (2 * P_τ)⁻¹ < P_τ⁻¹ :=
+          inv_strictAnti₀ (by positivity) (by linarith)
+        have h3 := h_def p₀
+        have h4 := h_margin k
+        linarith
+      have h_Fd_bd := h_stage p₀ α x_sp (fun k => Complex.log (τ k)) h_in_box
+      have h_B_pow : (2 : ℝ) ^ (D_m * p₀) * (E_m ^ p₀) ^ (m + 1) ≤
+          ((8 / 3 : ℝ) * K_m) ^ Q * P_τ ^ Q := by
+        have h_eq : (2 : ℝ) ^ (D_m * p₀) * (E_m ^ p₀) ^ (m + 1) = B_base ^ p₀ := by
+          dsimp [B_base]; rw [mul_pow, pow_mul, ← pow_mul E_m, mul_comm p₀ (m + 1), pow_mul]
+        rw [h_eq]
+        calc B_base ^ p₀
+            ≤ ((4 / 3 : ℝ) ^ Q) ^ p₀ := pow_le_pow_left₀ (by linarith) hB_le_pow p₀
+          _ = ((4 / 3 : ℝ) ^ p₀) ^ Q := by rw [← pow_mul, ← pow_mul, mul_comm Q p₀]
+          _ ≤ ((8 / 3 : ℝ) * K_m * P_τ) ^ Q := pow_le_pow_left₀ (by positivity) h_pow_le Q
+          _ = ((8 / 3 : ℝ) * K_m) ^ Q * P_τ ^ Q := mul_pow _ _ Q
+      have h_damp_inv : ‖(∏ k : Fin m, logTimeDamp (Complex.log (τ k)) ^ M)⁻¹‖ ≤
+          ∏ k : Fin m, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ (3 * M) := by
+        rw [norm_inv, norm_prod, ← Finset.prod_inv_distrib]
+        refine Finset.prod_le_prod (fun k _ => by positivity) fun k _ => ?_
+        rw [norm_pow, ← inv_pow, ← norm_inv]
+        have h1 := pow_le_pow_left₀ (norm_nonneg _) (norm_inv_logTimeDamp_log_le (hτ k)) M
+        rwa [← pow_mul] at h1
+      have h_Fd_le : ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))‖ ≤
+          C_n * P_τ ^ Q := by
+        calc ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))‖
+            ≤ C_m * (2 : ℝ) ^ (D_m * p₀) * (A_m * E_m ^ p₀) ^ (m + 1) *
+                (((m + 1).factorial : ℝ) ^ M) := h_Fd_bd
+          _ = (C_m * A_m ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M)) *
+                ((2 : ℝ) ^ (D_m * p₀) * (E_m ^ p₀) ^ (m + 1)) := by rw [mul_pow]; ring
+          _ ≤ (C_m * A_m ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M)) *
+                (((8 / 3 : ℝ) * K_m) ^ Q * P_τ ^ Q) :=
+              mul_le_mul_of_nonneg_left h_B_pow (by positivity)
+          _ = C_n * P_τ ^ Q := by dsimp [C_n]; ring
+      have h_prod_combine : (∏ k : Fin m, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ (3 * M)) * P_τ ^ Q =
+          ∏ k : Fin m, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ M_n := by
+        dsimp [P_τ, M_n]
+        rw [← Finset.prod_pow, ← Finset.prod_mul_distrib]
+        refine Finset.prod_congr rfl fun k _ => ?_
+        rw [← pow_mul, ← pow_add]
+      calc ‖(∏ k : Fin m, logTimeDamp (Complex.log (τ k)) ^ M)⁻¹‖ *
+            ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))‖
+          ≤ (∏ k : Fin m, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ (3 * M)) * (C_n * P_τ ^ Q) :=
+            mul_le_mul h_damp_inv h_Fd_le (norm_nonneg _) (by
+              exact Finset.prod_nonneg fun k _ => pow_nonneg (by
+                have hk := hτ k; linarith [inv_pos.mpr hk, norm_nonneg (τ k)]) _)
+        _ = C_n * ((∏ k : Fin m, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ (3 * M)) * P_τ ^ Q) := by ring
+        _ = C_n * ∏ k : Fin m, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ M_n := by rw [h_prod_combine]
+
+lemma cauchy_iteratedDeriv_norm_le {c : ℂ} {r M : ℝ} (hr : 0 < r) (_hM : 0 ≤ M)
+    {f : ℂ → ℂ} (hf : DiffContOnCl ℂ f (Metric.ball c r))
+    (hbdd : ∀ z ∈ Metric.closedBall c r, ‖f z‖ ≤ M) (k : ℕ) :
+    ‖iteratedDeriv k f c‖ ≤ M * (k.factorial : ℝ) / r ^ k := by
+  let r_nn : NNReal := ⟨r, hr.le⟩
+  have hP := hf.hasFPowerSeriesOnBall (by exact_mod_cast hr : (0 : NNReal) < r_nn)
+  have h_coeff : (cauchyPowerSeries f c r k) (fun _ => 1) =
+      ((k.factorial : ℂ)⁻¹) * iteratedDeriv k f c := by
+    have h_fact := hP.factorial_smul (1 : ℂ) k
+    rw [iteratedFDeriv_apply_eq_iteratedDeriv_mul_prod, Finset.prod_const_one, one_smul,
+      ← Nat.cast_smul_eq_nsmul ℂ, smul_eq_mul] at h_fact
+    have hfac : (k.factorial : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr (Nat.factorial_ne_zero k)
+    change (cauchyPowerSeries f c (r_nn : ℝ) k) (fun _ => 1) = _
+    rw [← h_fact, inv_mul_cancel_left₀ hfac]
+  have h_norm_c : ‖(cauchyPowerSeries f c r k) (fun _ => 1)‖ ≤ M / r ^ k := by
+    rw [cauchyPowerSeries_apply]
+    simp only [one_div]
+    have h_int : ‖∮ z in C(c, r), ((z - c) ^ (k + 1))⁻¹ * f z‖ ≤
+        2 * Real.pi * r * (M / r ^ (k + 1)) := by
+      refine circleIntegral.norm_integral_le_of_norm_le_const hr.le fun z hz => ?_
+      have hdist : ‖z - c‖ = r := by simpa [Metric.mem_sphere, dist_eq_norm] using hz
+      have hmem : z ∈ Metric.closedBall c r := by
+        rw [Metric.mem_closedBall, dist_eq_norm, hdist]
+      rw [norm_mul, norm_inv, norm_pow, hdist, div_eq_inv_mul]
+      exact mul_le_mul_of_nonneg_left (hbdd z hmem) (by positivity)
+    have h_smul : ‖(2 * ↑Real.pi * Complex.I : ℂ)⁻¹‖ = (2 * Real.pi)⁻¹ := by
+      rw [norm_inv, norm_mul, norm_mul, Complex.norm_I, mul_one, Complex.norm_real,
+        Real.norm_eq_abs, abs_of_pos Real.pi_pos, norm_ofNat]
+    have h_eq : ((2 * ↑Real.pi * Complex.I : ℂ)⁻¹ •
+        ∮ z in C(c, r), (z - c)⁻¹ ^ k • (z - c)⁻¹ • f z) =
+        (2 * ↑Real.pi * Complex.I : ℂ)⁻¹ *
+          ∮ z in C(c, r), ((z - c) ^ (k + 1))⁻¹ * f z := by
+      simp only [smul_eq_mul, ← mul_assoc]
+      congr 1
+      refine circleIntegral.integral_congr hr.le fun z _ => ?_
+      rw [pow_succ, mul_inv, inv_pow]
+    rw [h_eq, norm_mul, h_smul]
+    calc (2 * Real.pi)⁻¹ * ‖∮ z in C(c, r), ((z - c) ^ (k + 1))⁻¹ * f z‖
+        ≤ (2 * Real.pi)⁻¹ * (2 * Real.pi * r * (M / r ^ (k + 1))) :=
+          mul_le_mul_of_nonneg_left h_int (by positivity)
+      _ = M / r ^ k := by
+          rw [pow_succ]; field_simp [Real.pi_pos.ne', hr.ne']
+  rw [h_coeff, norm_mul, norm_inv, Complex.norm_natCast] at h_norm_c
+  have hfac_pos : (0 : ℝ) < (k.factorial : ℝ) := Nat.cast_pos.mpr (Nat.factorial_pos k)
+  calc ‖iteratedDeriv k f c‖
+      = (k.factorial : ℝ) * ((k.factorial : ℝ)⁻¹ * ‖iteratedDeriv k f c‖) := by
+        field_simp [hfac_pos.ne']
+    _ ≤ (k.factorial : ℝ) * (M / r ^ k) := mul_le_mul_of_nonneg_left h_norm_c hfac_pos.le
+    _ = M * (k.factorial : ℝ) / r ^ k := by ring
+
+lemma uniform_ball_tendsto_zero_of_real_tendsto_zero
+    {α : Type*} {S : Set α} {x₀ : ℝ} {θ M : ℝ} (hθ : 0 < θ) (hM : 0 ≤ M)
+    {g : ℕ → α → ℂ → ℂ}
+    (h_holo : ∀ n, ∀ a ∈ S, DifferentiableOn ℂ (g n a) (Metric.ball (x₀ : ℂ) θ))
+    (h_bdd : ∀ n, ∀ a ∈ S, ∀ z ∈ Metric.ball (x₀ : ℂ) θ, ‖g n a z‖ ≤ M)
+    (h_real : ∀ ε > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ a ∈ S, ∀ x ∈ Set.Icc (x₀ - θ / 4) (x₀ + θ / 4),
+      ‖g n a (x : ℂ)‖ ≤ ε) :
+    ∀ z ∈ Metric.ball (x₀ : ℂ) θ,
+      ∀ ε > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ a ∈ S, ‖g n a z‖ ≤ ε := by
+  have h_deriv_bd : ∀ k : ℕ, ∀ n, ∀ a ∈ S, ∀ x ∈ Set.Icc (x₀ - θ / 4) (x₀ + θ / 4),
+      ‖iteratedDeriv k (g n a) (x : ℂ)‖ ≤ M * (k.factorial : ℝ) / (θ / 4) ^ k := by
+    intro k n a ha x hx
+    have hsub : Metric.closedBall (x : ℂ) (θ / 4) ⊆ Metric.ball (x₀ : ℂ) θ := by
+      intro w hw
+      rw [Metric.mem_ball, dist_eq_norm]
+      have h1 : ‖w - (x : ℂ)‖ ≤ θ / 4 := by simpa [Metric.mem_closedBall, dist_eq_norm] using hw
+      have h2 : ‖(x : ℂ) - (x₀ : ℂ)‖ ≤ θ / 4 := by
+        rw [← Complex.ofReal_sub, Complex.norm_real, Real.norm_eq_abs, abs_le]
+        exact ⟨by linarith [hx.1], by linarith [hx.2]⟩
+      calc ‖w - (x₀ : ℂ)‖ = ‖(w - (x : ℂ)) + ((x : ℂ) - (x₀ : ℂ))‖ := by ring_nf
+        _ ≤ ‖w - (x : ℂ)‖ + ‖(x : ℂ) - (x₀ : ℂ)‖ := norm_add_le _ _
+        _ < θ := by linarith
+    refine cauchy_iteratedDeriv_norm_le (by positivity) hM
+      ⟨(h_holo n a ha).mono (Metric.ball_subset_closedBall.trans hsub),
+        (h_holo n a ha).continuousOn.mono (Metric.closure_ball_subset_closedBall.trans hsub)⟩
+      (fun z hz => h_bdd n a ha z (hsub hz)) k
+  have h_diff_iter : ∀ (n : ℕ) (a : α), a ∈ S → ∀ j : ℕ,
+      DifferentiableOn ℂ (iteratedDeriv j (g n a)) (Metric.ball (x₀ : ℂ) θ) := by
+    intro n a ha j
+    induction j with
+    | zero => simpa [iteratedDeriv_zero] using h_holo n a ha
+    | succ j ihj => rw [iteratedDeriv_succ]; exact ihj.deriv Metric.isOpen_ball
+  have h_ind : ∀ k : ℕ, ∀ ε > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ a ∈ S,
+      ∀ x ∈ Set.Icc (x₀ - (θ / 4) * (2⁻¹ : ℝ) ^ k) (x₀ + (θ / 4) * (2⁻¹ : ℝ) ^ k),
+        ‖iteratedDeriv k (g n a) (x : ℂ)‖ ≤ ε := by
+    intro k
+    induction k with
+    | zero =>
+      intro ε hε
+      obtain ⟨N, hN⟩ := h_real ε hε
+      exact ⟨N, fun n hn a ha x hx => by simpa [iteratedDeriv_zero] using hN n hn a ha x (by
+        simpa using hx)⟩
+    | succ k ih =>
+      intro ε hε
+      let rk : ℝ := (θ / 4) * (2⁻¹ : ℝ) ^ k
+      have hrk_pos : 0 < rk := by dsimp [rk]; positivity
+      have hrk_le : rk ≤ θ / 4 := by
+        dsimp [rk]
+        exact mul_le_of_le_one_right (by positivity) (pow_le_one₀ (by positivity) (by norm_num))
+      let B : ℝ := M * ((k + 2).factorial : ℝ) / (θ / 4) ^ (k + 2) + 1
+      have hB_pos : 0 < B := by dsimp [B]; positivity
+      let h : ℝ := min (rk / 2) (ε / (2 * B))
+      have hh_pos : 0 < h := lt_min (half_pos hrk_pos) (by positivity)
+      have hh_le_rk : h ≤ rk / 2 := min_le_left _ _
+      have hh_le_eps : h ≤ ε / (2 * B) := min_le_right _ _
+      obtain ⟨N, hN⟩ := ih (ε * h / 4) (by positivity)
+      refine ⟨N, fun n hn a ha x hx => ?_⟩
+      have hrk1 : (θ / 4) * (2⁻¹ : ℝ) ^ (k + 1) = rk / 2 := by
+        dsimp [rk]; rw [pow_succ]; ring
+      rw [hrk1] at hx
+      have hx_in : x ∈ Set.Icc (x₀ - rk) (x₀ + rk) :=
+        ⟨by linarith [hx.1], by linarith [hx.2]⟩
+      have hxh_in : x + h ∈ Set.Icc (x₀ - rk) (x₀ + rk) :=
+        ⟨by linarith [hx.1], by linarith [hx.2]⟩
+      let φ : ℝ → ℂ := fun s =>
+        iteratedDeriv k (g n a) (s : ℂ) -
+          iteratedDeriv (k + 1) (g n a) (x : ℂ) * ((s - x : ℝ) : ℂ)
+      have h_mvt : ‖φ (x + h) - φ x‖ ≤ (B * h) * ‖(x + h) - x‖ := by
+        refine (convex_Icc x (x + h)).norm_image_sub_le_of_norm_deriv_le ?_ ?_
+          (Set.left_mem_Icc.mpr (by linarith)) (Set.right_mem_Icc.mpr (by linarith))
+        · intro s hs
+          have hs_ball : (s : ℂ) ∈ Metric.ball (x₀ : ℂ) θ := by
+            rw [Metric.mem_ball, dist_eq_norm, ← Complex.ofReal_sub, Complex.norm_real,
+              Real.norm_eq_abs, abs_lt]
+            exact ⟨by linarith [hs.1, hx.1], by linarith [hs.2, hx.2]⟩
+          have h_diff_k : DifferentiableAt ℂ (iteratedDeriv k (g n a)) (s : ℂ) :=
+            (h_diff_iter n a ha k (s : ℂ) hs_ball).differentiableAt
+              (Metric.isOpen_ball.mem_nhds hs_ball)
+          have h1 : DifferentiableAt ℝ (fun t : ℝ => iteratedDeriv k (g n a) (t : ℂ)) s :=
+            (h_diff_k.restrictScalars ℝ).comp s Complex.ofRealCLM.differentiableAt
+          have h2 : DifferentiableAt ℝ
+              (fun t : ℝ => iteratedDeriv (k + 1) (g n a) (x : ℂ) * ((t - x : ℝ) : ℂ)) s :=
+            (differentiableAt_const _).mul
+              (Complex.ofRealCLM.differentiableAt.comp s
+                (differentiableAt_id.sub (differentiableAt_const x)))
+          exact h1.sub h2
+        · intro s hs
+          have hs_in : s ∈ Set.Icc (x₀ - θ / 4) (x₀ + θ / 4) :=
+            ⟨by linarith [hs.1, hx.1], by linarith [hs.2, hx.2]⟩
+          have hs_ball : (s : ℂ) ∈ Metric.ball (x₀ : ℂ) θ := by
+            rw [Metric.mem_ball, dist_eq_norm, ← Complex.ofReal_sub, Complex.norm_real,
+              Real.norm_eq_abs, abs_lt]
+            exact ⟨by linarith [hs_in.1], by linarith [hs_in.2]⟩
+          have h_diff_k : DifferentiableAt ℂ (iteratedDeriv k (g n a)) (s : ℂ) :=
+            (h_diff_iter n a ha k (s : ℂ) hs_ball).differentiableAt
+              (Metric.isOpen_ball.mem_nhds hs_ball)
+          have h_d1 : HasDerivAt (fun t : ℝ => iteratedDeriv k (g n a) (t : ℂ))
+              (iteratedDeriv (k + 1) (g n a) (s : ℂ)) s := by
+            rw [iteratedDeriv_succ]
+            simpa using h_diff_k.hasDerivAt.comp_ofReal
+          have h_d2 : HasDerivAt
+              (fun t : ℝ => iteratedDeriv (k + 1) (g n a) (x : ℂ) * ((t - x : ℝ) : ℂ))
+              (iteratedDeriv (k + 1) (g n a) (x : ℂ)) s := by
+            have hd := ((hasDerivAt_id s).sub_const x).ofReal_comp
+            simpa using hd.const_mul (iteratedDeriv (k + 1) (g n a) (x : ℂ))
+          have h_sub_hd : HasDerivAt φ
+              (iteratedDeriv (k + 1) (g n a) (s : ℂ) - iteratedDeriv (k + 1) (g n a) (x : ℂ)) s :=
+            h_d1.sub h_d2
+          rw [h_sub_hd.deriv]
+          have h_mvt2 : ‖iteratedDeriv (k + 1) (g n a) (s : ℂ) -
+              iteratedDeriv (k + 1) (g n a) (x : ℂ)‖ ≤ B * ‖s - x‖ := by
+            refine (convex_Icc x s).norm_image_sub_le_of_norm_deriv_le
+              (f := fun t : ℝ => iteratedDeriv (k + 1) (g n a) (t : ℂ)) ?_ ?_
+              (Set.left_mem_Icc.mpr hs.1) (Set.right_mem_Icc.mpr hs.1)
+            · intro t ht
+              have ht_ball : (t : ℂ) ∈ Metric.ball (x₀ : ℂ) θ := by
+                rw [Metric.mem_ball, dist_eq_norm, ← Complex.ofReal_sub, Complex.norm_real,
+                  Real.norm_eq_abs, abs_lt]
+                exact ⟨by linarith [ht.1, hx.1], by linarith [ht.2, hs.2, hx.2]⟩
+              have hd_t : DifferentiableAt ℂ (iteratedDeriv (k + 1) (g n a)) (t : ℂ) :=
+                (h_diff_iter n a ha (k + 1) (t : ℂ) ht_ball).differentiableAt
+                  (Metric.isOpen_ball.mem_nhds ht_ball)
+              exact (hd_t.restrictScalars ℝ).comp t Complex.ofRealCLM.differentiableAt
+            · intro t ht
+              have ht_in : t ∈ Set.Icc (x₀ - θ / 4) (x₀ + θ / 4) :=
+                ⟨by linarith [ht.1, hx.1], by linarith [ht.2, hs.2, hx.2]⟩
+              have ht_ball : (t : ℂ) ∈ Metric.ball (x₀ : ℂ) θ := by
+                rw [Metric.mem_ball, dist_eq_norm, ← Complex.ofReal_sub, Complex.norm_real,
+                  Real.norm_eq_abs, abs_lt]
+                exact ⟨by linarith [ht_in.1], by linarith [ht_in.2]⟩
+              have hd_t : DifferentiableAt ℂ (iteratedDeriv (k + 1) (g n a)) (t : ℂ) :=
+                (h_diff_iter n a ha (k + 1) (t : ℂ) ht_ball).differentiableAt
+                  (Metric.isOpen_ball.mem_nhds ht_ball)
+              have h_hd : HasDerivAt (fun u : ℝ => iteratedDeriv (k + 1) (g n a) (u : ℂ))
+                  (iteratedDeriv (k + 2) (g n a) (t : ℂ)) t := by
+                simpa only [← iteratedDeriv_succ] using hd_t.hasDerivAt.comp_ofReal
+              rw [h_hd.deriv]
+              have hbd := h_deriv_bd (k + 2) n a ha t ht_in
+              dsimp [B]; linarith
+          have hsx : ‖s - x‖ ≤ h := by
+            rw [Real.norm_eq_abs, abs_of_nonneg (by linarith [hs.1])]; linarith [hs.2]
+          exact h_mvt2.trans (mul_le_mul_of_nonneg_left hsx hB_pos.le)
+      have h_sub_eq : φ (x + h) - φ x =
+          (iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ) - iteratedDeriv k (g n a) (x : ℂ)) -
+            iteratedDeriv (k + 1) (g n a) (x : ℂ) * (h : ℂ) := by
+        dsimp [φ]; simp; ring
+      rw [h_sub_eq, add_sub_cancel_left, Real.norm_eq_abs, abs_of_pos hh_pos] at h_mvt
+      have h_tri : ‖iteratedDeriv (k + 1) (g n a) (x : ℂ) * (h : ℂ)‖ ≤
+          ‖iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ)‖ +
+            ‖iteratedDeriv k (g n a) (x : ℂ)‖ + B * h * h := by
+        have h1 : iteratedDeriv (k + 1) (g n a) (x : ℂ) * (h : ℂ) =
+            (iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ) - iteratedDeriv k (g n a) (x : ℂ)) -
+              ((iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ) - iteratedDeriv k (g n a) (x : ℂ)) -
+                iteratedDeriv (k + 1) (g n a) (x : ℂ) * (h : ℂ)) := by ring
+        calc ‖iteratedDeriv (k + 1) (g n a) (x : ℂ) * (h : ℂ)‖
+            = ‖(iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ) - iteratedDeriv k (g n a) (x : ℂ)) -
+                ((iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ) - iteratedDeriv k (g n a) (x : ℂ)) -
+                  iteratedDeriv (k + 1) (g n a) (x : ℂ) * (h : ℂ))‖ := congrArg norm h1
+          _ ≤ ‖iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ) - iteratedDeriv k (g n a) (x : ℂ)‖ +
+                ‖(iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ) - iteratedDeriv k (g n a) (x : ℂ)) -
+                  iteratedDeriv (k + 1) (g n a) (x : ℂ) * (h : ℂ)‖ := norm_sub_le _ _
+          _ ≤ (‖iteratedDeriv k (g n a) ((x + h : ℝ) : ℂ)‖ +
+                ‖iteratedDeriv k (g n a) (x : ℂ)‖) + B * h * h :=
+              add_le_add (norm_sub_le _ _) h_mvt
+      rw [norm_mul, Complex.norm_real, Real.norm_eq_abs, abs_of_pos hh_pos] at h_tri
+      have h_k1 := hN n hn a ha (x + h) hxh_in
+      have h_k2 := hN n hn a ha x hx_in
+      have hBh : B * h ≤ ε / 2 := by
+        have := (le_div_iff₀ (by positivity : (0 : ℝ) < 2 * B)).mp hh_le_eps
+        linarith
+      have h_mul : ‖iteratedDeriv (k + 1) (g n a) (x : ℂ)‖ * h ≤ ε * h := by nlinarith
+      exact le_of_mul_le_mul_right h_mul hh_pos
+  intro z hz ε hε
+  have hz_lt : ‖z - (x₀ : ℂ)‖ < θ := by simpa [Metric.mem_ball, dist_eq_norm] using hz
+  let r : ℝ := (‖z - (x₀ : ℂ)‖ + θ) / 2
+  have hr_gt : ‖z - (x₀ : ℂ)‖ < r := by dsimp [r]; linarith
+  have hr_lt : r < θ := by dsimp [r]; linarith
+  have hr_pos : 0 < r := lt_of_le_of_lt (norm_nonneg _) hr_gt
+  let q : ℝ := ‖z - (x₀ : ℂ)‖ / r
+  have hq_nn : 0 ≤ q := by dsimp [q]; positivity
+  have hq_lt1 : q < 1 := (div_lt_one hr_pos).mpr hr_gt
+  have hlim : Tendsto (fun K : ℕ => M * q ^ K / (1 - q)) atTop (𝓝 (M * 0 / (1 - q))) :=
+    ((tendsto_pow_atTop_nhds_zero_of_lt_one hq_nn hq_lt1).const_mul M).div_const (1 - q)
+  rw [mul_zero, zero_div] at hlim
+  rcases Filter.eventually_atTop.mp ((tendsto_order.mp hlim).2 (ε / 2) (half_pos hε)) with ⟨K, hK⟩
+  have h_tail_K : M * q ^ K / (1 - q) < ε / 2 := hK K le_rfl
+  have h_fin_N : ∀ k ∈ Finset.range K, ∃ N_k : ℕ, ∀ n ≥ N_k, ∀ a ∈ S,
+      ‖((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k‖ ≤
+        ε / (2 * ((K : ℝ) + 1)) := by
+    intro k _
+    let denom : ℝ := (k.factorial : ℝ)⁻¹ * ‖z - (x₀ : ℂ)‖ ^ k + 1
+    have hden_pos : 0 < denom := by dsimp [denom]; positivity
+    obtain ⟨N_k, hNk⟩ := h_ind k (ε / (2 * ((K : ℝ) + 1) * denom)) (by positivity)
+    refine ⟨N_k, fun n hn a ha => ?_⟩
+    have hx0_in : x₀ ∈ Set.Icc (x₀ - (θ / 4) * (2⁻¹ : ℝ) ^ k) (x₀ + (θ / 4) * (2⁻¹ : ℝ) ^ k) := by
+      have hnn : (0 : ℝ) ≤ (θ / 4) * (2⁻¹ : ℝ) ^ k := by positivity
+      exact ⟨by linarith, by linarith⟩
+    have h_bd := hNk n hn a ha x₀ hx0_in
+    rw [norm_mul, norm_mul, norm_inv, Complex.norm_natCast, norm_pow]
+    have h_le_den : (k.factorial : ℝ)⁻¹ * ‖z - (x₀ : ℂ)‖ ^ k ≤ denom := by
+      dsimp [denom]; linarith
+    calc (k.factorial : ℝ)⁻¹ * ‖iteratedDeriv k (g n a) (x₀ : ℂ)‖ * ‖z - (x₀ : ℂ)‖ ^ k
+        = ((k.factorial : ℝ)⁻¹ * ‖z - (x₀ : ℂ)‖ ^ k) * ‖iteratedDeriv k (g n a) (x₀ : ℂ)‖ := by ring
+      _ ≤ denom * (ε / (2 * ((K : ℝ) + 1) * denom)) :=
+          mul_le_mul h_le_den h_bd (norm_nonneg _) hden_pos.le
+      _ = ε / (2 * ((K : ℝ) + 1)) := by field_simp [hden_pos.ne']
+  classical
+  let N_max : ℕ := (Finset.range K).sup fun k =>
+    if hk : k ∈ Finset.range K then Classical.choose (h_fin_N k hk) else 0
+  refine ⟨N_max, fun n hn a ha => ?_⟩
+  have hsub_r : Metric.closedBall (x₀ : ℂ) r ⊆ Metric.ball (x₀ : ℂ) θ :=
+    Metric.closedBall_subset_ball hr_lt
+  have hdiff_r : DiffContOnCl ℂ (g n a) (Metric.ball (x₀ : ℂ) r) :=
+    ⟨(h_holo n a ha).mono (Metric.ball_subset_closedBall.trans hsub_r),
+      (h_holo n a ha).continuousOn.mono (Metric.closure_ball_subset_closedBall.trans hsub_r)⟩
+  let r_nn : NNReal := ⟨r, hr_pos.le⟩
+  have hP := hdiff_r.hasFPowerSeriesOnBall (by exact_mod_cast hr_pos : (0 : NNReal) < r_nn)
+  have hz_em : z - (x₀ : ℂ) ∈ Metric.eball (0 : ℂ) (r_nn : ENNReal) := by
+    rw [Metric.mem_eball, edist_zero_right, enorm_lt_coe]
+    exact hr_gt
+  have h_sum := hP.hasSum hz_em
+  have h_term : ∀ k : ℕ, (cauchyPowerSeries (g n a) (x₀ : ℂ) (r_nn : ℝ) k) (fun _ => z - (x₀ : ℂ)) =
+      ((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k := by
+    intro k
+    have h_fact := hP.factorial_smul (z - (x₀ : ℂ)) k
+    rw [iteratedFDeriv_apply_eq_iteratedDeriv_mul_prod, Finset.prod_const, Finset.card_univ,
+      Fintype.card_fin, ← Nat.cast_smul_eq_nsmul ℂ, smul_eq_mul, smul_eq_mul] at h_fact
+    have hfac : (k.factorial : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr (Nat.factorial_ne_zero k)
+    calc (cauchyPowerSeries (g n a) (x₀ : ℂ) (r_nn : ℝ) k) (fun _ => z - (x₀ : ℂ))
+        = (k.factorial : ℂ)⁻¹ * ((k.factorial : ℂ) *
+            (cauchyPowerSeries (g n a) (x₀ : ℂ) (r_nn : ℝ) k) (fun _ => z - (x₀ : ℂ))) := by
+          rw [inv_mul_cancel_left₀ hfac]
+      _ = (k.factorial : ℂ)⁻¹ * ((z - (x₀ : ℂ)) ^ k * iteratedDeriv k (g n a) (x₀ : ℂ)) := by
+          rw [h_fact]
+      _ = ((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k := by ring
+  have h_add_eq : (x₀ : ℂ) + (z - (x₀ : ℂ)) = z := add_sub_cancel _ _
+  rw [h_add_eq] at h_sum
+  have h_sum' : HasSum (fun k : ℕ =>
+      ((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k) (g n a z) := by
+    simpa only [h_term] using h_sum
+  have h_norm_term : ∀ k : ℕ,
+      ‖((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k‖ ≤
+        M * q ^ k := by
+    intro k
+    rw [norm_mul, norm_mul, norm_inv, Complex.norm_natCast, norm_pow]
+    have hcd := cauchy_iteratedDeriv_norm_le hr_pos hM hdiff_r
+      (fun w hw => h_bdd n a ha w (hsub_r hw)) k
+    have hfac_pos : (0 : ℝ) < (k.factorial : ℝ) := Nat.cast_pos.mpr (Nat.factorial_pos k)
+    have h1 : (k.factorial : ℝ)⁻¹ * ‖iteratedDeriv k (g n a) (x₀ : ℂ)‖ ≤ M / r ^ k := by
+      calc (k.factorial : ℝ)⁻¹ * ‖iteratedDeriv k (g n a) (x₀ : ℂ)‖
+          ≤ (k.factorial : ℝ)⁻¹ * (M * (k.factorial : ℝ) / r ^ k) :=
+            mul_le_mul_of_nonneg_left hcd (by positivity)
+        _ = M / r ^ k := by field_simp [hfac_pos.ne']
+    calc (k.factorial : ℝ)⁻¹ * ‖iteratedDeriv k (g n a) (x₀ : ℂ)‖ * ‖z - (x₀ : ℂ)‖ ^ k
+        ≤ (M / r ^ k) * ‖z - (x₀ : ℂ)‖ ^ k := mul_le_mul_of_nonneg_right h1 (by positivity)
+      _ = M * q ^ k := by dsimp only [q]; rw [div_mul_eq_mul_div, mul_div_assoc, ← div_pow]
+  have h_summable_geom : Summable (fun k : ℕ => M * q ^ k) :=
+    (summable_geometric_of_lt_one hq_nn hq_lt1).mul_left M
+  have h_norm_le_tsum : ‖g n a z‖ ≤
+      ∑' k : ℕ, ‖((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k‖ :=
+    h_sum'.tsum_eq ▸ norm_tsum_le_tsum_norm (h_summable_geom.of_nonneg_of_le
+      (fun _ => norm_nonneg _) h_norm_term)
+  have h_summable_n : Summable (fun k : ℕ =>
+      ‖((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k‖) :=
+    h_summable_geom.of_nonneg_of_le (fun _ => norm_nonneg _) h_norm_term
+  rw [← h_summable_n.sum_add_tsum_nat_add K] at h_norm_le_tsum
+  have h_head : ∑ k ∈ Finset.range K,
+      ‖((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k‖ ≤ ε / 2 := by
+    calc ∑ k ∈ Finset.range K,
+          ‖((k.factorial : ℂ)⁻¹ * iteratedDeriv k (g n a) (x₀ : ℂ)) * (z - (x₀ : ℂ)) ^ k‖
+        ≤ ∑ _k ∈ Finset.range K, (ε / (2 * ((K : ℝ) + 1))) := by
+          refine Finset.sum_le_sum fun k hk => ?_
+          have hle : Classical.choose (h_fin_N k hk) ≤ N_max := by
+            have hsup := Finset.le_sup (f := fun j =>
+              if hj : j ∈ Finset.range K then Classical.choose (h_fin_N j hj) else 0) hk
+            simpa [N_max, hk] using hsup
+          exact Classical.choose_spec (h_fin_N k hk) n (hle.trans hn) a ha
+      _ = (K : ℝ) * (ε / (2 * ((K : ℝ) + 1))) := by simp
+      _ ≤ ((K : ℝ) + 1) * (ε / (2 * ((K : ℝ) + 1))) :=
+          mul_le_mul_of_nonneg_right (by linarith) (by positivity)
+      _ = ε / 2 := by
+          have hK_ne : (K : ℝ) + 1 ≠ 0 := by positivity
+          field_simp [hK_ne]
+  have h_tail : ∑' k : ℕ,
+      ‖(((k + K).factorial : ℂ)⁻¹ * iteratedDeriv (k + K) (g n a) (x₀ : ℂ)) *
+        (z - (x₀ : ℂ)) ^ (k + K)‖ ≤ M * q ^ K / (1 - q) := by
+    have h_s1 : Summable (fun k : ℕ => M * q ^ (k + K)) :=
+      (summable_nat_add_iff K).mpr h_summable_geom
+    have h_le : ∑' k : ℕ,
+        ‖(((k + K).factorial : ℂ)⁻¹ * iteratedDeriv (k + K) (g n a) (x₀ : ℂ)) *
+          (z - (x₀ : ℂ)) ^ (k + K)‖ ≤ ∑' k : ℕ, M * q ^ (k + K) :=
+      ((summable_nat_add_iff K).mpr h_summable_n).tsum_le_tsum (fun k => h_norm_term (k + K)) h_s1
+    have h_eq : ∑' k : ℕ, M * q ^ (k + K) = M * q ^ K / (1 - q) := by
+      have h_rw : (fun k : ℕ => M * q ^ (k + K)) = fun k : ℕ => (M * q ^ K) * q ^ k := by
+        ext k; rw [pow_add]; ring
+      rw [h_rw, tsum_mul_left, tsum_geometric_of_lt_one hq_nn hq_lt1, div_eq_mul_inv]
+    linarith
+  linarith
+
+lemma tubeBox_tendsto_zero_of_real_tendsto_zero
+    {m : ℕ} {θ M : ℝ} (hθ : 0 < θ) (hM : 0 ≤ M)
+    {F : ℕ → (Fin m → ℂ) → ℂ}
+    (h_holo : ∀ n, DifferentiableOn ℂ (F n) (TubeDomain (osBox θ)))
+    (h_bdd : ∀ n, ∀ w ∈ TubeDomain (osBox θ), ‖F n w‖ ≤ M)
+    (h_real : ∀ R : ℝ, 0 < R → ∀ ε > 0, ∃ N : ℕ, ∀ n ≥ N,
+      ∀ x : Fin m → ℝ, (∀ i, |x i| ≤ R) → ‖F n (fun i => (x i : ℂ))‖ ≤ ε)
+    (w₀ : Fin m → ℂ) (hw₀ : w₀ ∈ TubeDomain (osBox θ)) :
+    Tendsto (fun n => F n w₀) atTop (𝓝 0) := by
+  have h_step : ∀ j : ℕ, j ≤ m →
+      ∀ R : ℝ, 0 < R → ∀ ε > 0, ∃ N : ℕ, ∀ n ≥ N,
+        ∀ x : Fin m → ℝ, (∀ i, |x i| ≤ R) →
+          ‖F n (fun i => if i.val < j then w₀ i else (x i : ℂ))‖ ≤ ε := by
+    intro j
+    induction j with
+    | zero =>
+      intro _ R hR ε hε
+      obtain ⟨N, hN⟩ := h_real R hR ε hε
+      exact ⟨N, fun n hn x hx => by simpa using hN n hn x hx⟩
+    | succ j ih =>
+      intro hj R hR ε hε
+      let idx : Fin m := ⟨j, by omega⟩
+      let x₀ : ℝ := (w₀ idx).re
+      let R' : ℝ := max R (|x₀| + θ / 4)
+      have hR' : 0 < R' := lt_of_lt_of_le hR (le_max_left _ _)
+      let S : Set (Fin m → ℝ) := { x : Fin m → ℝ | ∀ i, |x i| ≤ R }
+      let g : ℕ → (Fin m → ℝ) → ℂ → ℂ := fun n x ζ =>
+        F n (fun i => if i.val < j then w₀ i else if i.val = j then ζ else (x i : ℂ))
+      have h_g_holo : ∀ n, ∀ x ∈ S, DifferentiableOn ℂ (g n x) (Metric.ball (x₀ : ℂ) θ) := by
+        intro n x _
+        have h_emb : Differentiable ℂ (fun ζ : ℂ =>
+            fun i : Fin m => if i.val < j then w₀ i else if i.val = j then ζ else (x i : ℂ)) :=
+          differentiable_pi.mpr fun i => by
+            split_ifs
+            · exact differentiable_const _
+            · exact differentiable_id
+            · exact differentiable_const _
+        refine (h_holo n).comp h_emb.differentiableOn fun ζ hζ i => ?_
+        dsimp only
+        split_ifs with h1 h2
+        · exact hw₀ i
+        · have hζ_lt : ‖ζ - (x₀ : ℂ)‖ < θ := by simpa [Metric.mem_ball, dist_eq_norm] using hζ
+          have h_im : |ζ.im| ≤ ‖ζ - (x₀ : ℂ)‖ := by
+            simpa using Complex.abs_im_le_norm (ζ - (x₀ : ℂ))
+          exact h_im.trans_lt hζ_lt
+        · simp [hθ]
+      have h_g_bdd : ∀ n, ∀ x ∈ S, ∀ ζ ∈ Metric.ball (x₀ : ℂ) θ, ‖g n x ζ‖ ≤ M := by
+        intro n x _ ζ hζ
+        refine h_bdd n _ fun i => ?_
+        dsimp only
+        split_ifs with h1 h2
+        · exact hw₀ i
+        · have hζ_lt : ‖ζ - (x₀ : ℂ)‖ < θ := by simpa [Metric.mem_ball, dist_eq_norm] using hζ
+          have h_im : |ζ.im| ≤ ‖ζ - (x₀ : ℂ)‖ := by
+            simpa using Complex.abs_im_le_norm (ζ - (x₀ : ℂ))
+          exact h_im.trans_lt hζ_lt
+        · simp [hθ]
+      have h_g_real : ∀ ε' > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ x ∈ S,
+          ∀ t ∈ Set.Icc (x₀ - θ / 4) (x₀ + θ / 4), ‖g n x (t : ℂ)‖ ≤ ε' := by
+        intro ε' hε'
+        obtain ⟨N, hN⟩ := ih (by omega) R' hR' ε' hε'
+        refine ⟨N, fun n hn x hx t ht => ?_⟩
+        let x' : Fin m → ℝ := fun i => if i.val = j then t else x i
+        have hx'_bd : ∀ i, |x' i| ≤ R' := by
+          intro i
+          dsimp [x']
+          split_ifs
+          · have ht_abs : |t| ≤ |x₀| + θ / 4 := by
+              rw [abs_le]; constructor <;> linarith [ht.1, ht.2, le_abs_self x₀, neg_le_abs x₀]
+            exact ht_abs.trans (le_max_right _ _)
+          · exact (hx i).trans (le_max_left _ _)
+        have h_eq : (fun i : Fin m => if i.val < j then w₀ i else
+            if i.val = j then (t : ℂ) else (x i : ℂ)) =
+            (fun i : Fin m => if i.val < j then w₀ i else (x' i : ℂ)) := by
+          ext i; dsimp [x']; split_ifs <;> rfl
+        dsimp only [g]
+        rw [h_eq]
+        exact hN n hn x' hx'_bd
+      have hw_mem : w₀ idx ∈ Metric.ball (x₀ : ℂ) θ := by
+        rw [Metric.mem_ball, dist_eq_norm]
+        have h_eq : w₀ idx - (x₀ : ℂ) = ((w₀ idx).im : ℂ) * Complex.I := by
+          apply Complex.ext <;> simp [x₀]
+        rw [h_eq, norm_mul, Complex.norm_real, Complex.norm_I, mul_one, Real.norm_eq_abs]
+        exact hw₀ idx
+      obtain ⟨N, hN⟩ := uniform_ball_tendsto_zero_of_real_tendsto_zero (S := S) hθ hM
+        h_g_holo h_g_bdd h_g_real (w₀ idx) hw_mem ε hε
+      refine ⟨N, fun n hn x hx => ?_⟩
+      have h_eq : (fun i : Fin m => if i.val < j + 1 then w₀ i else (x i : ℂ)) =
+          (fun i : Fin m => if i.val <
+            j then w₀ i else if i.val = j then w₀ idx else (x i : ℂ)) := by
+        ext i
+        split_ifs with h1 h2 h3
+        · rfl
+        · have hi : i = idx := Fin.ext h3; rw [hi]
+        · omega
+        · omega
+        · omega
+        · rfl
+      rw [h_eq]
+      exact hN n hn x hx
+  rw [Metric.tendsto_atTop]
+  intro ε hε
+  obtain ⟨N, hN⟩ := h_step m le_rfl 1 zero_lt_one (ε / 2) (half_pos hε)
+  refine ⟨N, fun n hn => ?_⟩
+  rw [dist_zero_right]
+  have h1 := hN n hn 0 (fun _ => by simp)
+  have h_eq : (fun i : Fin m => if i.val < m then w₀ i else ((0 : Fin m → ℝ) i : ℂ)) = w₀ := by
+    ext i; rw [if_pos i.isLt]
+  rw [h_eq] at h1
+  linarith
+
+theorem continuousOn_osMultiTimeH_of_linearGrowth
+    {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
+    {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms Rrep Sstr η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮)
+    (n : ℕ) (α : Fin n → ι) :
+    ContinuousOn
+      (fun p : (Fin n → Fin 3 → ℝ) × (Fin (n - 1) → ℂ) =>
+        osMultiTimeH_of_linearGrowth hOS hcluster hlg n α p.1 p.2)
+      (Set.univ ×ˢ {τ : Fin (n - 1) → ℂ | ∀ k, 0 < (τ k).re}) := by
+  cases n with
+  | zero => exact continuousOn_const
+  | succ m =>
+    let U : Set (Fin m → ℂ) := {τ : Fin m → ℂ | ∀ k, 0 < (τ k).re}
+    let M := osLinearGrowthM hOS hcluster hlg
+    have hU_open : IsOpen U := by
+      have h_eq : U = ⋂ k : Fin m, {τ : Fin m → ℂ | 0 < (τ k).re} := by ext τ; simp [U]
+      rw [h_eq]
+      exact isOpen_iInter_of_finite fun k =>
+        isOpen_lt continuous_const (Complex.continuous_re.comp (continuous_apply k))
+    have h_log_cont : ContinuousOn (fun τ : Fin m → ℂ => fun k => Complex.log (τ k)) U :=
+      continuousOn_pi.mpr fun k => fun τ hτ =>
+        ((Complex.differentiableAt_log (Or.inl (hτ k))).continuousAt).comp_continuousWithinAt
+          (g := Complex.log) (f := fun x : Fin m → ℂ => x k) (continuous_apply k).continuousWithinAt
+    have h_damp_cont : ContinuousOn
+        (fun p : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℂ) =>
+          (∏ k : Fin m, logTimeDamp (Complex.log (p.2 k)) ^ M)⁻¹) (Set.univ ×ˢ U) := by
+      refine ContinuousOn.inv₀ ?_ fun p hp =>
+        Finset.prod_ne_zero_iff.mpr fun k _ => pow_ne_zero M (logTimeDamp_log_ne_zero (hp.2 k))
+      refine continuousOn_finsetProd Finset.univ fun k _ => ?_
+      refine (differentiableOn_logTimeDamp.continuousOn.comp ?_ fun p hp =>
+        complex_log_im_abs_lt_pi_div_two (hp.2 k)).pow M
+      exact (continuous_apply k).continuousOn.comp (h_log_cont.comp continuous_snd.continuousOn
+        fun p hp => hp.2) (fun _ _ => Set.mem_univ _)
+    have h_Fd_cont : ContinuousOn
+        (fun p : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℂ) =>
+          osDampedMultiTimeH hOS hcluster hlg m α p.1 p.2)
+        (Set.univ ×ˢ TubeDomain (osBox (Real.pi / 2))) := by
+      intro ⟨x₀, w₀⟩ ⟨_, hw₀⟩
+      have h_cover : ∃ p : ℕ, w₀ ∈ TubeDomain (osBox (osThetaSeq m p)) := by
+        by_cases hm : m = 0
+        · subst hm; exact ⟨0, fun i => Fin.elim0 i⟩
+        · have hne : (Finset.univ : Finset (Fin m)).Nonempty :=
+            ⟨⟨0, Nat.pos_of_ne_zero hm⟩, Finset.mem_univ _⟩
+          let θ_max : ℝ := Finset.sup' Finset.univ hne fun i => |(w₀ i).im|
+          have h_lt : θ_max < Real.pi / 2 := (Finset.sup'_lt_iff hne).mpr fun i _ => hw₀ i
+          obtain ⟨p, hp⟩ := exists_osThetaSeq_gt m h_lt
+          exact ⟨p, fun i => lt_of_le_of_lt
+            (Finset.le_sup' (fun j => |(w₀ j).im|) (Finset.mem_univ i)) hp⟩
+      obtain ⟨p, hp⟩ := h_cover
+      obtain ⟨C_m, A_m, E_m, D_m, hCm, hAm, hEm, h_stage⟩ :=
+        osDampedMultiTimeH_stage_bound hOS hcluster hlg m
+      let θ : ℝ := osThetaSeq m p
+      have hθ_pos : 0 < θ := osThetaSeq_pos m p
+      let B_p : ℝ := C_m * (2 : ℝ) ^ (D_m * p) * (A_m * E_m ^ p) ^ (m + 1) *
+        (((m + 1).factorial : ℝ) ^ M)
+      have hBp_nn : 0 ≤ B_p := by dsimp [B_p]; positivity
+      have h_open_T : IsOpen (TubeDomain (osBox (d := m) θ)) := isOpen_TubeDomain (isOpen_osBox θ)
+      obtain ⟨r, hr_pos, hr_sub⟩ := Metric.isOpen_iff.mp h_open_T w₀ hp
+      have h_lip2 : ∀ (x_sp : Fin (m + 1) → Fin 3 → ℝ) (w : Fin m → ℂ),
+          ‖w - w₀‖ < r / 4 →
+          ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w -
+            osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀‖ ≤
+            (8 * B_p / r) * ‖w - w₀‖ := by
+        intro x_sp w hw
+        by_cases hww : w = w₀
+        · subst hww; simp
+        · have hnw_pos : 0 < ‖w - w₀‖ := norm_pos_iff.mpr (sub_ne_zero.mpr hww)
+          let ρ : ℝ := (r / 2) / ‖w - w₀‖
+          have hρ_gt2 : 2 < ρ := by dsimp [ρ]; rw [lt_div_iff₀ hnw_pos]; linarith
+          let g_seg : ℂ → ℂ := fun ζ =>
+            osDampedMultiTimeH hOS hcluster hlg m α x_sp (w₀ + ζ • (w - w₀))
+          have h_in_ball' : ∀ ζ ∈ Metric.ball (0 : ℂ) ρ, w₀ + ζ • (w - w₀) ∈ Metric.ball w₀ r := by
+            intro ζ hζ
+            rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_left, norm_smul]
+            have hζρ : ‖ζ‖ < ρ := by simpa [Metric.mem_ball, dist_zero_right] using hζ
+            calc ‖ζ‖ * ‖w - w₀‖ < ρ * ‖w - w₀‖ := mul_lt_mul_of_pos_right hζρ hnw_pos
+              _ = r / 2 := div_mul_cancel₀ _ hnw_pos.ne'
+              _ < r := by linarith
+          have h_g_holo' : DifferentiableOn ℂ g_seg (Metric.ball (0 : ℂ) ρ) := by
+            have h_aff : Differentiable ℂ (fun ζ : ℂ => w₀ + ζ • (w - w₀)) :=
+              (differentiable_const w₀).add (differentiable_id.smul_const (w - w₀))
+            exact (osDampedMultiTimeH_holo hOS hcluster hlg m α x_sp).comp h_aff.differentiableOn
+              fun ζ hζ i => lt_trans (hr_sub (h_in_ball' ζ hζ) i) (osThetaSeq_lt_pi_div_two m p)
+          have h_g_bdd' : ∀ ζ ∈ Metric.ball (0 : ℂ) ρ, ‖g_seg ζ‖ ≤ B_p :=
+            fun ζ hζ => h_stage p α x_sp _ (hr_sub (h_in_ball' ζ hζ))
+          have h_mvt' : ‖g_seg 1 - g_seg 0‖ ≤ (B_p / (ρ / 4)) * ‖(1 : ℝ) - 0‖ := by
+            refine (convex_Icc (0 : ℝ) 1).norm_image_sub_le_of_norm_deriv_le
+              (f := fun t : ℝ => g_seg (t : ℂ)) ?_ ?_ (Set.left_mem_Icc.mpr zero_le_one)
+              (Set.right_mem_Icc.mpr zero_le_one)
+            · intro t ht
+              have htρ : (t : ℂ) ∈ Metric.ball (0 : ℂ) ρ := by
+                rw [Metric.mem_ball, dist_zero_right, Complex.norm_real, Real.norm_eq_abs,
+                  abs_of_nonneg ht.1]; linarith [ht.2]
+              exact (((h_g_holo' (t : ℂ) htρ).differentiableAt
+                (Metric.isOpen_ball.mem_nhds htρ)).restrictScalars ℝ).comp t
+                Complex.ofRealCLM.differentiableAt
+            · intro t ht
+              have hsub_cb : Metric.closedBall (t : ℂ) (ρ / 4) ⊆ Metric.ball (0 : ℂ) ρ := by
+                intro z hz
+                rw [Metric.mem_ball, dist_zero_right]
+                have h1 : ‖z - (t : ℂ)‖ ≤ ρ / 4 := by
+                  simpa [Metric.mem_closedBall, dist_eq_norm] using hz
+                have h2 : ‖(t : ℂ)‖ ≤ 1 := by
+                  rw [Complex.norm_real, Real.norm_eq_abs, abs_of_nonneg ht.1]; exact ht.2
+                calc ‖z‖ = ‖(z - (t : ℂ)) + (t : ℂ)‖ := by ring_nf
+                  _ ≤ ‖z - (t : ℂ)‖ + ‖(t : ℂ)‖ := norm_add_le _ _
+                  _ < ρ := by linarith
+              have hd_t : DifferentiableAt ℂ g_seg (t : ℂ) :=
+                (h_g_holo' (t : ℂ) (hsub_cb (Metric.mem_closedBall_self (by
+                  linarith)))).differentiableAt
+                  (Metric.isOpen_ball.mem_nhds (hsub_cb (Metric.mem_closedBall_self (by linarith))))
+              rw [hd_t.hasDerivAt.comp_ofReal.deriv]
+              have hcd := cauchy_iteratedDeriv_norm_le (c := (t : ℂ)) (r :=
+                ρ / 4) (by linarith) hBp_nn
+                ⟨h_g_holo'.mono (Metric.ball_subset_closedBall.trans hsub_cb),
+                  h_g_holo'.continuousOn.mono (Metric.closure_ball_subset_closedBall.trans hsub_cb)⟩
+                (fun z hz => h_g_bdd' z (hsub_cb hz)) 1
+              simpa [iteratedDeriv_one] using hcd
+          have hg1 : g_seg 1 = osDampedMultiTimeH hOS hcluster hlg m α x_sp w := by
+            dsimp [g_seg]; simp
+          have hg0 : g_seg 0 = osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀ := by
+            dsimp [g_seg]; simp
+          rw [hg1, hg0, sub_zero, norm_one, mul_one] at h_mvt'
+          have h_eq : B_p / (ρ / 4) = (8 * B_p / r) * ‖w - w₀‖ := by
+            dsimp [ρ]; field_simp [hr_pos.ne', hnw_pos.ne']; ring
+          rwa [h_eq] at h_mvt'
+      have h_x_cont : ContinuousAt (fun x_sp => osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀) x₀
+        := by
+        rw [ContinuousAt, tendsto_iff_seq_tendsto]
+        intro seq hseq
+        have h_sub_pi : TubeDomain (osBox (d := m) θ) ⊆ TubeDomain (osBox (d := m) (Real.pi / 2)) :=
+          fun z hz i => lt_trans (hz i) (osThetaSeq_lt_pi_div_two m p)
+        have h_diff_tendsto : Tendsto (fun k =>
+            osDampedMultiTimeH hOS hcluster hlg m α (seq k) w₀ -
+              osDampedMultiTimeH hOS hcluster hlg m α x₀ w₀) atTop (𝓝 0) := by
+          refine tubeBox_tendsto_zero_of_real_tendsto_zero hθ_pos (by positivity : (0 : ℝ) ≤
+            2 * B_p)
+            (fun k => ((osDampedMultiTimeH_holo hOS hcluster hlg m α (seq k)).mono h_sub_pi).sub
+              ((osDampedMultiTimeH_holo hOS hcluster hlg m α x₀).mono h_sub_pi))
+            (fun k w hw => by
+              calc ‖osDampedMultiTimeH hOS hcluster hlg m α (seq k) w -
+                    osDampedMultiTimeH hOS hcluster hlg m α x₀ w‖
+                  ≤ ‖osDampedMultiTimeH hOS hcluster hlg m α (seq k) w‖ +
+                      ‖osDampedMultiTimeH hOS hcluster hlg m α x₀ w‖ := norm_sub_le _ _
+                _ ≤ B_p + B_p := add_le_add (h_stage p α (seq k) w hw) (h_stage p α x₀ w hw)
+                _ = 2 * B_p := by ring)
+            (fun R hR ε hε => ?_) w₀ hp
+          let K : Set (Fin m → ℝ) := Set.pi Set.univ fun _ => Set.Icc (-R) R
+          have hK_comp : IsCompact K := isCompact_univ_pi fun _ => isCompact_Icc
+          let Ψ : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℝ) → ℂ := fun q =>
+            (∏ j : Fin m, logTimeDamp (q.2 j : ℂ) ^ M) *
+              𝒮 (m + 1) α (osBuildPoints m q.1 (fun j => Real.exp (q.2 j)) 0)
+          have hΨ_cont : Continuous Ψ := by
+            have h_d : Continuous (fun q : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℝ) =>
+                ∏ j : Fin m, logTimeDamp (q.2 j : ℂ) ^ M) :=
+              continuous_finsetProd Finset.univ fun j _ =>
+                ((differentiableOn_logTimeDamp.continuousOn.comp_continuous
+                  (Complex.continuous_ofReal.comp ((continuous_apply j).comp continuous_snd)))
+                  fun _ => by simp [Real.pi_pos]).pow M
+            have h_pts : Continuous (fun q : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℝ) =>
+                osBuildPoints m q.1 (fun j => Real.exp (q.2 j)) 0) := by
+              refine continuous_pi fun i => continuous_pi fun μ => ?_
+              refine Fin.cases ?_ (fun ν => ?_) μ
+              · simp only [osBuildPoints_zero_coord]
+                exact continuous_const.add (continuous_finsetSum _ fun j _ =>
+                  Real.continuous_exp.comp ((continuous_apply j).comp continuous_snd))
+              · simp only [osBuildPoints]
+                exact (continuous_apply ν).comp ((continuous_apply i).comp continuous_fst)
+            exact h_d.mul ((hOS.os0_smooth (m + 1) α).continuousOn.comp_continuous h_pts
+              fun q => osBuildPoints_mem_orderedEuclidN m q.1 (fun j => Real.exp_pos (q.2 j)) 0)
+          have h_unif : ∃ δ > 0, ∀ x_sp : Fin (m + 1) → Fin 3 → ℝ, dist x_sp x₀ < δ →
+              ∀ y ∈ K, ‖Ψ (x_sp, y) - Ψ (x₀, y)‖ < ε := by
+            have h_open : IsOpen { q : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℝ) |
+                ‖Ψ q - Ψ (x₀, q.2)‖ < ε } :=
+              isOpen_lt ((hΨ_cont.sub (hΨ_cont.comp (continuous_const.prodMk continuous_snd))).norm)
+                continuous_const
+            have h_sub : ({x₀} : Set (Fin (m + 1) → Fin 3 → ℝ)) ×ˢ K ⊆
+                { q | ‖Ψ q - Ψ (x₀, q.2)‖ < ε } := by
+              rintro ⟨x1, y⟩ ⟨hx1, _⟩
+              rw [Set.mem_singleton_iff] at hx1; subst hx1; simpa using hε
+            obtain ⟨U1, V1, hU1, _, hx0_U1, hK_V1, hUV⟩ :=
+              generalized_tube_lemma isCompact_singleton hK_comp h_open h_sub
+            obtain ⟨δ, hδ, hδ_sub⟩ := Metric.isOpen_iff.mp hU1 x₀ (hx0_U1 rfl)
+            exact ⟨δ, hδ, fun x_sp hx y hy => hUV ⟨hδ_sub hx, hK_V1 hy⟩⟩
+          obtain ⟨δ, hδ, h_unif_bd⟩ := h_unif
+          obtain ⟨N, hN⟩ := (Metric.tendsto_atTop.mp hseq) δ hδ
+          refine ⟨N, fun k hk y hy => ?_⟩
+          have hyK : y ∈ K := fun i _ => abs_le.mp (hy i)
+          dsimp only [Pi.sub_apply]
+          rw [osDampedMultiTimeH_real, osDampedMultiTimeH_real]
+          exact (h_unif_bd (seq k) (hN k hk) y hyK).le
+        exact tendsto_sub_nhds_zero_iff.mp h_diff_tendsto
+      refine ContinuousAt.continuousWithinAt ?_
+      rw [Metric.continuousAt_iff]
+      intro ε hε
+      obtain ⟨δ₁, hδ₁, h_x_bd⟩ := Metric.continuousAt_iff.mp h_x_cont (ε / 2) (half_pos hε)
+      let L : ℝ := 8 * B_p / r + 1
+      have hL_pos : 0 < L := by dsimp [L]; positivity
+      let δ : ℝ := min δ₁ (min (r / 4) (ε / (2 * L)))
+      have hδ_pos : 0 < δ := lt_min hδ₁ (lt_min (by positivity) (by positivity))
+      refine ⟨δ, hδ_pos, fun ⟨x_sp, w⟩ hdist => ?_⟩
+      have hx_d : dist x_sp x₀ < δ₁ :=
+        (le_max_left _ _).trans_lt (hdist.trans_le (min_le_left _ _))
+      have hw_d : ‖w - w₀‖ < r / 4 := by
+        rw [← dist_eq_norm]
+        exact (le_max_right _ _).trans_lt
+          (hdist.trans_le ((min_le_right _ _).trans (min_le_left _ _)))
+      have hw_d2 : ‖w - w₀‖ < ε / (2 * L) := by
+        rw [← dist_eq_norm]
+        exact (le_max_right _ _).trans_lt
+          (hdist.trans_le ((min_le_right _ _).trans (min_le_right _ _)))
+      have h1 := h_lip2 x_sp w hw_d
+      have h2 := h_x_bd hx_d
+      rw [dist_eq_norm] at h2 ⊢
+      have h3 : (8 * B_p / r) * ‖w - w₀‖ < ε / 2 := by
+        have h_lt : L * ‖w - w₀‖ < ε / 2 := by
+          have := (lt_div_iff₀ (by positivity : (0 : ℝ) < 2 * L)).mp hw_d2
+          linarith
+        have h_le : (8 * B_p / r) * ‖w - w₀‖ ≤ L * ‖w - w₀‖ :=
+          mul_le_mul_of_nonneg_right (by dsimp [L]; linarith) (norm_nonneg _)
+        linarith
+      calc ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w -
+            osDampedMultiTimeH hOS hcluster hlg m α x₀ w₀‖
+          = ‖(osDampedMultiTimeH hOS hcluster hlg m α x_sp w -
+              osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀) +
+              (osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀ -
+              osDampedMultiTimeH hOS hcluster hlg m α x₀ w₀)‖ := by ring_nf
+        _ ≤ ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w -
+              osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀‖ +
+            ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀ -
+              osDampedMultiTimeH hOS hcluster hlg m α x₀ w₀‖ := norm_add_le _ _
+        _ < ε := by linarith
+    have h_comp : ContinuousOn
+        (fun p : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℂ) =>
+          osDampedMultiTimeH hOS hcluster hlg m α p.1 (fun k => Complex.log (p.2 k)))
+        (Set.univ ×ˢ U) :=
+      h_Fd_cont.comp (continuous_fst.continuousOn.prodMk
+        (h_log_cont.comp continuous_snd.continuousOn fun p hp => hp.2))
+        fun p hp => ⟨trivial, fun k => complex_log_im_abs_lt_pi_div_two (hp.2 k)⟩
+    exact (h_damp_cont.mul h_comp).congr fun p hp => by
+      have hp' : ∀ k : Fin m, 0 < (p.2 k).re := hp.2
+      change (if _hτ : ∀ k : Fin m, 0 < (p.2 k).re then _ else 0) = _
+      rw [dif_pos hp']
+      rfl
+
+end Phase2MultiTimeOfLinearGrowth
+
+end Phase2Theme6
+
 end QFT
