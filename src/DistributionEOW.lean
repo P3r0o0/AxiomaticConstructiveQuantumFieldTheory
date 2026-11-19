@@ -2362,28 +2362,6 @@ lemma local_epstein_extension_of_data_exists
   rcases h_data_ex with ⟨data⟩
   exact local_eow_epstein_of_data_family V_plus V_minus hV_plus_open h0 f_plus f_minus U data
 
-def localEpsteinData_of_entire
-    (V_plus V_minus : Set (Fin n → ℝ))
-    (G : (Fin n → ℂ) → ℂ) (hG : Differentiable ℂ G)
-    (x : Fin n → ℝ) (ρ : ℝ) (hρ : 0 < ρ) :
-    LocalEpsteinData V_plus V_minus G G x :=
-  ⟨ρ, hρ, G, hG.differentiableOn, fun _ _ => rfl, fun _ _ => rfl⟩
-
-theorem local_eow_epstein_of_entire
-    (V_plus V_minus : Set (Fin n → ℝ))
-    (hV_plus_open : IsOpen V_plus)
-    (h0 : (0 : Fin n → ℝ) ∈ closure V_plus)
-    (G : (Fin n → ℂ) → ℂ) (hG : Differentiable ℂ G)
-    (U : Opens (Fin n → ℝ)) :
-    ∃ (W : Opens (Fin n → ℂ)) (F : (Fin n → ℂ) → ℂ),
-      (∀ x ∈ U, (fun i => (x i : ℂ)) ∈ W) ∧
-      DifferentiableOn ℂ F (W : Set (Fin n → ℂ)) ∧
-      EqOn F G ((W : Set (Fin n → ℂ)) ∩ TubeDomain V_plus) ∧
-      EqOn F G ((W : Set (Fin n → ℂ)) ∩ TubeDomain V_minus) := by
-  let data : ∀ x ∈ (U : Set (Fin n → ℝ)), LocalEpsteinData V_plus V_minus G G x :=
-    fun x _hx => localEpsteinData_of_entire V_plus V_minus G hG x 1 Real.zero_lt_one
-  exact local_eow_epstein_of_data_family V_plus V_minus hV_plus_open h0 G G U data
-
 section BoundaryValueAPI
 
 lemma EqualOn.refl {Ω_n : Opens (Fin n → ℝ)} (T : 𝓓'(Ω_n, ℂ))
@@ -3476,7 +3454,7 @@ namespace Distribution
 
 section TemperedEOW
 
-theorem local_eow_of_continuous_boundary {n : ℕ}
+theorem local_eow_of_continuous_boundary {n : ℕ} (hn : 0 < n)
     (Ω_n : Opens (Fin n → ℝ))
     (V_plus V_minus : Set (Fin n → ℝ))
     (h_opposite : V_minus = (fun y => -y) '' V_plus)
@@ -3541,7 +3519,7 @@ theorem local_eow_of_continuous_boundary {n : ℕ}
         EqOn G f_plus (N ∩ TubeDomain V_plus) ∧
         EqOn G f_minus (N ∩ TubeDomain V_minus) := by
     intro x hx
-    rcases QFT.eow_local_exists_all_dim V_plus U hV_plus_open hV_plus_conv hV_plus_cone
+    rcases QFT.eow_local_exists_pos_dim hn V_plus U hV_plus_open hV_plus_conv hV_plus_cone
       hV_ne U.isOpen fg hfg_cont hfg_plus hfg_minus x hx with
       ⟨r_x, hr_x_pos, _hr_sub, Fx, hFx_an, hFx_eq⟩
     let B := Metric.ball (fun i => (x i : ℂ)) r_x
@@ -5682,7 +5660,7 @@ lemma orthantEOWCore_of_mollified_seq {n : ℕ} (hn : 0 < n)
       (h_pt_neg w hw_ρ8).congr fun k => ((h_eq_k k).2 hw).symm
     exact tendsto_nhds_unique h1 h2
 
-theorem local_eow_of_tempered_boundary {n : ℕ}
+theorem local_eow_of_tempered_boundary {n : ℕ} (hn : 0 < n)
     (Ω_n : Opens (Fin n → ℝ))
     (V_plus V_minus : Set (Fin n → ℝ))
     (hV_plus_open : IsOpen V_plus)
@@ -5707,11 +5685,6 @@ theorem local_eow_of_tempered_boundary {n : ℕ}
       EqOn F f_plus ((W : Set (Fin n → ℂ)) ∩ TubeDomain V_plus) ∧
       EqOn F f_minus ((W : Set (Fin n → ℂ)) ∩ TubeDomain V_minus) := by
   classical
-  by_cases hn0 : n = 0
-  · subst hn0
-    rcases hV_ne with ⟨v, hv⟩
-    exact False.elim (h0_not_mem (Subsingleton.elim v 0 ▸ hv))
-  have hn : 0 < n := Nat.pos_of_ne_zero hn0
   have hn_pos : (0 : ℝ) < (n : ℝ) := Nat.cast_pos.mpr hn
   have h0_cl : (0 : Fin n → ℝ) ∈ closure V_plus := by
     rcases hV_ne with ⟨v, hv⟩

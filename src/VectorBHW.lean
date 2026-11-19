@@ -6894,6 +6894,7 @@ theorem coneVladimirov_jost_eow_extension
       hf_plus_an.differentiableOn.mono (fun _ _ => Set.mem_univ _),
       fun _ _ => rfl, fun w _ => h_all (Set.mem_univ w)⟩
   · exact Distribution.local_eow_of_tempered_boundary
+      (by omega)
       (⊤ : TopologicalSpace.Opens (Fin (n * 4) → ℝ))
       (forwardTubeConeFlat n)
       ((fun y => -y) '' forwardTubeConeFlat n)

@@ -9298,6 +9298,427 @@ theorem freeDirac_pure_os_full_reconstruction {m : ℝ} (hm : 0 < m) :
   rcases hfull (Or.inr rfl) hloc with ⟨hFE, hperm⟩
   exact ⟨hG.trans hW, hschw, hvac, htr, hFE, hperm⟩
 
+lemma card_chordPairing_le_factorial (n : ℕ) :
+    Fintype.card (ChordPairing n) ≤ n.factorial := by
+  have hinj : Function.Injective (fun P : ChordPairing n => P.mate) := by
+    intro P Q h
+    exact ChordPairing.ext h
+  calc Fintype.card (ChordPairing n)
+      ≤ Fintype.card (Equiv.Perm (Fin n)) := Fintype.card_le_of_injective _ hinj
+    _ = n.factorial := by simp [Fintype.card_perm]
+
+lemma orderedEuclidN_time_le_of_le {n : ℕ} {x : Fin n → Fin 4 → ℝ}
+    (hx : x ∈ orderedEuclidN n) {u v : Fin n} (huv : u ≤ v) :
+    x u 0 ≤ x v 0 := by
+  have haux : ∀ (d i : ℕ) (hid : i + d < n),
+      x ⟨i, by omega⟩ 0 ≤ x ⟨i + d, hid⟩ 0 := by
+    intro d
+    induction d with
+    | zero =>
+      intro i hid
+      exact le_refl _
+    | succ d ih =>
+      intro i hid
+      have h1 : x ⟨i, by omega⟩ 0 ≤ x ⟨i + d, by omega⟩ 0 := ih i (by omega)
+      have h2 : x ⟨i + d, by omega⟩ 0 < x ⟨i + d + 1, hid⟩ 0 := hx ⟨i + d, by omega⟩ hid
+      exact h1.trans h2.le
+  have h_eq : u.val + (v.val - u.val) = v.val := Nat.add_sub_of_le huv
+  have h_lt : u.val + (v.val - u.val) < n := by
+    rw [h_eq]
+    exact v.isLt
+  have h_le := haux (v.val - u.val) u.val h_lt
+  have hv_fin : (⟨u.val + (v.val - u.val), h_lt⟩ : Fin n) = v := Fin.ext h_eq
+  have hu_fin : (⟨u.val, by omega⟩ : Fin n) = u := Fin.ext rfl
+  rwa [hv_fin, hu_fin] at h_le
+
+theorem wickMassShellOSLinearGrowthCondition_of_eq_on_orderedEuclidN
+    {ι : Type*} [Finite ι]
+    {m : ℝ} (hm : 0 < m) {η : ℂ} (hη : ‖η‖ ≤ 1)
+    {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ} (hC : MassShellCoeffData m C)
+    {𝒮 : SchwingerFamily ι}
+    (hD : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = wickMassShellS m hm η C hC n α x) :
+    OSLinearGrowthCondition 𝒮 := by
+  letI : Fintype ι := Fintype.ofFinite ι
+  let C_α : (Fin 2 → ι) → ℝ := fun β =>
+    Classical.choose (norm_massShellTwoPointH_two_le hm hC β)
+  have hC_α : ∀ β : Fin 2 → ι,
+      0 ≤ C_α β ∧ ∀ {w : Fin 2 → Fin 4 → ℂ}, w ∈ forward_tube_n 2 →
+        ‖massShellTwoPointH m C 2 β w‖ ≤
+          C_α β * (coneGap (diff_im 2 w 0 (by decide)))⁻¹ ^ 4 :=
+    fun β => Classical.choose_spec (norm_massShellTwoPointH_two_le hm hC β)
+  let A_lg : ℝ := 1 + ∑ β : Fin 2 → ι, C_α β
+  have hsum_nn : 0 ≤ ∑ β : Fin 2 → ι, C_α β :=
+    Finset.sum_nonneg fun β _ => (hC_α β).1
+  have hA_ge : 1 ≤ A_lg := by
+    dsimp only [A_lg]
+    linarith
+  have hC_le_A : ∀ β : Fin 2 → ι, C_α β ≤ A_lg := fun β => by
+    have h1 : C_α β ≤ ∑ β' : Fin 2 → ι, C_α β' :=
+      Finset.single_le_sum (fun β' _ => (hC_α β').1) (Finset.mem_univ β)
+    dsimp only [A_lg]
+    linarith
+  refine ⟨1, A_lg, 4, zero_le_one, hA_ge, fun n α x hx => ?_⟩
+  rw [hD n α x hx]
+  change ‖wickMassShellH m η C n α (wickEmbedN n x)‖ ≤ _
+  let z : Fin n → Fin 4 → ℂ := wickEmbedN n x
+  have hz : z ∈ forward_tube_n n := wickEmbedN_mem_forward_tube_n n hx
+  let f : Fin (n - 1) → ℝ := fun k =>
+    (1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹) ^ 4
+  have hf_ge_one : ∀ k : Fin (n - 1), 1 ≤ f k := fun k => by
+    have hk : k.val < n - 1 := k.isLt
+    have hdt : 0 < x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0 :=
+      sub_pos.mpr (hx ⟨k.val, by omega⟩ (by dsimp; omega))
+    have hbase : 1 ≤ 1 + (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹ := by
+      have hinv : 0 ≤ (x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0)⁻¹ :=
+        inv_nonneg.mpr hdt.le
+      linarith
+    exact one_le_pow₀ hbase
+  have h_term : ∀ P : ChordPairing n,
+      ‖η ^ P.cross * ∏ c : P.Chord,
+        massShellTwoPointH m C 2 ![α c.1, α (P.mate c.1)] ![z c.1, z (P.mate c.1)]‖ ≤
+      A_lg ^ n * ∏ k : Fin (n - 1), f k := fun P => by
+    rw [norm_mul, norm_pow, norm_prod]
+    have hη_pow : ‖η‖ ^ P.cross ≤ 1 := pow_le_one₀ (norm_nonneg η) hη
+    let g : P.Chord → Fin (n - 1) := fun c =>
+      ⟨c.1.val, by
+        have hlt : c.1.val < (P.mate c.1).val := c.2
+        have hlt2 : (P.mate c.1).val < n := (P.mate c.1).isLt
+        omega⟩
+    have hg_inj : Function.Injective g := by
+      intro c₁ c₂ h
+      exact Subtype.ext (Fin.ext (congrArg (fun u : Fin (n - 1) => u.val) h))
+    have h_prod_le :
+        (∏ c : P.Chord,
+          ‖massShellTwoPointH m C 2 ![α c.1, α (P.mate c.1)] ![z c.1, z (P.mate c.1)]‖) ≤
+        ∏ c : P.Chord, (A_lg * f (g c)) := by
+      refine Finset.prod_le_prod (fun _ _ => norm_nonneg _) fun c _ => ?_
+      have hzc : ![z c.1, z (P.mate c.1)] ∈ forward_tube_n 2 :=
+        pair_mem_forward_tube_two hz c.2
+      have h_diff_eq :
+          diff_im 2 ![z c.1, z (P.mate c.1)] 0 (by decide) =
+            euclidTimeVec (x (P.mate c.1) 0 - x c.1 0) := by
+        ext μ
+        fin_cases μ <;> simp [diff_im, diff_z, z, wickEmbed, euclidTimeVec]
+      have h_gap_eq :
+          coneGap (diff_im 2 ![z c.1, z (P.mate c.1)] 0 (by decide)) =
+            x (P.mate c.1) 0 - x c.1 0 := by
+        rw [h_diff_eq]
+        simp [coneGap, euclidTimeVec]
+      have hdt_step : 0 < x ⟨c.1.val + 1, by omega⟩ 0 - x ⟨c.1.val, by omega⟩ 0 :=
+        sub_pos.mpr (hx c.1 (by
+          have hlt : c.1.val < (P.mate c.1).val := c.2
+          have hlt2 : (P.mate c.1).val < n := (P.mate c.1).isLt
+          omega))
+      have h_le_mate :
+          x ⟨c.1.val + 1, by
+            have hlt : c.1.val < (P.mate c.1).val := c.2
+            have hlt2 : (P.mate c.1).val < n := (P.mate c.1).isLt
+            omega⟩ 0 ≤ x (P.mate c.1) 0 := by
+        refine orderedEuclidN_time_le_of_le hx ?_
+        exact Nat.succ_le_of_lt c.2
+      have hdt_le :
+          x ⟨c.1.val + 1, by
+            have hlt : c.1.val < (P.mate c.1).val := c.2
+            have hlt2 : (P.mate c.1).val < n := (P.mate c.1).isLt
+            omega⟩ 0 - x ⟨c.1.val, c.1.isLt⟩ 0 ≤ x (P.mate c.1) 0 - x c.1 0 := by
+        have hc_eq : (⟨c.1.val, c.1.isLt⟩ : Fin n) = c.1 := Fin.ext rfl
+        rw [hc_eq]
+        linarith
+      have hdt_pos : 0 < x (P.mate c.1) 0 - x c.1 0 := lt_of_lt_of_le hdt_step hdt_le
+      have h_inv_le :
+          (x (P.mate c.1) 0 - x c.1 0)⁻¹ ≤
+            1 + (x ⟨(g c).val + 1, by omega⟩ 0 - x ⟨(g c).val, by omega⟩ 0)⁻¹ := by
+        have h1 :
+            (x (P.mate c.1) 0 - x c.1 0)⁻¹ ≤
+              (x ⟨(g c).val + 1, by omega⟩ 0 - x ⟨(g c).val, by omega⟩ 0)⁻¹ :=
+          inv_anti₀ hdt_step hdt_le
+        linarith
+      have h_pow_le :
+          (coneGap (diff_im 2 ![z c.1, z (P.mate c.1)] 0 (by decide)))⁻¹ ^ 4 ≤ f (g c) := by
+        rw [h_gap_eq]
+        exact pow_le_pow_left₀ (inv_nonneg.mpr hdt_pos.le) h_inv_le 4
+      exact ((hC_α ![α c.1, α (P.mate c.1)]).2 hzc).trans
+        (mul_le_mul (hC_le_A _) h_pow_le (by positivity) (by linarith))
+    have h_card_le : Fintype.card P.Chord ≤ n := by
+      have h2 := P.two_mul_card_chord
+      omega
+    have hA_pow_le : A_lg ^ Fintype.card P.Chord ≤ A_lg ^ n :=
+      pow_le_pow_right₀ hA_ge h_card_le
+    have h_f_prod_le : (∏ c : P.Chord, f (g c)) ≤ ∏ k : Fin (n - 1), f k := by
+      have h_img : ∏ k ∈ Finset.univ.image g, f k = ∏ c : P.Chord, f (g c) :=
+        Finset.prod_image fun a _ b _ h => hg_inj h
+      have h_sdiff : (∏ k ∈ Finset.univ \ Finset.univ.image g, f k) *
+          (∏ k ∈ Finset.univ.image g, f k) = ∏ k : Fin (n - 1), f k :=
+        Finset.prod_sdiff (Finset.subset_univ _)
+      have h_ge1 : 1 ≤ ∏ k ∈ Finset.univ \ Finset.univ.image g, f k := by
+        simpa using Finset.prod_le_prod (fun _ _ => zero_le_one) fun k _ => hf_ge_one k
+      have h_nn : 0 ≤ ∏ k ∈ Finset.univ.image g, f k :=
+        Finset.prod_nonneg fun k _ => zero_le_one.trans (hf_ge_one k)
+      rw [← h_img, ← h_sdiff]
+      nlinarith
+    have h_prod_rhs :
+        (∏ c : P.Chord, (A_lg * f (g c))) ≤ A_lg ^ n * ∏ k : Fin (n - 1), f k := by
+      rw [Finset.prod_mul_distrib, Finset.prod_const, Finset.card_univ]
+      exact mul_le_mul hA_pow_le h_f_prod_le
+        (Finset.prod_nonneg fun c _ => (zero_le_one.trans (hf_ge_one (g c))))
+        (pow_nonneg (zero_le_one.trans hA_ge) _)
+    calc ‖η‖ ^ P.cross *
+          (∏ c : P.Chord,
+            ‖massShellTwoPointH m C 2 ![α c.1, α (P.mate c.1)] ![z c.1, z (P.mate c.1)]‖)
+        ≤ 1 * (A_lg ^ n * ∏ k : Fin (n - 1), f k) :=
+          mul_le_mul hη_pow (h_prod_le.trans h_prod_rhs)
+            (Finset.prod_nonneg fun _ _ => norm_nonneg _) zero_le_one
+      _ = A_lg ^ n * ∏ k : Fin (n - 1), f k := one_mul _
+  have h_sum_le :
+      ‖wickMassShellH m η C n α z‖ ≤
+        (Fintype.card (ChordPairing n) : ℝ) * (A_lg ^ n * ∏ k : Fin (n - 1), f k) := by
+    unfold wickMassShellH
+    refine (norm_sum_le Finset.univ _).trans ?_
+    calc (∑ P : ChordPairing n,
+            ‖η ^ P.cross * ∏ c : P.Chord,
+              massShellTwoPointH m C 2 ![α c.1, α (P.mate c.1)] ![z c.1, z (P.mate c.1)]‖)
+        ≤ ∑ _P : ChordPairing n, (A_lg ^ n * ∏ k : Fin (n - 1), f k) :=
+          Finset.sum_le_sum fun P _ => h_term P
+      _ = (Fintype.card (ChordPairing n) : ℝ) * (A_lg ^ n * ∏ k : Fin (n - 1), f k) := by
+          rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+  have h_card_real : (Fintype.card (ChordPairing n) : ℝ) ≤ (n.factorial : ℝ) ^ 4 := by
+    have h1 : (Fintype.card (ChordPairing n) : ℝ) ≤ (n.factorial : ℝ) := by
+      exact_mod_cast card_chordPairing_le_factorial n
+    have h2 : (1 : ℝ) ≤ (n.factorial : ℝ) := by
+      exact_mod_cast Nat.factorial_pos n
+    have h3 : (n.factorial : ℝ) ≤ (n.factorial : ℝ) ^ 4 :=
+      le_self_pow₀ h2 (by decide)
+    exact h1.trans h3
+  have h_rhs_nn : 0 ≤ A_lg ^ n * ∏ k : Fin (n - 1), f k :=
+    mul_nonneg (pow_nonneg (zero_le_one.trans hA_ge) _)
+      (Finset.prod_nonneg fun k _ => zero_le_one.trans (hf_ge_one k))
+  calc ‖wickMassShellH m η C n α z‖
+      ≤ (Fintype.card (ChordPairing n) : ℝ) * (A_lg ^ n * ∏ k : Fin (n - 1), f k) := h_sum_le
+    _ ≤ (n.factorial : ℝ) ^ 4 * (A_lg ^ n * ∏ k : Fin (n - 1), f k) :=
+        mul_le_mul_of_nonneg_right h_card_real h_rhs_nn
+    _ = 1 * A_lg ^ n * (n.factorial : ℝ) ^ 4 * ∏ k : Fin (n - 1), f k := by ring
+
+theorem wickMassShellOSLinearGrowthCondition {ι : Type*} [Finite ι]
+    {m : ℝ} (hm : 0 < m) {η : ℂ} (hη : ‖η‖ ≤ 1)
+    {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ} (hC : MassShellCoeffData m C) :
+    OSLinearGrowthCondition (wickMassShellS m hm η C hC) :=
+  wickMassShellOSLinearGrowthCondition_of_eq_on_orderedEuclidN hm hη hC
+    (fun _ _ _ _ => rfl)
+
+theorem wickMassShellFullOSLinearGrowthCondition {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (R_rep : HolomorphicLorentzRep ι)
+    {m : ℝ} (hm : 0 < m) {η : ℂ} (hη : ‖η‖ ≤ 1)
+    {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ} (hC : MassShellCoeffData m C)
+    (hC_cov : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, R_rep.rep A (α i) (β i)) * C β q) :
+    OSLinearGrowthCondition (wickMassShellFullS R_rep m hm η C hC) :=
+  wickMassShellOSLinearGrowthCondition_of_eq_on_orderedEuclidN hm hη hC
+    (fun n α _x hx =>
+      wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN R_rep hm η hC hC_cov n α hx)
+
+theorem freeKGOSLinearGrowthCondition {m : ℝ} (hm : 0 < m) :
+    OSLinearGrowthCondition (freeKGS m hm) :=
+  wickMassShellOSLinearGrowthCondition hm (by norm_num) (massiveKGCoeff_data hm)
+
+theorem freeKGFullOSLinearGrowthCondition {m : ℝ} (hm : 0 < m) :
+    OSLinearGrowthCondition (freeKGFullS m hm) :=
+  wickMassShellFullOSLinearGrowthCondition trivialRep hm (by norm_num) (massiveKGCoeff_data hm)
+    (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+
+theorem freeDiracOSLinearGrowthCondition {m : ℝ} (hm : 0 < m) :
+    OSLinearGrowthCondition (freeDiracS m hm) :=
+  wickMassShellOSLinearGrowthCondition hm (by norm_num) (diracMassShellCoeff_data hm)
+
+theorem freeDiracFullOSLinearGrowthCondition {m : ℝ} (hm : 0 < m) :
+    OSLinearGrowthCondition (freeDiracFullS m hm) :=
+  wickMassShellFullOSLinearGrowthCondition diracRep hm (by norm_num)
+    (diracMassShellCoeff_data hm) (diracMassShellCoeff_lorentz m)
+
+theorem wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} (hm : 0 < m) {η_os η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (hC : MassShellCoeffData m C)
+    (hC_cov : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, R_rep.rep A (α i) (β i)) * C β q)
+    {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R_rep S η_os 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮)
+    (hD : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = wickMassShellS m hm η C hC n α x) :
+    osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg =
+      wickMassShellW m η C hC := by
+  let T₁ := osReconstructedTubeExtensionData_of_linearGrowth hOS hcluster hlg
+  let T₂ := wickMassShellOSTubeExtensionData R_rep hm η hC hC_cov
+  rw [← osReconstructedTubeExtensionData_of_linearGrowth_W_eq hOS hcluster hlg,
+      ← wickMassShellOSTubeExtensionData_W R_rep hm η hC hC_cov]
+  refine wightman_eq_of_tubeExtension_eq T₁.E T₂.E fun n α z hz => ?_
+  have hx₀ : euclidOrderedBasePoint n ∈ orderedEuclidN n :=
+    euclidOrderedBasePoint_mem_orderedEuclidN n
+  have h_ev : ∀ᶠ x in 𝓝 (euclidOrderedBasePoint n),
+      T₁.E.H n α (wickEmbedN n x) = T₂.E.H n α (wickEmbedN n x) := by
+    filter_upwards [(isOpen_orderedEuclidN n).mem_nhds hx₀] with x hx
+    rw [OSTubeExtensionData.E_H, OSTubeExtensionData.E_H,
+        ← T₁.schwinger_eq n α x hx, hD n α x hx, T₂.schwinger_eq n α x hx]
+  exact analyticOn_forward_tube_eq_of_eventuallyEq_wickEmbedN n
+    (T₁.E.analytic n α) (T₂.E.analytic n α) hx₀ h_ev hz
+
+theorem freeKG_osReconstructedWightmanFamily_of_linearGrowth_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily_of_linearGrowth (freeKGOSAxioms hm)
+      (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm) = freeKGW m hm :=
+  wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (massiveKGCoeff_data hm)
+    (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    (freeKGOSAxioms hm) (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm)
+    (fun _ _ _ _ => rfl)
+
+theorem freeKGFull_osReconstructedWightmanFamily_of_linearGrowth_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily_of_linearGrowth (freeKGFullEuclidOSAxioms hm).toOSAxioms
+      (freeKGFullOSTimeCluster hm) (freeKGFullOSLinearGrowthCondition hm) = freeKGW m hm :=
+  wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (massiveKGCoeff_data hm)
+    (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    (freeKGFullEuclidOSAxioms hm).toOSAxioms (freeKGFullOSTimeCluster hm)
+    (freeKGFullOSLinearGrowthCondition hm)
+    (fun n α _x hx => freeKGFullS_eq_freeKGS_on_orderedEuclidN hm n α hx)
+
+theorem freeDirac_osReconstructedWightmanFamily_of_linearGrowth_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily_of_linearGrowth (freeDiracOSAxioms hm)
+      (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm :=
+  wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (diracMassShellCoeff_data hm)
+    (diracMassShellCoeff_lorentz m)
+    (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm)
+    (fun _ _ _ _ => rfl)
+
+theorem freeDiracFull_osReconstructedWightmanFamily_of_linearGrowth_eq {m : ℝ} (hm : 0 < m) :
+    osReconstructedWightmanFamily_of_linearGrowth (freeDiracFullEuclidOSAxioms hm).toOSAxioms
+      (freeDiracFullOSTimeCluster hm) (freeDiracFullOSLinearGrowthCondition hm) =
+      freeDiracW m hm :=
+  wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (diracMassShellCoeff_data hm)
+    (diracMassShellCoeff_lorentz m)
+    (freeDiracFullEuclidOSAxioms hm).toOSAxioms (freeDiracFullOSTimeCluster hm)
+    (freeDiracFullOSLinearGrowthCondition hm)
+    (fun n α _x hx => freeDiracFullS_eq_freeDiracS_on_orderedEuclidN hm n α hx)
+
+theorem freeKGS_spin_statistics {m : ℝ} (hm : 0 < m) {η : ℂ}
+    (hOS : OSAxioms trivialRep trivialStarStructure η (freeKGS m hm)) :
+    η = 1 := by
+  have hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData :=
+    wickMassShellOSTimeCluster hm (kgModeData hm) (massiveKGCoeff_data hm)
+      (fun _ _ => by simp [massiveKGCoeff, trivialStarStructure]) _ rfl
+  have hlg : OSLinearGrowthCondition (freeKGS m hm) := freeKGOSLinearGrowthCondition hm
+  have hW : osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg = freeKGW m hm :=
+    wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (massiveKGCoeff_data hm)
+      (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+      hOS hcluster hlg (fun _ _ _ _ => rfl)
+  have hsyn := os_full_wightman_reconstruction_of_linearGrowth hOS hcluster hlg
+    (freeKGOSVacuumNormalized hm)
+  exact hsyn.2.2.2.2.1.1 trivialRep_spinParity ⟨default, by
+    rw [hW]
+    exact freeKGW_twoPoint_ne_zero hm⟩
+
+theorem freeDiracS_spin_statistics {m : ℝ} (hm : 0 < m) {η : ℂ}
+    (hOS : OSAxioms diracRep diracStarStructure η (freeDiracS m hm)) :
+    η = -1 := by
+  have hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData :=
+    wickMassShellOSTimeCluster hm (diracModeData hm) (diracMassShellCoeff_data hm)
+      (diracMassShellCoeff_herm m) _ rfl
+  have hlg : OSLinearGrowthCondition (freeDiracS m hm) := freeDiracOSLinearGrowthCondition hm
+  have hW : osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg = freeDiracW m hm :=
+    wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (diracMassShellCoeff_data hm)
+      (diracMassShellCoeff_lorentz m) hOS hcluster hlg (fun _ _ _ _ => rfl)
+  have hsyn := os_full_wightman_reconstruction_of_linearGrowth hOS hcluster hlg
+    (freeDiracOSVacuumNormalized hm)
+  rcases freeDiracW_twoPoint_nondegenerate hm with ⟨β, hβ⟩
+  exact hsyn.2.2.2.2.1.1 diracRep_spinParity ⟨β, by
+    rw [hW]
+    exact hβ⟩
+
+theorem freeKG_pure_os_full_reconstruction_of_linearGrowth {m : ℝ} (hm : 0 < m) :
+    let hOS := freeKGOSAxioms hm
+    let hcluster := freeKGOSTimeCluster hm
+    let hlg := freeKGOSLinearGrowthCondition hm
+    let hnorm := freeKGOSVacuumNormalized hm
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hcluster hlg
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = freeKGW m hm ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → freeKGS m hm n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare trivialRep P.poincare) a (U Ψ)) ∧
+    FullEuclidOSAxioms trivialRep trivialStarStructure 1 P.permutedSchwinger ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → P.permutedSchwinger n α x = freeKGS m hm n α x) ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ nonCoincidentEuclidN n → P.permutedSchwinger n α x = freeKGFullS m hm n α x) := by
+  have hsyn := os_full_wightman_reconstruction_of_linearGrowth (freeKGOSAxioms hm)
+    (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm) (freeKGOSVacuumNormalized hm)
+  have hW : osReconstructedWightmanFamily_of_linearGrowth (freeKGOSAxioms hm)
+      (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm) = freeKGW m hm :=
+    freeKG_osReconstructedWightmanFamily_of_linearGrowth_eq hm
+  have hloc : LocalCommutativity 1
+      (osReconstructedWightmanFamily_of_linearGrowth (freeKGOSAxioms hm)
+        (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm)) := by
+    rw [hW]
+    exact freeKG_localCommutativity hm
+  rcases hsyn with ⟨hG, hschw, hvac, htr, _, hfull⟩
+  rcases hfull (Or.inl rfl) hloc with ⟨hFE, hperm⟩
+  have hFE_kg := freeKGFullEuclidOSAxioms hm
+  refine ⟨hG.trans hW, hschw, hvac, htr, hFE, hperm, fun n α x hx => ?_⟩
+  exact fullEuclid_eq_of_eq_on_orderedEuclidN hFE.os1_rotation hFE.os3_permutation
+    hFE_kg.os1_rotation hFE_kg.os3_permutation
+    (fun β y hy => (hperm n β y hy).trans
+      (freeKGFullS_eq_freeKGS_on_orderedEuclidN hm n β hy).symm) α hx
+
+theorem freeDirac_pure_os_full_reconstruction_of_linearGrowth {m : ℝ} (hm : 0 < m) :
+    let hOS := freeDiracOSAxioms hm
+    let hcluster := freeDiracOSTimeCluster hm
+    let hlg := freeDiracOSLinearGrowthCondition hm
+    let hnorm := freeDiracOSVacuumNormalized hm
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hcluster hlg
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = freeDiracW m hm ∧
+    (∀ (n : ℕ) (α : Fin n → Fin 2 ⊕ Fin 2) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → freeDiracS m hm n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare diracRep P.poincare) a (U Ψ)) ∧
+    FullEuclidOSAxioms diracRep diracStarStructure (-1) P.permutedSchwinger ∧
+    (∀ (n : ℕ) (α : Fin n → Fin 2 ⊕ Fin 2) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → P.permutedSchwinger n α x = freeDiracS m hm n α x) ∧
+    (∀ (n : ℕ) (α : Fin n → Fin 2 ⊕ Fin 2) (x : Fin n → Fin 4 → ℝ),
+      x ∈ nonCoincidentEuclidN n → P.permutedSchwinger n α x = freeDiracFullS m hm n α x) := by
+  have hsyn := os_full_wightman_reconstruction_of_linearGrowth (freeDiracOSAxioms hm)
+    (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm)
+    (freeDiracOSVacuumNormalized hm)
+  have hW : osReconstructedWightmanFamily_of_linearGrowth (freeDiracOSAxioms hm)
+      (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm :=
+    freeDirac_osReconstructedWightmanFamily_of_linearGrowth_eq hm
+  have hloc : LocalCommutativity (-1)
+      (osReconstructedWightmanFamily_of_linearGrowth (freeDiracOSAxioms hm)
+        (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm)) := by
+    rw [hW]
+    exact freeDirac_localCommutativity hm
+  rcases hsyn with ⟨hG, hschw, hvac, htr, _, hfull⟩
+  rcases hfull (Or.inr rfl) hloc with ⟨hFE, hperm⟩
+  have hFE_dir := freeDiracFullEuclidOSAxioms hm
+  refine ⟨hG.trans hW, hschw, hvac, htr, hFE, hperm, fun n α x hx => ?_⟩
+  exact fullEuclid_eq_of_eq_on_orderedEuclidN hFE.os1_rotation hFE.os3_permutation
+    hFE_dir.os1_rotation hFE_dir.os3_permutation
+    (fun β y hy => (hperm n β y hy).trans
+      (freeDiracFullS_eq_freeDiracS_on_orderedEuclidN hm n β hy).symm) α hx
+
 theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     FullEuclidOSAxioms trivialRep trivialStarStructure 1 (freeKGFullS m hm) ∧
     OSAxioms trivialRep trivialStarStructure 1 (freeKGS m hm) ∧
@@ -9306,6 +9727,7 @@ theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     freeKGFullS m hm 2 default (equalTimeTwoPoint 1) ≠ 0 ∧
     (∀ {η : ℂ}, FullEuclidOSAxioms trivialRep trivialStarStructure η (freeKGFullS m hm) →
       η = 1) ∧
+    (∀ {η : ℂ}, OSAxioms trivialRep trivialStarStructure η (freeKGS m hm) → η = 1) ∧
     (∀ {τ : ℝ} (hτ : 0 ≤ τ) (A B : OSConfig Unit),
       ‖osKernel trivialStarStructure (freeKGS m hm) A (osConfigTimeShift τ hτ B) -
           osKernel trivialStarStructure (freeKGS m hm) A (osVacuumConfig Unit) *
@@ -9328,6 +9750,12 @@ theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
       (freeKGOSDampedFieldBounded hm) = freeKGW m hm ∧
     osReconstructedWightmanFamily (freeKGFullEuclidOSAxioms hm).toOSAxioms
       (freeKGFullOSTimeCluster hm) (freeKGFullOSDampedFieldBounded hm) = freeKGW m hm ∧
+    OSLinearGrowthCondition (freeKGS m hm) ∧
+    OSLinearGrowthCondition (freeKGFullS m hm) ∧
+    osReconstructedWightmanFamily_of_linearGrowth (freeKGOSAxioms hm)
+      (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm) = freeKGW m hm ∧
+    osReconstructedWightmanFamily_of_linearGrowth (freeKGFullEuclidOSAxioms hm).toOSAxioms
+      (freeKGFullOSTimeCluster hm) (freeKGFullOSLinearGrowthCondition hm) = freeKGW m hm ∧
     Positivity trivialStarStructure (freeKGW m hm) ∧
     PoincareCovariant trivialRep (freeKGW m hm) ∧
     ForwardConeSpectrumCondition (freeKGW m hm) ∧
@@ -9353,6 +9781,7 @@ theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     freeKGOSVacuumNormalized hm,
     freeKGFullS_equalTime_ne_zero hm zero_lt_one,
     fun hOS => freeKGFullS_spin_statistics hm hOS,
+    fun hOS => freeKGS_spin_statistics hm hOS,
     fun hτ A B => freeKGOS_exponential_cluster hm hτ A B,
     freeKGOSHolomorphicSemigroup_isWeaklyHolomorphic hm,
     ?_,
@@ -9364,6 +9793,10 @@ theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     freeKGFullOSDampedFieldBounded hm,
     freeKG_osReconstructedWightmanFamily_eq hm,
     freeKGFull_osReconstructedWightmanFamily_eq hm,
+    freeKGOSLinearGrowthCondition hm,
+    freeKGFullOSLinearGrowthCondition hm,
+    freeKG_osReconstructedWightmanFamily_of_linearGrowth_eq hm,
+    freeKGFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm,
     freeKGPositivity hm,
     freeKGPoincareCovariant hm,
     freeKG_forwardConeSpectrumCondition hm,
@@ -9392,6 +9825,7 @@ theorem freeDirac_grand_master {m : ℝ} (hm : 0 < m) :
     (∃ β : Fin 2 → Fin 2 ⊕ Fin 2, freeDiracFullS m hm 2 β (equalTimeTwoPoint 1) ≠ 0) ∧
     (∀ {η : ℂ}, FullEuclidOSAxioms diracRep diracStarStructure η (freeDiracFullS m hm) →
       η = -1) ∧
+    (∀ {η : ℂ}, OSAxioms diracRep diracStarStructure η (freeDiracS m hm) → η = -1) ∧
     (∀ {τ : ℝ} (hτ : 0 ≤ τ) (A B : OSConfig (Fin 2 ⊕ Fin 2)),
       ‖osKernel diracStarStructure (freeDiracS m hm) A (osConfigTimeShift τ hτ B) -
           osKernel diracStarStructure (freeDiracS m hm) A (osVacuumConfig (Fin 2 ⊕ Fin 2)) *
@@ -9414,6 +9848,13 @@ theorem freeDirac_grand_master {m : ℝ} (hm : 0 < m) :
       (freeDiracOSDampedFieldBounded hm) = freeDiracW m hm ∧
     osReconstructedWightmanFamily (freeDiracFullEuclidOSAxioms hm).toOSAxioms
       (freeDiracFullOSTimeCluster hm) (freeDiracFullOSDampedFieldBounded hm) =
+      freeDiracW m hm ∧
+    OSLinearGrowthCondition (freeDiracS m hm) ∧
+    OSLinearGrowthCondition (freeDiracFullS m hm) ∧
+    osReconstructedWightmanFamily_of_linearGrowth (freeDiracOSAxioms hm)
+      (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm ∧
+    osReconstructedWightmanFamily_of_linearGrowth (freeDiracFullEuclidOSAxioms hm).toOSAxioms
+      (freeDiracFullOSTimeCluster hm) (freeDiracFullOSLinearGrowthCondition hm) =
       freeDiracW m hm ∧
     Positivity diracStarStructure (freeDiracW m hm) ∧
     PoincareCovariant diracRep (freeDiracW m hm) ∧
@@ -9440,6 +9881,7 @@ theorem freeDirac_grand_master {m : ℝ} (hm : 0 < m) :
     freeDiracOSVacuumNormalized hm,
     freeDiracFullS_equalTime_exists_ne_zero hm zero_lt_one,
     fun hOS => freeDiracFullS_spin_statistics hm hOS,
+    fun hOS => freeDiracS_spin_statistics hm hOS,
     fun hτ A B => freeDiracOS_exponential_cluster hm hτ A B,
     freeDiracOSHolomorphicSemigroup_isWeaklyHolomorphic hm,
     ?_,
@@ -9451,6 +9893,10 @@ theorem freeDirac_grand_master {m : ℝ} (hm : 0 < m) :
     freeDiracFullOSDampedFieldBounded hm,
     freeDirac_osReconstructedWightmanFamily_eq hm,
     freeDiracFull_osReconstructedWightmanFamily_eq hm,
+    freeDiracOSLinearGrowthCondition hm,
+    freeDiracFullOSLinearGrowthCondition hm,
+    freeDirac_osReconstructedWightmanFamily_of_linearGrowth_eq hm,
+    freeDiracFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm,
     freeDiracPositivity hm,
     freeDiracPoincareCovariant hm,
     freeDirac_forwardConeSpectrumCondition hm,

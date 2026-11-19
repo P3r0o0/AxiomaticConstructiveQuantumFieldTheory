@@ -5449,16 +5449,106 @@ lemma bochner_F_limit_holo (r R : ℝ) (hr : 0 < r) (hR : r < R)
   intro z hz
   exact osgood_fin2 hU_open (bochner_F_limit f r R) h_cont h_diff0 h_diff1 z hz
 
-theorem bochner_tube_theorem (r R : ℝ) (hr : 0 < r) (hR : r < R)
+theorem bochner_tube_theorem (r R M : ℝ) (hr : 0 < r) (hR : r < R) (hM_nn : 0 ≤ M)
     (f : (Fin 2 → ℂ) → ℂ)
     (hf_holo : DifferentiableOn ℂ f (TubeDomain (LShape r R)))
-    (hf_bound : ∃ M : ℝ, ∀ z : Fin 2 → ℂ, ‖f z‖ ≤ M) :
+    (hf_bound : ∀ z ∈ TubeDomain (LShape r R), ‖f z‖ ≤ M) :
     ∃ (F : (Fin 2 → ℂ) → ℂ),
       DifferentiableOn ℂ F (TubeDomain (LShapeConvexHull r R)) ∧
+      (∀ z ∈ TubeDomain (LShapeConvexHull r R), ‖F z‖ ≤ M) ∧
       EqOn F f (TubeDomain (LShape r R)) := by
-  refine ⟨bochner_F_limit f r R, bochner_F_limit_holo r R hr hR f hf_holo hf_bound, ?_⟩
-  exact bochner_F_limit_eq_on_tube r R f
-    (fun ε hε => bochner_F_eps_eq_f r R hr hR f hf_holo hf_bound ε hε)
+  classical
+  let f₀ : (Fin 2 → ℂ) → ℂ := fun z => if z ∈ TubeDomain (LShape r R) then f z else 0
+  have hf₀_holo : DifferentiableOn ℂ f₀ (TubeDomain (LShape r R)) :=
+    hf_holo.congr (fun z hz => if_pos hz)
+  have hf₀_all : ∀ z : Fin 2 → ℂ, ‖f₀ z‖ ≤ M := by
+    intro z
+    dsimp [f₀]
+    split_ifs with hz
+    · exact hf_bound z hz
+    · rw [norm_zero]
+      exact hM_nn
+  let F := bochner_F_limit f₀ r R
+  have hF_holo : DifferentiableOn ℂ F (TubeDomain (LShapeConvexHull r R)) :=
+    bochner_F_limit_holo r R hr hR f₀ hf₀_holo ⟨M, hf₀_all⟩
+  have hF_eq : EqOn F f (TubeDomain (LShape r R)) := by
+    intro z hz
+    have h1 := bochner_F_limit_eq_on_tube r R f₀
+      (fun ε hε => bochner_F_eps_eq_f r R hr hR f₀ hf₀_holo ⟨M, hf₀_all⟩ ε hε) hz
+    exact h1.trans (if_pos hz)
+  refine ⟨F, hF_holo, ?_, hF_eq⟩
+  intro zstar hzstar
+  by_cases hz_LS : zstar ∈ TubeDomain (LShape r R)
+  · rw [hF_eq hz_LS]
+    exact hf_bound zstar hz_LS
+  · rcases bochner_F_eps_hull_strip_setup r R hr hR f₀ hf₀_holo hf₀_all zstar hzstar hz_LS with
+      ⟨t₁, t₂, _, η, ht₁_neg, ht₂_pos, _, hη_pos, _, h_ends, _, h_strip_unif_bd⟩
+    have ht₁_lt_t₂ : t₁ < t₂ := ht₁_neg.trans ht₂_pos
+    have hz_ball : zstar ∈ Metric.ball zstar η := Metric.mem_ball_self hη_pos
+    have h_seg : ∀ w : ℂ, w.im ∈ Set.Icc t₁ t₂ →
+        bochner_diag_map zstar w ∈ TubeDomain (LShapeConvexHull r R) := by
+      intro w hw
+      change (fun i => (bochner_diag_map zstar w i).im) ∈ LShapeConvexHull r R
+      rw [bochner_diag_map_im]
+      have ha_LS : ![(zstar 0).im + t₁, (zstar 1).im - t₁] ∈ LShapeConvexHull r R :=
+        subset_convexHull ℝ (LShape r R) (h_ends zstar hz_ball).1
+      have hb_LS : ![(zstar 0).im + t₂, (zstar 1).im - t₂] ∈ LShapeConvexHull r R :=
+        subset_convexHull ℝ (LShape r R) (h_ends zstar hz_ball).2
+      let θ := (w.im - t₁) / (t₂ - t₁)
+      have hθ0 : 0 ≤ θ := div_nonneg (sub_nonneg.mpr hw.1) (sub_nonneg.mpr ht₁_lt_t₂.le)
+      have hθ1 : 0 ≤ 1 - θ := by
+        have hle1 : θ ≤ 1 := (div_le_one (sub_pos.mpr ht₁_lt_t₂)).mpr (sub_le_sub_right hw.2 t₁)
+        linarith
+      have h_conv := (convex_convexHull ℝ (LShape r R)) ha_LS hb_LS hθ1 hθ0 (by ring)
+      have hba : t₂ - t₁ ≠ 0 := sub_ne_zero.mpr ht₁_lt_t₂.ne'
+      have h_pt_eq : (1 - θ) • ![(zstar 0).im + t₁, (zstar 1).im - t₁] +
+          θ • ![(zstar 0).im + t₂, (zstar 1).im - t₂] =
+          ![(zstar 0).im + w.im, (zstar 1).im - w.im] := by
+        ext i
+        fin_cases i <;>
+        · simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul]
+          dsimp [θ]
+          field_simp [hba]
+          ring
+      rwa [h_pt_eq] at h_conv
+    let g : ℂ → ℂ := fun w => F (bochner_diag_map zstar w)
+    have hg_diff : DifferentiableOn ℂ g (Complex.im ⁻¹' Set.Ioo t₁ t₂) :=
+      hF_holo.comp (differentiable_bochner_diag_map zstar).differentiableOn
+        (fun w hw => h_seg w ⟨hw.1.le, hw.2.le⟩)
+    have hg_cont : ContinuousOn g (Complex.im ⁻¹' Set.Icc t₁ t₂) :=
+      hF_holo.continuousOn.comp (differentiable_bochner_diag_map zstar).continuous.continuousOn
+        h_seg
+    have h_loc := bochner_F_eps_tendstoLocallyUniformlyOn r R hr hR f₀ hf₀_holo ⟨M, hf₀_all⟩
+    haveI : Filter.NeBot (𝓝[>] (0 : ℝ)) := nhdsWithin_Ioi_neBot le_rfl
+    have hg_bdd : ∀ w : ℂ, w.im ∈ Set.Ioo t₁ t₂ →
+        ‖g w‖ ≤ max M 0 * Real.exp (2 * R ^ 2) := by
+      intro w hw
+      have hw_Icc : w.im ∈ Set.Icc t₁ t₂ := ⟨hw.1.le, hw.2.le⟩
+      have h_tend := (h_loc.tendsto_at (h_seg w hw_Icc)).norm
+      refine le_of_tendsto h_tend ?_
+      filter_upwards [Ioo_mem_nhdsGT zero_lt_one] with ε hε
+      exact h_strip_unif_bd ε ⟨hε.1, hε.2.le⟩ zstar hz_ball w hw_Icc
+    have h_ed1 : ∀ w : ℂ, w.im = t₁ → ‖g w‖ ≤ M := by
+      intro w hw
+      have hw_LS : bochner_diag_map zstar w ∈ TubeDomain (LShape r R) := by
+        change (fun i => (bochner_diag_map zstar w i).im) ∈ LShape r R
+        rw [bochner_diag_map_im, hw]
+        exact (h_ends zstar hz_ball).1
+      dsimp [g]
+      rw [hF_eq hw_LS]
+      exact hf_bound _ hw_LS
+    have h_ed2 : ∀ w : ℂ, w.im = t₂ → ‖g w‖ ≤ M := by
+      intro w hw
+      have hw_LS : bochner_diag_map zstar w ∈ TubeDomain (LShape r R) := by
+        change (fun i => (bochner_diag_map zstar w i).im) ∈ LShape r R
+        rw [bochner_diag_map_im, hw]
+        exact (h_ends zstar hz_ball).2
+      dsimp [g]
+      rw [hF_eq hw_LS]
+      exact hf_bound _ hw_LS
+    have hg0 := norm_le_on_horizontal_strip_of_bdd ht₁_lt_t₂ hg_diff hg_cont hg_bdd h_ed1 h_ed2
+      (z := 0) (by simp [ht₁_neg.le]) (by simp [ht₂_pos.le])
+    simpa [g, bochner_diag_map_zero] using hg0
 end Bochner
 
 lemma isOpen_TubeDomain_minus (V_plus : Set (Fin n → ℝ)) (hV_open : IsOpen V_plus) :
@@ -7701,23 +7791,6 @@ lemma analyticAt_of_eventuallyEq {E : Type*} [NormedAddCommGroup E] [NormedSpace
     {g F : E → ℂ} {w : E} (hF : AnalyticAt ℂ F w) (h_eq : F =ᶠ[nhds w] g) :
     AnalyticAt ℂ g w := hF.congr h_eq
 
-lemma orthant_kernel_diag_proj_analytic (n : ℕ) (hn : 0 < n)
-    (f : (Fin n → ℂ) → ℂ) (x : Fin n → ℝ) (v : Fin n → (Fin n → ℝ))
-    (ρ : ℝ)
-    (hg_an : AnalyticOnNhd ℂ (slice_fun f (fun i => (x i : ℂ)) (∑ j, v j)) (Metric.ball 0 ρ))
-    (w : Fin n → ℂ) (hw : w ∈ Metric.ball 0 ρ) :
-    AnalyticAt ℂ ((slice_fun f (fun i => (x i : ℂ)) (∑ j, v j)) ∘
-      ((ContinuousLinearMap.proj ⟨0, hn⟩ : (Fin n → ℂ) →L[ℂ] ℂ))) w := by
-  have hw0 : w ⟨0, hn⟩ ∈ Metric.ball (0 : ℂ) ρ := by
-    rw [Metric.mem_ball] at hw ⊢
-    have hle := dist_le_pi_dist w 0 ⟨0, hn⟩
-    exact lt_of_le_of_lt hle hw
-  let P : (Fin n → ℂ) →L[ℂ] ℂ := ContinuousLinearMap.proj ⟨0, hn⟩
-  have hP : AnalyticAt ℂ P w := P.analyticAt w
-  let G1 : ℂ → ℂ := slice_fun f (fun i => (x i : ℂ)) (∑ j, v j)
-  have hG1 : AnalyticAt ℂ G1 (P w) := hg_an (w ⟨0, hn⟩) hw0
-  exact hG1.comp hP
-
 lemma cAffine_diag_eq (n : ℕ) (_hn : 0 < n)
     (f : (Fin n → ℂ) → ℂ) (x : Fin n → ℝ) (v : Fin n → (Fin n → ℝ)) (t : ℂ) :
     (f ∘ cAffine (Matrix.of fun i j => v j i) x) (fun _ => t) =
@@ -7764,26 +7837,6 @@ lemma orthant_kernel_analytic_nd_cauchy_rep (n : ℕ) (_hn : 0 < n)
     dsimp [c] at hζ; subst h_eq; rw [dist_self] at hζ
     have hri := hr_pos i; dsimp [r] at hζ; linarith
   exact ⟨hr_pos, hw_in, h_ne⟩
-
-lemma orthant_kernel_analytic_2d_local
-    (f : (Fin 2 → ℂ) → ℂ) (x : Fin 2 → ℝ) (v : Fin 2 → (Fin 2 → ℝ))
-    (ρ : ℝ)
-    (hg_an : AnalyticOnNhd ℂ (slice_fun f (fun i => (x i : ℂ)) (∑ j, v j)) (Metric.ball 0 ρ))
-    (w : Fin 2 → ℂ) (hw : w ∈ Metric.ball 0 ρ) :
-    ∃ F : (Fin 2 → ℂ) → ℂ, AnalyticAt ℂ F w ∧
-      F = (slice_fun f (fun i => (x i : ℂ)) (∑ j, v j)) ∘
-        ((ContinuousLinearMap.proj ⟨0, by decide⟩ : (Fin 2 → ℂ) →L[ℂ] ℂ)) :=
-  ⟨_, orthant_kernel_diag_proj_analytic 2 (by decide) f x v ρ hg_an w hw, rfl⟩
-
-lemma orthant_kernel_analytic_nd_local (n : ℕ) (hn : 0 < n)
-    (f : (Fin n → ℂ) → ℂ) (x : Fin n → ℝ) (v : Fin n → (Fin n → ℝ))
-    (ρ : ℝ)
-    (hg_an : AnalyticOnNhd ℂ (slice_fun f (fun i => (x i : ℂ)) (∑ j, v j)) (Metric.ball 0 ρ))
-    (w : Fin n → ℂ) (hw : w ∈ Metric.ball 0 ρ) :
-    ∃ F : (Fin n → ℂ) → ℂ, AnalyticAt ℂ F w ∧
-      F = (slice_fun f (fun i => (x i : ℂ)) (∑ j, v j)) ∘
-        ((ContinuousLinearMap.proj ⟨0, hn⟩ : (Fin n → ℂ) →L[ℂ] ℂ)) :=
-  ⟨_, orthant_kernel_diag_proj_analytic n hn f x v ρ hg_an w hw, rfl⟩
 
 lemma orthant_kernel_2d_diag_ident
     (f : (Fin 2 → ℂ) → ℂ) (x : Fin 2 → ℝ) (v : Fin 2 → (Fin 2 → ℝ)) (t : ℂ) :
@@ -10509,6 +10562,33 @@ lemma eow_local_exists_all_dim {n : ℕ} (V_plus U : Set (Fin n → ℝ))
     exists_ball_subset_and_analyticOnNhd hU_open hx_U hF_ana
   exact ⟨r_x, hr_x_pos, h_sub, F_x, h_ana_nhd, hF_eq.mono Set.inter_subset_right⟩
 
+lemma eow_local_exists_pos_dim {n : ℕ} (hn : 0 < n) (V_plus U : Set (Fin n → ℝ))
+    (hV_plus_open : IsOpen V_plus)
+    (hV_plus_convex : Convex ℝ V_plus)
+    (hV_plus_cone : ∀ v ∈ V_plus, ∀ (c : ℝ), c > 0 → (fun i => c * v i) ∈ V_plus)
+    (hV_plus_ne : V_plus.Nonempty)
+    (hU_open : IsOpen U)
+    (f : (Fin n → ℂ) → ℂ)
+    (h_cont : ContinuousOn f (WedgeDomain V_plus ((fun v : Fin n → ℝ => -v) '' V_plus) U))
+    (h_holo_plus : DifferentiableOn ℂ f (TubeDomain V_plus))
+    (h_holo_minus : DifferentiableOn ℂ f (TubeDomain ((fun v : Fin n → ℝ => -v) '' V_plus)))
+    (x : Fin n → ℝ) (hx_U : x ∈ U) :
+    ∃ r_x > 0, Metric.ball x r_x ⊆ U ∧ ∃ F_x : (Fin n → ℂ) → ℂ,
+      AnalyticOnNhd ℂ F_x (Metric.ball (fun i => (x i : ℂ)) r_x) ∧
+      EqOn F_x f (Metric.ball (fun i => (x i : ℂ)) r_x ∩
+        WedgeDomain V_plus ((fun v : Fin n → ℝ => -v) '' V_plus) U) := by
+  obtain ⟨v, hli, hv⟩ := exists_linearIndependent_mem_open hV_plus_open hV_plus_ne
+  obtain ⟨ρ, hρ, hdata⟩ := orthant_eowData_of_wedge n hn V_plus U hV_plus_convex hV_plus_cone
+    hU_open f h_cont h_holo_plus h_holo_minus x hx_U v hv
+  have h_orth := orthant_eow_extension n _ hρ hdata
+  have h_core := eow_local_core_of_orthant hn V_plus hV_plus_open hV_plus_convex hV_plus_cone f
+    h_holo_plus h_holo_minus x v hli hv h_orth
+  obtain ⟨F_x, hF_ana, hF_eq⟩ := exists_local_analytic_extension_of_core V_plus U hV_plus_open
+    hV_plus_convex hV_plus_cone f h_cont h_holo_plus h_holo_minus x h_core
+  obtain ⟨r_x, hr_x_pos, h_sub, h_ana_nhd⟩ :=
+    exists_ball_subset_and_analyticOnNhd hU_open hx_U hF_ana
+  exact ⟨r_x, hr_x_pos, h_sub, F_x, h_ana_nhd, hF_eq.mono Set.inter_subset_right⟩
+
 theorem eow_all_dim {n : ℕ} (V_plus U : Set (Fin n → ℝ))
     (hV_plus_open : IsOpen V_plus)
     (hV_plus_convex : Convex ℝ V_plus)
@@ -13015,24 +13095,49 @@ theorem malgrange_zerner_local_cross (N : ℕ) {r R M : ℝ}
 section Phase1LogTime
 
 def SectorCone (θ : ℝ) : Set ℂ :=
-  { τ : ℂ | 0 < τ.re ∧ |τ.im| < τ.re * Real.tan θ }
+  { τ : ℂ | τ ≠ 0 ∧ |τ.arg| < θ }
 
 lemma mem_sectorCone_iff_exists_exp {θ : ℝ} (hθ0 : 0 < θ) (hθpi : θ < Real.pi / 2) (τ : ℂ) :
     τ ∈ SectorCone θ ↔ ∃ w : ℂ, |w.im| < θ ∧ Complex.exp w = τ := by
   constructor
-  · intro ⟨hre, him⟩
-    have hτ_ne : τ ≠ 0 := fun h => by simp [h] at hre
-    refine ⟨Complex.log τ, ?_, Complex.exp_log hτ_ne⟩
-    rw [Complex.log_im]
-    have harg_lt : |τ.arg| < Real.pi / 2 :=
+  · rintro ⟨hτ_ne, him⟩
+    exact ⟨Complex.log τ, by rwa [Complex.log_im], Complex.exp_log hτ_ne⟩
+  · rintro ⟨w, hw, rfl⟩
+    have hcos : 0 < Real.cos w.im :=
+      Real.cos_pos_of_mem_Ioo ⟨by linarith [abs_lt.mp hw], by linarith [abs_lt.mp hw]⟩
+    have hre : 0 < (Complex.exp w).re := by
+      rw [Complex.exp_re]
+      exact mul_pos (Real.exp_pos _) hcos
+    refine ⟨Complex.exp_ne_zero w, ?_⟩
+    have him : |(Complex.exp w).im| < (Complex.exp w).re * Real.tan θ := by
+      rw [Complex.exp_im, Complex.exp_re, abs_mul, abs_of_pos (Real.exp_pos _), mul_assoc]
+      refine mul_lt_mul_of_pos_left ?_ (Real.exp_pos _)
+      have h_tan : |Real.sin w.im| / Real.cos w.im < Real.tan θ := by
+        have h_eq : |Real.sin w.im| / Real.cos w.im = Real.tan |w.im| := by
+          rw [← abs_of_pos hcos, ← abs_div, ← Real.tan_eq_sin_div_cos]
+          rcases le_or_gt 0 w.im with ha | ha
+          · rw [abs_of_nonneg ha, abs_of_nonneg (Real.tan_nonneg_of_nonneg_of_le_pi_div_two ha
+              (by linarith [abs_lt.mp hw]))]
+          · rw [abs_of_neg ha, Real.tan_neg, abs_of_nonpos]
+            have hpos := Real.tan_nonneg_of_nonneg_of_le_pi_div_two (neg_nonneg.mpr ha.le)
+              (by linarith [(abs_lt.mp hw).1])
+            rw [Real.tan_neg] at hpos
+            linarith
+        rw [h_eq]
+        exact Real.strictMonoOn_tan
+          ⟨by linarith [abs_nonneg w.im], by linarith⟩
+          ⟨by linarith [hθ0], hθpi⟩ hw
+      rwa [div_lt_iff₀ hcos, mul_comm] at h_tan
+    have harg_lt : |(Complex.exp w).arg| < Real.pi / 2 :=
       Complex.abs_arg_lt_pi_div_two_iff.mpr (Or.inl hre)
-    have htan_arg : Real.tan τ.arg = τ.im / τ.re := Complex.tan_arg τ
-    have htan_abs : Real.tan |τ.arg| < Real.tan θ := by
-      have h1 : |Real.tan τ.arg| < Real.tan θ := by
+    have htan_arg : Real.tan (Complex.exp w).arg = (Complex.exp w).im / (Complex.exp w).re :=
+      Complex.tan_arg (Complex.exp w)
+    have htan_abs : Real.tan |(Complex.exp w).arg| < Real.tan θ := by
+      have h1 : |Real.tan (Complex.exp w).arg| < Real.tan θ := by
         rw [htan_arg, abs_div, abs_of_pos hre, div_lt_iff₀ hre, mul_comm]
         exact him
-      have h_eq : Real.tan |τ.arg| = |Real.tan τ.arg| := by
-        rcases le_or_gt 0 τ.arg with ha | ha
+      have h_eq : Real.tan |(Complex.exp w).arg| = |Real.tan (Complex.exp w).arg| := by
+        rcases le_or_gt 0 (Complex.exp w).arg with ha | ha
         · rw [abs_of_nonneg ha, abs_of_nonneg (Real.tan_nonneg_of_nonneg_of_le_pi_div_two ha
             (abs_lt.mp harg_lt).2.le)]
         · rw [abs_of_neg ha, Real.tan_neg, abs_of_nonpos]
@@ -13042,35 +13147,10 @@ lemma mem_sectorCone_iff_exists_exp {θ : ℝ} (hθ0 : 0 < θ) (hθpi : θ < Rea
           linarith
       rwa [h_eq]
     by_contra hge
-    have hle : θ ≤ |τ.arg| := not_lt.mp hge
+    have hle : θ ≤ |(Complex.exp w).arg| := not_lt.mp hge
     have hmono := Real.strictMonoOn_tan.monotoneOn
-      ⟨by linarith, hθpi⟩ ⟨by linarith [abs_nonneg τ.arg], harg_lt⟩ hle
+      ⟨by linarith [hθ0], hθpi⟩ ⟨by linarith [abs_nonneg (Complex.exp w).arg], harg_lt⟩ hle
     linarith
-  · rintro ⟨w, hw, rfl⟩
-    have hcos : 0 < Real.cos w.im :=
-      Real.cos_pos_of_mem_Ioo ⟨by linarith [abs_lt.mp hw], by linarith [abs_lt.mp hw]⟩
-    have hre : 0 < (Complex.exp w).re := by
-      rw [Complex.exp_re]
-      exact mul_pos (Real.exp_pos _) hcos
-    refine ⟨hre, ?_⟩
-    rw [Complex.exp_im, Complex.exp_re, abs_mul, abs_of_pos (Real.exp_pos _), mul_assoc]
-    refine mul_lt_mul_of_pos_left ?_ (Real.exp_pos _)
-    have h_tan : |Real.sin w.im| / Real.cos w.im < Real.tan θ := by
-      have h_eq : |Real.sin w.im| / Real.cos w.im = Real.tan |w.im| := by
-        rw [← abs_of_pos hcos, ← abs_div, ← Real.tan_eq_sin_div_cos]
-        rcases le_or_gt 0 w.im with ha | ha
-        · rw [abs_of_nonneg ha, abs_of_nonneg (Real.tan_nonneg_of_nonneg_of_le_pi_div_two ha
-            (by linarith [abs_lt.mp hw]))]
-        · rw [abs_of_neg ha, Real.tan_neg, abs_of_nonpos]
-          have hpos := Real.tan_nonneg_of_nonneg_of_le_pi_div_two (neg_nonneg.mpr ha.le)
-            (by linarith [(abs_lt.mp hw).1])
-          rw [Real.tan_neg] at hpos
-          linarith
-      rw [h_eq]
-      exact Real.strictMonoOn_tan
-        ⟨by linarith [abs_nonneg w.im], by linarith⟩
-        ⟨by linarith, hθpi⟩ hw
-    rwa [div_lt_iff₀ hcos, mul_comm] at h_tan
 
 lemma re_pos_iff_exists_exp (τ : ℂ) :
     0 < τ.re ↔ ∃ w : ℂ, |w.im| < Real.pi / 2 ∧ Complex.exp w = τ := by
