@@ -41,4 +41,5 @@ roots = [
     "OSReconstruction",
     "VacuumTheory",
     "WightmanBridge",
+    "ScatteringTheory",
 ]
