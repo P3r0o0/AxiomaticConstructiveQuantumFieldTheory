@@ -12533,9 +12533,6 @@ instance instCompleteSpaceSymmFockSubmodule (ν : ℕ) (η : ℂ) :
 abbrev SymmFockHilbert (ν : ℕ) (η : ℂ) : Type :=
   ↥(SymmFockSubmodule ν η)
 
-def fockSymmProjCLM (ν : ℕ) (η : ℂ) : FockHilbert ν →L[ℂ] FockHilbert ν :=
-  (SymmFockSubmodule ν η).starProjection
-
 lemma mem_symmFockSubmodule_iff {ν : ℕ} {η : ℂ} {Ψ : FockHilbert ν} :
     Ψ ∈ SymmFockSubmodule ν η ↔
       ∀ (r : ℕ) (σ : Equiv.Perm (Fin r)),
@@ -14372,3 +14369,2880 @@ end
 end
 
 end QFT
+
+namespace QFT
+
+noncomputable section
+
+lemma minkowskiInner_massShellVec_ge_sq (m : ℝ) (q₁ q₂ : Fin 3 → ℝ) :
+    m ^ 2 ≤ minkowskiInner (massShellVec m q₁) (massShellVec m q₂) := by
+  let E₁ := massShellEnergy m q₁
+  let E₂ := massShellEnergy m q₂
+  let d := q₁ 0 * q₂ 0 + q₁ 1 * q₂ 1 + q₁ 2 * q₂ 2
+  have hE₁_nn : 0 ≤ E₁ := Real.sqrt_nonneg _
+  have hE₂_nn : 0 ≤ E₂ := Real.sqrt_nonneg _
+  have hE₁ : E₁ ^ 2 = m ^ 2 + (q₁ 0) ^ 2 + (q₁ 1) ^ 2 + (q₁ 2) ^ 2 := by
+    simpa [E₁, massShellSpatialSq, add_assoc] using massShellEnergy_sq m q₁
+  have hE₂ : E₂ ^ 2 = m ^ 2 + (q₂ 0) ^ 2 + (q₂ 1) ^ 2 + (q₂ 2) ^ 2 := by
+    simpa [E₂, massShellSpatialSq, add_assoc] using massShellEnergy_sq m q₂
+  have h_mink : minkowskiInner (massShellVec m q₁) (massShellVec m q₂) = E₁ * E₂ - d := by
+    rw [minkowskiInner_explicit]
+    dsimp [massShellVec, E₁, E₂, d]
+    ring
+  rw [h_mink]
+  by_cases hd : m ^ 2 + d ≤ 0
+  · have hprod : 0 ≤ E₁ * E₂ := mul_nonneg hE₁_nn hE₂_nn
+    linarith
+  · have h_id :
+        E₁ ^ 2 * E₂ ^ 2 - (m ^ 2 + d) ^ 2 =
+          m ^ 2 * ((q₁ 0 - q₂ 0) ^ 2 + (q₁ 1 - q₂ 1) ^ 2 + (q₁ 2 - q₂ 2) ^ 2) +
+            ((q₁ 0 * q₂ 1 - q₁ 1 * q₂ 0) ^ 2 +
+              (q₁ 1 * q₂ 2 - q₁ 2 * q₂ 1) ^ 2 +
+              (q₁ 2 * q₂ 0 - q₁ 0 * q₂ 2) ^ 2) := by
+      rw [hE₁, hE₂]
+      dsimp [d]
+      ring
+    have h_diff_nn : 0 ≤ (E₁ * E₂) ^ 2 - (m ^ 2 + d) ^ 2 := by
+      have h_pow : (E₁ * E₂) ^ 2 = E₁ ^ 2 * E₂ ^ 2 := by ring
+      rw [h_pow, h_id]
+      positivity
+    have h_le : m ^ 2 + d ≤ E₁ * E₂ := by
+      nlinarith [mul_nonneg hE₁_nn hE₂_nn]
+    linarith
+
+lemma minkowskiInner_sum_massShellVec_eq {κ : Type*} (m : ℝ) (S : Finset κ)
+    (p : κ → Fin 3 → ℝ) :
+    minkowskiInner (∑ c ∈ S, massShellVec m (p c)) (∑ c ∈ S, massShellVec m (p c)) =
+      ∑ c₁ ∈ S, ∑ c₂ ∈ S, minkowskiInner (massShellVec m (p c₁)) (massShellVec m (p c₂)) := by
+  have hcoord : ∀ μ : Fin 4,
+      (∑ c ∈ S, massShellVec m (p c)) μ * (∑ c ∈ S, massShellVec m (p c)) μ =
+        ∑ c₁ ∈ S, ∑ c₂ ∈ S, massShellVec m (p c₁) μ * massShellVec m (p c₂) μ := by
+    intro μ
+    simp only [Finset.sum_apply, Finset.sum_mul, Finset.mul_sum]
+    exact Finset.sum_comm
+  rw [minkowskiInner_explicit, hcoord 0, hcoord 1, hcoord 2, hcoord 3]
+  simp_rw [minkowskiInner_explicit, ← Finset.sum_sub_distrib]
+
+lemma sum_massShellVec_mem_massGapSpectrum {κ : Type*} {m : ℝ} (hm : 0 < m) (S : Finset κ)
+    (p : κ → Fin 3 → ℝ) :
+    (∑ c ∈ S, massShellVec m (p c)) ∈ massGapSpectrum m (2 * m) := by
+  classical
+  by_cases h0 : S.card = 0
+  · rw [Finset.card_eq_zero.mp h0, Finset.sum_empty]
+    exact zero_mem_massGapSpectrum m (2 * m)
+  · by_cases h1 : S.card = 1
+    · obtain ⟨c, hc⟩ := Finset.card_eq_one.mp h1
+      rw [hc, Finset.sum_singleton]
+      exact Or.inr (Or.inl (massShellVec_mem_posMassShell hm (p c)))
+    · have h2 : 2 ≤ S.card := by omega
+      have hne : S.Nonempty := Finset.card_pos.mp (by omega)
+      refine Or.inr (Or.inr ⟨?_, ?_⟩)
+      · rw [Finset.sum_apply]
+        exact Finset.sum_pos (fun c _ => massShellEnergy_pos hm (p c)) hne
+      · rw [minkowskiInner_sum_massShellVec_eq]
+        have h_low :
+            (∑ c₁ ∈ S, ∑ c₂ ∈ S, m ^ 2) ≤
+              ∑ c₁ ∈ S, ∑ c₂ ∈ S,
+                minkowskiInner (massShellVec m (p c₁)) (massShellVec m (p c₂)) :=
+          Finset.sum_le_sum fun c₁ _ => Finset.sum_le_sum fun c₂ _ =>
+            minkowskiInner_massShellVec_ge_sq m (p c₁) (p c₂)
+        have h_card_real : (2 : ℝ) ≤ (S.card : ℝ) := by exact_mod_cast h2
+        have h_sum_eq :
+            (∑ _c₁ ∈ S, ∑ _c₂ ∈ S, m ^ 2) = ((S.card : ℝ) * (S.card : ℝ)) * m ^ 2 := by
+          simp [Finset.sum_const, nsmul_eq_mul, mul_assoc]
+        have h_4m : (2 * m) ^ 2 ≤ ((S.card : ℝ) * (S.card : ℝ)) * m ^ 2 := by
+          have h4 : (4 : ℝ) ≤ (S.card : ℝ) * (S.card : ℝ) := by nlinarith
+          have hm2 : 0 ≤ m ^ 2 := sq_nonneg m
+          nlinarith
+        exact h_4m.trans (h_sum_eq ▸ h_low)
+
+theorem wickMassShell_massGapSpectrumCondition {κ : Type*} {m : ℝ} (hm : 0 < m) (η : ℂ)
+    {C : (Fin 2 → κ) → (Fin 4 → ℝ) → ℂ} (hC : MassShellCoeffData m C) :
+    MassGapSpectrumCondition m (2 * m) (wickMassShellW m η C hC) := by
+  intro n α f ⟨U, _hU_open, hU_sub, hU_zero⟩
+  rw [wickMassShellW_apply]
+  refine Finset.sum_eq_zero fun P _ => ?_
+  have h_int0 :
+      (∫ p : P.Chord → Fin 3 → ℝ,
+        wickChordWeight m C P α p * minkowskiFourier f (P.momentum m p)) = 0 := by
+    refine integral_eq_zero_of_ae (Filter.Eventually.of_forall fun p => ?_)
+    dsimp only
+    have h_mem : P.momentum m p ∈ massGapSpectralRegion m (2 * m) n := by
+      refine ⟨(P.momentum_mem_forwardConeSpectralRegion hm p).1, fun k => ?_⟩
+      have h_psum :
+          partial_sum_p n (P.momentum m p) k =
+            ∑ c ∈ Finset.univ.filter (fun c : P.Chord => c.1 ≤ k ∧ k < P.mate c.1),
+              massShellVec m (p c) := by
+        unfold partial_sum_p
+        simp_rw [P.momentum_eq_sum m p, Finset.sum_apply]
+        rw [Finset.sum_comm]
+        have h_each :
+            (∑ c : P.Chord, ∑ i ∈ Finset.univ.filter (· ≤ k),
+              chordTwoPointMomentum P c (massShellVec m (p c)) i) =
+              ∑ c : P.Chord,
+                if c.1 ≤ k ∧ k < P.mate c.1 then massShellVec m (p c) else 0 :=
+          Finset.sum_congr rfl fun c _ =>
+            partial_sum_chordTwoPointMomentum P c (massShellVec m (p c)) k
+        rw [h_each, ← Finset.sum_filter]
+      rw [h_psum]
+      exact sum_massShellVec_mem_massGapSpectrum hm _ (fun c => p c)
+    rw [hU_zero _ (hU_sub h_mem), mul_zero]
+    rfl
+  rw [h_int0, mul_zero]
+
+lemma liftSectorToFock_finsetSum {κ : Type*} (ν r : ℕ) (S : Finset κ)
+    (g : κ → FockSectorDom ν r → ℂ)
+    (hg_meas : ∀ k : κ, Measurable (g k))
+    (hg_mem : ∀ k : κ, MemLp (g k) 2 (fockSectorMeasure ν r))
+    (hsum_meas : Measurable (∑ k ∈ S, g k))
+    (hsum_mem : MemLp (∑ k ∈ S, g k) 2 (fockSectorMeasure ν r)) :
+    liftSectorToFock ν r (∑ k ∈ S, g k) hsum_meas hsum_mem =
+      ∑ k ∈ S, liftSectorToFock ν r (g k) (hg_meas k) (hg_mem k) := by
+  classical
+  revert hsum_meas hsum_mem
+  induction S using Finset.induction with
+  | empty =>
+    intro hm h
+    refine (liftSectorToFock_congr hm h measurable_const MemLp.zero
+      fun x => congrFun Finset.sum_empty x).trans ?_
+    exact liftSectorToFock_zero ν r
+  | @insert a S ha ih =>
+    intro hm h
+    have hs_meas : Measurable (∑ k ∈ S, g k) := by
+      have h_eq : (∑ k ∈ S, g k) = fun x => ∑ k ∈ S, g k x := by ext x; simp
+      rw [h_eq]
+      exact Finset.measurable_fun_sum S fun k _ => hg_meas k
+    have hs_mem : MemLp (∑ k ∈ S, g k) 2 (fockSectorMeasure ν r) :=
+      MeasureTheory.memLp_finsetSum' S fun k _ => hg_mem k
+    have h_eq : ∀ x, (∑ k ∈ insert a S, g k) x = (g a + ∑ k ∈ S, g k) x := fun x => by
+      simp [Finset.sum_insert ha]
+    rw [liftSectorToFock_congr hm h ((hg_meas a).add hs_meas) ((hg_mem a).add hs_mem) h_eq,
+      liftSectorToFock_add (hg_meas a) (hg_mem a) hs_meas hs_mem,
+      ih hs_meas hs_mem, Finset.sum_insert ha]
+
+lemma symmSector_finsetSum {κ : Type*} (ν r : ℕ) (η : ℂ) (S : Finset κ)
+    (g : κ → FockSectorDom ν r → ℂ) :
+    symmSector ν r η (∑ k ∈ S, g k) = ∑ k ∈ S, symmSector ν r η (g k) := by
+  ext x
+  unfold symmSector
+  simp only [Finset.sum_apply, Finset.mul_sum]
+  exact Finset.sum_comm
+
+lemma fockMomentumVec_mem_symmFockSubmodule {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (j : ℕ) (α : Fin j → ι) (φ : (Fin j → Fin 4 → ℝ) → ℂ)
+    (hφ : PartialMomentumBound m j φ) :
+    fockMomentumVec M_mode hC j α φ hφ ∈ SymmFockSubmodule M_mode.ν η := by
+  unfold fockMomentumVec
+  refine Submodule.sum_mem _ fun r _ => ?_
+  exact liftSectorToFock_symmSector_mem M_mode.hη
+    (measurable_fockRawSector M_mode hC r α hφ)
+    (memLp_fockRawSector M_mode hC r α hφ)
+
+def symmFockSchwartzVec {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R_rep : HolomorphicLorentzRep ι} {S : StarStructure R_rep}
+    {m : ℝ} {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R_rep S m η C) (hC : MassShellCoeffData m C)
+    (j : ℕ) (α : Fin j → ι) (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) :
+    SymmFockHilbert M_mode.ν η :=
+  ⟨fockSchwartzVec M_mode hC j α f,
+    fockMomentumVec_mem_symmFockSubmodule M_mode hC j α (minkowskiFourier f)
+      (partialMomentumBound_minkowskiFourier m j f)⟩
+
+section
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+abbrev SchwartzFieldConfig (κ : Type*) : Type _ :=
+  Σ (j : ℕ), (Fin j → κ) × SchwartzMap (Fin j → Fin 4 → ℝ) ℂ
+
+lemma dense_span_wightmanSchwartzVec
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (WData : WightmanPositiveData R S) :
+    Dense (Submodule.span ℂ (Set.range (fun cfg : SchwartzFieldConfig ι =>
+      wightmanSchwartzVec WData cfg.1 cfg.2.1 cfg.2.2)) : Set (WightmanHilbert WData)) := by
+  let K : Submodule ℂ (WightmanHilbert WData) :=
+    Submodule.span ℂ (Set.range (fun cfg : SchwartzFieldConfig ι =>
+      wightmanSchwartzVec WData cfg.1 cfg.2.1 cfg.2.2))
+  change Dense (K : Set (WightmanHilbert WData))
+  rw [Submodule.dense_iff_topologicalClosure_eq_top, ← K.orthogonal_orthogonal_eq_closure]
+  have hK_bot : Kᗮ = ⊥ := by
+    rw [Submodule.eq_bot_iff]
+    intro Φ hΦ
+    refine eq_zero_of_inner_wightmanBasis_eq_zero WData fun A => ?_
+    have hmem : wightmanBasis WData A ∈ K := by
+      rw [← wightmanSchwartzVec_compact WData A.1 A.2.1 A.2.2]
+      exact Submodule.subset_span ⟨⟨A.1, A.2.1, A.2.2.val⟩, rfl⟩
+    exact (Submodule.mem_orthogonal K Φ).mp hΦ _ hmem
+  rw [hK_bot, Submodule.bot_orthogonal_eq_top]
+
+def wickWightmanToSymmFock
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q) :
+    D.Hilbert →ₗᵢ[ℂ] SymmFockHilbert D.mode.ν η :=
+  (exists_unique_linearIsometry_of_inner_eq_of_dense
+    (fun cfg : SchwartzFieldConfig ι =>
+      wightmanSchwartzVec D.wightman.WData cfg.1 cfg.2.1 cfg.2.2)
+    (fun cfg : SchwartzFieldConfig ι =>
+      symmFockSchwartzVec D.mode D.hC cfg.1 cfg.2.1 cfg.2.2)
+    (fun ⟨j, α, f⟩ ⟨k, α', g⟩ => by
+      change ⟪fockSchwartzVec D.mode D.hC j α f, fockSchwartzVec D.mode D.hC k α' g⟫_ℂ =
+        ⟪wightmanSchwartzVec D.wightman.WData j α f,
+          wightmanSchwartzVec D.wightman.WData k α' g⟫_ℂ
+      rw [inner_fockSchwartzVec_eq_wickMassShellW D.mode D.hC hC_herm j k α α' f g
+        (borchersConcatSchwartz j k f g) (borchersConcatSchwartz_apply j k f g), ← hW,
+        inner_wightmanSchwartzVec])
+    (dense_span_wightmanSchwartzVec D.wightman.WData)).choose
+
+theorem wickWightmanToSymmFock_wightmanSchwartzVec
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (j : ℕ) (α : Fin j → ι) (f : SchwartzMap (Fin j → Fin 4 → ℝ) ℂ) :
+    wickWightmanToSymmFock D hW hC_herm (wightmanSchwartzVec D.wightman.WData j α f) =
+      symmFockSchwartzVec D.mode D.hC j α f :=
+  (exists_unique_linearIsometry_of_inner_eq_of_dense
+    (fun cfg : SchwartzFieldConfig ι =>
+      wightmanSchwartzVec D.wightman.WData cfg.1 cfg.2.1 cfg.2.2)
+    (fun cfg : SchwartzFieldConfig ι =>
+      symmFockSchwartzVec D.mode D.hC cfg.1 cfg.2.1 cfg.2.2)
+    (fun ⟨j₁, α₁, f₁⟩ ⟨k₁, α'₁, g₁⟩ => by
+      change ⟪fockSchwartzVec D.mode D.hC j₁ α₁ f₁,
+          fockSchwartzVec D.mode D.hC k₁ α'₁ g₁⟫_ℂ =
+        ⟪wightmanSchwartzVec D.wightman.WData j₁ α₁ f₁,
+          wightmanSchwartzVec D.wightman.WData k₁ α'₁ g₁⟫_ℂ
+      rw [inner_fockSchwartzVec_eq_wickMassShellW D.mode D.hC hC_herm j₁ k₁ α₁ α'₁ f₁ g₁
+        (borchersConcatSchwartz j₁ k₁ f₁ g₁) (borchersConcatSchwartz_apply j₁ k₁ f₁ g₁), ← hW,
+        inner_wightmanSchwartzVec])
+    (dense_span_wightmanSchwartzVec D.wightman.WData)).choose_spec.1 ⟨j, α, f⟩
+
+theorem wickWightmanToSymmFock_wightmanIndexedVec
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (k : ℕ) (Φ : IndexedSchwartz ι k) :
+    wickWightmanToSymmFock D hW hC_herm (wightmanIndexedVec D.wightman.WData k Φ) =
+      ∑ α : Fin k → ι, symmFockSchwartzVec D.mode D.hC k α (Φ α) := by
+  unfold wightmanIndexedVec
+  rw [map_sum]
+  refine Finset.sum_congr rfl fun α _ => ?_
+  exact wickWightmanToSymmFock_wightmanSchwartzVec D hW hC_herm k α (Φ α)
+
+lemma minkowskiFourier_schwartzChain (r : ℕ)
+    (ψ : Fin r → SchwartzMap (Fin 1 → Fin 4 → ℝ) ℂ) (q : Fin r → Fin 4 → ℝ) :
+    minkowskiFourier (schwartzChain r ψ) q =
+      ∏ i : Fin r, minkowskiFourier (ψ i) (fun _ => q i) := by
+  induction r with
+  | zero =>
+    dsimp [schwartzChain]
+    rw [minkowskiFourier_fin0, Subsingleton.elim q 0, momentumWavepacketSchwartz_zero_zero_apply,
+      Finset.univ_eq_empty, Finset.prod_empty]
+  | succ k ih =>
+    dsimp [schwartzChain]
+    rw [minkowskiFourier_schwartzPrepend, ih, Fin.prod_univ_succ]
+    rfl
+
+lemma minkowskiFourier_haagRuelleIndexedTest_posMassShell_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (s₀ : Fin D.mode.ν) (f₀ : SmoothWavepacket) (t : ℝ) (α₀ : ι) (p : Fin 3 → ℝ) :
+    minkowskiFourier (haagRuelleIndexedTest D s₀ f₀ t α₀) (fun _ => massShellVec m p) = 0 := by
+  have h_eq : (fun _ : Fin 1 => massShellVec m p) = fun _ => -(-massShellVec m p) := by
+    ext i μ
+    simp
+  have h_not : -massShellVec m p ∉ tsupport (massShellCutoff m M D.hm D.hM) := by
+    intro h_ts
+    have hb := (tsupport_massShellCutoff_bounds D.hm D.hM h_ts).1
+    have h0 : (-massShellVec m p) 0 = -massShellEnergy m p := rfl
+    have he := massShellEnergy_pos D.hm p
+    linarith [D.hm]
+  rw [h_eq]
+  exact minkowskiFourier_haagRuelleTestFn_eq_zero_of_notMem D.hm D.hM
+    (dualModeWavepacket D s₀ α₀ f₀) t h_not
+
+lemma minkowskiFourier_haagRuelleIndexedTest_negMassShell
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (s₀ : Fin D.mode.ν) (f₀ : SmoothWavepacket) (t : ℝ) (α₀ : ι) (k : Fin 3 → ℝ) :
+    minkowskiFourier (haagRuelleIndexedTest D s₀ f₀ t α₀) (fun _ => -massShellVec m k) =
+      D.dual_w s₀ k α₀ * f₀.amp k := by
+  dsimp [haagRuelleIndexedTest]
+  rw [minkowskiFourier_haagRuelleTestFn_massShell, dualModeWavepacket_apply]
+
+def idPartialPairing (r : ℕ) : PartialPairing r r where
+  unpaired := id
+  strictMono_unpaired := strictMono_id
+  mate := 1
+  involutive _ := rfl
+  fixed_iff i := ⟨fun _ => ⟨i, rfl⟩, fun _ => rfl⟩
+
+lemma partialPairing_eq_idPartialPairing {r : ℕ} (L : PartialPairing r r) :
+    L = idPartialPairing r := by
+  refine PartialPairing.ext_mate ?_
+  apply Equiv.ext
+  intro i
+  change L.mate i = i
+  rw [L.fixed_iff i]
+  exact Finite.surjective_of_injective L.unpaired_injective i
+
+lemma isEmpty_internalChord_idPartialPairing (r : ℕ) :
+    IsEmpty (idPartialPairing r).InternalChord :=
+  ⟨fun c => lt_irrefl c.1 c.2⟩
+
+lemma partialCross_idPartialPairing (r : ℕ) :
+    (idPartialPairing r).partialCross = 0 := by
+  have hint : (idPartialPairing r).internalCross = 0 := by
+    unfold PartialPairing.internalCross
+    rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
+    intro ij _ h
+    have hm : (idPartialPairing r).mate ij.1 = ij.1 := rfl
+    rw [hm] at h
+    exact lt_irrefl _ (lt_trans h.1 h.2.1)
+  have hopen : (idPartialPairing r).openCross = 0 := by
+    unfold PartialPairing.openCross
+    rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
+    intro ca _ h
+    have hm : (idPartialPairing r).mate ca.1 = ca.1 := rfl
+    rw [hm] at h
+    exact lt_irrefl _ (lt_trans h.1 h.2)
+  unfold PartialPairing.partialCross
+  rw [hint, hopen]
+
+lemma fockRawSector_haagRuelleChain_lt_eq_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (r r' : ℕ) (hrr : r' < r) (γ : Fin r → ι)
+    (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket) (t : ℝ) :
+    fockRawSector D.mode r' γ (minkowskiFourier (haagRuelleChain D r s f t γ)) = 0 := by
+  ext x
+  unfold fockRawSector
+  refine Finset.sum_eq_zero fun L _ => ?_
+  have h_not_surj : ¬ Function.Surjective L.unpaired := by
+    intro hsurj
+    have hle := Fintype.card_le_of_surjective L.unpaired hsurj
+    simp at hle
+    omega
+  have hex : ∃ i₀ : Fin r, ¬ ∃ a : Fin r', L.unpaired a = i₀ := by
+    by_contra h_all
+    refine h_not_surj fun i₀ => ?_
+    by_contra h_none
+    exact h_all ⟨i₀, h_none⟩
+  rcases hex with ⟨i₀, hi₀⟩
+  have h_ne : L.mate i₀ ≠ i₀ := fun hm => hi₀ ((L.fixed_iff i₀).mp hm)
+  let c₀ : L.InternalChord :=
+    if hlt : i₀ < L.mate i₀ then ⟨i₀, hlt⟩
+    else ⟨L.mate i₀, by
+      have hgt : L.mate i₀ < i₀ := (lt_or_gt_of_ne h_ne.symm).resolve_left hlt
+      simpa [L.mate_mate] using hgt⟩
+  have h_int0 :
+      (∫ p_int : L.InternalChord → Fin 3 → ℝ,
+        fockPartialIntWeight m D.C_shell γ L p_int *
+          minkowskiFourier (haagRuelleChain D r s f t γ) (L.partialMomentum m p_int x.1)) =
+        0 := by
+    refine integral_eq_zero_of_ae (Filter.Eventually.of_forall fun p_int => ?_)
+    dsimp only
+    have h_four0 :
+        minkowskiFourier (haagRuelleChain D r s f t γ) (L.partialMomentum m p_int x.1) = 0 := by
+      dsimp [haagRuelleChain]
+      rw [indexedChain_apply, minkowskiFourier_schwartzChain]
+      refine Finset.prod_eq_zero (Finset.mem_univ c₀.1) ?_
+      rw [L.partialMomentum_fst]
+      exact minkowskiFourier_haagRuelleIndexedTest_posMassShell_eq_zero D
+        (s c₀.1) (f c₀.1) t (γ c₀.1) (p_int c₀)
+    rw [h_four0, mul_zero]
+    rfl
+  unfold fockPartialTerm
+  rw [h_int0, mul_zero]
+
+lemma fockRawSector_haagRuelleChain_self_sum
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (r : ℕ) (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket) (t : ℝ) :
+    (∑ γ : Fin r → ι,
+      fockRawSector D.mode r γ (minkowskiFourier (haagRuelleChain D r s f t γ))) =
+      fockProdAmp D.mode.ν r s f := by
+  ext ⟨k_ext, s_ext⟩
+  rw [Finset.sum_apply]
+  haveI : IsEmpty (idPartialPairing r).InternalChord := isEmpty_internalChord_idPartialPairing r
+  have h_each :
+      ∀ γ : Fin r → ι,
+        fockRawSector D.mode r γ (minkowskiFourier (haagRuelleChain D r s f t γ))
+          (k_ext, s_ext) =
+          ∏ a : Fin r,
+            (D.mode.w (s_ext a) (k_ext a) (γ a) * (D.dual_w (s a) (k_ext a) (γ a) *
+              (f a).amp (k_ext a))) := by
+    intro γ
+    unfold fockRawSector
+    rw [Finset.sum_eq_single (idPartialPairing r)]
+    · unfold fockPartialTerm
+      rw [partialCross_idPartialPairing, pow_zero, one_mul]
+      have h_int :
+          (∫ p_int : (idPartialPairing r).InternalChord → Fin 3 → ℝ,
+            fockPartialIntWeight m D.C_shell γ (idPartialPairing r) p_int *
+              minkowskiFourier (haagRuelleChain D r s f t γ)
+                ((idPartialPairing r).partialMomentum m p_int k_ext)) =
+            ∏ a : Fin r, (D.dual_w (s a) (k_ext a) (γ a) * (f a).amp (k_ext a)) := by
+        have h_fn :
+            (fun p_int : (idPartialPairing r).InternalChord → Fin 3 → ℝ =>
+              fockPartialIntWeight m D.C_shell γ (idPartialPairing r) p_int *
+                minkowskiFourier (haagRuelleChain D r s f t γ)
+                  ((idPartialPairing r).partialMomentum m p_int k_ext)) =
+              fun _ => ∏ a : Fin r, (D.dual_w (s a) (k_ext a) (γ a) * (f a).amp (k_ext a)) := by
+          ext p_int
+          have hwt : fockPartialIntWeight m D.C_shell γ (idPartialPairing r) p_int = 1 := by
+            unfold fockPartialIntWeight
+            exact Fintype.prod_eq_one _ fun c => isEmptyElim c
+          rw [hwt, one_mul]
+          dsimp [haagRuelleChain]
+          rw [indexedChain_apply, minkowskiFourier_schwartzChain]
+          refine Finset.prod_congr rfl fun a _ => ?_
+          have hm_id : (idPartialPairing r).partialMomentum m p_int k_ext a =
+              -massShellVec m (k_ext a) :=
+            (idPartialPairing r).partialMomentum_unpaired m p_int k_ext a
+          rw [hm_id]
+          exact minkowskiFourier_haagRuelleIndexedTest_negMassShell D
+            (s a) (f a) t (γ a) (k_ext a)
+        rw [h_fn, integral_const]
+        have hvol : (volume : Measure ((idPartialPairing r).InternalChord → Fin 3 → ℝ))
+            Set.univ = 1 := by
+          rw [volume_pi, Measure.pi_univ]
+          simp
+        simp [Measure.real, hvol]
+      rw [h_int, ← Finset.prod_mul_distrib]
+      rfl
+    · intro L _ hL
+      exact False.elim (hL (partialPairing_eq_idPartialPairing L))
+    · intro hmem
+      exact False.elim (hmem (Finset.mem_univ _))
+  simp_rw [h_each]
+  rw [← Fintype.prod_sum (fun a α =>
+    D.mode.w (s_ext a) (k_ext a) α * (D.dual_w (s a) (k_ext a) α * (f a).amp (k_ext a)))]
+  have h_prod :
+      (∏ a : Fin r, ∑ α : ι,
+        D.mode.w (s_ext a) (k_ext a) α * (D.dual_w (s a) (k_ext a) α * (f a).amp (k_ext a))) =
+        ∏ a : Fin r, (if s_ext a = s a then (f a).amp (k_ext a) else 0) := by
+    refine Finset.prod_congr rfl fun a _ => ?_
+    have h_mul :
+        (∑ α : ι, D.mode.w (s_ext a) (k_ext a) α *
+          (D.dual_w (s a) (k_ext a) α * (f a).amp (k_ext a))) =
+          (∑ α : ι, D.mode.w (s_ext a) (k_ext a) α * D.dual_w (s a) (k_ext a) α) *
+            (f a).amp (k_ext a) := by
+      rw [Finset.sum_mul]
+      refine Finset.sum_congr rfl fun α _ => ?_
+      ring
+    rw [h_mul, D.dual_orthonormal (s_ext a) (s a) (k_ext a)]
+    split_ifs <;> simp
+  rw [h_prod]
+  dsimp [fockProdAmp]
+  by_cases hs : s_ext = s
+  · rw [if_pos hs]
+    refine Finset.prod_congr rfl fun a _ => ?_
+    rw [if_pos (congrFun hs a)]
+  · rw [if_neg hs]
+    have hex : ∃ a : Fin r, s_ext a ≠ s a := by
+      by_contra h_all
+      exact hs (funext fun a => by by_contra hne; exact h_all ⟨a, hne⟩)
+    rcases hex with ⟨a, ha⟩
+    exact Finset.prod_eq_zero (Finset.mem_univ a) (by simp [ha])
+
+theorem wickWightmanToSymmFock_haagRuelleChainVec
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (r : ℕ) (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket) (t : ℝ) :
+    wickWightmanToSymmFock D hW hC_herm (haagRuelleChainVec D r s f t) =
+      symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f := by
+  apply Subtype.ext
+  change (wickWightmanToSymmFock D hW hC_herm
+      (wightmanIndexedVec D.wightman.WData r (haagRuelleChain D r s f t)) : FockHilbert D.mode.ν) =
+    (symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f : FockHilbert D.mode.ν)
+  rw [wickWightmanToSymmFock_wightmanIndexedVec, coe_symmFockMultiParticleVec, Submodule.coe_sum]
+  have h_each :
+      ∀ γ : Fin r → ι,
+        (symmFockSchwartzVec D.mode D.hC r γ (haagRuelleChain D r s f t γ) :
+          FockHilbert D.mode.ν) =
+          liftSectorToFock D.mode.ν r
+            (symmSector D.mode.ν r η
+              (fockRawSector D.mode r γ (minkowskiFourier (haagRuelleChain D r s f t γ))))
+            (measurable_symmSector η (measurable_fockRawSector D.mode D.hC r γ
+              (partialMomentumBound_minkowskiFourier m r _)))
+            (memLp_symmSector η (memLp_fockRawSector D.mode D.hC r γ
+              (partialMomentumBound_minkowskiFourier m r _))) := by
+    intro γ
+    change fockMomentumVec D.mode D.hC r γ (minkowskiFourier (haagRuelleChain D r s f t γ))
+      (partialMomentumBound_minkowskiFourier m r _) = _
+    unfold fockMomentumVec
+    rw [Finset.sum_range_succ]
+    have h_lt0 :
+        (∑ r' ∈ Finset.range r,
+          liftSectorToFock D.mode.ν r'
+            (symmSector D.mode.ν r' η
+              (fockRawSector D.mode r' γ (minkowskiFourier (haagRuelleChain D r s f t γ))))
+            (measurable_symmSector η (measurable_fockRawSector D.mode D.hC r' γ
+              (partialMomentumBound_minkowskiFourier m r _)))
+            (memLp_symmSector η (memLp_fockRawSector D.mode D.hC r' γ
+              (partialMomentumBound_minkowskiFourier m r _)))) = 0 := by
+      refine Finset.sum_eq_zero fun r' hr' => ?_
+      have h_raw0 :
+          fockRawSector D.mode r' γ (minkowskiFourier (haagRuelleChain D r s f t γ)) = 0 :=
+        fockRawSector_haagRuelleChain_lt_eq_zero D r r' (Finset.mem_range.mp hr') γ s f t
+      have h_symm0 :
+          symmSector D.mode.ν r' η
+            (fockRawSector D.mode r' γ (minkowskiFourier (haagRuelleChain D r s f t γ))) = 0 := by
+        rw [h_raw0]
+        ext y
+        simp [symmSector]
+      have h_lift_congr :
+          liftSectorToFock D.mode.ν r'
+              (symmSector D.mode.ν r' η
+                (fockRawSector D.mode r' γ (minkowskiFourier (haagRuelleChain D r s f t γ))))
+              (measurable_symmSector η (measurable_fockRawSector D.mode D.hC r' γ
+                (partialMomentumBound_minkowskiFourier m r _)))
+              (memLp_symmSector η (memLp_fockRawSector D.mode D.hC r' γ
+                (partialMomentumBound_minkowskiFourier m r _))) =
+            liftSectorToFock D.mode.ν r' 0 measurable_const MemLp.zero :=
+        liftSectorToFock_congr _ _ measurable_const MemLp.zero (fun y => congrFun h_symm0 y)
+      rw [h_lift_congr, liftSectorToFock_zero]
+    rw [h_lt0, zero_add]
+  simp_rw [h_each]
+  let G : (Fin r → ι) → FockSectorDom D.mode.ν r → ℂ := fun γ =>
+    symmSector D.mode.ν r η
+      (fockRawSector D.mode r γ (minkowskiFourier (haagRuelleChain D r s f t γ)))
+  have hG_meas : ∀ γ, Measurable (G γ) := fun γ =>
+    measurable_symmSector η (measurable_fockRawSector D.mode D.hC r γ
+      (partialMomentumBound_minkowskiFourier m r _))
+  have hG_mem : ∀ γ, MemLp (G γ) 2 (fockSectorMeasure D.mode.ν r) := fun γ =>
+    memLp_symmSector η (memLp_fockRawSector D.mode D.hC r γ
+      (partialMomentumBound_minkowskiFourier m r _))
+  have hsum_meas : Measurable (∑ γ ∈ (Finset.univ : Finset (Fin r → ι)), G γ) := by
+    have h_eq : (∑ γ ∈ (Finset.univ : Finset (Fin r → ι)), G γ) =
+        fun y => ∑ γ : Fin r → ι, G γ y := by ext y; simp
+    rw [h_eq]
+    exact Finset.measurable_fun_sum Finset.univ fun γ _ => hG_meas γ
+  have hsum_mem : MemLp (∑ γ ∈ (Finset.univ : Finset (Fin r → ι)), G γ) 2
+      (fockSectorMeasure D.mode.ν r) :=
+    MeasureTheory.memLp_finsetSum' Finset.univ fun γ _ => hG_mem γ
+  rw [← liftSectorToFock_finsetSum D.mode.ν r Finset.univ G hG_meas hG_mem hsum_meas hsum_mem]
+  have h_sum_eq :
+      (∑ γ ∈ (Finset.univ : Finset (Fin r → ι)), G γ) =
+        symmSector D.mode.ν r η (fockProdAmp D.mode.ν r s f) := by
+    dsimp [G]
+    rw [← symmSector_finsetSum, fockRawSector_haagRuelleChain_self_sum]
+  exact liftSectorToFock_congr hsum_meas hsum_mem _ _ (fun y => congrFun h_sum_eq y)
+
+theorem haagRuelleChainVec_wick_time_indep
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (r : ℕ) (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket) (t : ℝ) :
+    haagRuelleChainVec D r s f t = haagRuelleChainVec D r s f 0 := by
+  apply (wickWightmanToSymmFock D hW hC_herm).injective
+  rw [wickWightmanToSymmFock_haagRuelleChainVec, wickWightmanToSymmFock_haagRuelleChainVec]
+
+theorem haagRuelleOutVec_eq_haagRuelleChainVec_of_wickMassShell
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (r : ℕ) (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket)
+    (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)) :
+    haagRuelleOutVec D r s f hf = haagRuelleChainVec D r s f 0 := by
+  have ht := tendsto_haagRuelleChainVec_atTop D r s f hf
+  have hconst : haagRuelleChainVec D r s f = fun _ => haagRuelleChainVec D r s f 0 :=
+    funext fun t => haagRuelleChainVec_wick_time_indep D hW hC_herm r s f t
+  rw [hconst] at ht
+  exact tendsto_nhds_unique ht tendsto_const_nhds
+
+theorem haagRuelleInVec_eq_haagRuelleChainVec_of_wickMassShell
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (r : ℕ) (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket)
+    (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)) :
+    haagRuelleInVec D r s f hf = haagRuelleChainVec D r s f 0 := by
+  have ht := tendsto_haagRuelleChainVec_atBot D r s f hf
+  have hconst : haagRuelleChainVec D r s f = fun _ => haagRuelleChainVec D r s f 0 :=
+    funext fun t => haagRuelleChainVec_wick_time_indep D hW hC_herm r s f t
+  rw [hconst] at ht
+  exact tendsto_nhds_unique ht tendsto_const_nhds
+
+theorem haagRuelleOutVec_eq_inVec_of_wickMassShell
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (r : ℕ) (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket)
+    (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)) :
+    haagRuelleOutVec D r s f hf = haagRuelleInVec D r s f hf :=
+  (haagRuelleOutVec_eq_haagRuelleChainVec_of_wickMassShell D hW hC_herm r s f hf).trans
+    (haagRuelleInVec_eq_haagRuelleChainVec_of_wickMassShell D hW hC_herm r s f hf).symm
+
+theorem wickWightmanToSymmFock_mollerWaveOut
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (Ψ : SymmFockHilbert D.mode.ν η) :
+    wickWightmanToSymmFock D hW hC_herm (mollerWaveOut D Ψ) = Ψ := by
+  let L : SymmFockHilbert D.mode.ν η →ₗᵢ[ℂ] SymmFockHilbert D.mode.ν η :=
+    (wickWightmanToSymmFock D hW hC_herm).comp (mollerWaveOut D)
+  have h_uniq := (exists_unique_linearIsometry_of_inner_eq_of_dense
+    (fun cfg : DisjointWavepacketConfig D.mode.ν m =>
+      symmFockMultiParticleVec D.mode.ν η D.mode.hη cfg.1 cfg.2.1 cfg.2.2.1)
+    (fun cfg : DisjointWavepacketConfig D.mode.ν m =>
+      symmFockMultiParticleVec D.mode.ν η D.mode.hη cfg.1 cfg.2.1 cfg.2.2.1)
+    (fun _ _ => rfl)
+    (dense_range_symmFockMultiParticleVec D.mode.ν D.hm D.mode.hη))
+  have hL : L = LinearIsometry.id := by
+    refine (h_uniq.choose_spec.2 L fun ⟨r, s, f, hf⟩ => ?_).trans
+      (h_uniq.choose_spec.2 LinearIsometry.id fun _ => rfl).symm
+    change wickWightmanToSymmFock D hW hC_herm
+        (mollerWaveOut D (symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f)) =
+      symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f
+    rw [mollerWaveOut_symmFockMultiParticleVec D r s f hf,
+      haagRuelleOutVec_eq_haagRuelleChainVec_of_wickMassShell D hW hC_herm r s f hf,
+      wickWightmanToSymmFock_haagRuelleChainVec]
+  exact congrFun (congrArg DFunLike.coe hL) Ψ
+
+theorem wickWightmanToSymmFock_mollerWaveIn
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (Ψ : SymmFockHilbert D.mode.ν η) :
+    wickWightmanToSymmFock D hW hC_herm (mollerWaveIn D Ψ) = Ψ := by
+  let L : SymmFockHilbert D.mode.ν η →ₗᵢ[ℂ] SymmFockHilbert D.mode.ν η :=
+    (wickWightmanToSymmFock D hW hC_herm).comp (mollerWaveIn D)
+  have h_uniq := (exists_unique_linearIsometry_of_inner_eq_of_dense
+    (fun cfg : DisjointWavepacketConfig D.mode.ν m =>
+      symmFockMultiParticleVec D.mode.ν η D.mode.hη cfg.1 cfg.2.1 cfg.2.2.1)
+    (fun cfg : DisjointWavepacketConfig D.mode.ν m =>
+      symmFockMultiParticleVec D.mode.ν η D.mode.hη cfg.1 cfg.2.1 cfg.2.2.1)
+    (fun _ _ => rfl)
+    (dense_range_symmFockMultiParticleVec D.mode.ν D.hm D.mode.hη))
+  have hL : L = LinearIsometry.id := by
+    refine (h_uniq.choose_spec.2 L fun ⟨r, s, f, hf⟩ => ?_).trans
+      (h_uniq.choose_spec.2 LinearIsometry.id fun _ => rfl).symm
+    change wickWightmanToSymmFock D hW hC_herm
+        (mollerWaveIn D (symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f)) =
+      symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f
+    rw [mollerWaveIn_symmFockMultiParticleVec D r s f hf,
+      haagRuelleInVec_eq_haagRuelleChainVec_of_wickMassShell D hW hC_herm r s f hf,
+      wickWightmanToSymmFock_haagRuelleChainVec]
+  exact congrFun (congrArg DFunLike.coe hL) Ψ
+
+theorem mollerWaveOut_wickWightmanToSymmFock
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (x : D.Hilbert) :
+    mollerWaveOut D (wickWightmanToSymmFock D hW hC_herm x) = x := by
+  apply (wickWightmanToSymmFock D hW hC_herm).injective
+  exact wickWightmanToSymmFock_mollerWaveOut D hW hC_herm _
+
+theorem mollerWaveIn_wickWightmanToSymmFock
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (x : D.Hilbert) :
+    mollerWaveIn D (wickWightmanToSymmFock D hW hC_herm x) = x := by
+  apply (wickWightmanToSymmFock D hW hC_herm).injective
+  exact wickWightmanToSymmFock_mollerWaveIn D hW hC_herm _
+
+theorem asymptoticCompleteness_of_wickMassShell
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q) :
+    AsymptoticCompleteness D := by
+  refine ⟨eq_top_iff.mpr fun x _ => ?_, eq_top_iff.mpr fun x _ => ?_⟩
+  · exact ⟨wickWightmanToSymmFock D hW hC_herm x,
+      mollerWaveIn_wickWightmanToSymmFock D hW hC_herm x⟩
+  · exact ⟨wickWightmanToSymmFock D hW hC_herm x,
+      mollerWaveOut_wickWightmanToSymmFock D hW hC_herm x⟩
+
+theorem mollerWaveIn_eq_mollerWaveOut_of_wickMassShell
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q) :
+    mollerWaveIn D = mollerWaveOut D := by
+  apply LinearIsometry.ext
+  intro Ψ
+  apply (wickWightmanToSymmFock D hW hC_herm).injective
+  rw [wickWightmanToSymmFock_mollerWaveIn, wickWightmanToSymmFock_mollerWaveOut]
+
+theorem scatteringOperatorCLM_eq_id_of_wickMassShell
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q) :
+    scatteringOperatorCLM D = ContinuousLinearMap.id ℂ (SymmFockHilbert D.mode.ν η) := by
+  apply ContinuousLinearMap.ext
+  intro Ψ
+  refine ext_inner_left ℂ fun Φ => ?_
+  rw [inner_scatteringOperatorCLM, mollerWaveIn_eq_mollerWaveOut_of_wickMassShell D hW hC_herm,
+    LinearIsometry.inner_map_map, ContinuousLinearMap.id_apply]
+
+theorem scatteringUnitary_eq_refl_of_wickMassShell
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hW : D.wightman.WData.W = wickMassShellW m η D.C_shell D.hC)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q)
+    (hcomp : AsymptoticCompleteness D) :
+    scatteringUnitary D hcomp = LinearIsometryEquiv.refl ℂ (SymmFockHilbert D.mode.ν η) := by
+  apply LinearIsometryEquiv.ext
+  intro Ψ
+  rw [scatteringUnitary_apply D hcomp Ψ,
+    scatteringOperatorCLM_eq_id_of_wickMassShell D hW hC_herm]
+  rfl
+
+def WightmanAxiomsWithUniqueVacuum.toGeneral
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ}
+    (A : WightmanAxiomsWithUniqueVacuum R S η) :
+    GeneralWightmanAxiomsWithUniqueVacuum R S η where
+  toWightmanAxioms := A.toWightmanAxioms
+  vacuumNormalized := A.vacuumNormalized
+  vacuumUnique := A.vacuumUnique
+
+def wickMassShellIsolatedData
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R S m η C) (hC : MassShellCoeffData m C)
+    (hC_cov : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, R.rep A (α i) (β i)) * C β q)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (C α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * C (β ∘ Fin.rev) q)
+    (hC_pct : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α q = η * ∑ β : Fin 2 → ι,
+        (∏ i : Fin 2, R.σ (-1, 1) (α i) (β i)) * C (β ∘ Fin.rev) q)
+    (dual_w : Fin M_mode.ν → (Fin 3 → ℝ) → ι → ℂ)
+    (contDiff_dual_w : ∀ (s : Fin M_mode.ν) (α : ι),
+      ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => dual_w s p α))
+    (dual_orthonormal : ∀ (s₁ s₂ : Fin M_mode.ν) (p : Fin 3 → ℝ),
+      ∑ α : ι, M_mode.w s₁ p α * dual_w s₂ p α = if s₁ = s₂ then 1 else 0) :
+    IsolatedMassShellData R S m (2 * m) η where
+  hm := hm
+  hM := by linarith
+  wightman :=
+    (wickMassShellWightmanAxiomsWithUniqueVacuum R S hm M_mode hC hC_cov hC_herm hC_pct).toGeneral
+  locality := wickMassShellLocalCommutativity R hm M_mode.hη hC hC_cov hC_pct
+  massGap := wickMassShell_massGapSpectrumCondition hm η hC
+  C_shell := C
+  hC := hC
+  mode := M_mode
+  dual_w := dual_w
+  contDiff_dual_w := contDiff_dual_w
+  dual_orthonormal := dual_orthonormal
+  twoPoint_shell β F _ := by
+    change wickMassShellW m η C hC 2 β F = massShellTwoPointW m C hC 2 β F
+    rw [wickMassShellW_two hm η hC β]
+
+end
+
+
+lemma integral_bump3DFn_sq_pos (p₀ : Fin 3 → ℝ) (δ : ℝ) (hδ : 0 < δ) :
+    0 < ∫ p : Fin 3 → ℝ, (bump3DFn p₀ δ hδ p) ^ 2 := by
+  have hex : ∃ q : Fin 3 → ℝ, bump3DFn p₀ δ hδ q ≠ 0 := by
+    by_contra h_all
+    have h0 : ∀ q : Fin 3 → ℝ, bump3DFn p₀ δ hδ q = 0 := fun q => by
+      by_contra hne
+      exact h_all ⟨q, hne⟩
+    have hi := integral_bump3DFn p₀ δ hδ
+    simp_rw [h0] at hi
+    rw [integral_zero] at hi
+    exact zero_ne_one hi
+  rcases hex with ⟨q, hq⟩
+  have hcont : Continuous (fun p : Fin 3 → ℝ => (bump3DFn p₀ δ hδ p) ^ 2) :=
+    (contDiff_bump3DFn p₀ δ hδ).continuous.pow 2
+  have hsupp : Function.support (fun p : Fin 3 → ℝ => (bump3DFn p₀ δ hδ p) ^ 2) ⊆
+      Metric.closedBall p₀ δ := by
+    intro p hp
+    rw [Function.mem_support] at hp
+    have hnz : bump3DFn p₀ δ hδ p ≠ 0 := fun h0 => hp (by simp [h0])
+    exact tsupport_bump3DFn_subset p₀ δ hδ (subset_closure (Function.mem_support.mpr hnz))
+  have hcs : HasCompactSupport (fun p : Fin 3 → ℝ => (bump3DFn p₀ δ hδ p) ^ 2) :=
+    HasCompactSupport.of_support_subset_isCompact (isCompact_closedBall p₀ δ) hsupp
+  exact MeasureTheory.integral_pos_of_integrable_nonneg_nonzero hcont
+    (hcont.integrable_of_hasCompactSupport hcs) (fun p => sq_nonneg _) (pow_ne_zero 2 hq)
+
+lemma inner_fockOneParticleVec_bump3DWavepacket_ne_zero {ν : ℕ} (s : Fin ν)
+    (p₀ : Fin 3 → ℝ) (δ : ℝ) (hδ : 0 < δ) :
+    ⟪fockOneParticleVec ν s (bump3DWavepacket p₀ δ hδ),
+      fockOneParticleVec ν s (bump3DWavepacket p₀ δ hδ)⟫_ℂ ≠ 0 := by
+  rw [inner_fockOneParticleVec_eq, if_pos rfl]
+  have h_fn :
+      (fun p : Fin 3 → ℝ =>
+        star ((bump3DWavepacket p₀ δ hδ).amp p) * (bump3DWavepacket p₀ δ hδ).amp p) =
+        fun p => (((bump3DFn p₀ δ hδ p) ^ 2 : ℝ) : ℂ) := by
+    ext p
+    simp [bump3DWavepacket, sq]
+  rw [h_fn, integral_complex_ofReal]
+  exact Complex.ofReal_ne_zero.mpr (integral_bump3DFn_sq_pos p₀ δ hδ).ne'
+
+def disjointBumpPacket (r : ℕ) (i : Fin r) : SmoothWavepacket :=
+  bump3DWavepacket ![3 * (i.val : ℝ), 0, 0] 1 zero_lt_one
+
+lemma pairwise_velocityDisjoint_disjointBumpPacket {m : ℝ} (hm : 0 < m) (r : ℕ) :
+    Pairwise fun i j : Fin r => VelocityDisjoint m (disjointBumpPacket r i)
+      (disjointBumpPacket r j) := by
+  intro i j hij
+  rw [velocityDisjoint_iff_tsupport_disjoint hm]
+  refine Set.disjoint_left.mpr fun p hpi hpj => ?_
+  have hi := tsupport_bump3DWavepacket_subset ![3 * (i.val : ℝ), 0, 0] 1 zero_lt_one hpi
+  have hj := tsupport_bump3DWavepacket_subset ![3 * (j.val : ℝ), 0, 0] 1 zero_lt_one hpj
+  rw [Metric.mem_closedBall, dist_eq_norm] at hi hj
+  have hi0 : |p 0 - 3 * (i.val : ℝ)| ≤ 1 := by
+    have h0 := norm_le_pi_norm (p - ![3 * (i.val : ℝ), 0, 0]) 0
+    simpa [Real.norm_eq_abs] using h0.trans hi
+  have hj0 : |p 0 - 3 * (j.val : ℝ)| ≤ 1 := by
+    have h0 := norm_le_pi_norm (p - ![3 * (j.val : ℝ), 0, 0]) 0
+    simpa [Real.norm_eq_abs] using h0.trans hj
+  have hne_val : i.val ≠ j.val := fun hv => hij (Fin.ext hv)
+  have hdiff : 3 * |(i.val : ℝ) - (j.val : ℝ)| ≤ 2 := by
+    have h1 : |3 * (i.val : ℝ) - 3 * (j.val : ℝ)| ≤
+        |p 0 - 3 * (i.val : ℝ)| + |p 0 - 3 * (j.val : ℝ)| := by
+      have h_eq : 3 * (i.val : ℝ) - 3 * (j.val : ℝ) =
+          -(p 0 - 3 * (i.val : ℝ)) + (p 0 - 3 * (j.val : ℝ)) := by ring
+      rw [h_eq]
+      calc |-(p 0 - 3 * (i.val : ℝ)) + (p 0 - 3 * (j.val : ℝ))|
+          ≤ |-(p 0 - 3 * (i.val : ℝ))| + |p 0 - 3 * (j.val : ℝ)| := abs_add_le _ _
+        _ = |p 0 - 3 * (i.val : ℝ)| + |p 0 - 3 * (j.val : ℝ)| := by rw [abs_neg]
+    have h2 : |3 * (i.val : ℝ) - 3 * (j.val : ℝ)| = 3 * |(i.val : ℝ) - (j.val : ℝ)| := by
+      have h_eq : 3 * (i.val : ℝ) - 3 * (j.val : ℝ) = 3 * ((i.val : ℝ) - (j.val : ℝ)) := by ring
+      rw [h_eq, abs_mul, abs_of_pos (by norm_num : (0 : ℝ) < 3)]
+    linarith
+  rcases Nat.lt_or_gt_of_ne hne_val with hlt | hgt
+  · have hstep : (i.val : ℝ) + 1 ≤ (j.val : ℝ) := by exact_mod_cast Nat.succ_le_of_lt hlt
+    have habs : 1 ≤ |(i.val : ℝ) - (j.val : ℝ)| := by
+      rw [abs_of_neg (by linarith)]
+      linarith
+    linarith
+  · have hstep : (j.val : ℝ) + 1 ≤ (i.val : ℝ) := by exact_mod_cast Nat.succ_le_of_lt hgt
+    have habs : 1 ≤ |(i.val : ℝ) - (j.val : ℝ)| := by
+      rw [abs_of_pos (by linarith)]
+      linarith
+    linarith
+
+lemma inner_fockOneParticleVec_eq_zero_of_velocityDisjoint
+    {ν : ℕ} {m : ℝ} (hm : 0 < m) (s₁ s₂ : Fin ν) {f₁ f₂ : SmoothWavepacket}
+    (hdisj : VelocityDisjoint m f₁ f₂) :
+    ⟪fockOneParticleVec ν s₁ f₁, fockOneParticleVec ν s₂ f₂⟫_ℂ = 0 := by
+  rw [inner_fockOneParticleVec_eq]
+  split_ifs with hs
+  · refine integral_eq_zero_of_ae (Filter.Eventually.of_forall fun p => ?_)
+    dsimp only
+    have htd : Disjoint (tsupport f₁.amp) (tsupport f₂.amp) :=
+      (velocityDisjoint_iff_tsupport_disjoint hm f₁ f₂).mp hdisj
+    by_cases hp1 : p ∈ tsupport f₁.amp
+    · have hp2 : p ∉ tsupport f₂.amp := Set.disjoint_left.mp htd hp1
+      rw [image_eq_zero_of_notMem_tsupport hp2, mul_zero]
+      rfl
+    · rw [image_eq_zero_of_notMem_tsupport hp1, star_zero, zero_mul]
+      rfl
+  · rfl
+
+section
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+theorem exists_disjoint_haagRuelleVec_ne_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (hν : 0 < D.mode.ν) (r : ℕ) :
+    ∃ (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f ≠ 0 ∧
+      haagRuelleInVec D r s f hf ≠ 0 ∧
+      haagRuelleOutVec D r s f hf ≠ 0 := by
+  let s : Fin r → Fin D.mode.ν := fun _ => ⟨0, hν⟩
+  let f : Fin r → SmoothWavepacket := disjointBumpPacket r
+  have hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j) :=
+    pairwise_velocityDisjoint_disjointBumpPacket D.hm r
+  have hinner_ne :
+      ⟪symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f,
+        symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f⟫_ℂ ≠ 0 := by
+    rw [inner_symmFockMultiParticleVec_eq, Finset.sum_eq_single 1]
+    · rw [permInversions_one, pow_zero, one_mul]
+      refine Finset.prod_ne_zero_iff.mpr fun i _ => ?_
+      have h1 : (1 : Equiv.Perm (Fin r)).symm i = i := rfl
+      rw [h1]
+      exact inner_fockOneParticleVec_bump3DWavepacket_ne_zero (s i) ![3 * (i.val : ℝ), 0, 0] 1
+        zero_lt_one
+    · intro σ _ hσ
+      have h_symm_ne : σ.symm ≠ 1 := fun hs => hσ (Equiv.symm_symm σ ▸ congrArg Equiv.symm hs)
+      have hex : ∃ i : Fin r, σ.symm i ≠ i := by
+        by_contra h_all
+        refine h_symm_ne (Equiv.ext fun i => ?_)
+        by_contra hne
+        exact h_all ⟨i, hne⟩
+      rcases hex with ⟨i, hi⟩
+      have h0 : ⟪fockOneParticleVec D.mode.ν (s i) (f i),
+          fockOneParticleVec D.mode.ν (s (σ.symm i)) (f (σ.symm i))⟫_ℂ = 0 :=
+        inner_fockOneParticleVec_eq_zero_of_velocityDisjoint D.hm _ _ (hf hi.symm)
+      rw [Finset.prod_eq_zero (Finset.mem_univ i) h0, mul_zero]
+    · intro hmem
+      exact False.elim (hmem (Finset.mem_univ _))
+  have hsymm_ne : symmFockMultiParticleVec D.mode.ν η D.mode.hη r s f ≠ 0 := fun h0 =>
+    hinner_ne (by rw [h0, inner_zero_left])
+  have hin_ne : haagRuelleInVec D r s f hf ≠ 0 := by
+    rw [← mollerWaveIn_symmFockMultiParticleVec D r s f hf]
+    intro h0
+    exact hsymm_ne ((mollerWaveIn D).injective (h0.trans (map_zero _).symm))
+  have hout_ne : haagRuelleOutVec D r s f hf ≠ 0 := by
+    rw [← mollerWaveOut_symmFockMultiParticleVec D r s f hf]
+    intro h0
+    exact hsymm_ne ((mollerWaveOut D).injective (h0.trans (map_zero _).symm))
+  exact ⟨s, f, hf, hsymm_ne, hin_ne, hout_ne⟩
+
+end
+
+lemma symmSector_fockProdAmp_perm (ν : ℕ) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (r : ℕ) (s : Fin r → Fin ν) (f : Fin r → SmoothWavepacket) (σ : Equiv.Perm (Fin r))
+    (x : FockSectorDom ν r) :
+    symmSector ν r η (fockProdAmp ν r s f) x =
+      η ^ permInversions σ * symmSector ν r η (fockProdAmp ν r (s ∘ σ) (f ∘ σ)) x := by
+  unfold symmSector
+  rw [mul_left_comm]
+  congr 1
+  rw [← Equiv.sum_comp (Equiv.mulRight σ⁻¹), Finset.mul_sum]
+  refine Finset.sum_congr rfl fun π _ => ?_
+  have hsign : η ^ permInversions (Equiv.mulRight σ⁻¹ π) =
+      η ^ permInversions σ * η ^ permInversions π := by
+    change η ^ permInversions (π * σ⁻¹) = _
+    rw [eta_pow_permInversions_mul hη π σ⁻¹, eta_pow_permInversions_inv hη σ, mul_comm]
+  have hamp : fockProdAmp ν r s f (fockSectorPermEquiv ν r (Equiv.mulRight σ⁻¹ π) x) =
+      fockProdAmp ν r (s ∘ σ) (f ∘ σ) (fockSectorPermEquiv ν r π x) := by
+    rcases x with ⟨k, s'⟩
+    dsimp [fockProdAmp, fockSectorPermEquiv]
+    have hcond : (s' ∘ ⇑π ∘ ⇑σ.symm = s) ↔ (s' ∘ ⇑π = s ∘ ⇑σ) := by
+      constructor
+      · intro h
+        funext i
+        simpa using congrFun h (σ i)
+      · intro h
+        funext i
+        simpa using congrFun h (σ.symm i)
+    by_cases h1 : s' ∘ ⇑π ∘ ⇑σ.symm = s
+    · have h2 : s' ∘ ⇑π = s ∘ ⇑σ := hcond.mp h1
+      rw [if_pos h1, if_pos h2]
+      refine (Equiv.prod_comp σ fun j => (f j).amp (k (π (σ.symm j)))).symm.trans ?_
+      refine Finset.prod_congr rfl fun i _ => ?_
+      simp
+    · have h2 : s' ∘ ⇑π ≠ s ∘ ⇑σ := fun hc => h1 (hcond.mpr hc)
+      rw [if_neg h1, if_neg h2]
+  change η ^ permInversions (Equiv.mulRight σ⁻¹ π) *
+      fockProdAmp ν r s f (fockSectorPermEquiv ν r (Equiv.mulRight σ⁻¹ π) x) =
+    η ^ permInversions σ *
+      (η ^ permInversions π * fockProdAmp ν r (s ∘ σ) (f ∘ σ) (fockSectorPermEquiv ν r π x))
+  rw [hsign, hamp, mul_assoc]
+
+lemma symmFockMultiParticleVec_perm (ν : ℕ) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    (r : ℕ) (s : Fin r → Fin ν) (f : Fin r → SmoothWavepacket) (σ : Equiv.Perm (Fin r)) :
+    symmFockMultiParticleVec ν η hη r s f =
+      (η ^ permInversions σ) • symmFockMultiParticleVec ν η hη r (s ∘ σ) (f ∘ σ) := by
+  apply Subtype.ext
+  rw [coe_symmFockMultiParticleVec, Submodule.coe_smul, coe_symmFockMultiParticleVec,
+    ← liftSectorToFock_smul (η ^ permInversions σ)
+      (measurable_symmSector η (measurable_fockProdAmp ν r (s ∘ σ) (f ∘ σ)))
+      (memLp_symmSector η (memLp_fockProdAmp ν r (s ∘ σ) (f ∘ σ)))]
+  refine liftSectorToFock_congr _ _ _ _ fun x => ?_
+  exact symmSector_fockProdAmp_perm ν hη r s f σ x
+
+theorem symmFockMultiParticleVec_two_same_eq_zero_of_fermion
+    (ν : ℕ) (s₀ : Fin ν) (f₀ : SmoothWavepacket) :
+    symmFockMultiParticleVec ν (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀) = 0 := by
+  let Ψ := symmFockMultiParticleVec ν (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)
+  have hperm := symmFockMultiParticleVec_perm ν (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)
+    (Equiv.swap (0 : Fin 2) 1)
+  have hinv : permInversions (Equiv.swap (0 : Fin 2) 1) = 1 := by decide
+  have hs : (fun _ : Fin 2 => s₀) ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = fun _ => s₀ := rfl
+  have hf : (fun _ : Fin 2 => f₀) ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = fun _ => f₀ := rfl
+  rw [hinv, pow_one, hs, hf] at hperm
+  change Ψ = (-1 : ℂ) • Ψ at hperm
+  have h2 : (2 : ℂ) • Ψ = 0 := by
+    rw [two_smul]
+    exact add_eq_zero_iff_eq_neg.mpr (by simpa [neg_one_smul] using hperm)
+  exact (smul_eq_zero.mp h2).resolve_left two_ne_zero
+
+lemma integral_normSq_amp_pos {f₀ : SmoothWavepacket}
+    (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    0 < ∫ p : Fin 3 → ℝ, Complex.normSq (f₀.amp p) := by
+  rcases hf₀ with ⟨p₀, hp₀⟩
+  have hcont : Continuous (fun p : Fin 3 → ℝ => Complex.normSq (f₀.amp p)) :=
+    Complex.continuous_normSq.comp f₀.smooth.continuous
+  have hcs : HasCompactSupport (fun p : Fin 3 → ℝ => Complex.normSq (f₀.amp p)) :=
+    f₀.compactSupport.comp_left Complex.normSq_zero
+  exact MeasureTheory.integral_pos_of_integrable_nonneg_nonzero hcont
+    (hcont.integrable_of_hasCompactSupport hcs) (fun p => Complex.normSq_nonneg _)
+    (mt Complex.normSq_eq_zero.mp hp₀)
+
+lemma inner_fockOneParticleVec_self_ne_zero {ν : ℕ} (s : Fin ν) {f₀ : SmoothWavepacket}
+    (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    ⟪fockOneParticleVec ν s f₀, fockOneParticleVec ν s f₀⟫_ℂ ≠ 0 := by
+  rw [inner_fockOneParticleVec_eq, if_pos rfl]
+  have h_fn :
+      (fun p : Fin 3 → ℝ => star (f₀.amp p) * f₀.amp p) =
+        fun p => ((Complex.normSq (f₀.amp p) : ℝ) : ℂ) := by
+    ext p
+    rw [Complex.star_def, mul_comm, Complex.mul_conj]
+  rw [h_fn, integral_complex_ofReal]
+  exact Complex.ofReal_ne_zero.mpr (integral_normSq_amp_pos hf₀).ne'
+
+theorem symmFockMultiParticleVec_two_same_wavepacket_diff_spin_ne_zero
+    (ν : ℕ) {η : ℂ} (hη : η = 1 ∨ η = -1)
+    {s₁ s₂ : Fin ν} (hs : s₁ ≠ s₂)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    symmFockMultiParticleVec ν η hη 2 ![s₁, s₂] (fun _ => f₀) ≠ 0 := by
+  have hinner :
+      ⟪symmFockMultiParticleVec ν η hη 2 ![s₁, s₂] (fun _ => f₀),
+        symmFockMultiParticleVec ν η hη 2 ![s₁, s₂] (fun _ => f₀)⟫_ℂ ≠ 0 := by
+    rw [inner_symmFockMultiParticleVec_eq, Finset.sum_eq_single 1]
+    · rw [permInversions_one, pow_zero, one_mul]
+      refine Finset.prod_ne_zero_iff.mpr fun i _ => ?_
+      have h1 : (1 : Equiv.Perm (Fin 2)).symm i = i := rfl
+      rw [h1]
+      exact inner_fockOneParticleVec_self_ne_zero (![s₁, s₂] i) hf₀
+    · intro σ _ hσ
+      have h_symm_ne : σ.symm ≠ 1 := fun h => hσ (Equiv.symm_symm σ ▸ congrArg Equiv.symm h)
+      have h01 : ∀ x : Fin 2, x = 0 ∨ x = 1 := fun x => by
+        fin_cases x <;> simp
+      have hσ0 : σ.symm 0 = 1 := by
+        by_contra hne
+        have h0 : σ.symm 0 = 0 := (h01 (σ.symm 0)).resolve_right hne
+        have hinj : σ.symm 1 ≠ 0 := fun h1 =>
+          absurd (σ.symm.injective (h1.trans h0.symm)) (by decide)
+        have h1 : σ.symm 1 = 1 := (h01 (σ.symm 1)).resolve_left hinj
+        exact h_symm_ne (Equiv.ext fun i => by fin_cases i <;> simp [h0, h1])
+      have h_zero : ⟪fockOneParticleVec ν (![s₁, s₂] 0) f₀,
+          fockOneParticleVec ν (![s₁, s₂] (σ.symm 0)) f₀⟫_ℂ = 0 := by
+        simp [hσ0, inner_fockOneParticleVec_eq, hs]
+      rw [Finset.prod_eq_zero (Finset.mem_univ (0 : Fin 2)) h_zero, mul_zero]
+    · intro hmem
+      exact False.elim (hmem (Finset.mem_univ _))
+  intro h0
+  exact hinner (by rw [h0, inner_zero_left])
+
+section
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+theorem mollerWaveIn_two_same_eq_zero_of_fermion
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} (D : IsolatedMassShellData R S m M (-1))
+    (s₀ : Fin D.mode.ν) (f₀ : SmoothWavepacket) :
+    mollerWaveIn D
+        (symmFockMultiParticleVec D.mode.ν (-1) D.mode.hη 2 (fun _ => s₀) (fun _ => f₀)) =
+      0 := by
+  rw [symmFockMultiParticleVec_two_same_eq_zero_of_fermion, map_zero]
+
+theorem mollerWaveOut_two_same_eq_zero_of_fermion
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} (D : IsolatedMassShellData R S m M (-1))
+    (s₀ : Fin D.mode.ν) (f₀ : SmoothWavepacket) :
+    mollerWaveOut D
+        (symmFockMultiParticleVec D.mode.ν (-1) D.mode.hη 2 (fun _ => s₀) (fun _ => f₀)) =
+      0 := by
+  rw [symmFockMultiParticleVec_two_same_eq_zero_of_fermion, map_zero]
+
+theorem mollerWaveIn_two_same_wavepacket_diff_spin_ne_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    {s₁ s₂ : Fin D.mode.ν} (hs : s₁ ≠ s₂)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    mollerWaveIn D
+        (symmFockMultiParticleVec D.mode.ν η D.mode.hη 2 ![s₁, s₂] (fun _ => f₀)) ≠
+      0 := by
+  intro h0
+  exact symmFockMultiParticleVec_two_same_wavepacket_diff_spin_ne_zero
+    D.mode.ν D.mode.hη hs hf₀ ((mollerWaveIn D).injective (h0.trans (map_zero _).symm))
+
+theorem mollerWaveOut_two_same_wavepacket_diff_spin_ne_zero
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    {s₁ s₂ : Fin D.mode.ν} (hs : s₁ ≠ s₂)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    mollerWaveOut D
+        (symmFockMultiParticleVec D.mode.ν η D.mode.hη 2 ![s₁, s₂] (fun _ => f₀)) ≠
+      0 := by
+  intro h0
+  exact symmFockMultiParticleVec_two_same_wavepacket_diff_spin_ne_zero
+    D.mode.ν D.mode.hη hs hf₀ ((mollerWaveOut D).injective (h0.trans (map_zero _).symm))
+
+theorem haagRuelleOutVec_swap_two
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (s₁ s₂ : Fin D.mode.ν) (f₁ f₂ : SmoothWavepacket)
+    (hf : Pairwise fun i j : Fin 2 => VelocityDisjoint m (![f₁, f₂] i) (![f₁, f₂] j))
+    (hf' : Pairwise fun i j : Fin 2 => VelocityDisjoint m (![f₂, f₁] i) (![f₂, f₁] j)) :
+    haagRuelleOutVec D 2 ![s₁, s₂] ![f₁, f₂] hf =
+      η • haagRuelleOutVec D 2 ![s₂, s₁] ![f₂, f₁] hf' := by
+  have hs : ![s₁, s₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = ![s₂, s₁] := by
+    ext i
+    fin_cases i <;> rfl
+  have hf_eq : ![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = ![f₂, f₁] := by
+    ext i
+    fin_cases i <;> rfl
+  have hperm := haagRuelleOutVec_perm D 2 ![s₁, s₂] ![f₁, f₂] hf (Equiv.swap (0 : Fin 2) 1)
+  have hinv : permInversions (Equiv.swap (0 : Fin 2) 1) = 1 := by decide
+  rw [hinv, pow_one] at hperm
+  refine hperm.trans (congrArg (η • ·) ?_)
+  clear hperm hinv
+  have h_congr :
+      ∀ (s' : Fin 2 → Fin D.mode.ν)
+        (hs' : ![s₁, s₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = s')
+        (f' : Fin 2 → SmoothWavepacket)
+        (hf_eq' : ![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = f')
+        (hpair1 : Pairwise fun i j : Fin 2 =>
+          VelocityDisjoint m ((![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1)) i)
+            ((![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1)) j))
+        (hpair2 : Pairwise fun i j : Fin 2 => VelocityDisjoint m (f' i) (f' j)),
+        haagRuelleOutVec D 2 (![s₁, s₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1))
+          (![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1)) hpair1 =
+          haagRuelleOutVec D 2 s' f' hpair2 := by
+    intro s' hs' f' hf_eq' hpair1 hpair2
+    subst hs' hf_eq'
+    rfl
+  exact h_congr ![s₂, s₁] hs ![f₂, f₁] hf_eq _ hf'
+
+theorem haagRuelleInVec_swap_two
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (D : IsolatedMassShellData R S m M η)
+    (s₁ s₂ : Fin D.mode.ν) (f₁ f₂ : SmoothWavepacket)
+    (hf : Pairwise fun i j : Fin 2 => VelocityDisjoint m (![f₁, f₂] i) (![f₁, f₂] j))
+    (hf' : Pairwise fun i j : Fin 2 => VelocityDisjoint m (![f₂, f₁] i) (![f₂, f₁] j)) :
+    haagRuelleInVec D 2 ![s₁, s₂] ![f₁, f₂] hf =
+      η • haagRuelleInVec D 2 ![s₂, s₁] ![f₂, f₁] hf' := by
+  have hs : ![s₁, s₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = ![s₂, s₁] := by
+    ext i
+    fin_cases i <;> rfl
+  have hf_eq : ![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = ![f₂, f₁] := by
+    ext i
+    fin_cases i <;> rfl
+  have hperm := haagRuelleInVec_perm D 2 ![s₁, s₂] ![f₁, f₂] hf (Equiv.swap (0 : Fin 2) 1)
+  have hinv : permInversions (Equiv.swap (0 : Fin 2) 1) = 1 := by decide
+  rw [hinv, pow_one] at hperm
+  refine hperm.trans (congrArg (η • ·) ?_)
+  clear hperm hinv
+  have h_congr :
+      ∀ (s' : Fin 2 → Fin D.mode.ν)
+        (hs' : ![s₁, s₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = s')
+        (f' : Fin 2 → SmoothWavepacket)
+        (hf_eq' : ![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1) = f')
+        (hpair1 : Pairwise fun i j : Fin 2 =>
+          VelocityDisjoint m ((![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1)) i)
+            ((![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1)) j))
+        (hpair2 : Pairwise fun i j : Fin 2 => VelocityDisjoint m (f' i) (f' j)),
+        haagRuelleInVec D 2 (![s₁, s₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1))
+          (![f₁, f₂] ∘ ⇑(Equiv.swap (0 : Fin 2) 1)) hpair1 =
+          haagRuelleInVec D 2 s' f' hpair2 := by
+    intro s' hs' f' hf_eq' hpair1 hpair2
+    subst hs' hf_eq'
+    rfl
+  exact h_congr ![s₂, s₁] hs ![f₂, f₁] hf_eq _ hf'
+
+end
+
+def kgDualMode (m : ℝ) : Fin 1 → (Fin 3 → ℝ) → Unit → ℂ :=
+  fun _ p _ => ((Real.sqrt (2 * massShellEnergy m p) : ℝ) : ℂ)
+
+lemma contDiff_kgDualMode {m : ℝ} (hm : 0 < m) (s : Fin 1) (α : Unit) :
+    ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => kgDualMode m s p α) := by
+  unfold kgDualMode
+  exact Complex.ofRealCLM.contDiff.comp
+    ((contDiff_const.mul (contDiff_massShellEnergy hm)).sqrt fun p =>
+      (mul_pos zero_lt_two (massShellEnergy_pos hm p)).ne')
+
+lemma kgDualMode_orthonormal {m : ℝ} (hm : 0 < m) (s₁ s₂ : Fin 1) (p : Fin 3 → ℝ) :
+    ∑ α : Unit, (kgModeData hm).w s₁ p α * kgDualMode m s₂ p α =
+      if s₁ = s₂ then 1 else 0 := by
+  have hs : s₁ = s₂ := Subsingleton.elim s₁ s₂
+  rw [if_pos hs, Fintype.sum_unique]
+  dsimp [kgModeData, kgDualMode]
+  rw [← Complex.ofReal_mul, inv_mul_cancel₀
+    (Real.sqrt_ne_zero'.mpr (mul_pos zero_lt_two (massShellEnergy_pos hm p)))]
+  rfl
+
+def freeKGIsolatedMassShellData {m : ℝ} (hm : 0 < m) :
+    IsolatedMassShellData trivialRep trivialStarStructure m (2 * m) 1 :=
+  wickMassShellIsolatedData trivialRep trivialStarStructure hm (kgModeData hm)
+    (massiveKGCoeff_data hm)
+    (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    (fun _ _ => by simp [massiveKGCoeff, trivialStarStructure])
+    (fun _ _ => by simp [massiveKGCoeff, trivialRep])
+    (kgDualMode m) (contDiff_kgDualMode hm) (kgDualMode_orthonormal hm)
+
+theorem freeKG_asymptoticCompleteness {m : ℝ} (hm : 0 < m) :
+    AsymptoticCompleteness (freeKGIsolatedMassShellData hm) :=
+  asymptoticCompleteness_of_wickMassShell (freeKGIsolatedMassShellData hm) rfl
+    (fun _ _ => by
+      dsimp [freeKGIsolatedMassShellData, wickMassShellIsolatedData]
+      simp [massiveKGCoeff, trivialStarStructure])
+
+theorem freeKG_mollerWaveIn_eq_out {m : ℝ} (hm : 0 < m) :
+    mollerWaveIn (freeKGIsolatedMassShellData hm) =
+      mollerWaveOut (freeKGIsolatedMassShellData hm) :=
+  mollerWaveIn_eq_mollerWaveOut_of_wickMassShell (freeKGIsolatedMassShellData hm) rfl
+    (fun _ _ => by
+      dsimp [freeKGIsolatedMassShellData, wickMassShellIsolatedData]
+      simp [massiveKGCoeff, trivialStarStructure])
+
+theorem freeKG_scatteringOperatorCLM_eq_id {m : ℝ} (hm : 0 < m) :
+    scatteringOperatorCLM (freeKGIsolatedMassShellData hm) =
+      ContinuousLinearMap.id ℂ (SymmFockHilbert 1 1) :=
+  scatteringOperatorCLM_eq_id_of_wickMassShell (freeKGIsolatedMassShellData hm) rfl
+    (fun _ _ => by
+      dsimp [freeKGIsolatedMassShellData, wickMassShellIsolatedData]
+      simp [massiveKGCoeff, trivialStarStructure])
+
+theorem freeKG_scatteringUnitary_eq_refl {m : ℝ} (hm : 0 < m) :
+    scatteringUnitary (freeKGIsolatedMassShellData hm) (freeKG_asymptoticCompleteness hm) =
+      LinearIsometryEquiv.refl ℂ (SymmFockHilbert 1 1) :=
+  scatteringUnitary_eq_refl_of_wickMassShell (freeKGIsolatedMassShellData hm) rfl
+    (fun _ _ => by
+      dsimp [freeKGIsolatedMassShellData, wickMassShellIsolatedData]
+      simp [massiveKGCoeff, trivialStarStructure])
+    (freeKG_asymptoticCompleteness hm)
+
+theorem freeKG_haagRuelleOutVec_swap_two {m : ℝ} (hm : 0 < m)
+    (s₁ s₂ : Fin 1) (f₁ f₂ : SmoothWavepacket)
+    (hf : Pairwise fun i j : Fin 2 => VelocityDisjoint m (![f₁, f₂] i) (![f₁, f₂] j))
+    (hf' : Pairwise fun i j : Fin 2 => VelocityDisjoint m (![f₂, f₁] i) (![f₂, f₁] j)) :
+    haagRuelleOutVec (freeKGIsolatedMassShellData hm) 2 ![s₁, s₂] ![f₁, f₂] hf =
+      haagRuelleOutVec (freeKGIsolatedMassShellData hm) 2 ![s₂, s₁] ![f₂, f₁] hf' := by
+  simpa using haagRuelleOutVec_swap_two (freeKGIsolatedMassShellData hm) s₁ s₂ f₁ f₂ hf hf'
+
+theorem freeKG_exists_multiParticle_ne_zero {m : ℝ} (hm : 0 < m) (r : ℕ) :
+    ∃ (s : Fin r → Fin 1) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      symmFockMultiParticleVec 1 1 (Or.inl rfl) r s f ≠ 0 ∧
+      haagRuelleInVec (freeKGIsolatedMassShellData hm) r s f hf ≠ 0 ∧
+      haagRuelleOutVec (freeKGIsolatedMassShellData hm) r s f hf ≠ 0 :=
+  exists_disjoint_haagRuelleVec_ne_zero (freeKGIsolatedMassShellData hm) Nat.zero_lt_one r
+
+def diracDualScale (m : ℝ) (p : Fin 3 → ℝ) : ℝ :=
+  (diracModeScale m p * (massShellEnergy m p + p 2))⁻¹
+
+lemma contDiff_diracModeScale {m : ℝ} (hm : 0 < m) :
+    ContDiff ℝ (⊤ : ℕ∞) (diracModeScale m) := by
+  unfold diracModeScale
+  have h2 : ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => p 2) :=
+    (ContinuousLinearMap.proj (R := ℝ) (φ := fun _ : Fin 3 => ℝ) 2).contDiff
+  have h_prod : ContDiff ℝ (⊤ : ℕ∞)
+      (fun p : Fin 3 → ℝ => 2 * massShellEnergy m p * (massShellEnergy m p + p 2)) :=
+    (contDiff_const.mul (contDiff_massShellEnergy hm)).mul
+      ((contDiff_massShellEnergy hm).add h2)
+  exact (h_prod.sqrt fun p => (diracModeDenom_pos hm p).ne').inv
+    fun p => (Real.sqrt_pos.mpr (diracModeDenom_pos hm p)).ne'
+
+lemma contDiff_diracDualScale {m : ℝ} (hm : 0 < m) :
+    ContDiff ℝ (⊤ : ℕ∞) (diracDualScale m) := by
+  unfold diracDualScale
+  have h2 : ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => p 2) :=
+    (ContinuousLinearMap.proj (R := ℝ) (φ := fun _ : Fin 3 => ℝ) 2).contDiff
+  have h_prod : ContDiff ℝ (⊤ : ℕ∞)
+      (fun p : Fin 3 → ℝ => diracModeScale m p * (massShellEnergy m p + p 2)) :=
+    (contDiff_diracModeScale hm).mul ((contDiff_massShellEnergy hm).add h2)
+  exact h_prod.inv fun p => mul_ne_zero
+    (inv_ne_zero (Real.sqrt_ne_zero'.mpr (diracModeDenom_pos hm p)))
+    (massShellEnergy_add_third_pos hm p).ne'
+
+def diracDualMode (m : ℝ) : Fin 2 → (Fin 3 → ℝ) → (Fin 2 ⊕ Fin 2) → ℂ
+  | 0, p, Sum.inr 0 => (diracDualScale m p : ℂ)
+  | 1, p, Sum.inl 0 => Complex.I * (diracDualScale m p : ℂ)
+  | _, _, _ => 0
+
+lemma contDiff_diracDualMode {m : ℝ} (hm : 0 < m) (s : Fin 2) (α : Fin 2 ⊕ Fin 2) :
+    ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => diracDualMode m s p α) := by
+  have hsc : ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => (diracDualScale m p : ℂ)) :=
+    Complex.ofRealCLM.contDiff.comp (contDiff_diracDualScale hm)
+  fin_cases s <;> rcases α with i | i <;> fin_cases i <;> dsimp [diracDualMode]
+  · exact contDiff_const
+  · exact contDiff_const
+  · exact hsc
+  · exact contDiff_const
+  · exact contDiff_const.mul hsc
+  · exact contDiff_const
+  · exact contDiff_const
+  · exact contDiff_const
+
+lemma diracDualMode_orthonormal {m : ℝ} (hm : 0 < m) (s₁ s₂ : Fin 2) (p : Fin 3 → ℝ) :
+    ∑ α : Fin 2 ⊕ Fin 2, (diracModeData hm).w s₁ p α * diracDualMode m s₂ p α =
+      if s₁ = s₂ then 1 else 0 := by
+  have hscale : (diracModeScale m p : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr
+    (inv_ne_zero (Real.sqrt_ne_zero'.mpr (diracModeDenom_pos hm p)))
+  have hadd : ((massShellEnergy m p : ℂ) + (p 2 : ℂ)) ≠ 0 := by
+    have hpos : massShellEnergy m p + p 2 ≠ 0 := (massShellEnergy_add_third_pos hm p).ne'
+    exact_mod_cast hpos
+  rw [Fintype.sum_sum_type, Fin.sum_univ_two, Fin.sum_univ_two]
+  fin_cases s₁ <;> fin_cases s₂
+  · dsimp [diracModeData, diracModeRaw, diracDualMode, diracDualScale]
+    push_cast
+    field_simp [hscale, hadd]
+    simp
+  · dsimp [diracModeData, diracModeRaw, diracDualMode]
+    simp
+  · dsimp [diracModeData, diracModeRaw, diracDualMode]
+    simp
+  · dsimp [diracModeData, diracModeRaw, diracDualMode, diracDualScale]
+    push_cast
+    field_simp [hscale, hadd]
+    simp [Complex.I_mul_I]
+
+def freeDiracIsolatedMassShellData {m : ℝ} (hm : 0 < m) :
+    IsolatedMassShellData diracRep diracStarStructure m (2 * m) (-1) :=
+  wickMassShellIsolatedData diracRep diracStarStructure hm (diracModeData hm)
+    (diracMassShellCoeff_data hm) (diracMassShellCoeff_lorentz m)
+    (diracMassShellCoeff_herm m) (diracMassShellCoeff_pct m)
+    (diracDualMode m) (contDiff_diracDualMode hm) (diracDualMode_orthonormal hm)
+
+theorem freeDirac_asymptoticCompleteness {m : ℝ} (hm : 0 < m) :
+    AsymptoticCompleteness (freeDiracIsolatedMassShellData hm) :=
+  asymptoticCompleteness_of_wickMassShell (freeDiracIsolatedMassShellData hm) rfl
+    (diracMassShellCoeff_herm m)
+
+theorem freeDirac_mollerWaveIn_eq_out {m : ℝ} (hm : 0 < m) :
+    mollerWaveIn (freeDiracIsolatedMassShellData hm) =
+      mollerWaveOut (freeDiracIsolatedMassShellData hm) :=
+  mollerWaveIn_eq_mollerWaveOut_of_wickMassShell (freeDiracIsolatedMassShellData hm) rfl
+    (diracMassShellCoeff_herm m)
+
+theorem freeDirac_scatteringOperatorCLM_eq_id {m : ℝ} (hm : 0 < m) :
+    scatteringOperatorCLM (freeDiracIsolatedMassShellData hm) =
+      ContinuousLinearMap.id ℂ (SymmFockHilbert 2 (-1)) :=
+  scatteringOperatorCLM_eq_id_of_wickMassShell (freeDiracIsolatedMassShellData hm) rfl
+    (diracMassShellCoeff_herm m)
+
+theorem freeDirac_scatteringUnitary_eq_refl {m : ℝ} (hm : 0 < m) :
+    scatteringUnitary (freeDiracIsolatedMassShellData hm)
+        (freeDirac_asymptoticCompleteness hm) =
+      LinearIsometryEquiv.refl ℂ (SymmFockHilbert 2 (-1)) :=
+  scatteringUnitary_eq_refl_of_wickMassShell (freeDiracIsolatedMassShellData hm) rfl
+    (diracMassShellCoeff_herm m) (freeDirac_asymptoticCompleteness hm)
+
+theorem freeDirac_pauli_exclusion_in {m : ℝ} (hm : 0 < m)
+    (s₀ : Fin 2) (f₀ : SmoothWavepacket) :
+    mollerWaveIn (freeDiracIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)) =
+      0 :=
+  mollerWaveIn_two_same_eq_zero_of_fermion (freeDiracIsolatedMassShellData hm) s₀ f₀
+
+theorem freeDirac_pauli_exclusion_out {m : ℝ} (hm : 0 < m)
+    (s₀ : Fin 2) (f₀ : SmoothWavepacket) :
+    mollerWaveOut (freeDiracIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)) =
+      0 :=
+  mollerWaveOut_two_same_eq_zero_of_fermion (freeDiracIsolatedMassShellData hm) s₀ f₀
+
+theorem freeDirac_two_same_wavepacket_opposite_spin_in {m : ℝ} (hm : 0 < m)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    mollerWaveIn (freeDiracIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) 2 ![0, 1] (fun _ => f₀)) ≠
+      0 :=
+  mollerWaveIn_two_same_wavepacket_diff_spin_ne_zero (freeDiracIsolatedMassShellData hm)
+    (by decide : (0 : Fin 2) ≠ 1) hf₀
+
+theorem freeDirac_two_same_wavepacket_opposite_spin_out {m : ℝ} (hm : 0 < m)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    mollerWaveOut (freeDiracIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) 2 ![0, 1] (fun _ => f₀)) ≠
+      0 :=
+  mollerWaveOut_two_same_wavepacket_diff_spin_ne_zero (freeDiracIsolatedMassShellData hm)
+    (by decide : (0 : Fin 2) ≠ 1) hf₀
+
+theorem freeDirac_haagRuelleOutVec_swap_two {m : ℝ} (hm : 0 < m)
+    (s₁ s₂ : Fin 2) (f₁ f₂ : SmoothWavepacket)
+    (hf : Pairwise fun i j : Fin 2 => VelocityDisjoint m (![f₁, f₂] i) (![f₁, f₂] j))
+    (hf' : Pairwise fun i j : Fin 2 => VelocityDisjoint m (![f₂, f₁] i) (![f₂, f₁] j)) :
+    haagRuelleOutVec (freeDiracIsolatedMassShellData hm) 2 ![s₁, s₂] ![f₁, f₂] hf =
+      -(haagRuelleOutVec (freeDiracIsolatedMassShellData hm) 2 ![s₂, s₁] ![f₂, f₁] hf') := by
+  simpa using haagRuelleOutVec_swap_two (freeDiracIsolatedMassShellData hm) s₁ s₂ f₁ f₂ hf hf'
+
+theorem freeDirac_exists_multiParticle_ne_zero {m : ℝ} (hm : 0 < m) (r : ℕ) :
+    ∃ (s : Fin r → Fin 2) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      symmFockMultiParticleVec 2 (-1) (Or.inr rfl) r s f ≠ 0 ∧
+      haagRuelleInVec (freeDiracIsolatedMassShellData hm) r s f hf ≠ 0 ∧
+      haagRuelleOutVec (freeDiracIsolatedMassShellData hm) r s f hf ≠ 0 :=
+  exists_disjoint_haagRuelleVec_ne_zero (freeDiracIsolatedMassShellData hm)
+    (by decide : 0 < 2) r
+
+structure EuclidIsolatedMassShellData {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (m M : ℝ) (η : ℂ) (𝒮 : SchwingerFamily ι) where
+  hm : 0 < m
+  hM : m < M
+  fullOS : FullEuclidOSAxioms R S η 𝒮
+  timeCluster : OSTimeClusterDecomposition fullOS.toOSAxioms.toReflectionPositiveData
+  linearGrowth : OSLinearGrowthCondition 𝒮
+  vacuumNormalized : OSVacuumNormalized 𝒮
+  massGap :
+    MassGapSpectrumCondition m M
+      (osReconstructedWightmanFamily_of_linearGrowth fullOS.toOSAxioms linearGrowth)
+  C_shell : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ
+  hC : MassShellCoeffData m C_shell
+  mode : MassShellModeData R S m η C_shell
+  dual_w : Fin mode.ν → (Fin 3 → ℝ) → ι → ℂ
+  contDiff_dual_w : ∀ (s : Fin mode.ν) (α : ι),
+    ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => dual_w s p α)
+  dual_orthonormal : ∀ (s₁ s₂ : Fin mode.ν) (p : Fin 3 → ℝ),
+    ∑ α : ι, mode.w s₁ p α * dual_w s₂ p α = if s₁ = s₂ then 1 else 0
+  twoPoint_shell : ∀ (β : Fin 2 → ι) (F : SchwartzMap (Fin 2 → Fin 4 → ℝ) ℂ),
+    (∃ U : Set (Fin 2 → Fin 4 → ℝ), IsOpen U ∧
+      { p : Fin 2 → Fin 4 → ℝ |
+          p 0 + p 1 = 0 ∧ (p 0 = 0 ∨ p 0 ∈ continuumCone M) } ⊆ U ∧
+      ∀ p ∈ U, minkowskiFourier F p = 0) →
+    osReconstructedWightmanFamily_of_linearGrowth fullOS.toOSAxioms linearGrowth 2 β F =
+      massShellTwoPointW m C_shell hC 2 β F
+
+namespace EuclidIsolatedMassShellData
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+  {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+  {m M : ℝ} {η : ℂ} {𝒮 : SchwingerFamily ι}
+
+def tubeData (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    OSTubeExtensionData R 𝒮 :=
+  osReconstructedTubeExtensionData_of_linearGrowth E.fullOS.toOSAxioms E.linearGrowth
+
+def osWightman (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    ForwardConeOSReconstructedWightman R S η 𝒮 :=
+  E.tubeData.toForwardConeOSReconstructedWightman E.fullOS.toOSAxioms E.timeCluster
+
+abbrev OSHilbert (E : EuclidIsolatedMassShellData R S m M η 𝒮) : Type _ :=
+  E.osWightman.Hilbert
+
+def osVacuumVec (E : EuclidIsolatedMassShellData R S m M η 𝒮) : E.OSHilbert :=
+  E.osWightman.vacuum
+
+def osSpacetimeTranslate (E : EuclidIsolatedMassShellData R S m M η 𝒮)
+    (a : Fin 4 → ℝ) : E.OSHilbert →L[ℂ] E.OSHilbert :=
+  E.osWightman.semigroup.spacetimeTranslate E.osWightman.osAxioms.os1_translation
+    (euclidTimeReflect a)
+
+def toIsolatedMassShellData (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    IsolatedMassShellData R S m M η :=
+  let hsyn := fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+    E.fullOS E.timeCluster E.linearGrowth E.vacuumNormalized
+  { hm := E.hm
+    hM := E.hM
+    wightman :=
+      E.tubeData.toGeneralWightmanAxiomsWithUniqueVacuum
+        E.fullOS.toOSAxioms E.timeCluster E.vacuumNormalized
+    locality := hsyn.2.1
+    massGap := by
+      have hW_eq :
+          (E.tubeData.toGeneralWightmanAxiomsWithUniqueVacuum
+            E.fullOS.toOSAxioms E.timeCluster E.vacuumNormalized).WData.W =
+            osReconstructedWightmanFamily_of_linearGrowth E.fullOS.toOSAxioms E.linearGrowth :=
+        hsyn.1
+      rw [hW_eq]
+      exact E.massGap
+    C_shell := E.C_shell
+    hC := E.hC
+    mode := E.mode
+    dual_w := E.dual_w
+    contDiff_dual_w := E.contDiff_dual_w
+    dual_orthonormal := E.dual_orthonormal
+    twoPoint_shell := fun β F hF => by
+      have hW_eq :
+          (E.tubeData.toGeneralWightmanAxiomsWithUniqueVacuum
+            E.fullOS.toOSAxioms E.timeCluster E.vacuumNormalized).WData.W =
+            osReconstructedWightmanFamily_of_linearGrowth E.fullOS.toOSAxioms E.linearGrowth :=
+        hsyn.1
+      change (E.tubeData.toGeneralWightmanAxiomsWithUniqueVacuum
+        E.fullOS.toOSAxioms E.timeCluster E.vacuumNormalized).WData.W 2 β F = _
+      rw [hW_eq]
+      exact E.twoPoint_shell β F hF }
+
+theorem toIsolatedMassShellData_W_eq (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    E.toIsolatedMassShellData.wightman.WData.W =
+      osReconstructedWightmanFamily_of_linearGrowth E.fullOS.toOSAxioms E.linearGrowth :=
+  (fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+    E.fullOS E.timeCluster E.linearGrowth E.vacuumNormalized).1
+
+def osToWightmanEquiv (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    E.OSHilbert ≃ₗᵢ[ℂ] E.toIsolatedMassShellData.Hilbert :=
+  E.tubeData.osToWightmanUnitaryEquiv E.fullOS.toOSAxioms E.timeCluster
+
+def osMollerWaveIn (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    SymmFockHilbert E.mode.ν η →ₗᵢ[ℂ] E.OSHilbert :=
+  E.osToWightmanEquiv.symm.toLinearIsometry.comp (mollerWaveIn E.toIsolatedMassShellData)
+
+def osMollerWaveOut (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    SymmFockHilbert E.mode.ν η →ₗᵢ[ℂ] E.OSHilbert :=
+  E.osToWightmanEquiv.symm.toLinearIsometry.comp (mollerWaveOut E.toIsolatedMassShellData)
+
+@[simp]
+theorem osToWightmanEquiv_osMollerWaveIn (E : EuclidIsolatedMassShellData R S m M η 𝒮)
+    (Ψ : SymmFockHilbert E.mode.ν η) :
+    E.osToWightmanEquiv (osMollerWaveIn E Ψ) =
+      mollerWaveIn E.toIsolatedMassShellData Ψ := by
+  change E.osToWightmanEquiv (E.osToWightmanEquiv.symm (mollerWaveIn E.toIsolatedMassShellData Ψ)) =
+    _
+  exact E.osToWightmanEquiv.apply_symm_apply _
+
+@[simp]
+theorem osToWightmanEquiv_osMollerWaveOut (E : EuclidIsolatedMassShellData R S m M η 𝒮)
+    (Ψ : SymmFockHilbert E.mode.ν η) :
+    E.osToWightmanEquiv (osMollerWaveOut E Ψ) =
+      mollerWaveOut E.toIsolatedMassShellData Ψ := by
+  change E.osToWightmanEquiv
+      (E.osToWightmanEquiv.symm (mollerWaveOut E.toIsolatedMassShellData Ψ)) = _
+  exact E.osToWightmanEquiv.apply_symm_apply _
+
+@[simp]
+theorem osMollerWaveIn_vacuum (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    osMollerWaveIn E (symmFockVacuum E.mode.ν η) = E.osVacuumVec := by
+  have hvac := (fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+    E.fullOS E.timeCluster E.linearGrowth E.vacuumNormalized).2.2.2.2.1
+  have hm_vac : mollerWaveIn E.toIsolatedMassShellData (symmFockVacuum E.mode.ν η) =
+      E.toIsolatedMassShellData.vacuum :=
+    mollerWaveIn_vacuum E.toIsolatedMassShellData
+  apply E.osToWightmanEquiv.injective
+  rw [osToWightmanEquiv_osMollerWaveIn, hm_vac]
+  exact hvac.symm
+
+@[simp]
+theorem osMollerWaveOut_vacuum (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    osMollerWaveOut E (symmFockVacuum E.mode.ν η) = E.osVacuumVec := by
+  have hvac := (fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+    E.fullOS E.timeCluster E.linearGrowth E.vacuumNormalized).2.2.2.2.1
+  have hm_vac : mollerWaveOut E.toIsolatedMassShellData (symmFockVacuum E.mode.ν η) =
+      E.toIsolatedMassShellData.vacuum :=
+    mollerWaveOut_vacuum E.toIsolatedMassShellData
+  apply E.osToWightmanEquiv.injective
+  rw [osToWightmanEquiv_osMollerWaveOut, hm_vac]
+  exact hvac.symm
+
+theorem osSpacetimeTranslate_osMollerWaveIn (E : EuclidIsolatedMassShellData R S m M η 𝒮)
+    (a : Fin 4 → ℝ) (Ψ : SymmFockHilbert E.mode.ν η) :
+    E.osSpacetimeTranslate a (osMollerWaveIn E Ψ) =
+      osMollerWaveIn E (symmFockMinkowskiTranslate m E.mode.ν η a Ψ) := by
+  have htr : E.osToWightmanEquiv (E.osSpacetimeTranslate a (osMollerWaveIn E Ψ)) =
+      E.toIsolatedMassShellData.translate a (E.osToWightmanEquiv (osMollerWaveIn E Ψ)) :=
+    (fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+      E.fullOS E.timeCluster E.linearGrowth E.vacuumNormalized).2.2.2.2.2.1 a
+      (osMollerWaveIn E Ψ)
+  have hm_tr :
+      E.toIsolatedMassShellData.translate a (mollerWaveIn E.toIsolatedMassShellData Ψ) =
+        mollerWaveIn E.toIsolatedMassShellData
+          (symmFockMinkowskiTranslate m E.mode.ν η a Ψ) :=
+    translate_mollerWaveIn E.toIsolatedMassShellData a Ψ
+  apply E.osToWightmanEquiv.injective
+  rw [htr, osToWightmanEquiv_osMollerWaveIn, osToWightmanEquiv_osMollerWaveIn, hm_tr]
+
+theorem osSpacetimeTranslate_osMollerWaveOut (E : EuclidIsolatedMassShellData R S m M η 𝒮)
+    (a : Fin 4 → ℝ) (Ψ : SymmFockHilbert E.mode.ν η) :
+    E.osSpacetimeTranslate a (osMollerWaveOut E Ψ) =
+      osMollerWaveOut E (symmFockMinkowskiTranslate m E.mode.ν η a Ψ) := by
+  have htr : E.osToWightmanEquiv (E.osSpacetimeTranslate a (osMollerWaveOut E Ψ)) =
+      E.toIsolatedMassShellData.translate a (E.osToWightmanEquiv (osMollerWaveOut E Ψ)) :=
+    (fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+      E.fullOS E.timeCluster E.linearGrowth E.vacuumNormalized).2.2.2.2.2.1 a
+      (osMollerWaveOut E Ψ)
+  have hm_tr :
+      E.toIsolatedMassShellData.translate a (mollerWaveOut E.toIsolatedMassShellData Ψ) =
+        mollerWaveOut E.toIsolatedMassShellData
+          (symmFockMinkowskiTranslate m E.mode.ν η a Ψ) :=
+    translate_mollerWaveOut E.toIsolatedMassShellData a Ψ
+  apply E.osToWightmanEquiv.injective
+  rw [htr, osToWightmanEquiv_osMollerWaveOut, osToWightmanEquiv_osMollerWaveOut, hm_tr]
+
+theorem osMollerWave_scattering_eq (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    (osMollerWaveOut E).toContinuousLinearMap.adjoint.comp
+        (osMollerWaveIn E).toContinuousLinearMap =
+      scatteringOperatorCLM E.toIsolatedMassShellData := by
+  apply ContinuousLinearMap.ext
+  intro Ψ
+  refine ext_inner_left ℂ fun Φ => ?_
+  rw [ContinuousLinearMap.comp_apply, ContinuousLinearMap.adjoint_inner_right]
+  refine (LinearIsometryEquiv.inner_map_map E.osToWightmanEquiv.symm
+    (mollerWaveOut E.toIsolatedMassShellData Φ)
+    (mollerWaveIn E.toIsolatedMassShellData Ψ)).trans ?_
+  exact (inner_scatteringOperatorCLM E.toIsolatedMassShellData Φ Ψ).symm
+
+theorem osMollerWaveIn_two_same_wavepacket_diff_spin_ne_zero
+    (E : EuclidIsolatedMassShellData R S m M η 𝒮)
+    {s₁ s₂ : Fin E.mode.ν} (hs : s₁ ≠ s₂)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    osMollerWaveIn E
+        (symmFockMultiParticleVec E.mode.ν η E.mode.hη 2 ![s₁, s₂] (fun _ => f₀)) ≠
+      0 := by
+  intro h0
+  exact mollerWaveIn_two_same_wavepacket_diff_spin_ne_zero
+    E.toIsolatedMassShellData hs hf₀
+    (E.osToWightmanEquiv.symm.injective (h0.trans (map_zero _).symm))
+
+theorem osMollerWaveOut_two_same_wavepacket_diff_spin_ne_zero
+    (E : EuclidIsolatedMassShellData R S m M η 𝒮)
+    {s₁ s₂ : Fin E.mode.ν} (hs : s₁ ≠ s₂)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    osMollerWaveOut E
+        (symmFockMultiParticleVec E.mode.ν η E.mode.hη 2 ![s₁, s₂] (fun _ => f₀)) ≠
+      0 := by
+  intro h0
+  exact mollerWaveOut_two_same_wavepacket_diff_spin_ne_zero
+    E.toIsolatedMassShellData hs hf₀
+    (E.osToWightmanEquiv.symm.injective (h0.trans (map_zero _).symm))
+
+end EuclidIsolatedMassShellData
+
+theorem fullEuclid_os_haagRuelle_scattering_synthesis
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (E : EuclidIsolatedMassShellData R S m M η 𝒮) :
+    let D := E.toIsolatedMassShellData
+    D.wightman.WData.W =
+      osReconstructedWightmanFamily_of_linearGrowth E.fullOS.toOSAxioms E.linearGrowth ∧
+    LocalCommutativity η D.wightman.WData.W ∧
+    PermSpacelikeLocality η D.wightman.WData.W ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E.tubeData.E n α x) ∧
+    (∀ {ε : ℂ}, R.HasSpinParity ε →
+      (∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) → η = ε) ∧
+    (∀ (r : ℕ) (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      Tendsto (haagRuelleChainVec D r s f) atTop (𝓝 (haagRuelleOutVec D r s f hf)) ∧
+      Tendsto (haagRuelleChainVec D r s f) atBot (𝓝 (haagRuelleInVec D r s f hf))) ∧
+    E.osMollerWaveIn (symmFockVacuum E.mode.ν η) = E.osVacuumVec ∧
+    E.osMollerWaveOut (symmFockVacuum E.mode.ν η) = E.osVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : SymmFockHilbert E.mode.ν η),
+      E.osSpacetimeTranslate a (E.osMollerWaveIn Ψ) =
+        E.osMollerWaveIn (symmFockMinkowskiTranslate m E.mode.ν η a Ψ)) ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : SymmFockHilbert E.mode.ν η),
+      E.osSpacetimeTranslate a (E.osMollerWaveOut Ψ) =
+        E.osMollerWaveOut (symmFockMinkowskiTranslate m E.mode.ν η a Ψ)) ∧
+    (E.osMollerWaveOut.toContinuousLinearMap.adjoint.comp
+      E.osMollerWaveIn.toContinuousLinearMap = scatteringOperatorCLM D) ∧
+    scatteringOperatorCLM D (symmFockVacuum D.mode.ν η) = symmFockVacuum D.mode.ν η ∧
+    (∀ (s : Fin D.mode.ν) (f : SmoothWavepacket),
+      scatteringOperatorCLM D (symmFockOneParticleVec D.mode.ν η s f) =
+        symmFockOneParticleVec D.mode.ν η s f) ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : SymmFockHilbert D.mode.ν η),
+      scatteringOperatorCLM D (symmFockMinkowskiTranslate m D.mode.ν η a Ψ) =
+        symmFockMinkowskiTranslate m D.mode.ν η a (scatteringOperatorCLM D Ψ)) := by
+  have hsyn := fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+    E.fullOS E.timeCluster E.linearGrowth E.vacuumNormalized
+  refine ⟨hsyn.1, hsyn.2.1, hsyn.2.2.1, hsyn.2.2.2.1, hsyn.2.2.2.2.2.2.1.2,
+    fun r s f hf => ⟨tendsto_haagRuelleChainVec_atTop _ r s f hf,
+      tendsto_haagRuelleChainVec_atBot _ r s f hf⟩,
+    E.osMollerWaveIn_vacuum, E.osMollerWaveOut_vacuum,
+    E.osSpacetimeTranslate_osMollerWaveIn, E.osSpacetimeTranslate_osMollerWaveOut,
+    E.osMollerWave_scattering_eq, scatteringOperatorCLM_vacuum _,
+    scatteringOperatorCLM_oneParticle _, scatteringOperatorCLM_comm_translate _⟩
+
+def freeKGEuclidIsolatedMassShellData {m : ℝ} (hm : 0 < m) :
+    EuclidIsolatedMassShellData trivialRep trivialStarStructure m (2 * m) 1
+      (freeKGFullS m hm) where
+  hm := hm
+  hM := by linarith
+  fullOS := freeKGFullEuclidOSAxioms hm
+  timeCluster := freeKGFullOSTimeCluster hm
+  linearGrowth := freeKGFullOSLinearGrowthCondition hm
+  vacuumNormalized := freeKGFullS_vacuumNormalized hm
+  massGap := by
+    rw [freeKGFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm]
+    exact wickMassShell_massGapSpectrumCondition hm 1 (massiveKGCoeff_data hm)
+  C_shell := massiveKGCoeff
+  hC := massiveKGCoeff_data hm
+  mode := kgModeData hm
+  dual_w := kgDualMode m
+  contDiff_dual_w := contDiff_kgDualMode hm
+  dual_orthonormal := kgDualMode_orthonormal hm
+  twoPoint_shell β F _ := by
+    rw [freeKGFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm]
+    unfold freeKGW
+    rw [wickMassShellW_two hm 1 (massiveKGCoeff_data hm) β]
+
+theorem freeKG_euclid_scattering_master {m : ℝ} (hm : 0 < m) :
+    let E := freeKGEuclidIsolatedMassShellData hm
+    let D := E.toIsolatedMassShellData
+    AsymptoticCompleteness D ∧
+    E.osMollerWaveIn = E.osMollerWaveOut ∧
+    Function.Surjective E.osMollerWaveIn ∧
+    Function.Surjective E.osMollerWaveOut ∧
+    scatteringOperatorCLM D = ContinuousLinearMap.id ℂ (SymmFockHilbert 1 1) ∧
+    (∀ {η : ℂ}, FullEuclidOSAxioms trivialRep trivialStarStructure η (freeKGFullS m hm) →
+      η = 1) ∧
+    (∀ r : ℕ, ∃ (s : Fin r → Fin 1) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      E.osMollerWaveIn (symmFockMultiParticleVec 1 1 (Or.inl rfl) r s f) ≠ 0 ∧
+      haagRuelleInVec D r s f hf ≠ 0 ∧
+      haagRuelleOutVec D r s f hf ≠ 0) := by
+  let E := freeKGEuclidIsolatedMassShellData hm
+  let D := E.toIsolatedMassShellData
+  have hW : D.wightman.WData.W = wickMassShellW m 1 D.C_shell D.hC :=
+    E.toIsolatedMassShellData_W_eq.trans
+      (freeKGFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm)
+  have hherm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → Unit),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → Unit,
+          (∏ i : Fin 2, trivialStarStructure.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q :=
+    fun _ _ => by
+      dsimp [D, E, freeKGEuclidIsolatedMassShellData,
+        EuclidIsolatedMassShellData.toIsolatedMassShellData]
+      simp [massiveKGCoeff, trivialStarStructure]
+  have hcomp : AsymptoticCompleteness D := asymptoticCompleteness_of_wickMassShell D hW hherm
+  have hin_out : mollerWaveIn D = mollerWaveOut D :=
+    mollerWaveIn_eq_mollerWaveOut_of_wickMassShell D hW hherm
+  have hsurj_in : Function.Surjective E.osMollerWaveIn := fun y => by
+    obtain ⟨Ψ, hΨ⟩ := surjective_mollerWaveIn D hcomp (E.osToWightmanEquiv y)
+    refine ⟨Ψ, ?_⟩
+    change E.osToWightmanEquiv.symm (mollerWaveIn D Ψ) = y
+    rw [hΨ, E.osToWightmanEquiv.symm_apply_apply]
+  have hsurj_out : Function.Surjective E.osMollerWaveOut := fun y => by
+    obtain ⟨Ψ, hΨ⟩ := surjective_mollerWaveOut D hcomp (E.osToWightmanEquiv y)
+    refine ⟨Ψ, ?_⟩
+    change E.osToWightmanEquiv.symm (mollerWaveOut D Ψ) = y
+    rw [hΨ, E.osToWightmanEquiv.symm_apply_apply]
+  refine ⟨hcomp, ?_, hsurj_in, hsurj_out,
+    scatteringOperatorCLM_eq_id_of_wickMassShell D hW hherm,
+    fun hOS => freeKGFullS_spin_statistics hm hOS, fun r => ?_⟩
+  · apply LinearIsometry.ext
+    intro Ψ
+    change E.osToWightmanEquiv.symm (mollerWaveIn D Ψ) =
+      E.osToWightmanEquiv.symm (mollerWaveOut D Ψ)
+    rw [hin_out]
+  · obtain ⟨s, f, hf, _, hin, hout⟩ :=
+      exists_disjoint_haagRuelleVec_ne_zero D Nat.zero_lt_one r
+    have hmv : mollerWaveIn D (symmFockMultiParticleVec 1 1 (Or.inl rfl) r s f) =
+        haagRuelleInVec D r s f hf :=
+      mollerWaveIn_symmFockMultiParticleVec D r s f hf
+    refine ⟨s, f, hf, ?_, hin, hout⟩
+    change E.osToWightmanEquiv.symm
+        (mollerWaveIn D (symmFockMultiParticleVec 1 1 (Or.inl rfl) r s f)) ≠ 0
+    rw [hmv]
+    intro h0
+    exact hin (E.osToWightmanEquiv.symm.injective (h0.trans (map_zero _).symm))
+
+def freeDiracEuclidIsolatedMassShellData {m : ℝ} (hm : 0 < m) :
+    EuclidIsolatedMassShellData diracRep diracStarStructure m (2 * m) (-1)
+      (freeDiracFullS m hm) where
+  hm := hm
+  hM := by linarith
+  fullOS := freeDiracFullEuclidOSAxioms hm
+  timeCluster := freeDiracFullOSTimeCluster hm
+  linearGrowth := freeDiracFullOSLinearGrowthCondition hm
+  vacuumNormalized := freeDiracFullS_vacuumNormalized hm
+  massGap := by
+    rw [freeDiracFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm]
+    exact wickMassShell_massGapSpectrumCondition hm (-1) (diracMassShellCoeff_data hm)
+  C_shell := diracMassShellCoeff m
+  hC := diracMassShellCoeff_data hm
+  mode := diracModeData hm
+  dual_w := diracDualMode m
+  contDiff_dual_w := contDiff_diracDualMode hm
+  dual_orthonormal := diracDualMode_orthonormal hm
+  twoPoint_shell β F _ := by
+    rw [freeDiracFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm]
+    unfold freeDiracW
+    rw [wickMassShellW_two hm (-1) (diracMassShellCoeff_data hm) β]
+
+theorem freeDirac_euclid_scattering_master {m : ℝ} (hm : 0 < m) :
+    let E := freeDiracEuclidIsolatedMassShellData hm
+    let D := E.toIsolatedMassShellData
+    AsymptoticCompleteness D ∧
+    E.osMollerWaveIn = E.osMollerWaveOut ∧
+    Function.Surjective E.osMollerWaveIn ∧
+    Function.Surjective E.osMollerWaveOut ∧
+    scatteringOperatorCLM D = ContinuousLinearMap.id ℂ (SymmFockHilbert 2 (-1)) ∧
+    (∀ (s₀ : Fin 2) (f₀ : SmoothWavepacket),
+      E.osMollerWaveIn
+        (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)) = 0) ∧
+    (∀ (f₀ : SmoothWavepacket), (∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) →
+      E.osMollerWaveIn
+        (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) 2 ![0, 1] (fun _ => f₀)) ≠ 0) ∧
+    (∀ {η : ℂ}, FullEuclidOSAxioms diracRep diracStarStructure η (freeDiracFullS m hm) →
+      η = -1) ∧
+    (∀ r : ℕ, ∃ (s : Fin r → Fin 2) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      E.osMollerWaveIn (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) r s f) ≠ 0 ∧
+      haagRuelleInVec D r s f hf ≠ 0 ∧
+      haagRuelleOutVec D r s f hf ≠ 0) := by
+  let E := freeDiracEuclidIsolatedMassShellData hm
+  let D := E.toIsolatedMassShellData
+  have hW : D.wightman.WData.W = wickMassShellW m (-1) D.C_shell D.hC :=
+    E.toIsolatedMassShellData_W_eq.trans
+      (freeDiracFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm)
+  have hherm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → Fin 2 ⊕ Fin 2),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → Fin 2 ⊕ Fin 2,
+          (∏ i : Fin 2, diracStarStructure.C (α i) (β i)) * D.C_shell (β ∘ Fin.rev) q :=
+    diracMassShellCoeff_herm m
+  have hcomp : AsymptoticCompleteness D := asymptoticCompleteness_of_wickMassShell D hW hherm
+  have hin_out : mollerWaveIn D = mollerWaveOut D :=
+    mollerWaveIn_eq_mollerWaveOut_of_wickMassShell D hW hherm
+  have hsurj_in : Function.Surjective E.osMollerWaveIn := fun y => by
+    obtain ⟨Ψ, hΨ⟩ := surjective_mollerWaveIn D hcomp (E.osToWightmanEquiv y)
+    refine ⟨Ψ, ?_⟩
+    change E.osToWightmanEquiv.symm (mollerWaveIn D Ψ) = y
+    rw [hΨ, E.osToWightmanEquiv.symm_apply_apply]
+  have hsurj_out : Function.Surjective E.osMollerWaveOut := fun y => by
+    obtain ⟨Ψ, hΨ⟩ := surjective_mollerWaveOut D hcomp (E.osToWightmanEquiv y)
+    refine ⟨Ψ, ?_⟩
+    change E.osToWightmanEquiv.symm (mollerWaveOut D Ψ) = y
+    rw [hΨ, E.osToWightmanEquiv.symm_apply_apply]
+  refine ⟨hcomp, ?_, hsurj_in, hsurj_out,
+    scatteringOperatorCLM_eq_id_of_wickMassShell D hW hherm,
+    fun s₀ f₀ => ?_, fun f₀ hf₀ => ?_, fun hOS => freeDiracFullS_spin_statistics hm hOS,
+    fun r => ?_⟩
+  · apply LinearIsometry.ext
+    intro Ψ
+    change E.osToWightmanEquiv.symm (mollerWaveIn D Ψ) =
+      E.osToWightmanEquiv.symm (mollerWaveOut D Ψ)
+    rw [hin_out]
+  · have hm0 : mollerWaveIn D
+        (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)) = 0 :=
+      mollerWaveIn_two_same_eq_zero_of_fermion D s₀ f₀
+    change E.osToWightmanEquiv.symm
+        (mollerWaveIn D (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) 2
+          (fun _ => s₀) (fun _ => f₀))) = 0
+    rw [hm0, map_zero]
+  · exact E.osMollerWaveIn_two_same_wavepacket_diff_spin_ne_zero
+      (by decide : (0 : Fin 2) ≠ 1) hf₀
+  · obtain ⟨s, f, hf, _, hin, hout⟩ :=
+      exists_disjoint_haagRuelleVec_ne_zero D (by decide : 0 < 2) r
+    have hmv : mollerWaveIn D (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) r s f) =
+        haagRuelleInVec D r s f hf :=
+      mollerWaveIn_symmFockMultiParticleVec D r s f hf
+    refine ⟨s, f, hf, ?_, hin, hout⟩
+    change E.osToWightmanEquiv.symm
+        (mollerWaveIn D (symmFockMultiParticleVec 2 (-1) (Or.inr rfl) r s f)) ≠ 0
+    rw [hmv]
+    intro h0
+    exact hin (E.osToWightmanEquiv.symm.injective (h0.trans (map_zero _).symm))
+
+section
+
+variable {ι₁ ι₂ : Type*}
+
+def directSumCoeff
+    (C₁ : (Fin 2 → ι₁) → (Fin 4 → ℝ) → ℂ)
+    (C₂ : (Fin 2 → ι₂) → (Fin 4 → ℝ) → ℂ)
+    (α : Fin 2 → ι₁ ⊕ ι₂) (q : Fin 4 → ℝ) : ℂ :=
+  match α 0, α 1 with
+  | Sum.inl a₀, Sum.inl a₁ => C₁ ![a₀, a₁] q
+  | Sum.inr b₀, Sum.inr b₁ => C₂ ![b₀, b₁] q
+  | _, _ => 0
+
+lemma directSumCoeff_inl
+    (C₁ : (Fin 2 → ι₁) → (Fin 4 → ℝ) → ℂ)
+    (C₂ : (Fin 2 → ι₂) → (Fin 4 → ℝ) → ℂ)
+    (α : Fin 2 → ι₁) (q : Fin 4 → ℝ) :
+    directSumCoeff C₁ C₂ (Sum.inl ∘ α) q = C₁ α q := by
+  dsimp [directSumCoeff]
+  have h : ![α 0, α 1] = α := by
+    ext i
+    fin_cases i <;> rfl
+  rw [h]
+
+lemma directSumCoeff_inr
+    (C₁ : (Fin 2 → ι₁) → (Fin 4 → ℝ) → ℂ)
+    (C₂ : (Fin 2 → ι₂) → (Fin 4 → ℝ) → ℂ)
+    (α : Fin 2 → ι₂) (q : Fin 4 → ℝ) :
+    directSumCoeff C₁ C₂ (Sum.inr ∘ α) q = C₂ α q := by
+  dsimp [directSumCoeff]
+  have h : ![α 0, α 1] = α := by
+    ext i
+    fin_cases i <;> rfl
+  rw [h]
+
+lemma directSumCoeff_data {m : ℝ}
+    {C₁ : (Fin 2 → ι₁) → (Fin 4 → ℝ) → ℂ} (hC₁ : MassShellCoeffData m C₁)
+    {C₂ : (Fin 2 → ι₂) → (Fin 4 → ℝ) → ℂ} (hC₂ : MassShellCoeffData m C₂) :
+    MassShellCoeffData m (directSumCoeff C₁ C₂) := by
+  refine ⟨fun α => ?_, fun α => ?_⟩
+  · rcases h0 : α 0 with a₀ | b₀ <;> rcases h1 : α 1 with a₁ | b₁
+    · have hfn : (fun p : Fin 3 → ℝ =>
+          directSumCoeff C₁ C₂ α (massShellVec m p)) =
+          fun p => C₁ ![a₀, a₁] (massShellVec m p) := by
+        ext p
+        simp [directSumCoeff, h0, h1]
+      rw [hfn]
+      exact hC₁.1 ![a₀, a₁]
+    · have hfn : (fun p : Fin 3 → ℝ =>
+          directSumCoeff C₁ C₂ α (massShellVec m p)) = fun _ => 0 := by
+        ext p
+        simp [directSumCoeff, h0, h1]
+      rw [hfn]
+      exact measurable_const
+    · have hfn : (fun p : Fin 3 → ℝ =>
+          directSumCoeff C₁ C₂ α (massShellVec m p)) = fun _ => 0 := by
+        ext p
+        simp [directSumCoeff, h0, h1]
+      rw [hfn]
+      exact measurable_const
+    · have hfn : (fun p : Fin 3 → ℝ =>
+          directSumCoeff C₁ C₂ α (massShellVec m p)) =
+          fun p => C₂ ![b₀, b₁] (massShellVec m p) := by
+        ext p
+        simp [directSumCoeff, h0, h1]
+      rw [hfn]
+      exact hC₂.1 ![b₀, b₁]
+  · rcases h0 : α 0 with a₀ | b₀ <;> rcases h1 : α 1 with a₁ | b₁
+    · rcases hC₁.2 ![a₀, a₁] with ⟨B, hB_nn, hB⟩
+      refine ⟨B, hB_nn, fun p => ?_⟩
+      have hwt : massShellWeight m (directSumCoeff C₁ C₂) α p =
+          massShellWeight m C₁ ![a₀, a₁] p := by
+        simp [massShellWeight, directSumCoeff, h0, h1]
+      rw [hwt]
+      exact hB p
+    · refine ⟨0, le_rfl, fun p => ?_⟩
+      have hwt : massShellWeight m (directSumCoeff C₁ C₂) α p = 0 := by
+        simp [massShellWeight, directSumCoeff, h0, h1]
+      rw [hwt, norm_zero]
+    · refine ⟨0, le_rfl, fun p => ?_⟩
+      have hwt : massShellWeight m (directSumCoeff C₁ C₂) α p = 0 := by
+        simp [massShellWeight, directSumCoeff, h0, h1]
+      rw [hwt, norm_zero]
+    · rcases hC₂.2 ![b₀, b₁] with ⟨B, hB_nn, hB⟩
+      refine ⟨B, hB_nn, fun p => ?_⟩
+      have hwt : massShellWeight m (directSumCoeff C₁ C₂) α p =
+          massShellWeight m C₂ ![b₀, b₁] p := by
+        simp [massShellWeight, directSumCoeff, h0, h1]
+      rw [hwt]
+      exact hB p
+
+def directSumModeW (ν₁ ν₂ : ℕ)
+    (w₁ : Fin ν₁ → (Fin 3 → ℝ) → ι₁ → ℂ)
+    (w₂ : Fin ν₂ → (Fin 3 → ℝ) → ι₂ → ℂ) :
+    Fin (ν₁ + ν₂) → (Fin 3 → ℝ) → (ι₁ ⊕ ι₂) → ℂ :=
+  fun s p α =>
+    match finSumFinEquiv.symm s, α with
+    | Sum.inl s₁, Sum.inl a => w₁ s₁ p a
+    | Sum.inr s₂, Sum.inr b => w₂ s₂ p b
+    | _, _ => 0
+
+lemma contDiff_directSumModeW {ν₁ ν₂ : ℕ}
+    {d₁ : Fin ν₁ → (Fin 3 → ℝ) → ι₁ → ℂ}
+    {d₂ : Fin ν₂ → (Fin 3 → ℝ) → ι₂ → ℂ}
+    (hd₁ : ∀ (s : Fin ν₁) (a : ι₁), ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => d₁ s p a))
+    (hd₂ : ∀ (s : Fin ν₂) (b : ι₂), ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => d₂ s p b))
+    (s : Fin (ν₁ + ν₂)) (α : ι₁ ⊕ ι₂) :
+    ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => directSumModeW ν₁ ν₂ d₁ d₂ s p α) := by
+  unfold directSumModeW
+  rcases hs : finSumFinEquiv.symm s with s₁ | s₂ <;> rcases α with a | b
+  · exact hd₁ s₁ a
+  · exact contDiff_const
+  · exact contDiff_const
+  · exact hd₂ s₂ b
+
+section
+
+variable [Fintype ι₁] [DecidableEq ι₁] [Fintype ι₂] [DecidableEq ι₂]
+
+omit [DecidableEq ι₁] [DecidableEq ι₂] in
+lemma sum_block_two_inl (M₁ : ι₁ → ι₁ → ℂ) (M₂ : ι₂ → ι₂ → ℂ)
+    (M : ι₁ ⊕ ι₂ → ι₁ ⊕ ι₂ → ℂ)
+    (h11 : ∀ x y, M (Sum.inl x) (Sum.inl y) = M₁ x y)
+    (h12 : ∀ x y, M (Sum.inl x) (Sum.inr y) = 0)
+    (_h21 : ∀ x y, M (Sum.inr x) (Sum.inl y) = 0)
+    (_h22 : ∀ x y, M (Sum.inr x) (Sum.inr y) = M₂ x y)
+    (F : (Fin 2 → ι₁ ⊕ ι₂) → ℂ) (α : Fin 2 → ι₁) :
+    (∑ β : Fin 2 → ι₁ ⊕ ι₂, (∏ i : Fin 2, M ((Sum.inl ∘ α) i) (β i)) * F β) =
+      ∑ β : Fin 2 → ι₁, (∏ i : Fin 2, M₁ (α i) (β i)) * F (Sum.inl ∘ β) := by
+  rw [← (finTwoFunEquiv (ι₁ ⊕ ι₂)).symm.sum_comp,
+    ← (finTwoFunEquiv ι₁).symm.sum_comp,
+    Fintype.sum_prod_type, Fintype.sum_prod_type]
+  simp only [finTwoFunEquiv, Equiv.coe_fn_symm_mk, Function.comp_apply,
+    Fin.prod_univ_two, Fin.isValue, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Fintype.sum_sum_type, h11, h12, mul_zero, zero_mul, Finset.sum_const_zero, add_zero]
+  refine Finset.sum_congr rfl fun b₀ _ => Finset.sum_congr rfl fun b₁ _ => ?_
+  have hcomp : (Sum.inl (β := ι₂) ∘ ![b₀, b₁]) = ![Sum.inl b₀, Sum.inl b₁] := by
+    ext i
+    fin_cases i <;> rfl
+  rw [hcomp]
+
+omit [DecidableEq ι₁] [DecidableEq ι₂] in
+lemma sum_block_two_inr (M₁ : ι₁ → ι₁ → ℂ) (M₂ : ι₂ → ι₂ → ℂ)
+    (M : ι₁ ⊕ ι₂ → ι₁ ⊕ ι₂ → ℂ)
+    (_h11 : ∀ x y, M (Sum.inl x) (Sum.inl y) = M₁ x y)
+    (_h12 : ∀ x y, M (Sum.inl x) (Sum.inr y) = 0)
+    (h21 : ∀ x y, M (Sum.inr x) (Sum.inl y) = 0)
+    (h22 : ∀ x y, M (Sum.inr x) (Sum.inr y) = M₂ x y)
+    (F : (Fin 2 → ι₁ ⊕ ι₂) → ℂ) (α : Fin 2 → ι₂) :
+    (∑ β : Fin 2 → ι₁ ⊕ ι₂, (∏ i : Fin 2, M ((Sum.inr ∘ α) i) (β i)) * F β) =
+      ∑ β : Fin 2 → ι₂, (∏ i : Fin 2, M₂ (α i) (β i)) * F (Sum.inr ∘ β) := by
+  rw [← (finTwoFunEquiv (ι₁ ⊕ ι₂)).symm.sum_comp,
+    ← (finTwoFunEquiv ι₂).symm.sum_comp,
+    Fintype.sum_prod_type, Fintype.sum_prod_type]
+  simp only [finTwoFunEquiv, Equiv.coe_fn_symm_mk, Function.comp_apply,
+    Fin.prod_univ_two, Fin.isValue, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Fintype.sum_sum_type, h21, h22, mul_zero, zero_mul, Finset.sum_const_zero, zero_add]
+  refine Finset.sum_congr rfl fun b₀ _ => Finset.sum_congr rfl fun b₁ _ => ?_
+  have hcomp : (Sum.inr (α := ι₁) ∘ ![b₀, b₁]) = ![Sum.inr b₀, Sum.inr b₁] := by
+    ext i
+    fin_cases i <;> rfl
+  rw [hcomp]
+
+lemma directSumCoeff_cov
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    {C₁ : (Fin 2 → ι₁) → (Fin 4 → ℝ) → ℂ}
+    {C₂ : (Fin 2 → ι₂) → (Fin 4 → ℝ) → ℂ}
+    (hC₁ : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι₁),
+      C₁ α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι₁, (∏ i : Fin 2, R₁.rep A (α i) (β i)) * C₁ β q)
+    (hC₂ : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι₂),
+      C₂ α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι₂, (∏ i : Fin 2, R₂.rep A (α i) (β i)) * C₂ β q)
+    (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι₁ ⊕ ι₂) :
+    directSumCoeff C₁ C₂ α ((lorentzOfSL2C A).mulVec q) =
+      ∑ β : Fin 2 → ι₁ ⊕ ι₂,
+        (∏ i : Fin 2, (directSumRep R₁ R₂).rep A (α i) (β i)) *
+          directSumCoeff C₁ C₂ β q := by
+  have h11 : ∀ x y, (directSumRep R₁ R₂).rep A (Sum.inl x) (Sum.inl y) = R₁.rep A x y :=
+    fun _ _ => rfl
+  have h12 : ∀ x y, (directSumRep R₁ R₂).rep A (Sum.inl x) (Sum.inr y) = 0 := fun _ _ => rfl
+  have h21 : ∀ x y, (directSumRep R₁ R₂).rep A (Sum.inr x) (Sum.inl y) = 0 := fun _ _ => rfl
+  have h22 : ∀ x y, (directSumRep R₁ R₂).rep A (Sum.inr x) (Sum.inr y) = R₂.rep A x y :=
+    fun _ _ => rfl
+  rcases h0 : α 0 with a₀ | b₀ <;> rcases h1 : α 1 with a₁ | b₁
+  · have hα : α = Sum.inl ∘ ![a₀, a₁] := by
+      ext i
+      fin_cases i <;> simp [h0, h1]
+    rw [hα, directSumCoeff_inl, sum_block_two_inl _ _ _ h11 h12 h21 h22]
+    simp_rw [directSumCoeff_inl]
+    exact hC₁ A q ![a₀, a₁]
+  · have hL : directSumCoeff C₁ C₂ α ((lorentzOfSL2C A).mulVec q) = 0 := by
+      simp [directSumCoeff, h0, h1]
+    rw [hL]
+    symm
+    refine Finset.sum_eq_zero fun β _ => ?_
+    rw [Fin.prod_univ_two]
+    rcases hβ0 : β 0 with c₀ | d₀ <;> rcases hβ1 : β 1 with c₁ | d₁
+    · simp [h1, h21]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [h0, h12]
+  · have hL : directSumCoeff C₁ C₂ α ((lorentzOfSL2C A).mulVec q) = 0 := by
+      simp [directSumCoeff, h0, h1]
+    rw [hL]
+    symm
+    refine Finset.sum_eq_zero fun β _ => ?_
+    rw [Fin.prod_univ_two]
+    rcases hβ0 : β 0 with c₀ | d₀ <;> rcases hβ1 : β 1 with c₁ | d₁
+    · simp [h0, h21]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [h1, h12]
+  · have hα : α = Sum.inr ∘ ![b₀, b₁] := by
+      ext i
+      fin_cases i <;> simp [h0, h1]
+    rw [hα, directSumCoeff_inr, sum_block_two_inr _ _ _ h11 h12 h21 h22]
+    simp_rw [directSumCoeff_inr]
+    exact hC₂ A q ![b₀, b₁]
+
+lemma directSumCoeff_herm
+    {R₁ : HolomorphicLorentzRep ι₁} {S₁ : StarStructure R₁}
+    {R₂ : HolomorphicLorentzRep ι₂} {S₂ : StarStructure R₂}
+    {C₁ : (Fin 2 → ι₁) → (Fin 4 → ℝ) → ℂ}
+    {C₂ : (Fin 2 → ι₂) → (Fin 4 → ℝ) → ℂ}
+    (hC₁ : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι₁),
+      star (C₁ α q) = ∑ β : Fin 2 → ι₁, (∏ i : Fin 2, S₁.C (α i) (β i)) * C₁ (β ∘ Fin.rev) q)
+    (hC₂ : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι₂),
+      star (C₂ α q) = ∑ β : Fin 2 → ι₂, (∏ i : Fin 2, S₂.C (α i) (β i)) * C₂ (β ∘ Fin.rev) q)
+    (q : Fin 4 → ℝ) (α : Fin 2 → ι₁ ⊕ ι₂) :
+    star (directSumCoeff C₁ C₂ α q) =
+      ∑ β : Fin 2 → ι₁ ⊕ ι₂,
+        (∏ i : Fin 2, (directSumStarStructure S₁ S₂).C (α i) (β i)) *
+          directSumCoeff C₁ C₂ (β ∘ Fin.rev) q := by
+  have h11 : ∀ x y, (directSumStarStructure S₁ S₂).C (Sum.inl x) (Sum.inl y) = S₁.C x y :=
+    fun _ _ => rfl
+  have h12 : ∀ x y, (directSumStarStructure S₁ S₂).C (Sum.inl x) (Sum.inr y) = 0 :=
+    fun _ _ => rfl
+  have h21 : ∀ x y, (directSumStarStructure S₁ S₂).C (Sum.inr x) (Sum.inl y) = 0 :=
+    fun _ _ => rfl
+  have h22 : ∀ x y, (directSumStarStructure S₁ S₂).C (Sum.inr x) (Sum.inr y) = S₂.C x y :=
+    fun _ _ => rfl
+  rcases h0 : α 0 with a₀ | b₀ <;> rcases h1 : α 1 with a₁ | b₁
+  · have hα : α = Sum.inl ∘ ![a₀, a₁] := by
+      ext i
+      fin_cases i <;> simp [h0, h1]
+    rw [hα, directSumCoeff_inl, sum_block_two_inl _ _ _ h11 h12 h21 h22]
+    have hcomp : ∀ β : Fin 2 → ι₁,
+        directSumCoeff C₁ C₂ ((Sum.inl ∘ β) ∘ Fin.rev) q = C₁ (β ∘ Fin.rev) q := fun β => by
+      change directSumCoeff C₁ C₂ (Sum.inl ∘ (β ∘ Fin.rev)) q = _
+      exact directSumCoeff_inl C₁ C₂ (β ∘ Fin.rev) q
+    simp_rw [hcomp]
+    exact hC₁ q ![a₀, a₁]
+  · have hL : star (directSumCoeff C₁ C₂ α q) = 0 := by
+      simp [directSumCoeff, h0, h1]
+    rw [hL]
+    symm
+    refine Finset.sum_eq_zero fun β _ => ?_
+    rw [Fin.prod_univ_two]
+    rcases hβ0 : β 0 with c₀ | d₀ <;> rcases hβ1 : β 1 with c₁ | d₁
+    · simp [h1, h21]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [h0, h12]
+  · have hL : star (directSumCoeff C₁ C₂ α q) = 0 := by
+      simp [directSumCoeff, h0, h1]
+    rw [hL]
+    symm
+    refine Finset.sum_eq_zero fun β _ => ?_
+    rw [Fin.prod_univ_two]
+    rcases hβ0 : β 0 with c₀ | d₀ <;> rcases hβ1 : β 1 with c₁ | d₁
+    · simp [h0, h21]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [h1, h12]
+  · have hα : α = Sum.inr ∘ ![b₀, b₁] := by
+      ext i
+      fin_cases i <;> simp [h0, h1]
+    rw [hα, directSumCoeff_inr, sum_block_two_inr _ _ _ h11 h12 h21 h22]
+    have hcomp : ∀ β : Fin 2 → ι₂,
+        directSumCoeff C₁ C₂ ((Sum.inr ∘ β) ∘ Fin.rev) q = C₂ (β ∘ Fin.rev) q := fun β => by
+      change directSumCoeff C₁ C₂ (Sum.inr ∘ (β ∘ Fin.rev)) q = _
+      exact directSumCoeff_inr C₁ C₂ (β ∘ Fin.rev) q
+    simp_rw [hcomp]
+    exact hC₂ q ![b₀, b₁]
+
+lemma directSumCoeff_pct
+    {R₁ : HolomorphicLorentzRep ι₁} {R₂ : HolomorphicLorentzRep ι₂}
+    {η : ℂ}
+    {C₁ : (Fin 2 → ι₁) → (Fin 4 → ℝ) → ℂ}
+    {C₂ : (Fin 2 → ι₂) → (Fin 4 → ℝ) → ℂ}
+    (hC₁ : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι₁),
+      C₁ α q = η * ∑ β : Fin 2 → ι₁,
+        (∏ i : Fin 2, R₁.σ (-1, 1) (α i) (β i)) * C₁ (β ∘ Fin.rev) q)
+    (hC₂ : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι₂),
+      C₂ α q = η * ∑ β : Fin 2 → ι₂,
+        (∏ i : Fin 2, R₂.σ (-1, 1) (α i) (β i)) * C₂ (β ∘ Fin.rev) q)
+    (q : Fin 4 → ℝ) (α : Fin 2 → ι₁ ⊕ ι₂) :
+    directSumCoeff C₁ C₂ α q =
+      η * ∑ β : Fin 2 → ι₁ ⊕ ι₂,
+        (∏ i : Fin 2, (directSumRep R₁ R₂).σ (-1, 1) (α i) (β i)) *
+          directSumCoeff C₁ C₂ (β ∘ Fin.rev) q := by
+  have h11 : ∀ x y, (directSumRep R₁ R₂).σ (-1, 1) (Sum.inl x) (Sum.inl y) = R₁.σ (-1, 1) x y :=
+    fun _ _ => rfl
+  have h12 : ∀ x y, (directSumRep R₁ R₂).σ (-1, 1) (Sum.inl x) (Sum.inr y) = 0 :=
+    fun _ _ => rfl
+  have h21 : ∀ x y, (directSumRep R₁ R₂).σ (-1, 1) (Sum.inr x) (Sum.inl y) = 0 :=
+    fun _ _ => rfl
+  have h22 : ∀ x y, (directSumRep R₁ R₂).σ (-1, 1) (Sum.inr x) (Sum.inr y) = R₂.σ (-1, 1) x y :=
+    fun _ _ => rfl
+  rcases h0 : α 0 with a₀ | b₀ <;> rcases h1 : α 1 with a₁ | b₁
+  · have hα : α = Sum.inl ∘ ![a₀, a₁] := by
+      ext i
+      fin_cases i <;> simp [h0, h1]
+    rw [hα, directSumCoeff_inl, sum_block_two_inl _ _ _ h11 h12 h21 h22]
+    have hcomp : ∀ β : Fin 2 → ι₁,
+        directSumCoeff C₁ C₂ ((Sum.inl ∘ β) ∘ Fin.rev) q = C₁ (β ∘ Fin.rev) q := fun β => by
+      change directSumCoeff C₁ C₂ (Sum.inl ∘ (β ∘ Fin.rev)) q = _
+      exact directSumCoeff_inl C₁ C₂ (β ∘ Fin.rev) q
+    simp_rw [hcomp]
+    exact hC₁ q ![a₀, a₁]
+  · have hL : directSumCoeff C₁ C₂ α q = 0 := by
+      simp [directSumCoeff, h0, h1]
+    rw [hL]
+    symm
+    rw [mul_eq_zero]
+    right
+    refine Finset.sum_eq_zero fun β _ => ?_
+    rw [Fin.prod_univ_two]
+    rcases hβ0 : β 0 with c₀ | d₀ <;> rcases hβ1 : β 1 with c₁ | d₁
+    · simp [h1, h21]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [h0, h12]
+  · have hL : directSumCoeff C₁ C₂ α q = 0 := by
+      simp [directSumCoeff, h0, h1]
+    rw [hL]
+    symm
+    rw [mul_eq_zero]
+    right
+    refine Finset.sum_eq_zero fun β _ => ?_
+    rw [Fin.prod_univ_two]
+    rcases hβ0 : β 0 with c₀ | d₀ <;> rcases hβ1 : β 1 with c₁ | d₁
+    · simp [h0, h21]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [directSumCoeff, hβ0, hβ1]
+    · simp [h1, h12]
+  · have hα : α = Sum.inr ∘ ![b₀, b₁] := by
+      ext i
+      fin_cases i <;> simp [h0, h1]
+    rw [hα, directSumCoeff_inr, sum_block_two_inr _ _ _ h11 h12 h21 h22]
+    have hcomp : ∀ β : Fin 2 → ι₂,
+        directSumCoeff C₁ C₂ ((Sum.inr ∘ β) ∘ Fin.rev) q = C₂ (β ∘ Fin.rev) q := fun β => by
+      change directSumCoeff C₁ C₂ (Sum.inr ∘ (β ∘ Fin.rev)) q = _
+      exact directSumCoeff_inr C₁ C₂ (β ∘ Fin.rev) q
+    simp_rw [hcomp]
+    exact hC₂ q ![b₀, b₁]
+
+def directSumModeData
+    {R₁ : HolomorphicLorentzRep ι₁} {S₁ : StarStructure R₁}
+    {R₂ : HolomorphicLorentzRep ι₂} {S₂ : StarStructure R₂}
+    {m : ℝ} {η : ℂ}
+    {C₁ : (Fin 2 → ι₁) → (Fin 4 → ℝ) → ℂ}
+    {C₂ : (Fin 2 → ι₂) → (Fin 4 → ℝ) → ℂ}
+    (M₁ : MassShellModeData R₁ S₁ m η C₁)
+    (M₂ : MassShellModeData R₂ S₂ m η C₂) :
+    MassShellModeData (directSumRep R₁ R₂) (directSumStarStructure S₁ S₂)
+      m η (directSumCoeff C₁ C₂) where
+  ν := M₁.ν + M₂.ν
+  hη := M₁.hη
+  w := directSumModeW M₁.ν M₂.ν M₁.w M₂.w
+  measurable_w s α := by
+    unfold directSumModeW
+    rcases hs : finSumFinEquiv.symm s with s₁ | s₂ <;> rcases α with a | b
+    · exact M₁.measurable_w s₁ a
+    · exact measurable_const
+    · exact measurable_const
+    · exact M₂.measurable_w s₂ b
+  M := max M₁.M M₂.M
+  hM := le_max_of_le_left M₁.hM
+  norm_w_le s p α := by
+    unfold directSumModeW
+    rcases hs : finSumFinEquiv.symm s with s₁ | s₂ <;> rcases α with a | b
+    · exact (M₁.norm_w_le s₁ p a).trans (le_max_left _ _)
+    · simpa [norm_zero] using le_max_of_le_left M₁.hM
+    · simpa [norm_zero] using le_max_of_le_left M₁.hM
+    · exact (M₂.norm_w_le s₂ p b).trans (le_max_right _ _)
+  factor_weight p α β := by
+    change (∑ γ : ι₁ ⊕ ι₂, (directSumStarStructure S₁ S₂).C α γ *
+        massShellWeight m (directSumCoeff C₁ C₂) ![γ, β] p) =
+      ∑ s : Fin (M₁.ν + M₂.ν),
+        star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w s p α) *
+          directSumModeW M₁.ν M₂.ν M₁.w M₂.w s p β
+    rw [← (finSumFinEquiv (m := M₁.ν) (n := M₂.ν)).sum_comp,
+      Fintype.sum_sum_type, Fintype.sum_sum_type]
+    rcases α with a | a <;> rcases β with b | b
+    · have hL : (∑ γ : ι₂, (directSumStarStructure S₁ S₂).C (Sum.inl a) (Sum.inr γ) *
+          massShellWeight m (directSumCoeff C₁ C₂) ![Sum.inr γ, Sum.inl b] p) = 0 :=
+        Finset.sum_eq_zero fun γ _ => by simp [directSumStarStructure]
+      have hL1 : (∑ γ : ι₁, (directSumStarStructure S₁ S₂).C (Sum.inl a) (Sum.inl γ) *
+          massShellWeight m (directSumCoeff C₁ C₂) ![Sum.inl γ, Sum.inl b] p) =
+          ∑ γ : ι₁, S₁.C a γ * massShellWeight m C₁ ![γ, b] p :=
+        Finset.sum_congr rfl fun γ _ => by
+          simp [directSumStarStructure, massShellWeight, directSumCoeff]
+      have hR1 : (∑ u : Fin M₁.ν,
+          star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inl u)) p (Sum.inl a)) *
+            directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inl u)) p (Sum.inl b)) =
+          ∑ u : Fin M₁.ν, star (M₁.w u p a) * M₁.w u p b :=
+        Finset.sum_congr rfl fun u _ => by simp [directSumModeW]
+      have hR2 : (∑ u : Fin M₂.ν,
+          star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inr u)) p (Sum.inl a)) *
+            directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inr u)) p (Sum.inl b)) =
+          0 := Finset.sum_eq_zero fun u _ => by simp [directSumModeW]
+      rw [hL, hL1, hR1, hR2, add_zero, add_zero]
+      exact M₁.factor_weight p a b
+    · have hL1 : (∑ γ : ι₁, (directSumStarStructure S₁ S₂).C (Sum.inl a) (Sum.inl γ) *
+          massShellWeight m (directSumCoeff C₁ C₂) ![Sum.inl γ, Sum.inr b] p) = 0 :=
+        Finset.sum_eq_zero fun γ _ => by simp [massShellWeight, directSumCoeff]
+      have hL2 : (∑ γ : ι₂, (directSumStarStructure S₁ S₂).C (Sum.inl a) (Sum.inr γ) *
+          massShellWeight m (directSumCoeff C₁ C₂) ![Sum.inr γ, Sum.inr b] p) = 0 :=
+        Finset.sum_eq_zero fun γ _ => by simp [directSumStarStructure]
+      have hR1 : (∑ u : Fin M₁.ν,
+          star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inl u)) p (Sum.inl a)) *
+            directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inl u)) p (Sum.inr b)) =
+          0 := Finset.sum_eq_zero fun u _ => by simp [directSumModeW]
+      have hR2 : (∑ u : Fin M₂.ν,
+          star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inr u)) p (Sum.inl a)) *
+            directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inr u)) p (Sum.inr b)) =
+          0 := Finset.sum_eq_zero fun u _ => by simp [directSumModeW]
+      rw [hL1, hL2, hR1, hR2, add_zero]
+    · have hL1 : (∑ γ : ι₁, (directSumStarStructure S₁ S₂).C (Sum.inr a) (Sum.inl γ) *
+          massShellWeight m (directSumCoeff C₁ C₂) ![Sum.inl γ, Sum.inl b] p) = 0 :=
+        Finset.sum_eq_zero fun γ _ => by simp [directSumStarStructure]
+      have hL2 : (∑ γ : ι₂, (directSumStarStructure S₁ S₂).C (Sum.inr a) (Sum.inr γ) *
+          massShellWeight m (directSumCoeff C₁ C₂) ![Sum.inr γ, Sum.inl b] p) = 0 :=
+        Finset.sum_eq_zero fun γ _ => by simp [massShellWeight, directSumCoeff]
+      have hR1 : (∑ u : Fin M₁.ν,
+          star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inl u)) p (Sum.inr a)) *
+            directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inl u)) p (Sum.inl b)) =
+          0 := Finset.sum_eq_zero fun u _ => by simp [directSumModeW]
+      have hR2 : (∑ u : Fin M₂.ν,
+          star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inr u)) p (Sum.inr a)) *
+            directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inr u)) p (Sum.inl b)) =
+          0 := Finset.sum_eq_zero fun u _ => by simp [directSumModeW]
+      rw [hL1, hL2, hR1, hR2, add_zero]
+    · have hL1 : (∑ γ : ι₁, (directSumStarStructure S₁ S₂).C (Sum.inr a) (Sum.inl γ) *
+          massShellWeight m (directSumCoeff C₁ C₂) ![Sum.inl γ, Sum.inr b] p) = 0 :=
+        Finset.sum_eq_zero fun γ _ => by simp [directSumStarStructure]
+      have hL2 : (∑ γ : ι₂, (directSumStarStructure S₁ S₂).C (Sum.inr a) (Sum.inr γ) *
+          massShellWeight m (directSumCoeff C₁ C₂) ![Sum.inr γ, Sum.inr b] p) =
+          ∑ γ : ι₂, S₂.C a γ * massShellWeight m C₂ ![γ, b] p :=
+        Finset.sum_congr rfl fun γ _ => by
+          simp [directSumStarStructure, massShellWeight, directSumCoeff]
+      have hR1 : (∑ u : Fin M₁.ν,
+          star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inl u)) p (Sum.inr a)) *
+            directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inl u)) p (Sum.inr b)) =
+          0 := Finset.sum_eq_zero fun u _ => by simp [directSumModeW]
+      have hR2 : (∑ u : Fin M₂.ν,
+          star (directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inr u)) p (Sum.inr a)) *
+            directSumModeW M₁.ν M₂.ν M₁.w M₂.w (finSumFinEquiv (Sum.inr u)) p (Sum.inr b)) =
+          ∑ u : Fin M₂.ν, star (M₂.w u p a) * M₂.w u p b :=
+        Finset.sum_congr rfl fun u _ => by simp [directSumModeW]
+      rw [hL1, hL2, hR1, hR2, zero_add, zero_add]
+      exact M₂.factor_weight p a b
+
+omit [DecidableEq ι₁] [DecidableEq ι₂] in
+lemma directSumModeW_orthonormal {ν₁ ν₂ : ℕ}
+    {w₁ : Fin ν₁ → (Fin 3 → ℝ) → ι₁ → ℂ}
+    {w₂ : Fin ν₂ → (Fin 3 → ℝ) → ι₂ → ℂ}
+    {d₁ : Fin ν₁ → (Fin 3 → ℝ) → ι₁ → ℂ}
+    {d₂ : Fin ν₂ → (Fin 3 → ℝ) → ι₂ → ℂ}
+    (hd₁ : ∀ (s₁ s₂ : Fin ν₁) (p : Fin 3 → ℝ),
+      ∑ a : ι₁, w₁ s₁ p a * d₁ s₂ p a = if s₁ = s₂ then 1 else 0)
+    (hd₂ : ∀ (s₁ s₂ : Fin ν₂) (p : Fin 3 → ℝ),
+      ∑ b : ι₂, w₂ s₁ p b * d₂ s₂ p b = if s₁ = s₂ then 1 else 0)
+    (s₁ s₂ : Fin (ν₁ + ν₂)) (p : Fin 3 → ℝ) :
+    ∑ α : ι₁ ⊕ ι₂,
+        directSumModeW ν₁ ν₂ w₁ w₂ s₁ p α * directSumModeW ν₁ ν₂ d₁ d₂ s₂ p α =
+      if s₁ = s₂ then 1 else 0 := by
+  rw [Fintype.sum_sum_type]
+  by_cases hs : s₁ = s₂
+  · rw [if_pos hs, hs]
+    rcases h2 : finSumFinEquiv.symm s₂ with u | v
+    · simp [directSumModeW, h2, hd₁ u u p]
+    · simp [directSumModeW, h2, hd₂ v v p]
+  · rw [if_neg hs]
+    have hsymm : finSumFinEquiv.symm s₁ ≠ finSumFinEquiv.symm s₂ := fun h =>
+      hs (finSumFinEquiv.symm.injective h)
+    rcases h1 : finSumFinEquiv.symm s₁ with u₁ | v₁ <;>
+      rcases h2 : finSumFinEquiv.symm s₂ with u₂ | v₂
+    · have hu : u₁ ≠ u₂ := fun h => hsymm (by rw [h1, h2, h])
+      simp [directSumModeW, h1, h2, hd₁ u₁ u₂ p, if_neg hu]
+    · simp [directSumModeW, h1, h2]
+    · simp [directSumModeW, h1, h2]
+    · have hv : v₁ ≠ v₂ := fun h => hsymm (by rw [h1, h2, h])
+      simp [directSumModeW, h1, h2, hd₂ v₁ v₂ p, if_neg hv]
+
+end
+
+end
+
+section
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+def wickMassShellEuclidIsolatedData
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    {m : ℝ} (hm : 0 < m) {η : ℂ} {C : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (M_mode : MassShellModeData R S m η C) (hC : MassShellCoeffData m C)
+    (hC_cov : ∀ (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α ((lorentzOfSL2C A).mulVec q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, R.rep A (α i) (β i)) * C β q)
+    (hC_herm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      star (C α q) =
+        ∑ β : Fin 2 → ι, (∏ i : Fin 2, S.C (α i) (β i)) * C (β ∘ Fin.rev) q)
+    (hC_pct : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → ι),
+      C α q = η * ∑ β : Fin 2 → ι,
+        (∏ i : Fin 2, R.σ (-1, 1) (α i) (β i)) * C (β ∘ Fin.rev) q)
+    (dual_w : Fin M_mode.ν → (Fin 3 → ℝ) → ι → ℂ)
+    (contDiff_dual_w : ∀ (s : Fin M_mode.ν) (α : ι),
+      ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => dual_w s p α))
+    (dual_orthonormal : ∀ (s₁ s₂ : Fin M_mode.ν) (p : Fin 3 → ℝ),
+      ∑ α : ι, M_mode.w s₁ p α * dual_w s₂ p α = if s₁ = s₂ then 1 else 0) :
+    EuclidIsolatedMassShellData R S m (2 * m) η
+      (wickMassShellFullS R m hm η C hC) where
+  hm := hm
+  hM := by linarith
+  fullOS := wickMassShellFullEuclidOSAxioms R S hm M_mode hC hC_cov hC_herm hC_pct
+  timeCluster := by
+    have hOS := wickMassShellOSAxioms R S hm M_mode hC hC_cov hC_herm hC_pct
+    have hcl := wickMassShellOSTimeCluster hm M_mode hC hC_herm
+      hOS.toReflectionPositiveData rfl
+    exact (osTimeClusterDecomposition_congr_of_eq_on_orderedEuclidN
+      (D₁ := (wickMassShellFullEuclidOSAxioms R S hm M_mode hC
+        hC_cov hC_herm hC_pct).toOSAxioms.toReflectionPositiveData)
+      (D₂ := hOS.toReflectionPositiveData)
+      (fun n α _x hx =>
+        wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN
+          R hm η hC hC_cov n α hx)).mpr hcl
+  linearGrowth :=
+    wickMassShellFullOSLinearGrowthCondition R hm
+      (by rcases M_mode.hη with h | h <;> simp [h]) hC hC_cov
+  vacuumNormalized := wickMassShellFullS_vacuumNormalized R m hm η C hC
+  massGap := by
+    rw [wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm hC hC_cov _ _
+      (fun n α _x hx =>
+        wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN R hm η hC hC_cov n α hx)]
+    exact wickMassShell_massGapSpectrumCondition hm η hC
+  C_shell := C
+  hC := hC
+  mode := M_mode
+  dual_w := dual_w
+  contDiff_dual_w := contDiff_dual_w
+  dual_orthonormal := dual_orthonormal
+  twoPoint_shell β F _ := by
+    rw [wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm hC hC_cov _ _
+      (fun n α _x hx =>
+        wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN R hm η hC hC_cov n α hx)]
+    rw [wickMassShellW_two hm η hC β]
+
+end
+
+abbrev chargedKGRep : HolomorphicLorentzRep (Unit ⊕ Unit) :=
+  directSumRep trivialRep trivialRep
+
+abbrev chargedKGStarStructure : StarStructure chargedKGRep :=
+  directSumStarStructure trivialStarStructure trivialStarStructure
+
+def chargedKGCoeff : (Fin 2 → Unit ⊕ Unit) → (Fin 4 → ℝ) → ℂ :=
+  directSumCoeff massiveKGCoeff massiveKGCoeff
+
+lemma chargedKGCoeff_data {m : ℝ} (hm : 0 < m) :
+    MassShellCoeffData m chargedKGCoeff :=
+  directSumCoeff_data (massiveKGCoeff_data hm) (massiveKGCoeff_data hm)
+
+lemma chargedKGCoeff_cov (A : SL2C) (q : Fin 4 → ℝ) (α : Fin 2 → Unit ⊕ Unit) :
+    chargedKGCoeff α ((lorentzOfSL2C A).mulVec q) =
+      ∑ β : Fin 2 → Unit ⊕ Unit,
+        (∏ i : Fin 2, chargedKGRep.rep A (α i) (β i)) * chargedKGCoeff β q :=
+  directSumCoeff_cov
+    (fun A' q' α' => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    (fun A' q' α' => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
+    A q α
+
+lemma chargedKGCoeff_herm (q : Fin 4 → ℝ) (α : Fin 2 → Unit ⊕ Unit) :
+    star (chargedKGCoeff α q) =
+      ∑ β : Fin 2 → Unit ⊕ Unit,
+        (∏ i : Fin 2, chargedKGStarStructure.C (α i) (β i)) *
+          chargedKGCoeff (β ∘ Fin.rev) q :=
+  directSumCoeff_herm
+    (fun _ _ => by simp [massiveKGCoeff, trivialStarStructure])
+    (fun _ _ => by simp [massiveKGCoeff, trivialStarStructure])
+    q α
+
+lemma chargedKGCoeff_pct (q : Fin 4 → ℝ) (α : Fin 2 → Unit ⊕ Unit) :
+    chargedKGCoeff α q =
+      (1 : ℂ) * ∑ β : Fin 2 → Unit ⊕ Unit,
+        (∏ i : Fin 2, chargedKGRep.σ (-1, 1) (α i) (β i)) *
+          chargedKGCoeff (β ∘ Fin.rev) q :=
+  directSumCoeff_pct
+    (fun _ _ => by simp [massiveKGCoeff, trivialRep])
+    (fun _ _ => by simp [massiveKGCoeff, trivialRep])
+    q α
+
+def chargedKGModeData {m : ℝ} (hm : 0 < m) :
+    MassShellModeData chargedKGRep chargedKGStarStructure m 1 chargedKGCoeff :=
+  directSumModeData (kgModeData hm) (kgModeData hm)
+
+def chargedKGDualMode (m : ℝ) : Fin 2 → (Fin 3 → ℝ) → (Unit ⊕ Unit) → ℂ :=
+  directSumModeW 1 1 (kgDualMode m) (kgDualMode m)
+
+lemma contDiff_chargedKGDualMode {m : ℝ} (hm : 0 < m)
+    (s : Fin 2) (α : Unit ⊕ Unit) :
+    ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => chargedKGDualMode m s p α) :=
+  contDiff_directSumModeW (contDiff_kgDualMode hm) (contDiff_kgDualMode hm) s α
+
+lemma chargedKGDualMode_orthonormal {m : ℝ} (hm : 0 < m)
+    (s₁ s₂ : Fin 2) (p : Fin 3 → ℝ) :
+    ∑ α : Unit ⊕ Unit, (chargedKGModeData hm).w s₁ p α * chargedKGDualMode m s₂ p α =
+      if s₁ = s₂ then 1 else 0 :=
+  directSumModeW_orthonormal (kgDualMode_orthonormal hm) (kgDualMode_orthonormal hm) s₁ s₂ p
+
+def chargedKGFullS (m : ℝ) (hm : 0 < m) : SchwingerFamily (Unit ⊕ Unit) :=
+  wickMassShellFullS chargedKGRep m hm 1 chargedKGCoeff (chargedKGCoeff_data hm)
+
+def chargedKGIsolatedMassShellData {m : ℝ} (hm : 0 < m) :
+    IsolatedMassShellData chargedKGRep chargedKGStarStructure m (2 * m) 1 :=
+  wickMassShellIsolatedData chargedKGRep chargedKGStarStructure hm
+    (chargedKGModeData hm) (chargedKGCoeff_data hm)
+    chargedKGCoeff_cov chargedKGCoeff_herm chargedKGCoeff_pct
+    (chargedKGDualMode m) (contDiff_chargedKGDualMode hm) (chargedKGDualMode_orthonormal hm)
+
+theorem chargedKG_asymptoticCompleteness {m : ℝ} (hm : 0 < m) :
+    AsymptoticCompleteness (chargedKGIsolatedMassShellData hm) :=
+  asymptoticCompleteness_of_wickMassShell (chargedKGIsolatedMassShellData hm) rfl
+    chargedKGCoeff_herm
+
+theorem chargedKG_scatteringOperatorCLM_eq_id {m : ℝ} (hm : 0 < m) :
+    scatteringOperatorCLM (chargedKGIsolatedMassShellData hm) =
+      ContinuousLinearMap.id ℂ (SymmFockHilbert 2 1) :=
+  scatteringOperatorCLM_eq_id_of_wickMassShell (chargedKGIsolatedMassShellData hm) rfl
+    chargedKGCoeff_herm
+
+theorem chargedKG_two_same_wavepacket_particle_antiparticle_ne_zero {m : ℝ} (hm : 0 < m)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    mollerWaveIn (chargedKGIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 2 1 (Or.inl rfl) 2 ![0, 1] (fun _ => f₀)) ≠
+      0 :=
+  mollerWaveIn_two_same_wavepacket_diff_spin_ne_zero (chargedKGIsolatedMassShellData hm)
+    (by decide : (0 : Fin 2) ≠ 1) hf₀
+
+def chargedKGEuclidIsolatedMassShellData {m : ℝ} (hm : 0 < m) :
+    EuclidIsolatedMassShellData chargedKGRep chargedKGStarStructure m (2 * m) 1
+      (chargedKGFullS m hm) :=
+  wickMassShellEuclidIsolatedData chargedKGRep chargedKGStarStructure hm
+    (chargedKGModeData hm) (chargedKGCoeff_data hm)
+    chargedKGCoeff_cov chargedKGCoeff_herm chargedKGCoeff_pct
+    (chargedKGDualMode m) (contDiff_chargedKGDualMode hm) (chargedKGDualMode_orthonormal hm)
+
+theorem chargedKGFullS_spin_statistics {m : ℝ} (hm : 0 < m) {η : ℂ}
+    (hOS : FullEuclidOSAxioms chargedKGRep chargedKGStarStructure η (chargedKGFullS m hm)) :
+    η = 1 := by
+  let α : Fin 2 → Unit ⊕ Unit := fun _ => Sum.inl ()
+  let x : Fin 2 → Fin 4 → ℝ := ![0, ![1, 0, 0, 0]]
+  have hx : x ∈ orderedEuclidN 2 := posTimeTwoPoint_mem_orderedEuclidN zero_lt_one
+  have heq : chargedKGFullS m hm 2 α x =
+      massShellTwoPointS m hm chargedKGCoeff (chargedKGCoeff_data hm) 2 α x := by
+    change wickMassShellFullS chargedKGRep m hm 1 chargedKGCoeff
+        (chargedKGCoeff_data hm) 2 α x = _
+    rw [wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN
+      chargedKGRep hm 1 (chargedKGCoeff_data hm) chargedKGCoeff_cov 2 α hx]
+    change wickMassShellH m 1 chargedKGCoeff 2 α (wickEmbedN 2 x) = _
+    rw [wickMassShellH_two]
+    rfl
+  have hne : chargedKGFullS m hm 2 α x ≠ 0 := by
+    rw [heq]
+    exact (massShellTwoPointS_posTime_re_pos_and_ne_zero hm (chargedKGCoeff_data hm) α
+      continuous_const (fun _ => zero_lt_one) (fun _ => rfl) zero_lt_one).2
+  exact osAxioms_spin_statistics hOS.toOSAxioms
+    (directSumRep_spinParity trivialRep_spinParity trivialRep_spinParity)
+    ⟨2, by omega, α, x, hx, hne⟩
+
+theorem chargedKG_euclid_scattering_master {m : ℝ} (hm : 0 < m) :
+    let E := chargedKGEuclidIsolatedMassShellData hm
+    let D := E.toIsolatedMassShellData
+    AsymptoticCompleteness D ∧
+    E.osMollerWaveIn = E.osMollerWaveOut ∧
+    Function.Surjective E.osMollerWaveIn ∧
+    Function.Surjective E.osMollerWaveOut ∧
+    scatteringOperatorCLM D = ContinuousLinearMap.id ℂ (SymmFockHilbert 2 1) ∧
+    (∀ (f₀ : SmoothWavepacket), (∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) →
+      E.osMollerWaveIn
+        (symmFockMultiParticleVec 2 1 (Or.inl rfl) 2 ![0, 1] (fun _ => f₀)) ≠ 0) ∧
+    (∀ {η : ℂ}, FullEuclidOSAxioms chargedKGRep chargedKGStarStructure η
+      (chargedKGFullS m hm) → η = 1) ∧
+    (∀ r : ℕ, ∃ (s : Fin r → Fin 2) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      E.osMollerWaveIn (symmFockMultiParticleVec 2 1 (Or.inl rfl) r s f) ≠ 0 ∧
+      haagRuelleInVec D r s f hf ≠ 0 ∧
+      haagRuelleOutVec D r s f hf ≠ 0) := by
+  let E := chargedKGEuclidIsolatedMassShellData hm
+  let D := E.toIsolatedMassShellData
+  have hW : D.wightman.WData.W = wickMassShellW m 1 D.C_shell D.hC :=
+    E.toIsolatedMassShellData_W_eq.trans
+      (wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm
+        (chargedKGCoeff_data hm) chargedKGCoeff_cov _ _
+        (fun n α _x hx =>
+          wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN
+            chargedKGRep hm 1 (chargedKGCoeff_data hm) chargedKGCoeff_cov n α hx))
+  have hherm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → Unit ⊕ Unit),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → Unit ⊕ Unit,
+          (∏ i : Fin 2, chargedKGStarStructure.C (α i) (β i)) *
+            D.C_shell (β ∘ Fin.rev) q :=
+    chargedKGCoeff_herm
+  have hcomp : AsymptoticCompleteness D := asymptoticCompleteness_of_wickMassShell D hW hherm
+  have hin_out : mollerWaveIn D = mollerWaveOut D :=
+    mollerWaveIn_eq_mollerWaveOut_of_wickMassShell D hW hherm
+  have hsurj_in : Function.Surjective E.osMollerWaveIn := fun y => by
+    obtain ⟨Ψ, hΨ⟩ := surjective_mollerWaveIn D hcomp (E.osToWightmanEquiv y)
+    refine ⟨Ψ, ?_⟩
+    change E.osToWightmanEquiv.symm (mollerWaveIn D Ψ) = y
+    rw [hΨ, E.osToWightmanEquiv.symm_apply_apply]
+  have hsurj_out : Function.Surjective E.osMollerWaveOut := fun y => by
+    obtain ⟨Ψ, hΨ⟩ := surjective_mollerWaveOut D hcomp (E.osToWightmanEquiv y)
+    refine ⟨Ψ, ?_⟩
+    change E.osToWightmanEquiv.symm (mollerWaveOut D Ψ) = y
+    rw [hΨ, E.osToWightmanEquiv.symm_apply_apply]
+  refine ⟨hcomp, ?_, hsurj_in, hsurj_out,
+    scatteringOperatorCLM_eq_id_of_wickMassShell D hW hherm,
+    fun f₀ hf₀ => E.osMollerWaveIn_two_same_wavepacket_diff_spin_ne_zero
+      (by decide : (0 : Fin 2) ≠ 1) hf₀,
+    fun hOS => chargedKGFullS_spin_statistics hm hOS, fun r => ?_⟩
+  · apply LinearIsometry.ext
+    intro Ψ
+    change E.osToWightmanEquiv.symm (mollerWaveIn D Ψ) =
+      E.osToWightmanEquiv.symm (mollerWaveOut D Ψ)
+    rw [hin_out]
+  · obtain ⟨s, f, hf, _, hin, hout⟩ :=
+      exists_disjoint_haagRuelleVec_ne_zero D (by decide : 0 < 2) r
+    have hmv : mollerWaveIn D (symmFockMultiParticleVec 2 1 (Or.inl rfl) r s f) =
+        haagRuelleInVec D r s f hf :=
+      mollerWaveIn_symmFockMultiParticleVec D r s f hf
+    refine ⟨s, f, hf, ?_, hin, hout⟩
+    change E.osToWightmanEquiv.symm
+        (mollerWaveIn D (symmFockMultiParticleVec 2 1 (Or.inl rfl) r s f)) ≠ 0
+    rw [hmv]
+    intro h0
+    exact hin (E.osToWightmanEquiv.symm.injective (h0.trans (map_zero _).symm))
+
+abbrev chargedDiracRep :
+    HolomorphicLorentzRep ((Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)) :=
+  directSumRep diracRep diracRep
+
+abbrev chargedDiracStarStructure : StarStructure chargedDiracRep :=
+  directSumStarStructure diracStarStructure diracStarStructure
+
+def chargedDiracCoeff (m : ℝ) :
+    (Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)) → (Fin 4 → ℝ) → ℂ :=
+  directSumCoeff (diracMassShellCoeff m) (diracMassShellCoeff m)
+
+lemma chargedDiracCoeff_data {m : ℝ} (hm : 0 < m) :
+    MassShellCoeffData m (chargedDiracCoeff m) :=
+  directSumCoeff_data (diracMassShellCoeff_data hm) (diracMassShellCoeff_data hm)
+
+lemma chargedDiracCoeff_cov (m : ℝ) (A : SL2C) (q : Fin 4 → ℝ)
+    (α : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)) :
+    chargedDiracCoeff m α ((lorentzOfSL2C A).mulVec q) =
+      ∑ β : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2),
+        (∏ i : Fin 2, chargedDiracRep.rep A (α i) (β i)) * chargedDiracCoeff m β q :=
+  directSumCoeff_cov
+    (diracMassShellCoeff_lorentz m) (diracMassShellCoeff_lorentz m) A q α
+
+lemma chargedDiracCoeff_herm (m : ℝ) (q : Fin 4 → ℝ)
+    (α : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)) :
+    star (chargedDiracCoeff m α q) =
+      ∑ β : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2),
+        (∏ i : Fin 2, chargedDiracStarStructure.C (α i) (β i)) *
+          chargedDiracCoeff m (β ∘ Fin.rev) q :=
+  directSumCoeff_herm (diracMassShellCoeff_herm m) (diracMassShellCoeff_herm m) q α
+
+lemma chargedDiracCoeff_pct (m : ℝ) (q : Fin 4 → ℝ)
+    (α : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)) :
+    chargedDiracCoeff m α q =
+      (-1 : ℂ) * ∑ β : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2),
+        (∏ i : Fin 2, chargedDiracRep.σ (-1, 1) (α i) (β i)) *
+          chargedDiracCoeff m (β ∘ Fin.rev) q :=
+  directSumCoeff_pct (diracMassShellCoeff_pct m) (diracMassShellCoeff_pct m) q α
+
+def chargedDiracModeData {m : ℝ} (hm : 0 < m) :
+    MassShellModeData chargedDiracRep chargedDiracStarStructure m (-1)
+      (chargedDiracCoeff m) :=
+  directSumModeData (diracModeData hm) (diracModeData hm)
+
+def chargedDiracDualMode (m : ℝ) :
+    Fin 4 → (Fin 3 → ℝ) → ((Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)) → ℂ :=
+  directSumModeW 2 2 (diracDualMode m) (diracDualMode m)
+
+lemma contDiff_chargedDiracDualMode {m : ℝ} (hm : 0 < m)
+    (s : Fin 4) (α : (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)) :
+    ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => chargedDiracDualMode m s p α) :=
+  contDiff_directSumModeW (contDiff_diracDualMode hm) (contDiff_diracDualMode hm) s α
+
+lemma chargedDiracDualMode_orthonormal {m : ℝ} (hm : 0 < m)
+    (s₁ s₂ : Fin 4) (p : Fin 3 → ℝ) :
+    ∑ α : (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2),
+        (chargedDiracModeData hm).w s₁ p α * chargedDiracDualMode m s₂ p α =
+      if s₁ = s₂ then 1 else 0 :=
+  directSumModeW_orthonormal (diracDualMode_orthonormal hm) (diracDualMode_orthonormal hm) s₁ s₂ p
+
+def chargedDiracFullS (m : ℝ) (hm : 0 < m) :
+    SchwingerFamily ((Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)) :=
+  wickMassShellFullS chargedDiracRep m hm (-1) (chargedDiracCoeff m)
+    (chargedDiracCoeff_data hm)
+
+def chargedDiracIsolatedMassShellData {m : ℝ} (hm : 0 < m) :
+    IsolatedMassShellData chargedDiracRep chargedDiracStarStructure m (2 * m) (-1) :=
+  wickMassShellIsolatedData chargedDiracRep chargedDiracStarStructure hm
+    (chargedDiracModeData hm) (chargedDiracCoeff_data hm)
+    (chargedDiracCoeff_cov m) (chargedDiracCoeff_herm m) (chargedDiracCoeff_pct m)
+    (chargedDiracDualMode m) (contDiff_chargedDiracDualMode hm)
+    (chargedDiracDualMode_orthonormal hm)
+
+theorem chargedDirac_asymptoticCompleteness {m : ℝ} (hm : 0 < m) :
+    AsymptoticCompleteness (chargedDiracIsolatedMassShellData hm) :=
+  asymptoticCompleteness_of_wickMassShell (chargedDiracIsolatedMassShellData hm) rfl
+    (chargedDiracCoeff_herm m)
+
+theorem chargedDirac_scatteringOperatorCLM_eq_id {m : ℝ} (hm : 0 < m) :
+    scatteringOperatorCLM (chargedDiracIsolatedMassShellData hm) =
+      ContinuousLinearMap.id ℂ (SymmFockHilbert 4 (-1)) :=
+  scatteringOperatorCLM_eq_id_of_wickMassShell (chargedDiracIsolatedMassShellData hm) rfl
+    (chargedDiracCoeff_herm m)
+
+theorem chargedDirac_pauli_exclusion_in {m : ℝ} (hm : 0 < m)
+    (s₀ : Fin 4) (f₀ : SmoothWavepacket) :
+    mollerWaveIn (chargedDiracIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)) =
+      0 :=
+  mollerWaveIn_two_same_eq_zero_of_fermion (chargedDiracIsolatedMassShellData hm) s₀ f₀
+
+theorem chargedDirac_pauli_exclusion_out {m : ℝ} (hm : 0 < m)
+    (s₀ : Fin 4) (f₀ : SmoothWavepacket) :
+    mollerWaveOut (chargedDiracIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)) =
+      0 :=
+  mollerWaveOut_two_same_eq_zero_of_fermion (chargedDiracIsolatedMassShellData hm) s₀ f₀
+
+theorem chargedDirac_two_same_wavepacket_diff_mode_in {m : ℝ} (hm : 0 < m)
+    {s₁ s₂ : Fin 4} (hs : s₁ ≠ s₂)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    mollerWaveIn (chargedDiracIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) 2 ![s₁, s₂] (fun _ => f₀)) ≠
+      0 :=
+  mollerWaveIn_two_same_wavepacket_diff_spin_ne_zero
+    (chargedDiracIsolatedMassShellData hm) hs hf₀
+
+theorem chargedDirac_two_same_wavepacket_diff_mode_out {m : ℝ} (hm : 0 < m)
+    {s₁ s₂ : Fin 4} (hs : s₁ ≠ s₂)
+    {f₀ : SmoothWavepacket} (hf₀ : ∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) :
+    mollerWaveOut (chargedDiracIsolatedMassShellData hm)
+        (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) 2 ![s₁, s₂] (fun _ => f₀)) ≠
+      0 :=
+  mollerWaveOut_two_same_wavepacket_diff_spin_ne_zero
+    (chargedDiracIsolatedMassShellData hm) hs hf₀
+
+def chargedDiracEuclidIsolatedMassShellData {m : ℝ} (hm : 0 < m) :
+    EuclidIsolatedMassShellData chargedDiracRep chargedDiracStarStructure m (2 * m) (-1)
+      (chargedDiracFullS m hm) :=
+  wickMassShellEuclidIsolatedData chargedDiracRep chargedDiracStarStructure hm
+    (chargedDiracModeData hm) (chargedDiracCoeff_data hm)
+    (chargedDiracCoeff_cov m) (chargedDiracCoeff_herm m) (chargedDiracCoeff_pct m)
+    (chargedDiracDualMode m) (contDiff_chargedDiracDualMode hm)
+    (chargedDiracDualMode_orthonormal hm)
+
+theorem chargedDiracFullS_spin_statistics {m : ℝ} (hm : 0 < m) {η : ℂ}
+    (hOS : FullEuclidOSAxioms chargedDiracRep chargedDiracStarStructure η
+      (chargedDiracFullS m hm)) :
+    η = -1 := by
+  let α : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2) :=
+    ![Sum.inl (Sum.inl 0), Sum.inl (Sum.inr 0)]
+  let x : Fin 2 → Fin 4 → ℝ := ![0, ![1, 0, 0, 0]]
+  have hx : x ∈ orderedEuclidN 2 := posTimeTwoPoint_mem_orderedEuclidN zero_lt_one
+  have heq : chargedDiracFullS m hm 2 α x =
+      massShellTwoPointS m hm (chargedDiracCoeff m) (chargedDiracCoeff_data hm) 2 α x := by
+    change wickMassShellFullS chargedDiracRep m hm (-1) (chargedDiracCoeff m)
+        (chargedDiracCoeff_data hm) 2 α x = _
+    rw [wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN
+      chargedDiracRep hm (-1) (chargedDiracCoeff_data hm) (chargedDiracCoeff_cov m) 2 α hx]
+    change wickMassShellH m (-1) (chargedDiracCoeff m) 2 α (wickEmbedN 2 x) = _
+    rw [wickMassShellH_two]
+    rfl
+  have hne : chargedDiracFullS m hm 2 α x ≠ 0 := by
+    rw [heq]
+    refine (massShellTwoPointS_posTime_re_pos_and_ne_zero hm (chargedDiracCoeff_data hm) α
+      ((continuous_massShellEnergy m).add (continuous_apply 2))
+      (massShellEnergy_add_third_pos hm) (fun p => ?_) zero_lt_one).2
+    simp [α, chargedDiracCoeff, directSumCoeff, diracMassShellCoeff, massShellVec]
+  exact osAxioms_spin_statistics hOS.toOSAxioms
+    (directSumRep_spinParity diracRep_spinParity diracRep_spinParity)
+    ⟨2, by omega, α, x, hx, hne⟩
+
+theorem chargedDirac_euclid_scattering_master {m : ℝ} (hm : 0 < m) :
+    let E := chargedDiracEuclidIsolatedMassShellData hm
+    let D := E.toIsolatedMassShellData
+    AsymptoticCompleteness D ∧
+    E.osMollerWaveIn = E.osMollerWaveOut ∧
+    Function.Surjective E.osMollerWaveIn ∧
+    Function.Surjective E.osMollerWaveOut ∧
+    scatteringOperatorCLM D = ContinuousLinearMap.id ℂ (SymmFockHilbert 4 (-1)) ∧
+    (∀ (s₀ : Fin 4) (f₀ : SmoothWavepacket),
+      E.osMollerWaveIn
+        (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)) = 0) ∧
+    (∀ {s₁ s₂ : Fin 4}, s₁ ≠ s₂ → ∀ (f₀ : SmoothWavepacket),
+      (∃ p : Fin 3 → ℝ, f₀.amp p ≠ 0) →
+      E.osMollerWaveIn
+        (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) 2 ![s₁, s₂] (fun _ => f₀)) ≠ 0) ∧
+    (∀ {η : ℂ}, FullEuclidOSAxioms chargedDiracRep chargedDiracStarStructure η
+      (chargedDiracFullS m hm) → η = -1) ∧
+    (∀ r : ℕ, ∃ (s : Fin r → Fin 4) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      E.osMollerWaveIn (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) r s f) ≠ 0 ∧
+      haagRuelleInVec D r s f hf ≠ 0 ∧
+      haagRuelleOutVec D r s f hf ≠ 0) := by
+  let E := chargedDiracEuclidIsolatedMassShellData hm
+  let D := E.toIsolatedMassShellData
+  have hW : D.wightman.WData.W = wickMassShellW m (-1) D.C_shell D.hC :=
+    E.toIsolatedMassShellData_W_eq.trans
+      (wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm
+        (chargedDiracCoeff_data hm) (chargedDiracCoeff_cov m) _ _
+        (fun n α _x hx =>
+          wickMassShellFullS_eq_wickMassShellS_on_orderedEuclidN
+            chargedDiracRep hm (-1) (chargedDiracCoeff_data hm)
+            (chargedDiracCoeff_cov m) n α hx))
+  have hherm : ∀ (q : Fin 4 → ℝ) (α : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2)),
+      star (D.C_shell α q) =
+        ∑ β : Fin 2 → (Fin 2 ⊕ Fin 2) ⊕ (Fin 2 ⊕ Fin 2),
+          (∏ i : Fin 2, chargedDiracStarStructure.C (α i) (β i)) *
+            D.C_shell (β ∘ Fin.rev) q :=
+    chargedDiracCoeff_herm m
+  have hcomp : AsymptoticCompleteness D := asymptoticCompleteness_of_wickMassShell D hW hherm
+  have hin_out : mollerWaveIn D = mollerWaveOut D :=
+    mollerWaveIn_eq_mollerWaveOut_of_wickMassShell D hW hherm
+  have hsurj_in : Function.Surjective E.osMollerWaveIn := fun y => by
+    obtain ⟨Ψ, hΨ⟩ := surjective_mollerWaveIn D hcomp (E.osToWightmanEquiv y)
+    refine ⟨Ψ, ?_⟩
+    change E.osToWightmanEquiv.symm (mollerWaveIn D Ψ) = y
+    rw [hΨ, E.osToWightmanEquiv.symm_apply_apply]
+  have hsurj_out : Function.Surjective E.osMollerWaveOut := fun y => by
+    obtain ⟨Ψ, hΨ⟩ := surjective_mollerWaveOut D hcomp (E.osToWightmanEquiv y)
+    refine ⟨Ψ, ?_⟩
+    change E.osToWightmanEquiv.symm (mollerWaveOut D Ψ) = y
+    rw [hΨ, E.osToWightmanEquiv.symm_apply_apply]
+  refine ⟨hcomp, ?_, hsurj_in, hsurj_out,
+    scatteringOperatorCLM_eq_id_of_wickMassShell D hW hherm,
+    fun s₀ f₀ => ?_, fun {s₁ s₂} hs f₀ hf₀ => ?_,
+    fun hOS => chargedDiracFullS_spin_statistics hm hOS, fun r => ?_⟩
+  · apply LinearIsometry.ext
+    intro Ψ
+    change E.osToWightmanEquiv.symm (mollerWaveIn D Ψ) =
+      E.osToWightmanEquiv.symm (mollerWaveOut D Ψ)
+    rw [hin_out]
+  · have hm0 : mollerWaveIn D
+        (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) 2 (fun _ => s₀) (fun _ => f₀)) = 0 :=
+      mollerWaveIn_two_same_eq_zero_of_fermion D s₀ f₀
+    change E.osToWightmanEquiv.symm
+        (mollerWaveIn D (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) 2
+          (fun _ => s₀) (fun _ => f₀))) = 0
+    rw [hm0, map_zero]
+  · exact E.osMollerWaveIn_two_same_wavepacket_diff_spin_ne_zero hs hf₀
+  · obtain ⟨s, f, hf, _, hin, hout⟩ :=
+      exists_disjoint_haagRuelleVec_ne_zero D (by decide : 0 < 4) r
+    have hmv : mollerWaveIn D (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) r s f) =
+        haagRuelleInVec D r s f hf :=
+      mollerWaveIn_symmFockMultiParticleVec D r s f hf
+    refine ⟨s, f, hf, ?_, hin, hout⟩
+    change E.osToWightmanEquiv.symm
+        (mollerWaveIn D (symmFockMultiParticleVec 4 (-1) (Or.inr rfl) r s f)) ≠ 0
+    rw [hmv]
+    intro h0
+    exact hin (E.osToWightmanEquiv.symm.injective (h0.trans (map_zero _).symm))
+
+end
+
+end QFT
+
