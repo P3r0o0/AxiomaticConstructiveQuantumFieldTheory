@@ -14099,6 +14099,20 @@ noncomputable def toForwardConeOSReconstructedWightmanOfDiagonalBounded
   forwardConeOSReconstructedWightmanOfDiagonalBoundedBridge R S η 𝒮 hOS hdiag
     (T.toForwardConeOSEuclideanTubeBridge hOS)
 
+noncomputable def toWightmanAxiomsOfDiagonalBounded (T : OSTubeExtensionData R 𝒮)
+    {S : StarStructure R} {η : ℂ} (hOS : OSAxioms R S η 𝒮)
+    (hdiag : OSDiagonalKernelBounded S 𝒮) :
+    WightmanAxioms R S η :=
+  (T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag).toWightmanAxioms
+
+noncomputable def osToWightmanUnitaryEquivOfDiagonalBounded (T : OSTubeExtensionData R 𝒮)
+    {S : StarStructure R} {η : ℂ} (hOS : OSAxioms R S η 𝒮)
+    (hdiag : OSDiagonalKernelBounded S 𝒮) :
+    (T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag).Hilbert ≃ₗᵢ[ℂ]
+      (T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag).WightmanHilbertSpace :=
+  ForwardConeOSReconstructedWightman.osToWightmanLinearIsometryEquiv
+    (T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag)
+
 noncomputable def toWightmanAxioms (T : OSTubeExtensionData R 𝒮)
     {S : StarStructure R} {η : ℂ} (hOS : OSAxioms R S η 𝒮)
     (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData) :
@@ -16661,6 +16675,42 @@ theorem os_to_wightman_full_synthesis
       ⟨P.toFullEuclidOSAxioms hη hloc,
        fun n α _ hx => P.permutedSchwinger_eq_on_orderedEuclidN hη hloc n α hx⟩⟩
 
+theorem os_to_wightman_synthesis_of_diagonalBounded
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hdiag : OSDiagonalKernelBounded S 𝒮)
+    (T : OSTubeExtensionData R 𝒮) :
+    let P := T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag
+    let A := T.toWightmanAxiomsOfDiagonalBounded hOS hdiag
+    let U := T.osToWightmanUnitaryEquivOfDiagonalBounded hOS hdiag
+    A.WData.W = T.W ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare R P.poincare) a (U Ψ)) ∧
+    ((∀ {ε : ℂ}, R.HasSpinParity ε → (∃ β : Fin 2 → ι, T.W 2 β ≠ 0) → η = ε) ∧
+      (∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+          x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) → η = ε)) ∧
+    ((η = 1 ∨ η = -1) → LocalCommutativity η T.W →
+      FullEuclidOSAxioms R S η P.permutedSchwinger ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n → P.permutedSchwinger n α x = 𝒮 n α x) := by
+  let P := T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag
+  have h_holo : P.semigroup.IsWeaklyHolomorphic :=
+    hOS.isWeaklyHolomorphic_canonicalHolomorphicSemigroup_of_diagonalBounded hdiag
+  refine ⟨rfl, fun n α _ hx => T.schwingerFromTube_eq n α hx,
+    P.osToWightmanLinearIsometryEquiv_vacuum,
+    P.osToWightmanLinearIsometryEquiv_spacetimeTranslate h_holo,
+    ⟨fun hε h_nondeg => P.spin_statistics hε h_nondeg,
+     fun hε h_nondeg => osAxioms_spin_statistics hOS hε h_nondeg⟩,
+    fun hη hloc =>
+      ⟨P.toFullEuclidOSAxioms hη hloc,
+       fun n α _ hx => P.permutedSchwinger_eq_on_orderedEuclidN hη hloc n α hx⟩⟩
+
 noncomputable def schwartzDilateEquiv (n : ℕ) {r : ℝ} (hr : 0 < r) :
     (Fin n → Fin 4 → ℝ) ≃L[ℝ] (Fin n → Fin 4 → ℝ) where
   toFun p := r • p
@@ -17371,16 +17421,15 @@ noncomputable def osMultiTimeData_of_damped
 noncomputable def osMultiTimeData_of_linearGrowth
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R S η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     OSMultiTimeData hOS where
-  H := osMultiTimeH_of_linearGrowth hOS hcluster hlg
-  differentiableOn := differentiableOn_osMultiTimeH_of_linearGrowth hOS hcluster hlg
-  continuousOn := continuousOn_osMultiTimeH_of_linearGrowth hOS hcluster hlg
-  real_eq_schwinger := osMultiTimeH_of_linearGrowth_real_eq_schwinger hOS hcluster hlg
-  spatial_shift := osMultiTimeH_of_linearGrowth_spatial_shift hOS hcluster hlg
-  spinorRot := osMultiTimeH_of_linearGrowth_spinorRot hOS hcluster hlg
-  growth_bound := exists_osMultiTimeH_of_linearGrowth_growth_bound hOS hcluster hlg
+  H := osMultiTimeH_of_linearGrowth hOS hlg
+  differentiableOn := differentiableOn_osMultiTimeH_of_linearGrowth hOS hlg
+  continuousOn := continuousOn_osMultiTimeH_of_linearGrowth hOS hlg
+  real_eq_schwinger := osMultiTimeH_of_linearGrowth_real_eq_schwinger hOS hlg
+  spatial_shift := osMultiTimeH_of_linearGrowth_spatial_shift hOS hlg
+  spinorRot := osMultiTimeH_of_linearGrowth_spinorRot hOS hlg
+  growth_bound := exists_osMultiTimeH_of_linearGrowth_growth_bound hOS hlg
 
 noncomputable def osMultiTimeTubeH
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
@@ -24963,6 +25012,42 @@ theorem osReconstructedTubeExtensionData_of_data_W_eq
   osReconstructedTubeExtensionData_of_poincare_W_eq hOS D_mt
     (osReconstructed_poincareCovariant_of_data hOS D_mt)
 
+theorem os_wightman_reconstruction_of_data
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (D_mt : OSMultiTimeData hOS)
+    (hdiag : OSDiagonalKernelBounded S 𝒮) :
+    let T := osReconstructedTubeExtensionData_of_data hOS D_mt
+    let P := T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag
+    let A := T.toWightmanAxiomsOfDiagonalBounded hOS hdiag
+    let U := T.osToWightmanUnitaryEquivOfDiagonalBounded hOS hdiag
+    A.WData.W = osReconstructedWightmanFamily_of_data hOS D_mt ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare R P.poincare) a (U Ψ)) ∧
+    ((∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ β : Fin 2 → ι, osReconstructedWightmanFamily_of_data hOS D_mt 2 β ≠ 0) →
+        η = ε) ∧
+      (∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+          x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) → η = ε)) ∧
+    ((η = 1 ∨ η = -1) →
+      LocalCommutativity η (osReconstructedWightmanFamily_of_data hOS D_mt) →
+      FullEuclidOSAxioms R S η P.permutedSchwinger ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n → P.permutedSchwinger n α x = 𝒮 n α x) := by
+  intro T P A U
+  have hW : T.W = osReconstructedWightmanFamily_of_data hOS D_mt :=
+    osReconstructedTubeExtensionData_of_data_W_eq hOS D_mt
+  obtain ⟨h1, h2, h3, h4, ⟨h5a, h5b⟩, h6⟩ :=
+    os_to_wightman_synthesis_of_diagonalBounded hOS hdiag T
+  refine ⟨h1.trans hW, h2, h3, h4, ⟨fun hε h_nd => h5a hε (hW.symm ▸ h_nd), h5b⟩,
+    fun hη hloc => h6 hη (hW.symm ▸ hloc)⟩
+
 theorem os_full_wightman_reconstruction_of_data
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R S η 𝒮)
@@ -25076,59 +25161,53 @@ theorem os_full_wightman_reconstruction
 noncomputable def osReconstructedWightmanFamily_of_linearGrowth
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R S η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     WightmanFamily ι :=
-  osReconstructedWightmanFamily_of_data hOS (osMultiTimeData_of_linearGrowth hOS hcluster hlg)
+  osReconstructedWightmanFamily_of_data hOS (osMultiTimeData_of_linearGrowth hOS hlg)
 
 theorem osReconstructed_poincareCovariant_of_linearGrowth
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R S η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
-    PoincareCovariant R (osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg) :=
+    PoincareCovariant R (osReconstructedWightmanFamily_of_linearGrowth hOS hlg) :=
   osReconstructed_poincareCovariant_of_data hOS
-    (osMultiTimeData_of_linearGrowth hOS hcluster hlg)
+    (osMultiTimeData_of_linearGrowth hOS hlg)
 
 theorem osReconstructed_spectrumCondition_of_linearGrowth
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R S η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
-    SpectrumCondition (osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg) :=
+    SpectrumCondition (osReconstructedWightmanFamily_of_linearGrowth hOS hlg) :=
   osReconstructed_spectrumCondition_of_data hOS
-    (osMultiTimeData_of_linearGrowth hOS hcluster hlg)
+    (osMultiTimeData_of_linearGrowth hOS hlg)
 
 noncomputable def osReconstructedTubeExtensionData_of_linearGrowth
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R S η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     OSTubeExtensionData R 𝒮 :=
   osReconstructedTubeExtensionData_of_data hOS
-    (osMultiTimeData_of_linearGrowth hOS hcluster hlg)
+    (osMultiTimeData_of_linearGrowth hOS hlg)
 
 theorem osReconstructedTubeExtensionData_of_linearGrowth_W_eq
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R S η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
-    (osReconstructedTubeExtensionData_of_linearGrowth hOS hcluster hlg).W =
-      osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg :=
+    (osReconstructedTubeExtensionData_of_linearGrowth hOS hlg).W =
+      osReconstructedWightmanFamily_of_linearGrowth hOS hlg :=
   osReconstructedTubeExtensionData_of_data_W_eq hOS
-    (osMultiTimeData_of_linearGrowth hOS hcluster hlg)
+    (osMultiTimeData_of_linearGrowth hOS hlg)
 
-theorem os_full_wightman_reconstruction_of_linearGrowth
+theorem os_wightman_reconstruction_of_linearGrowth
     {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R S η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
-    (hlg : OSLinearGrowthCondition 𝒮)
-    (hnorm : OSVacuumNormalized 𝒮) :
-    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hcluster hlg
-    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
-    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
-    let U := T.osToWightmanUnitaryEquiv hOS hcluster
-    G.WData.W = osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg ∧
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    let hdiag := osDiagonalKernelBounded_of_linearGrowth S hlg
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
+    let P := T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag
+    let A := T.toWightmanAxiomsOfDiagonalBounded hOS hdiag
+    let U := T.osToWightmanUnitaryEquivOfDiagonalBounded hOS hdiag
+    A.WData.W = osReconstructedWightmanFamily_of_linearGrowth hOS hlg ∧
     (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
       x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube T.E n α x) ∧
     U P.vacuum = P.wightmanVacuumVec ∧
@@ -25138,18 +25217,2013 @@ theorem os_full_wightman_reconstruction_of_linearGrowth
           (wightmanTranslationInvariant_of_poincare R P.poincare) a (U Ψ)) ∧
     ((∀ {ε : ℂ}, R.HasSpinParity ε →
         (∃ β : Fin 2 → ι,
-          osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg 2 β ≠ 0) →
+          osReconstructedWightmanFamily_of_linearGrowth hOS hlg 2 β ≠ 0) →
         η = ε) ∧
       (∀ {ε : ℂ}, R.HasSpinParity ε →
         (∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
           x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) → η = ε)) ∧
     ((η = 1 ∨ η = -1) →
-      LocalCommutativity η (osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg) →
+      LocalCommutativity η (osReconstructedWightmanFamily_of_linearGrowth hOS hlg) →
+      FullEuclidOSAxioms R S η P.permutedSchwinger ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n → P.permutedSchwinger n α x = 𝒮 n α x) :=
+  os_wightman_reconstruction_of_data hOS
+    (osMultiTimeData_of_linearGrowth hOS hlg)
+    (osDiagonalKernelBounded_of_linearGrowth S hlg)
+
+theorem os_full_wightman_reconstruction_of_linearGrowth
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮)
+    (hnorm : OSVacuumNormalized 𝒮) :
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = osReconstructedWightmanFamily_of_linearGrowth hOS hlg ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare R P.poincare) a (U Ψ)) ∧
+    ((∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ β : Fin 2 → ι,
+          osReconstructedWightmanFamily_of_linearGrowth hOS hlg 2 β ≠ 0) →
+        η = ε) ∧
+      (∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+          x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) → η = ε)) ∧
+    ((η = 1 ∨ η = -1) →
+      LocalCommutativity η (osReconstructedWightmanFamily_of_linearGrowth hOS hlg) →
       FullEuclidOSAxioms R S η P.permutedSchwinger ∧
       ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
         x ∈ orderedEuclidN n → P.permutedSchwinger n α x = 𝒮 n α x) :=
   os_full_wightman_reconstruction_of_data hOS hcluster
-    (osMultiTimeData_of_linearGrowth hOS hcluster hlg) hnorm
+    (osMultiTimeData_of_linearGrowth hOS hlg) hnorm
+
+noncomputable def momentOSTubeExtensionData (c : ℕ → ℂ) :
+    OSTubeExtensionData trivialRep (momentS (ι := Unit) c) where
+  H := momentH c
+  analytic n α := (momentTubeExtension (ι := Unit) c).analytic n α
+  growth n _ := ⟨‖c n‖, 0, 0, norm_nonneg _, fun _ _ => by simp [momentH]⟩
+  schwinger_eq _ _ _ _ := rfl
+  tube_covariant := momentTubeCovariant c
+
+@[simp]
+theorem momentOSTubeExtensionData_W (c : ℕ → ℂ) :
+    (momentOSTubeExtensionData c).W = momentW (ι := Unit) c :=
+  wightman_eq_of_tubeExtension_eq (momentOSTubeExtensionData c).E
+    (momentTubeExtension (ι := Unit) c) (fun _ _ _ _ => rfl)
+
+omit [Fintype ι] [DecidableEq ι] in
+theorem momentLocalCommutativity (c : ℕ → ℂ) :
+    LocalCommutativity 1 (momentW (ι := ι) c) := by
+  intro n i hi α f f' _ hf'
+  rw [one_mul, momentW_apply, momentW_apply]
+  congr 1
+  let σ : Equiv.Perm (Fin n) := Equiv.swap i ⟨i.val + 1, hi⟩
+  have h_eq : (fun x : Fin n → Fin 4 → ℝ => f x) =
+      fun x => f' (permCoordCLE n σ x) := by
+    ext x
+    exact (hf' x).symm
+  rw [h_eq]
+  exact integral_comp_of_involutive_cle n (permCoordCLE n σ)
+    (fun x => by ext j μ; simp [permCoordCLE, σ]) f'
+
+theorem not_osTimeClusterDecomposition_z2FreeOSData :
+    ¬ OSTimeClusterDecomposition z2FreeOSData := by
+  intro hcl
+  have h1 := hcl (osBaseConfig 1) (osBaseConfig 1)
+  have h_fn : (fun τ : ℝ => osKernel trivialStarStructure z2FreeOSData.𝒮 (osBaseConfig 1)
+      (osConfigTimeShift (max τ 0) (le_max_right τ 0) (osBaseConfig 1))) =
+      fun _ => (1 : ℂ) := by
+    ext τ
+    change osKernel trivialStarStructure (momentS z2FreeCoeff) (osBaseConfig 1)
+      (osConfigTimeShift (max τ 0) (le_max_right τ 0) (osBaseConfig 1)) = 1
+    rw [osKernel_trivialStarStructure_momentS]
+    exact z2FreeCoeff_two
+  have h_vac : osKernel trivialStarStructure z2FreeOSData.𝒮 (osBaseConfig 1)
+      (osVacuumConfig Unit) = 0 := by
+    change osKernel trivialStarStructure (momentS z2FreeCoeff) (osBaseConfig 1)
+      (osVacuumConfig Unit) = 0
+    rw [osKernel_trivialStarStructure_momentS]
+    exact z2FreeCoeff_one
+  rw [h_fn, h_vac, zero_mul] at h1
+  exact one_ne_zero (tendsto_nhds_unique tendsto_const_nhds h1)
+
+theorem z2FreeOSLinearGrowthCondition : OSLinearGrowthCondition z2FreeS := by
+  refine ⟨1, 1, 0, zero_le_one, le_rfl, fun n α x _ => ?_⟩
+  change ‖z2FreeCoeff n‖ ≤ _
+  rw [z2FreeCoeff_eq_ite]
+  split_ifs <;> simp
+
+theorem z2Free_osReconstructedWightmanFamily_of_linearGrowth_eq :
+    osReconstructedWightmanFamily_of_linearGrowth
+      z2FreeOSReconstructedWightman.osAxioms z2FreeOSLinearGrowthCondition = z2FreeW := by
+  let T₁ := osReconstructedTubeExtensionData_of_linearGrowth
+    z2FreeOSReconstructedWightman.osAxioms z2FreeOSLinearGrowthCondition
+  let T₂ := momentOSTubeExtensionData z2FreeCoeff
+  unfold z2FreeW
+  rw [← osReconstructedTubeExtensionData_of_linearGrowth_W_eq,
+      ← momentOSTubeExtensionData_W z2FreeCoeff]
+  refine wightman_eq_of_tubeExtension_eq T₁.E T₂.E fun n α z hz => ?_
+  have hx₀ : euclidOrderedBasePoint n ∈ orderedEuclidN n :=
+    euclidOrderedBasePoint_mem_orderedEuclidN n
+  have h_ev : ∀ᶠ x in 𝓝 (euclidOrderedBasePoint n),
+      T₁.E.H n α (wickEmbedN n x) = T₂.E.H n α (wickEmbedN n x) := by
+    filter_upwards [(isOpen_orderedEuclidN n).mem_nhds hx₀] with x hx
+    rw [OSTubeExtensionData.E_H, OSTubeExtensionData.E_H, ← T₁.schwinger_eq n α x hx]
+    rfl
+  exact analyticOn_forward_tube_eq_of_eventuallyEq_wickEmbedN n
+    (T₁.E.analytic n α) (T₂.E.analytic n α) hx₀ h_ev hz
+
+theorem z2Free_pure_os_wightman_reconstruction_of_linearGrowth :
+    let hOS := z2FreeOSReconstructedWightman.osAxioms
+    let hlg := z2FreeOSLinearGrowthCondition
+    let hdiag := osDiagonalKernelBounded_of_linearGrowth trivialStarStructure hlg
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
+    let P := T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag
+    let A := T.toWightmanAxiomsOfDiagonalBounded hOS hdiag
+    let U := T.osToWightmanUnitaryEquivOfDiagonalBounded hOS hdiag
+    ¬ OSTimeClusterDecomposition hOS.toReflectionPositiveData ∧
+    A.WData.W = z2FreeW ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → z2FreeS n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare trivialRep P.poincare) a (U Ψ)) ∧
+    FullEuclidOSAxioms trivialRep trivialStarStructure 1 P.permutedSchwinger ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → P.permutedSchwinger n α x = z2FreeS n α x) := by
+  have hsyn := os_wightman_reconstruction_of_linearGrowth
+    z2FreeOSReconstructedWightman.osAxioms z2FreeOSLinearGrowthCondition
+  have hW := z2Free_osReconstructedWightmanFamily_of_linearGrowth_eq
+  have hloc : LocalCommutativity 1
+      (osReconstructedWightmanFamily_of_linearGrowth
+        z2FreeOSReconstructedWightman.osAxioms z2FreeOSLinearGrowthCondition) := by
+    rw [hW]
+    exact momentLocalCommutativity z2FreeCoeff
+  rcases hsyn with ⟨hA, hschw, hvac, htr, _, hfull⟩
+  rcases hfull (Or.inl rfl) hloc with ⟨hFE, hperm⟩
+  exact ⟨not_osTimeClusterDecomposition_z2FreeOSData, hA.trans hW, hschw, hvac, htr, hFE, hperm⟩
+
 end
+
+noncomputable section Phase2LocalityConverse
+
+lemma permInversions_adjacent_swap {n : ℕ} (i : Fin n) (hi : i.val + 1 < n) :
+    permInversions (Equiv.swap i ⟨i.val + 1, hi⟩) = 1 := by
+  let σ : Equiv.Perm (Fin n) := Equiv.swap i ⟨i.val + 1, hi⟩
+  have hinv : σ ⟨i.val + 1, hi⟩ < σ i := by
+    dsimp [σ]
+    rw [Equiv.swap_apply_right, Equiv.swap_apply_left, Fin.lt_def]
+    exact Nat.lt_succ_self i.val
+  have h1 := permInversions_mul_adjacent_swap σ i hi hinv
+  change permInversions σ = permInversions (σ * σ) + 1 at h1
+  rw [Equiv.swap_mul_self, permInversions_one] at h1
+  exact h1
+
+def complexBoostMatRing {K : Type*} [CommRing K]
+    (C S a b d : K) : Matrix (Fin 4) (Fin 4) K := !![
+  C, S * a, S * b, S * d;
+  S * a, 1 + (C - 1) * a ^ 2, (C - 1) * a * b, (C - 1) * a * d;
+  S * b, (C - 1) * b * a, 1 + (C - 1) * b ^ 2, (C - 1) * b * d;
+  S * d, (C - 1) * d * a, (C - 1) * d * b, 1 + (C - 1) * d ^ 2
+]
+
+private lemma complexBoostMatRing_transpose {K : Type*} [CommRing K]
+    (C S a b d : K) :
+    (complexBoostMatRing C S a b d)ᵀ = complexBoostMatRing C S a b d := by
+  ext i j
+  fin_cases i <;> fin_cases j <;> simp [complexBoostMatRing] <;> ring
+
+private lemma complexBoostMatRing_mul_inv {K : Type*} [CommRing K]
+    {C S a b d : K} (hCS : C ^ 2 - S ^ 2 = 1) (hu : a ^ 2 + b ^ 2 + d ^ 2 = 1) :
+    complexBoostMatRing C S a b d * complexBoostMatRing C (-S) a b d = 1 := by
+  ext i j
+  fin_cases i <;> fin_cases j
+  all_goals simp [Matrix.mul_apply, complexBoostMatRing, Fin.sum_univ_four]
+  · linear_combination hCS - S ^ 2 * hu
+  · linear_combination S * a * (C - 1) * hu
+  · linear_combination S * b * (C - 1) * hu
+  · linear_combination S * d * (C - 1) * hu
+  · linear_combination -(S * a * (C - 1)) * hu
+  · linear_combination a ^ 2 * hCS + (C - 1) ^ 2 * a ^ 2 * hu
+  · linear_combination a * b * hCS + (C - 1) ^ 2 * a * b * hu
+  · linear_combination a * d * hCS + (C - 1) ^ 2 * a * d * hu
+  · linear_combination -(S * b * (C - 1)) * hu
+  · linear_combination a * b * hCS + (C - 1) ^ 2 * a * b * hu
+  · linear_combination b ^ 2 * hCS + (C - 1) ^ 2 * b ^ 2 * hu
+  · linear_combination b * d * hCS + (C - 1) ^ 2 * b * d * hu
+  · linear_combination -(S * d * (C - 1)) * hu
+  · linear_combination a * d * hCS + (C - 1) ^ 2 * a * d * hu
+  · linear_combination b * d * hCS + (C - 1) ^ 2 * b * d * hu
+  · linear_combination d ^ 2 * hCS + (C - 1) ^ 2 * d ^ 2 * hu
+
+private lemma complexBoostMatRing_inv_mul {K : Type*} [CommRing K]
+    {C S a b d : K} (hCS : C ^ 2 - S ^ 2 = 1) (hu : a ^ 2 + b ^ 2 + d ^ 2 = 1) :
+    complexBoostMatRing C (-S) a b d * complexBoostMatRing C S a b d = 1 := by
+  have hCS' : C ^ 2 - (-S) ^ 2 = 1 := by rw [neg_sq]; exact hCS
+  simpa using complexBoostMatRing_mul_inv hCS' hu
+
+private lemma complexBoostMatRing_eta_comm {K : Type*} [CommRing K]
+    (C S a b d : K) :
+    let eta : Matrix (Fin 4) (Fin 4) K := !![1, 0, 0, 0; 0, -1, 0, 0; 0, 0, -1, 0; 0, 0, 0, -1]
+    complexBoostMatRing C S a b d * eta = eta * complexBoostMatRing C (-S) a b d := by
+  intro eta
+  ext i j
+  fin_cases i <;> fin_cases j <;>
+    simp [Matrix.mul_apply, complexBoostMatRing, eta, Fin.sum_univ_four]
+
+private lemma complexBoostMatRing_lorentz {K : Type*} [CommRing K]
+    {C S a b d : K} (hCS : C ^ 2 - S ^ 2 = 1) (hu : a ^ 2 + b ^ 2 + d ^ 2 = 1) :
+    let eta : Matrix (Fin 4) (Fin 4) K := !![1, 0, 0, 0; 0, -1, 0, 0; 0, 0, -1, 0; 0, 0, 0, -1]
+    (complexBoostMatRing C S a b d)ᵀ * eta * complexBoostMatRing C S a b d = eta := by
+  intro eta
+  rw [complexBoostMatRing_transpose, complexBoostMatRing_eta_comm, Matrix.mul_assoc,
+    complexBoostMatRing_inv_mul hCS hu, Matrix.mul_one]
+
+private lemma complexBoostMatRing_det {K : Type*} [CommRing K]
+    (C S a b d : K) :
+    (complexBoostMatRing C S a b d).det = C + (C ^ 2 - C - S ^ 2) * (a ^ 2 + b ^ 2 + d ^ 2) := by
+  rw [Matrix.det_succ_row_zero]
+  simp [Fin.sum_univ_succ, Matrix.det_succ_row_zero, Matrix.submatrix_apply,
+    Fin.succ_zero_eq_one, Fin.succ_one_eq_two, Fin.succAbove, complexBoostMatRing]
+  ring
+
+private lemma complexBoostMatRing_mulVec {K : Type*} [CommRing K]
+    (C S a b d : K) (z : Fin 4 → K) :
+    let σ_e : K := a * z 1 + b * z 2 + d * z 3
+    (complexBoostMatRing C S a b d).mulVec z =
+      ![C * z 0 + S * σ_e,
+        z 1 + (S * z 0 + (C - 1) * σ_e) * a,
+        z 2 + (S * z 0 + (C - 1) * σ_e) * b,
+        z 3 + (S * z 0 + (C - 1) * σ_e) * d] := by
+  intro σ_e
+  ext k
+  fin_cases k <;> (
+    simp [Matrix.mulVec, dotProduct, Fin.sum_univ_four, complexBoostMatRing, σ_e]
+    ring
+  )
+
+def complexBoostMatCS (c s e₁ e₂ e₃ : ℝ) : Matrix (Fin 4) (Fin 4) ℂ :=
+  complexBoostMatRing (c : ℂ) (Complex.I * (s : ℂ)) (e₁ : ℂ) (e₂ : ℂ) (e₃ : ℂ)
+
+private lemma complexBoostCS_ident {c s : ℝ} (hcs : c ^ 2 + s ^ 2 = 1) :
+    (c : ℂ) ^ 2 - (Complex.I * (s : ℂ)) ^ 2 = 1 := by
+  rw [mul_pow, Complex.I_sq]
+  have h1c : (c : ℂ) ^ 2 + (s : ℂ) ^ 2 = 1 := by exact_mod_cast hcs
+  linear_combination h1c
+
+def complexBoostCS {c s e₁ e₂ e₃ : ℝ} (hcs : c ^ 2 + s ^ 2 = 1)
+    (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1) : SpecialSpecialComplexLorentzGroup :=
+  have heC : (e₁ : ℂ) ^ 2 + (e₂ : ℂ) ^ 2 + (e₃ : ℂ) ^ 2 = 1 := by exact_mod_cast he
+  have hCS := complexBoostCS_ident hcs
+  ⟨⟨complexBoostMatCS c s e₁ e₂ e₃,
+    complexBoostMatRing (c : ℂ) (-(Complex.I * (s : ℂ))) (e₁ : ℂ) (e₂ : ℂ) (e₃ : ℂ),
+    complexBoostMatRing_mul_inv hCS heC,
+    complexBoostMatRing_inv_mul hCS heC⟩,
+   ⟨by
+      have h_eta : minkowskiMetric =
+          !![(1 : ℂ), 0, 0, 0; 0, -1, 0, 0; 0, 0, -1, 0; 0, 0, 0, -1] := by
+        ext i j; fin_cases i <;> fin_cases j <;> rfl
+      rw [h_eta]
+      exact complexBoostMatRing_lorentz hCS heC,
+    by
+      dsimp [complexBoostMatCS]
+      rw [complexBoostMatRing_det, heC]
+      linear_combination hCS⟩⟩
+
+lemma complexBoostCS_temporal_mem_forward_light_cone
+    {c s e₁ e₂ e₃ : ℝ} (hcs : c ^ 2 + s ^ 2 = 1) (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1)
+    (w : Fin 4 → ℂ) (hw1 : (w 1).im = 0) (hw2 : (w 2).im = 0) (hw3 : (w 3).im = 0)
+    (h_ineq : |s| * |(w 0).re| <
+      -(c * (w 0).im) - s * (e₁ * (w 1).re + e₂ * (w 2).re + e₃ * (w 3).re)) :
+    (fun μ => -(((complexBoostCS hcs he).val.val.mulVec w) μ).im) ∈ forward_light_cone := by
+  let σ_r : ℝ := e₁ * (w 1).re + e₂ * (w 2).re + e₃ * (w 3).re
+  have h_mv := complexBoostMatRing_mulVec (c : ℂ) (Complex.I * (s : ℂ))
+    (e₁ : ℂ) (e₂ : ℂ) (e₃ : ℂ) w
+  dsimp only at h_mv
+  have h_vec : (fun μ => -(((complexBoostCS hcs he).val.val.mulVec w) μ).im) =
+      ![-(c * (w 0).im) - s * σ_r,
+        -(s * (w 0).re * e₁),
+        -(s * (w 0).re * e₂),
+        -(s * (w 0).re * e₃)] := by
+    change (fun μ => -(((complexBoostMatCS c s e₁ e₂ e₃).mulVec w) μ).im) = _
+    dsimp only [complexBoostMatCS]
+    rw [h_mv]
+    ext μ
+    fin_cases μ
+    · simp [σ_r, hw1, hw2, hw3, Complex.mul_re, Complex.mul_im]
+      ring
+    · simp [σ_r, hw1, hw2, hw3, Complex.mul_re, Complex.mul_im]
+    · simp [σ_r, hw1, hw2, hw3, Complex.mul_re, Complex.mul_im]
+    · simp [σ_r, hw1, hw2, hw3, Complex.mul_re, Complex.mul_im]
+  rw [h_vec]
+  have h_lhs_nn : 0 ≤ |s| * |(w 0).re| := mul_nonneg (abs_nonneg _) (abs_nonneg _)
+  have hV0_pos : 0 < -(c * (w 0).im) - s * σ_r :=
+    lt_of_le_of_lt h_lhs_nn h_ineq
+  refine ⟨hV0_pos, ?_⟩
+  rw [minkowskiInner_explicit]
+  simp only [Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.cons_val]
+  have h_sp : (-(s * (w 0).re * e₁)) * (-(s * (w 0).re * e₁)) +
+      (-(s * (w 0).re * e₂)) * (-(s * (w 0).re * e₂)) +
+      (-(s * (w 0).re * e₃)) * (-(s * (w 0).re * e₃)) =
+      (|s| * |(w 0).re|) ^ 2 := by
+    rw [← abs_mul, sq_abs]
+    calc (-(s * (w 0).re * e₁)) * (-(s * (w 0).re * e₁)) +
+          (-(s * (w 0).re * e₂)) * (-(s * (w 0).re * e₂)) +
+          (-(s * (w 0).re * e₃)) * (-(s * (w 0).re * e₃))
+        = (e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2) * (s * (w 0).re) ^ 2 := by ring
+      _ = 1 * (s * (w 0).re) ^ 2 := by rw [he]
+      _ = (s * (w 0).re) ^ 2 := one_mul _
+  have h_sq_lt : (|s| * |(w 0).re|) ^ 2 <
+      (-(c * (w 0).im) - s * σ_r) ^ 2 :=
+    pow_lt_pow_left₀ h_ineq h_lhs_nn two_ne_zero
+  linarith
+
+def adjCoincVec (n : ℕ) (i : Fin n) : Fin n → Fin 4 → ℝ :=
+  fun k μ => if μ = 0 then (if k.val ≤ i.val then (k.val : ℝ) else ((k.val - 1 : ℕ) : ℝ)) else 0
+
+def adjBaseVec (n : ℕ) : Fin n → Fin 4 → ℝ :=
+  fun k μ => if μ = 0 then (k.val : ℝ) else 0
+
+lemma adjCoincVec_comp_swap {n : ℕ} (i : Fin n) (hi : i.val + 1 < n) :
+    adjCoincVec n i ∘ Equiv.swap i ⟨i.val + 1, hi⟩ = adjCoincVec n i := by
+  let j : Fin n := ⟨i.val + 1, hi⟩
+  ext k μ
+  dsimp only [Function.comp_apply, adjCoincVec]
+  by_cases hμ : μ = 0
+  · subst hμ
+    simp only [↓reduceIte]
+    by_cases hki : k = i
+    · subst hki
+      rw [Equiv.swap_apply_left]
+      have h1 : ¬ (k.val + 1) ≤ k.val := by omega
+      rw [if_neg h1, if_pos le_rfl]
+      simp
+    · by_cases hkj : k = j
+      · subst hkj
+        rw [Equiv.swap_apply_right]
+        have h1 : ¬ (i.val + 1) ≤ i.val := by omega
+        rw [if_pos le_rfl, if_neg h1]
+        dsimp [j]
+      · rw [Equiv.swap_apply_of_ne_of_ne hki hkj]
+  · simp [hμ]
+
+lemma adjCoincVec_diff {n : ℕ} (i k : Fin n) (hk : k.val + 1 < n) :
+    adjCoincVec n i ⟨k.val + 1, hk⟩ 0 - adjCoincVec n i k 0 = if k = i then 0 else 1 := by
+  dsimp [adjCoincVec]
+  by_cases hki : k = i
+  · subst hki
+    have h1 : ¬ k.val + 1 ≤ k.val := by omega
+    rw [if_neg h1, if_pos le_rfl, if_pos rfl, sub_self]
+  · rw [if_neg hki]
+    have hne : k.val ≠ i.val := fun h => hki (Fin.ext h)
+    by_cases hlt : k.val < i.val
+    · have h1 : k.val + 1 ≤ i.val := by omega
+      have h2 : k.val ≤ i.val := by omega
+      rw [if_pos h1, if_pos h2]
+      push_cast
+      ring
+    · have h1 : ¬ k.val + 1 ≤ i.val := by omega
+      have h2 : ¬ k.val ≤ i.val := by omega
+      have h3 : k.val - 1 + 1 = k.val := by omega
+      rw [if_neg h1, if_neg h2]
+      have hcast : (k.val : ℝ) = ((k.val - 1 : ℕ) : ℝ) + 1 := by
+        exact_mod_cast h3.symm
+      linarith
+
+lemma adjBaseVec_diff {n : ℕ} (k : Fin n) (hk : k.val + 1 < n) :
+    adjBaseVec n ⟨k.val + 1, hk⟩ 0 - adjBaseVec n k 0 = 1 := by
+  dsimp [adjBaseVec]
+  push_cast
+  ring
+
+lemma adjBaseVec_swap_diff_at {n : ℕ} (i : Fin n) (hi : i.val + 1 < n) :
+    let σ := Equiv.swap i ⟨i.val + 1, hi⟩
+    (adjBaseVec n ∘ σ) ⟨i.val + 1, hi⟩ 0 - (adjBaseVec n ∘ σ) i 0 = -1 := by
+  intro σ
+  dsimp [σ, adjBaseVec]
+  rw [Equiv.swap_apply_right, Equiv.swap_apply_left]
+  push_cast
+  ring
+
+lemma adjBaseVec_swap_diff_abs_le_two {n : ℕ} (i : Fin n) (hi : i.val + 1 < n)
+    (k : Fin n) (hk : k.val + 1 < n) :
+    let σ := Equiv.swap i ⟨i.val + 1, hi⟩
+    |(adjBaseVec n ∘ σ) ⟨k.val + 1, hk⟩ 0 - (adjBaseVec n ∘ σ) k 0| ≤ 2 := by
+  intro σ
+  let j : Fin n := ⟨i.val + 1, hi⟩
+  let k' : Fin n := ⟨k.val + 1, hk⟩
+  have h_val : ∀ a : Fin n,
+      (σ a).val =
+        if a.val = i.val then i.val + 1 else if a.val = i.val + 1 then i.val else a.val := by
+    intro a
+    by_cases hai : a = i
+    · subst hai
+      simp [σ]
+    · have hne1 : a.val ≠ i.val := fun h => hai (Fin.ext h)
+      rw [if_neg hne1]
+      by_cases haj : a = j
+      · subst haj
+        dsimp [σ, j]
+        rw [Equiv.swap_apply_right, if_pos rfl]
+      · have hne2 : a.val ≠ i.val + 1 := fun h => haj (Fin.ext h)
+        rw [if_neg hne2, Equiv.swap_apply_of_ne_of_ne hai haj]
+  have h_int : (-2 : ℤ) ≤ ((σ k').val : ℤ) - ((σ k).val : ℤ) ∧
+      ((σ k').val : ℤ) - ((σ k).val : ℤ) ≤ 2 := by
+    have hk'v : k'.val = k.val + 1 := rfl
+    rw [h_val k', h_val k, hk'v]
+    split_ifs <;> omega
+  have h_real : (-2 : ℝ) ≤ ((σ k').val : ℝ) - ((σ k).val : ℝ) ∧
+      ((σ k').val : ℝ) - ((σ k).val : ℝ) ≤ 2 := by
+    exact_mod_cast h_int
+  change |((σ k').val : ℝ) - ((σ k).val : ℝ)| ≤ 2
+  exact abs_le.mpr h_real
+
+lemma pos_shift_mem_forwardTubeConeFlat {n : ℕ} (i : Fin n)
+    {t s : ℝ} (ht : 0 < t) (hs : 0 < s) :
+    spacetimeFlatCLE n (t • adjCoincVec n i + s • adjBaseVec n) ∈ forwardTubeConeFlat n := by
+  let y := t • adjCoincVec n i + s • adjBaseVec n
+  have hz : (fun k μ => (y k μ : ℂ) * Complex.I) ∈ forward_tube_n n := by
+    intro k hk
+    have h_im : (fun μ => -((((y k μ : ℂ) * Complex.I) -
+        ((y ⟨k.val + 1, hk⟩ μ : ℂ) * Complex.I)).im)) =
+        fun μ => if μ = 0 then (if k = i then s else t + s) else 0 := by
+      ext μ
+      by_cases hμ : μ = 0
+      · subst hμ
+        simp only [Complex.sub_im, Complex.mul_im, Complex.ofReal_re, Complex.I_im, mul_one,
+          Complex.ofReal_im, Complex.I_re, mul_zero, add_zero, ↓reduceIte]
+        have hd1 := adjCoincVec_diff i k hk
+        have hd2 := adjBaseVec_diff k hk
+        dsimp [y]
+        have h_lin : -(t * adjCoincVec n i k 0 + s * adjBaseVec n k 0 -
+            (t * adjCoincVec n i ⟨k.val + 1, hk⟩ 0 + s * adjBaseVec n ⟨k.val + 1, hk⟩ 0)) =
+            t * (adjCoincVec n i ⟨k.val + 1, hk⟩ 0 - adjCoincVec n i k 0) +
+              s * (adjBaseVec n ⟨k.val + 1, hk⟩ 0 - adjBaseVec n k 0) := by ring
+        rw [h_lin, hd1, hd2]
+        by_cases hki : k = i <;> simp [hki]
+      · simp [y, adjCoincVec, adjBaseVec, hμ]
+    change (fun μ => -((((y k μ : ℂ) * Complex.I) -
+      ((y ⟨k.val + 1, hk⟩ μ : ℂ) * Complex.I)).im)) ∈ forward_light_cone
+    rw [h_im]
+    have hpos : 0 < (if k = i then s else t + s) := by split_ifs <;> linarith
+    refine ⟨by simpa using hpos, ?_⟩
+    rw [minkowskiInner_explicit]
+    simp only [↓reduceIte, Fin.isValue, Fin.reduceEq, mul_zero, sub_zero]
+    exact mul_pos hpos hpos
+  have htd := (mem_tubeDomain_forwardTubeConeFlat_iff n (fun k μ => (y k μ : ℂ) * Complex.I)).mpr hz
+  have him : (fun p => (spacetimeFlatCLE_C n (fun k μ => (y k μ : ℂ) * Complex.I) p).im) =
+      spacetimeFlatCLE n y := by
+    ext p
+    simp [spacetimeFlatCLE_C, spacetimeFlatLinearEquivC, spacetimeFlatCLE, spacetimeFlatLinearEquiv]
+  exact him ▸ htd
+
+lemma neg_shift_swap_mem_forwardTubeConeFlat {n : ℕ} (i : Fin n) (hi : i.val + 1 < n)
+    {t u : ℝ} (hu : 0 < u) (hut : 3 * u < t) :
+    let σ := Equiv.swap i ⟨i.val + 1, hi⟩
+    spacetimeFlatCLE n ((t • adjCoincVec n i - u • adjBaseVec n) ∘ σ) ∈ forwardTubeConeFlat n := by
+  intro σ
+  let y := (t • adjCoincVec n i - u • adjBaseVec n) ∘ σ
+  have hz : (fun k μ => (y k μ : ℂ) * Complex.I) ∈ forward_tube_n n := by
+    intro k hk
+    have h_w_swap : (adjCoincVec n i ∘ σ) = adjCoincVec n i := adjCoincVec_comp_swap i hi
+    let c_k : ℝ := y ⟨k.val + 1, hk⟩ 0 - y k 0
+    have hc_pos : 0 < c_k := by
+      dsimp [c_k, y]
+      have hw : adjCoincVec n i (σ ⟨k.val + 1, hk⟩) 0 - adjCoincVec n i (σ k) 0 =
+          if k = i then 0 else 1 := by
+        have h1 := congrFun (congrFun h_w_swap ⟨k.val + 1, hk⟩) 0
+        have h2 := congrFun (congrFun h_w_swap k) 0
+        dsimp only [Function.comp_apply] at h1 h2
+        rw [h1, h2, adjCoincVec_diff]
+      by_cases hki : k = i
+      · subst hki
+        have hk_eq : (⟨k.val + 1, hk⟩ : Fin n) = ⟨k.val + 1, hi⟩ := rfl
+        rw [hk_eq] at hw ⊢
+        rw [if_pos rfl] at hw
+        have hd_at := adjBaseVec_swap_diff_at k hi
+        dsimp only [σ, Function.comp_apply] at hd_at hw ⊢
+        have h_lin : t * adjCoincVec n k ((Equiv.swap k ⟨k.val + 1, hi⟩) ⟨k.val + 1, hi⟩) 0 -
+            u * adjBaseVec n ((Equiv.swap k ⟨k.val + 1, hi⟩) ⟨k.val + 1, hi⟩) 0 -
+            (t * adjCoincVec n k ((Equiv.swap k ⟨k.val + 1, hi⟩) k) 0 -
+              u * adjBaseVec n ((Equiv.swap k ⟨k.val + 1, hi⟩) k) 0) =
+            t * (adjCoincVec n k ((Equiv.swap k ⟨k.val + 1, hi⟩) ⟨k.val + 1, hi⟩) 0 -
+              adjCoincVec n k ((Equiv.swap k ⟨k.val + 1, hi⟩) k) 0) -
+            u * (adjBaseVec n ((Equiv.swap k ⟨k.val + 1, hi⟩) ⟨k.val + 1, hi⟩) 0 -
+              adjBaseVec n ((Equiv.swap k ⟨k.val + 1, hi⟩) k) 0) := by ring
+        rw [h_lin, hw, hd_at]
+        linarith
+      · have hd_bd := (abs_le.mp (adjBaseVec_swap_diff_abs_le_two i hi k hk)).2
+        dsimp only [σ, Function.comp_apply] at hd_bd hw ⊢
+        rw [if_neg hki] at hw
+        have hu_le : u * (adjBaseVec n ((Equiv.swap i ⟨i.val + 1, hi⟩) ⟨k.val + 1, hk⟩) 0 -
+            adjBaseVec n ((Equiv.swap i ⟨i.val + 1, hi⟩) k) 0) ≤ u * 2 :=
+          mul_le_mul_of_nonneg_left hd_bd hu.le
+        have h_lin : t * adjCoincVec n i ((Equiv.swap i ⟨i.val + 1, hi⟩) ⟨k.val + 1, hk⟩) 0 -
+            u * adjBaseVec n ((Equiv.swap i ⟨i.val + 1, hi⟩) ⟨k.val + 1, hk⟩) 0 -
+            (t * adjCoincVec n i ((Equiv.swap i ⟨i.val + 1, hi⟩) k) 0 -
+              u * adjBaseVec n ((Equiv.swap i ⟨i.val + 1, hi⟩) k) 0) =
+            t * (adjCoincVec n i ((Equiv.swap i ⟨i.val + 1, hi⟩) ⟨k.val + 1, hk⟩) 0 -
+              adjCoincVec n i ((Equiv.swap i ⟨i.val + 1, hi⟩) k) 0) -
+            u * (adjBaseVec n ((Equiv.swap i ⟨i.val + 1, hi⟩) ⟨k.val + 1, hk⟩) 0 -
+              adjBaseVec n ((Equiv.swap i ⟨i.val + 1, hi⟩) k) 0) := by ring
+        rw [h_lin, hw]
+        linarith
+    have h_im : (fun μ => -((((y k μ : ℂ) * Complex.I) -
+        ((y ⟨k.val + 1, hk⟩ μ : ℂ) * Complex.I)).im)) =
+        fun μ => if μ = 0 then c_k else 0 := by
+      ext μ
+      by_cases hμ : μ = 0
+      · subst hμ
+        simp only [Complex.sub_im, Complex.mul_im, Complex.ofReal_re, Complex.I_im, mul_one,
+          Complex.ofReal_im, Complex.I_re, mul_zero, add_zero, ↓reduceIte, c_k]
+        ring
+      · simp [y, adjCoincVec, adjBaseVec, hμ]
+    change (fun μ => -((((y k μ : ℂ) * Complex.I) -
+      ((y ⟨k.val + 1, hk⟩ μ : ℂ) * Complex.I)).im)) ∈ forward_light_cone
+    rw [h_im]
+    refine ⟨by simpa using hc_pos, ?_⟩
+    rw [minkowskiInner_explicit]
+    simp only [↓reduceIte, Fin.isValue, Fin.reduceEq, mul_zero, sub_zero]
+    exact mul_pos hc_pos hc_pos
+  have htd := (mem_tubeDomain_forwardTubeConeFlat_iff n (fun k μ => (y k μ : ℂ) * Complex.I)).mpr hz
+  have him : (fun p => (spacetimeFlatCLE_C n (fun k μ => (y k μ : ℂ) * Complex.I) p).im) =
+      spacetimeFlatCLE n y := by
+    ext p
+    simp [spacetimeFlatCLE_C, spacetimeFlatLinearEquivC, spacetimeFlatCLE, spacetimeFlatLinearEquiv]
+  exact him ▸ htd
+
+lemma tsupport_schwartzCutoffSeq_subset (n : ℕ)
+    (f : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ) (k : ℕ) :
+    tsupport (schwartzCutoffSeq n f k : (Fin n → Fin 4 → ℝ) → ℂ) ⊆
+      tsupport (f : (Fin n → Fin 4 → ℝ) → ℂ) := by
+  refine closure_mono fun x hx h0 => hx ?_
+  rw [schwartzCutoffSeq_apply, h0, mul_zero]
+
+lemma isOpen_adjSpacelikeSet {n : ℕ} (i : Fin n) (hi : i.val + 1 < n) :
+    IsOpen { x : Fin n → Fin 4 → ℝ | is_spacelike (x i - x ⟨i.val + 1, hi⟩) } := by
+  have h_eq : { x : Fin n → Fin 4 → ℝ | is_spacelike (x i - x ⟨i.val + 1, hi⟩) } =
+      { x | (x i 0 - x ⟨i.val + 1, hi⟩ 0) ^ 2 -
+          (x i 1 - x ⟨i.val + 1, hi⟩ 1) ^ 2 -
+          (x i 2 - x ⟨i.val + 1, hi⟩ 2) ^ 2 -
+          (x i 3 - x ⟨i.val + 1, hi⟩ 3) ^ 2 < 0 } := by
+    ext x
+    simp only [Set.mem_setOf_eq, is_spacelike, minkowskiInner_explicit, Pi.sub_apply, sq]
+  rw [h_eq]
+  refine isOpen_lt ?_ continuous_const
+  fun_prop
+
+def zRectAdj {n : ℕ} (i : Fin n) (x : Fin n → Fin 4 → ℝ) (t₀ s : ℝ) (ζ : ℂ) :
+    Fin n → Fin 4 → ℂ :=
+  fun k μ =>
+    if μ = 0 then
+      ζ * (x k 0 : ℂ) + ((t₀ • adjCoincVec n i + s • adjBaseVec n) k 0 : ℂ) * Complex.I
+    else
+      (x k μ : ℂ)
+
+private lemma cs_unit_three {e₁ e₂ e₃ a₁ a₂ a₃ : ℝ} (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1) :
+    (-(e₁ * a₁ + e₂ * a₂ + e₃ * a₃)) ^ 2 ≤ a₁ ^ 2 + a₂ ^ 2 + a₃ ^ 2 := by
+  have h_id : (a₁ ^ 2 + a₂ ^ 2 + a₃ ^ 2) * (e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2) -
+      (-(e₁ * a₁ + e₂ * a₂ + e₃ * a₃)) ^ 2 =
+      (a₁ * e₂ - a₂ * e₁) ^ 2 + (a₂ * e₃ - a₃ * e₂) ^ 2 + (a₃ * e₁ - a₁ * e₃) ^ 2 := by
+    ring
+  rw [he, mul_one] at h_id
+  linarith [sq_nonneg (a₁ * e₂ - a₂ * e₁), sq_nonneg (a₂ * e₃ - a₃ * e₂),
+    sq_nonneg (a₃ * e₁ - a₁ * e₃)]
+
+private lemma exists_unit_dir_spacelike (d₀ : Fin 4 → ℝ) (hd₀ : is_spacelike d₀) :
+    ∃ (r μ_gap e₁ e₂ e₃ : ℝ), 0 < r ∧ 0 < μ_gap ∧ μ_gap = r - |d₀ 0| ∧
+      e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1 ∧ |e₁| ≤ 1 ∧ |e₂| ≤ 1 ∧ |e₃| ≤ 1 ∧
+      -(e₁ * d₀ 1 + e₂ * d₀ 2 + e₃ * d₀ 3) = r := by
+  have hd₀_sl : d₀ 0 ^ 2 < d₀ 1 ^ 2 + d₀ 2 ^ 2 + d₀ 3 ^ 2 := by
+    have h := hd₀
+    rw [is_spacelike, minkowskiInner_explicit] at h
+    linarith [h]
+  obtain ⟨S_sq, hS_def⟩ : ∃ S_sq : ℝ, S_sq = d₀ 1 ^ 2 + d₀ 2 ^ 2 + d₀ 3 ^ 2 := ⟨_, rfl⟩
+  have hS_pos : 0 < S_sq := lt_of_le_of_lt (sq_nonneg (d₀ 0)) (hS_def ▸ hd₀_sl)
+  obtain ⟨r, hr_def⟩ : ∃ r : ℝ, r = Real.sqrt S_sq := ⟨_, rfl⟩
+  have hr_pos : 0 < r := hr_def ▸ Real.sqrt_pos.mpr hS_pos
+  have hr_sq : r ^ 2 = S_sq := by rw [hr_def]; exact Real.sq_sqrt hS_pos.le
+  have hd₀0_lt_r : |d₀ 0| < r := by
+    have hsq : |d₀ 0| ^ 2 < r ^ 2 := by rw [sq_abs, hr_sq, hS_def]; exact hd₀_sl
+    by_contra h_ge
+    have hr_le : r ≤ |d₀ 0| := le_of_not_gt h_ge
+    have h_le_sq : r ^ 2 ≤ |d₀ 0| ^ 2 := pow_le_pow_left₀ hr_pos.le hr_le 2
+    linarith
+  obtain ⟨e₁, he₁_def⟩ : ∃ e₁ : ℝ, e₁ = -d₀ 1 / r := ⟨_, rfl⟩
+  obtain ⟨e₂, he₂_def⟩ : ∃ e₂ : ℝ, e₂ = -d₀ 2 / r := ⟨_, rfl⟩
+  obtain ⟨e₃, he₃_def⟩ : ∃ e₃ : ℝ, e₃ = -d₀ 3 / r := ⟨_, rfl⟩
+  have he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1 := by
+    rw [he₁_def, he₂_def, he₃_def]
+    field_simp [hr_pos.ne']
+    rw [hr_sq, hS_def]
+  have he_abs : ∀ (a b d : ℝ), a ^ 2 + b ^ 2 + d ^ 2 = 1 → |a| ≤ 1 := by
+    intro a b d h1
+    have hsq : |a| ^ 2 ≤ 1 ^ 2 := by rw [sq_abs]; linarith [sq_nonneg b, sq_nonneg d]
+    by_contra hgt
+    have hlt : (1 : ℝ) < |a| := lt_of_not_ge hgt
+    have hgt_sq : (1 : ℝ) ^ 2 < |a| ^ 2 := pow_lt_pow_left₀ hlt zero_le_one two_ne_zero
+    linarith
+  have he₁_abs : |e₁| ≤ 1 := he_abs e₁ e₂ e₃ he
+  have he₂_abs : |e₂| ≤ 1 := he_abs e₂ e₁ e₃ (by linear_combination he)
+  have he₃_abs : |e₃| ≤ 1 := he_abs e₃ e₁ e₂ (by linear_combination he)
+  have he_dot : -(e₁ * d₀ 1 + e₂ * d₀ 2 + e₃ * d₀ 3) = r := by
+    rw [he₁_def, he₂_def, he₃_def]
+    field_simp [hr_pos.ne']
+    rw [hr_sq, hS_def]
+    ring
+  exact ⟨r, r - |d₀ 0|, e₁, e₂, e₃, hr_pos, by linarith, rfl,
+    he, he₁_abs, he₂_abs, he₃_abs, he_dot⟩
+
+private lemma exists_boost_cs_params {M₀ μ_gap δ₀ t₀ : ℝ}
+    (hM₀ : 1 ≤ M₀) (hμ : 0 < μ_gap)
+    (hδ₀_gap : δ₀ ≤ μ_gap / (1056 * M₀)) (ht₀ : 0 < t₀) (ht₀_le : t₀ ≤ 1) :
+    ∃ (c_q s_q : ℝ), 0 < c_q ∧ 0 < s_q ∧ c_q ^ 2 + s_q ^ 2 = 1 ∧
+      s_q * M₀ < (1 / 24) * (c_q * t₀) ∧ δ₀ * (c_q * t₀) ≤ (1 / 32) * μ_gap * s_q := by
+  have hM₀_pos : 0 < M₀ := by linarith
+  obtain ⟨D_q, hDq_def⟩ : ∃ D_q : ℝ, D_q = 64 * M₀ + 2 * t₀ := ⟨_, rfl⟩
+  have hDq_pos : 0 < D_q := by rw [hDq_def]; positivity
+  obtain ⟨q, hq_def⟩ : ∃ q : ℝ, q = t₀ / D_q := ⟨_, rfl⟩
+  have hq_pos : 0 < q := hq_def ▸ div_pos ht₀ hDq_pos
+  have hq_mul : q * D_q = t₀ := by rw [hq_def]; exact div_mul_cancel₀ t₀ hDq_pos.ne'
+  have hq_lt_half : q < 1 / 2 := by
+    rw [hq_def, div_lt_iff₀ hDq_pos, hDq_def]
+    linarith
+  have hq_sq_lt : q ^ 2 < 1 / 4 := by
+    have h1 := pow_lt_pow_left₀ hq_lt_half hq_pos.le two_ne_zero
+    norm_num at h1
+    exact h1
+  obtain ⟨D_cs, hDcs_def⟩ : ∃ D_cs : ℝ, D_cs = 1 + q ^ 2 := ⟨_, rfl⟩
+  have hDcs_pos : 0 < D_cs := by rw [hDcs_def]; positivity
+  obtain ⟨c_q, hcq_def⟩ : ∃ c_q : ℝ, c_q = (1 - q ^ 2) / D_cs := ⟨_, rfl⟩
+  obtain ⟨s_q, hsq_def⟩ : ∃ s_q : ℝ, s_q = 2 * q / D_cs := ⟨_, rfl⟩
+  have hcq_pos : 0 < c_q := hcq_def ▸ div_pos (by linarith) hDcs_pos
+  have hsq_pos : 0 < s_q := hsq_def ▸ div_pos (by positivity) hDcs_pos
+  have hcs_pos : c_q ^ 2 + s_q ^ 2 = 1 := by
+    rw [hcq_def, hsq_def, hDcs_def]
+    field_simp [(by rw [← hDcs_def]; exact hDcs_pos.ne' : 1 + q ^ 2 ≠ 0)]
+    ring
+  have hsqM_lt : s_q * M₀ < (1 / 24) * (c_q * t₀) := by
+    have h64 : q * (64 * M₀) ≤ q * D_q :=
+      mul_le_mul_of_nonneg_left (by rw [hDq_def]; linarith) hq_pos.le
+    have h2qM : (2 * q) * M₀ ≤ t₀ / 32 := by linarith
+    have h34 : (3 / 4 : ℝ) * t₀ < (1 - q ^ 2) * t₀ :=
+      mul_lt_mul_of_pos_right (by linarith) ht₀
+    have h_num : (2 * q) * M₀ < (1 / 24) * ((1 - q ^ 2) * t₀) := by linarith
+    have hl : s_q * M₀ = ((2 * q) * M₀) / D_cs := by rw [hsq_def]; ring
+    have hr : (1 / 24) * (c_q * t₀) = ((1 / 24) * ((1 - q ^ 2) * t₀)) / D_cs := by
+      rw [hcq_def]; ring
+    rw [hl, hr]
+    exact div_lt_div_of_pos_right h_num hDcs_pos
+  have hcq_le_33 : c_q * t₀ ≤ 33 * M₀ * s_q := by
+    have hDq_le : q * D_q ≤ q * (66 * M₀) :=
+      mul_le_mul_of_nonneg_left (by rw [hDq_def]; linarith) hq_pos.le
+    have h1_le : (1 - q ^ 2) * t₀ ≤ 1 * t₀ :=
+      mul_le_mul_of_nonneg_right (by linarith [sq_nonneg q]) ht₀.le
+    have h_num : (1 - q ^ 2) * t₀ ≤ 33 * M₀ * (2 * q) := by linarith
+    have hl : c_q * t₀ = ((1 - q ^ 2) * t₀) / D_cs := by rw [hcq_def]; ring
+    have hr : 33 * M₀ * s_q = (33 * M₀ * (2 * q)) / D_cs := by rw [hsq_def]; ring
+    rw [hl, hr]
+    exact div_le_div_of_nonneg_right h_num hDcs_pos.le
+  have hδ_cq_le : δ₀ * (c_q * t₀) ≤ (1 / 32) * μ_gap * s_q := by
+    have h1 : δ₀ * (c_q * t₀) ≤ (μ_gap / (1056 * M₀)) * (33 * M₀ * s_q) :=
+      mul_le_mul hδ₀_gap hcq_le_33 (mul_pos hcq_pos ht₀).le (by positivity)
+    have h2 : (μ_gap / (1056 * M₀)) * (33 * M₀ * s_q) = (1 / 32) * μ_gap * s_q := by
+      field_simp [hM₀_pos.ne']
+      ring
+    linarith
+  exact ⟨c_q, s_q, hcq_pos, hsq_pos, hcs_pos, hsqM_lt, hδ_cq_le⟩
+
+private lemma zRectAdj_swap_fwd_of_params {n : ℕ} (i : Fin n) (hi : i.val + 1 < n)
+    {x : Fin n → Fin 4 → ℝ} {r μ_gap e₁ e₂ e₃ M₀ δ₀ t₀ s c_q s_q : ℝ} {ζ : ℂ}
+    (hμ_pos : 0 < μ_gap) (hδ₀_pos : 0 < δ₀) (ht₀ : 0 < t₀)
+    (hcq_pos : 0 < c_q) (hsq_pos : 0 < s_q)
+    (hcs_neg : c_q ^ 2 + (-s_q) ^ 2 = 1) (he : e₁ ^ 2 + e₂ ^ 2 + e₃ ^ 2 = 1)
+    (hsqM_lt : s_q * M₀ < (1 / 24) * (c_q * t₀))
+    (hδ_cq_le : δ₀ * (c_q * t₀) ≤ (1 / 32) * μ_gap * s_q)
+    (h_δt_le : δ₀ * t₀ ≤ (1 / 8) * t₀)
+    (hs : |s| < δ₀ * t₀) (hζ_re32 : |ζ.re| ≤ 3 / 2)
+    (h_sp_bd : r - 3 * μ_gap / 8 <
+      -(e₁ * (x i 1 - x ⟨i.val + 1, hi⟩ 1) + e₂ * (x i 2 - x ⟨i.val + 1, hi⟩ 2) +
+        e₃ * (x i 3 - x ⟨i.val + 1, hi⟩ 3)))
+    (h_all_bd : ∀ a b : Fin n, ∀ μ : Fin 4, |x a μ - x b μ| < M₀)
+    (h_sp_abs : ∀ a b : Fin n,
+      |e₁ * (x a 1 - x b 1) + e₂ * (x a 2 - x b 2) + e₃ * (x a 3 - x b 3)| ≤ 3 * M₀)
+    (h_im_prod : ∀ a b : Fin n, |ζ.im * (x a 0 - x b 0)| < δ₀ * t₀ / 2)
+    (h_re_d0 : |ζ.re * (x i 0 - x ⟨i.val + 1, hi⟩ 0)| < r - 3 * μ_gap / 4) :
+    complexBoostCS hcs_neg he • (zRectAdj i x t₀ s ζ ∘ Equiv.swap i ⟨i.val + 1, hi⟩) ∈
+      forward_tube_n n := by
+  let j : Fin n := ⟨i.val + 1, hi⟩
+  let σ : Equiv.Perm (Fin n) := Equiv.swap i j
+  let Z := zRectAdj i x t₀ s ζ
+  intro k hk
+  let k' : Fin n := ⟨k.val + 1, hk⟩
+  let w : Fin 4 → ℂ := (Z ∘ σ) k - (Z ∘ σ) k'
+  have h_smul : (complexBoostCS hcs_neg he • (Z ∘ σ)) k -
+      (complexBoostCS hcs_neg he • (Z ∘ σ)) k' =
+      (complexBoostCS hcs_neg he).val.val.mulVec w :=
+    (smul_sub_lorentz (complexBoostCS hcs_neg he) ((Z ∘ σ) k) ((Z ∘ σ) k')).symm
+  change (fun μ => -(((complexBoostCS hcs_neg he • (Z ∘ σ)) k -
+    (complexBoostCS hcs_neg he • (Z ∘ σ)) k') μ).im) ∈ forward_light_cone
+  rw [h_smul]
+  have hw1_im : (w 1).im = 0 := by simp [w, Z, zRectAdj]
+  have hw2_im : (w 2).im = 0 := by simp [w, Z, zRectAdj]
+  have hw3_im : (w 3).im = 0 := by simp [w, Z, zRectAdj]
+  have hw1_re : (w 1).re = x (σ k) 1 - x (σ k') 1 := by simp [w, Z, zRectAdj]
+  have hw2_re : (w 2).re = x (σ k) 2 - x (σ k') 2 := by simp [w, Z, zRectAdj]
+  have hw3_re : (w 3).re = x (σ k) 3 - x (σ k') 3 := by simp [w, Z, zRectAdj]
+  have hw0_re : (w 0).re = ζ.re * (x (σ k) 0 - x (σ k') 0) := by
+    simp [w, Z, zRectAdj, Complex.mul_re]
+    ring
+  have h_w_swap : adjCoincVec n i ∘ σ = adjCoincVec n i := adjCoincVec_comp_swap i hi
+  have hw_coinc : adjCoincVec n i (σ k') 0 - adjCoincVec n i (σ k) 0 =
+      if k = i then 0 else 1 := by
+    have h1 := congrFun (congrFun h_w_swap k') 0
+    have h2 := congrFun (congrFun h_w_swap k) 0
+    dsimp only [Function.comp_apply] at h1 h2
+    rw [h1, h2, adjCoincVec_diff i k hk]
+  have hw0_im : -(w 0).im = -ζ.im * (x (σ k) 0 - x (σ k') 0) +
+      t₀ * (adjCoincVec n i (σ k') 0 - adjCoincVec n i (σ k) 0) +
+      s * (adjBaseVec n (σ k') 0 - adjBaseVec n (σ k) 0) := by
+    simp [w, Z, zRectAdj, Complex.mul_im]
+    ring
+  refine complexBoostCS_temporal_mem_forward_light_cone hcs_neg he w hw1_im hw2_im hw3_im ?_
+  rw [abs_neg, abs_of_pos hsq_pos, hw0_re, hw1_re, hw2_re, hw3_re]
+  have h_neg_c : -(c_q * (w 0).im) = c_q * (-(w 0).im) := by ring
+  rw [h_neg_c, hw0_im, hw_coinc]
+  by_cases hki : k = i
+  · subst hki
+    have hk'_eq : k' = j := rfl
+    rw [if_pos rfl, hk'_eq]
+    have hσi : σ k = j := Equiv.swap_apply_left k j
+    have hσj : σ j = k := Equiv.swap_apply_right k j
+    rw [hσi, hσj]
+    have hd_base : adjBaseVec n k 0 - adjBaseVec n j 0 = -1 := by
+      have hb := adjBaseVec_diff k hi
+      dsimp [j]
+      linarith
+    rw [hd_base]
+    have him_abs := (abs_lt.mp (h_im_prod j k)).2
+    have hs_abs := (abs_lt.mp hs).2
+    have h_im_low : -((3 / 2 : ℝ) * (δ₀ * t₀)) < -ζ.im * (x j 0 - x k 0) + t₀ * 0 + s * (-1) := by
+      linarith
+    have hc_mul := mul_lt_mul_of_pos_left h_im_low hcq_pos
+    have hc_eq : c_q * (-((3 / 2 : ℝ) * (δ₀ * t₀))) = -((3 / 2 : ℝ) * (δ₀ * (c_q * t₀))) := by
+      ring
+    rw [hc_eq] at hc_mul
+    have h_c_low : -((3 / 64 : ℝ) * (μ_gap * s_q)) <
+        c_q * (-ζ.im * (x j 0 - x k 0) + t₀ * 0 + s * (-1)) := by
+      linarith [hδ_cq_le]
+    have h_re_jk : |ζ.re * (x j 0 - x k 0)| < r - 3 * μ_gap / 4 := by
+      have h_eq_abs : |ζ.re * (x j 0 - x k 0)| = |ζ.re * (x k 0 - x j 0)| := by
+        rw [← abs_neg]
+        congr 1
+        ring
+      rwa [h_eq_abs]
+    have h_lhs_lt : s_q * |ζ.re * (x j 0 - x k 0)| < s_q * (r - 3 * μ_gap / 4) :=
+      mul_lt_mul_of_pos_left h_re_jk hsq_pos
+    have h_sp_mul : s_q * (r - 3 * μ_gap / 8) <
+        s_q * (-(e₁ * (x k 1 - x j 1) + e₂ * (x k 2 - x j 2) + e₃ * (x k 3 - x j 3))) :=
+      mul_lt_mul_of_pos_left h_sp_bd hsq_pos
+    have h_μsq_pos : 0 < μ_gap * s_q := mul_pos hμ_pos hsq_pos
+    have h_alg : - (-s_q) * (e₁ * (x j 1 - x k 1) + e₂ * (x j 2 - x k 2) +
+        e₃ * (x j 3 - x k 3)) =
+        s_q * (-(e₁ * (x k 1 - x j 1) + e₂ * (x k 2 - x j 2) + e₃ * (x k 3 - x j 3))) := by
+      ring
+    have h_alg2 : s_q * (r - 3 * μ_gap / 8) - s_q * (r - 3 * μ_gap / 4) =
+        (3 / 8 : ℝ) * (μ_gap * s_q) := by ring
+    linarith
+  · rw [if_neg hki]
+    have him_abs := (abs_lt.mp (h_im_prod (σ k) (σ k'))).2
+    have h_u_bd := adjBaseVec_swap_diff_abs_le_two i hi k hk
+    dsimp only [σ, Function.comp_apply] at h_u_bd
+    have hs_u : |s * (adjBaseVec n (σ k') 0 - adjBaseVec n (σ k) 0)| ≤ 2 * (δ₀ * t₀) := by
+      rw [abs_mul]
+      have h1 := mul_le_mul hs.le h_u_bd (abs_nonneg _) (mul_pos hδ₀_pos ht₀).le
+      linarith
+    have hs_u_low := (abs_le.mp hs_u).1
+    have h_im_low : (11 / 16 : ℝ) * t₀ <
+        -ζ.im * (x (σ k) 0 - x (σ k') 0) + t₀ * 1 +
+          s * (adjBaseVec n (σ k') 0 - adjBaseVec n (σ k) 0) := by
+      linarith
+    have hc_mul := mul_lt_mul_of_pos_left h_im_low hcq_pos
+    have hc_eq : c_q * ((11 / 16 : ℝ) * t₀) = (11 / 16 : ℝ) * (c_q * t₀) := by ring
+    rw [hc_eq] at hc_mul
+    have h_re_bd : |ζ.re * (x (σ k) 0 - x (σ k') 0)| ≤ (3 / 2) * M₀ := by
+      rw [abs_mul]
+      exact mul_le_mul hζ_re32 (h_all_bd (σ k) (σ k') 0).le (abs_nonneg _) (by norm_num)
+    have h_sre : s_q * |ζ.re * (x (σ k) 0 - x (σ k') 0)| ≤ (3 / 2) * (s_q * M₀) := by
+      have hm := mul_le_mul_of_nonneg_left h_re_bd hsq_pos.le
+      linarith
+    have h_sp_neg := neg_abs_le (e₁ * (x (σ k) 1 - x (σ k') 1) +
+      e₂ * (x (σ k) 2 - x (σ k') 2) + e₃ * (x (σ k) 3 - x (σ k') 3))
+    have h_sp_k := h_sp_abs (σ k) (σ k')
+    have h_ssp : - (-s_q) * (e₁ * (x (σ k) 1 - x (σ k') 1) +
+        e₂ * (x (σ k) 2 - x (σ k') 2) + e₃ * (x (σ k) 3 - x (σ k') 3)) ≥
+        -(3 * (s_q * M₀)) := by
+      have h_eq_s : - (-s_q) * (e₁ * (x (σ k) 1 - x (σ k') 1) +
+          e₂ * (x (σ k) 2 - x (σ k') 2) + e₃ * (x (σ k) 3 - x (σ k') 3)) =
+          s_q * (e₁ * (x (σ k) 1 - x (σ k') 1) +
+            e₂ * (x (σ k) 2 - x (σ k') 2) + e₃ * (x (σ k) 3 - x (σ k') 3)) := by ring
+      have hm := mul_le_mul_of_nonneg_left
+        ((neg_le_neg h_sp_k).trans h_sp_neg) hsq_pos.le
+      linarith
+    have h_ct_pos : 0 < c_q * t₀ := mul_pos hcq_pos ht₀
+    linarith [hsqM_lt]
+
+lemma exists_adjSpacelike_ball_rect_mem_extended_tube {n : ℕ} (i : Fin n) (hi : i.val + 1 < n)
+    {x₀ : Fin n → Fin 4 → ℝ} (hx₀ : is_spacelike (x₀ i - x₀ ⟨i.val + 1, hi⟩)) :
+    ∃ (ρ δ₀ : ℝ), 0 < ρ ∧ 0 < δ₀ ∧ δ₀ ≤ 1 / 8 ∧
+      Metric.ball x₀ ρ ⊆ { x | is_spacelike (x i - x ⟨i.val + 1, hi⟩) } ∧
+      ∀ {x : Fin n → Fin 4 → ℝ}, x ∈ Metric.ball x₀ ρ →
+        ∀ {t₀ s : ℝ}, 0 < t₀ → t₀ ≤ 1 → |s| < δ₀ * t₀ →
+          ∃ (a_rect b_rect : ℝ), 1 < a_rect ∧ 0 < b_rect ∧
+            ∀ (ζ : ℂ), |ζ.re| < a_rect → |ζ.im| < b_rect →
+              zRectAdj i x t₀ s ζ ∈ extended_tube_n n ∧
+              (zRectAdj i x t₀ s ζ ∘ Equiv.swap i ⟨i.val + 1, hi⟩) ∈ extended_tube_n n := by
+  let j : Fin n := ⟨i.val + 1, hi⟩
+  let σ : Equiv.Perm (Fin n) := Equiv.swap i j
+  obtain ⟨r, μ_gap, e₁, e₂, e₃, hr_pos, hμ_pos, hμ_def,
+    he, he₁_abs, he₂_abs, he₃_abs, he_dot_d₀⟩ :=
+    exists_unit_dir_spacelike (x₀ i - x₀ j) hx₀
+  obtain ⟨ρ, hρ_def⟩ : ∃ ρ : ℝ, ρ = μ_gap / 16 := ⟨_, rfl⟩
+  have hρ_pos : 0 < ρ := by rw [hρ_def]; positivity
+  obtain ⟨M₀, hM₀_def⟩ : ∃ M₀ : ℝ, M₀ = 2 * (‖x₀‖ + ρ) + 1 := ⟨_, rfl⟩
+  have hM₀_ge1 : 1 ≤ M₀ := by
+    have hnn := norm_nonneg x₀
+    rw [hM₀_def]
+    linarith
+  have hM₀_pos : 0 < M₀ := by linarith
+  obtain ⟨δ₀, hδ₀_def⟩ : ∃ δ₀ : ℝ, δ₀ = min (1 / 8) (μ_gap / (1056 * M₀)) := ⟨_, rfl⟩
+  have hδ₀_pos : 0 < δ₀ := by rw [hδ₀_def]; exact lt_min (by norm_num) (by positivity)
+  have hδ₀_le : δ₀ ≤ 1 / 8 := hδ₀_def ▸ min_le_left _ _
+  have hδ₀_gap : δ₀ ≤ μ_gap / (1056 * M₀) := hδ₀_def ▸ min_le_right _ _
+  have h_ball_props : ∀ {x : Fin n → Fin 4 → ℝ}, x ∈ Metric.ball x₀ ρ →
+      (|x i 0 - x j 0| < r - 7 * μ_gap / 8) ∧
+      (r - 3 * μ_gap / 8 < -(e₁ * (x i 1 - x j 1) + e₂ * (x i 2 - x j 2) +
+        e₃ * (x i 3 - x j 3))) ∧
+      (∀ a b : Fin n, ∀ μ : Fin 4, |x a μ - x b μ| < M₀) := by
+    intro x hx
+    rw [Metric.mem_ball, dist_eq_norm] at hx
+    have h_coord_diff : ∀ k : Fin n, ∀ μ : Fin 4, |x k μ - x₀ k μ| < ρ := by
+      intro k μ
+      have h1 : ‖(x - x₀) k μ‖ ≤ ‖x - x₀‖ :=
+        (norm_le_pi_norm ((x - x₀) k) μ).trans (norm_le_pi_norm (x - x₀) k)
+      rw [Real.norm_eq_abs] at h1
+      exact h1.trans_lt hx
+    have h_d_diff : ∀ μ : Fin 4, |(x i μ - x j μ) - (x₀ i μ - x₀ j μ)| < μ_gap / 8 := by
+      intro μ
+      have h_eq : (x i μ - x j μ) - (x₀ i μ - x₀ j μ) =
+          (x i μ - x₀ i μ) - (x j μ - x₀ j μ) := by ring
+      rw [h_eq]
+      have h1 := abs_sub (x i μ - x₀ i μ) (x j μ - x₀ j μ)
+      have hi_bd := h_coord_diff i μ
+      have hj_bd := h_coord_diff j μ
+      linarith [hρ_def]
+    have hd0_bd : |x i 0 - x j 0| < r - 7 * μ_gap / 8 := by
+      have h1 := abs_add_le (x₀ i 0 - x₀ j 0) ((x i 0 - x j 0) - (x₀ i 0 - x₀ j 0))
+      have h_sum : (x₀ i 0 - x₀ j 0) + ((x i 0 - x j 0) - (x₀ i 0 - x₀ j 0)) =
+          x i 0 - x j 0 := by ring
+      rw [h_sum] at h1
+      have h_d0_eq : (x₀ i - x₀ j) 0 = x₀ i 0 - x₀ j 0 := rfl
+      rw [h_d0_eq] at hμ_def
+      linarith [h_d_diff 0, hμ_def]
+    have h_sp_bd : r - 3 * μ_gap / 8 <
+        -(e₁ * (x i 1 - x j 1) + e₂ * (x i 2 - x j 2) + e₃ * (x i 3 - x j 3)) := by
+      let δ₁ := (x i 1 - x j 1) - (x₀ i 1 - x₀ j 1)
+      let δ₂ := (x i 2 - x j 2) - (x₀ i 2 - x₀ j 2)
+      let δ₃ := (x i 3 - x j 3) - (x₀ i 3 - x₀ j 3)
+      have h_id : -(e₁ * (x i 1 - x j 1) + e₂ * (x i 2 - x j 2) + e₃ * (x i 3 - x j 3)) =
+          r - (e₁ * δ₁ + e₂ * δ₂ + e₃ * δ₃) := by
+        dsimp [δ₁, δ₂, δ₃]
+        have hd1 : (x₀ i - x₀ j) 1 = x₀ i 1 - x₀ j 1 := rfl
+        have hd2 : (x₀ i - x₀ j) 2 = x₀ i 2 - x₀ j 2 := rfl
+        have hd3 : (x₀ i - x₀ j) 3 = x₀ i 3 - x₀ j 3 := rfl
+        rw [hd1, hd2, hd3] at he_dot_d₀
+        linear_combination he_dot_d₀
+      have h_a1 : |e₁ * δ₁| ≤ |δ₁| := by
+        rw [abs_mul]; simpa using mul_le_mul_of_nonneg_right he₁_abs (abs_nonneg δ₁)
+      have h_a2 : |e₂ * δ₂| ≤ |δ₂| := by
+        rw [abs_mul]; simpa using mul_le_mul_of_nonneg_right he₂_abs (abs_nonneg δ₂)
+      have h_a3 : |e₃ * δ₃| ≤ |δ₃| := by
+        rw [abs_mul]; simpa using mul_le_mul_of_nonneg_right he₃_abs (abs_nonneg δ₃)
+      have h_tri : |e₁ * δ₁ + e₂ * δ₂ + e₃ * δ₃| ≤ |e₁ * δ₁| + |e₂ * δ₂| + |e₃ * δ₃| :=
+        (abs_add_le _ _).trans (add_le_add (abs_add_le _ _) le_rfl)
+      have h_le := le_abs_self (e₁ * δ₁ + e₂ * δ₂ + e₃ * δ₃)
+      have hd1_lt : |δ₁| < μ_gap / 8 := h_d_diff 1
+      have hd2_lt : |δ₂| < μ_gap / 8 := h_d_diff 2
+      have hd3_lt : |δ₃| < μ_gap / 8 := h_d_diff 3
+      linarith
+    have h_all_bd : ∀ a b : Fin n, ∀ μ : Fin 4, |x a μ - x b μ| < M₀ := by
+      intro a b μ
+      have hx_norm : ‖x‖ < ‖x₀‖ + ρ := by
+        calc ‖x‖ = ‖x₀ + (x - x₀)‖ := congrArg norm (by abel)
+          _ ≤ ‖x₀‖ + ‖x - x₀‖ := norm_add_le _ _
+          _ < ‖x₀‖ + ρ := by linarith
+      have ha : |x a μ| ≤ ‖x‖ := by
+        rw [← Real.norm_eq_abs]
+        exact (norm_le_pi_norm (x a) μ).trans (norm_le_pi_norm x a)
+      have hb : |x b μ| ≤ ‖x‖ := by
+        rw [← Real.norm_eq_abs]
+        exact (norm_le_pi_norm (x b) μ).trans (norm_le_pi_norm x b)
+      have h_sub := abs_sub (x a μ) (x b μ)
+      linarith [hM₀_def]
+    exact ⟨hd0_bd, h_sp_bd, h_all_bd⟩
+  have hB_sub : Metric.ball x₀ ρ ⊆ { x | is_spacelike (x i - x j) } := by
+    intro x hx
+    obtain ⟨hd0_bd, h_sp_bd, _⟩ := h_ball_props hx
+    obtain ⟨σ_d, hσ_def⟩ :
+        ∃ σ_d : ℝ, σ_d = -(e₁ * (x i 1 - x j 1) + e₂ * (x i 2 - x j 2) +
+          e₃ * (x i 3 - x j 3)) := ⟨_, rfl⟩
+    rw [← hσ_def] at h_sp_bd
+    have h_lt : |x i 0 - x j 0| < σ_d := by linarith
+    have h_sq_lt : (x i 0 - x j 0) ^ 2 < σ_d ^ 2 := by
+      rw [← sq_abs (x i 0 - x j 0)]
+      exact pow_lt_pow_left₀ h_lt (abs_nonneg _) two_ne_zero
+    have h_cs : σ_d ^ 2 ≤ (x i 1 - x j 1) ^ 2 + (x i 2 - x j 2) ^ 2 + (x i 3 - x j 3) ^ 2 := by
+      rw [hσ_def]
+      exact cs_unit_three he
+    rw [Set.mem_setOf_eq, is_spacelike, minkowskiInner_explicit]
+    simp only [Pi.sub_apply, sq] at h_sq_lt h_cs ⊢
+    linarith
+  refine ⟨ρ, δ₀, hρ_pos, hδ₀_pos, hδ₀_le, hB_sub, ?_⟩
+  intro x hx t₀ s ht₀ ht₀_le hs
+  obtain ⟨hd0_bd, h_sp_bd, h_all_bd⟩ := h_ball_props hx
+  obtain ⟨a_rect, ha_def⟩ : ∃ a_rect : ℝ, a_rect = 1 + min (1 / 2) (μ_gap / (8 * M₀)) := ⟨_, rfl⟩
+  obtain ⟨b_rect, hb_def⟩ : ∃ b_rect : ℝ, b_rect = δ₀ * t₀ / (2 * M₀) := ⟨_, rfl⟩
+  have ha_gt1 : 1 < a_rect := by
+    have h_min : 0 < min (1 / 2) (μ_gap / (8 * M₀)) := lt_min (by norm_num) (by positivity)
+    linarith [ha_def]
+  have ha_le_32 : a_rect ≤ 3 / 2 := by
+    have h1 : min (1 / 2) (μ_gap / (8 * M₀)) ≤ 1 / 2 := min_le_left _ _
+    linarith [ha_def]
+  have ha_le_gap : a_rect ≤ 1 + μ_gap / (8 * M₀) := by
+    have h1 : min (1 / 2) (μ_gap / (8 * M₀)) ≤ μ_gap / (8 * M₀) := min_le_right _ _
+    linarith [ha_def]
+  have hb_pos : 0 < b_rect := by rw [hb_def]; positivity
+  obtain ⟨c_q, s_q, hcq_pos, hsq_pos, hcs_pos, hsqM_lt, hδ_cq_le⟩ :=
+    exists_boost_cs_params hM₀_ge1 hμ_pos hδ₀_gap ht₀ ht₀_le
+  have hcs_neg : c_q ^ 2 + (-s_q) ^ 2 = 1 := by rw [neg_sq]; exact hcs_pos
+  have h_sp_abs : ∀ a b : Fin n,
+      |e₁ * (x a 1 - x b 1) + e₂ * (x a 2 - x b 2) + e₃ * (x a 3 - x b 3)| ≤ 3 * M₀ := by
+    intro a b
+    have h1 : |e₁ * (x a 1 - x b 1)| ≤ M₀ := by
+      rw [abs_mul]
+      exact (mul_le_mul_of_nonneg_right he₁_abs (abs_nonneg _)).trans
+        (by linarith [h_all_bd a b 1])
+    have h2 : |e₂ * (x a 2 - x b 2)| ≤ M₀ := by
+      rw [abs_mul]
+      exact (mul_le_mul_of_nonneg_right he₂_abs (abs_nonneg _)).trans
+        (by linarith [h_all_bd a b 2])
+    have h3 : |e₃ * (x a 3 - x b 3)| ≤ M₀ := by
+      rw [abs_mul]
+      exact (mul_le_mul_of_nonneg_right he₃_abs (abs_nonneg _)).trans
+        (by linarith [h_all_bd a b 3])
+    have h_tri := (abs_add_le (e₁ * (x a 1 - x b 1) + e₂ * (x a 2 - x b 2))
+      (e₃ * (x a 3 - x b 3))).trans
+      (add_le_add (abs_add_le _ _) le_rfl)
+    linarith
+  refine ⟨a_rect, b_rect, ha_gt1, hb_pos, ?_⟩
+  intro ζ hζ_re hζ_im
+  let Z := zRectAdj i x t₀ s ζ
+  have h_im_prod : ∀ a b : Fin n, |ζ.im * (x a 0 - x b 0)| < δ₀ * t₀ / 2 := by
+    intro a b
+    rw [abs_mul]
+    have h1 : |ζ.im| * |x a 0 - x b 0| < b_rect * M₀ :=
+      mul_lt_mul_of_nonneg_of_pos' hζ_im.le (h_all_bd a b 0) (abs_nonneg _) hb_pos
+    have h2 : b_rect * M₀ = δ₀ * t₀ / 2 := by
+      rw [hb_def]
+      field_simp [hM₀_pos.ne']
+    linarith
+  have h_re_d0 : |ζ.re * (x i 0 - x j 0)| < r - 3 * μ_gap / 4 := by
+    rw [abs_mul]
+    have hd0_M : |x i 0 - x j 0| < M₀ := h_all_bd i j 0
+    by_cases hre1 : |ζ.re| ≤ 1
+    · have h1 : |ζ.re| * |x i 0 - x j 0| ≤ 1 * |x i 0 - x j 0| :=
+        mul_le_mul_of_nonneg_right hre1 (abs_nonneg _)
+      linarith
+    · have h_sub_pos : 0 < |ζ.re| - 1 := by linarith
+      have h_sub_le : |ζ.re| - 1 ≤ μ_gap / (8 * M₀) := by linarith
+      have h_prod : (|ζ.re| - 1) * |x i 0 - x j 0| ≤ (μ_gap / (8 * M₀)) * M₀ :=
+        mul_le_mul h_sub_le hd0_M.le (abs_nonneg _) (by positivity)
+      have h_simp : (μ_gap / (8 * M₀)) * M₀ = μ_gap / 8 := by field_simp [hM₀_pos.ne']
+      have h_id : |ζ.re| * |x i 0 - x j 0| =
+          |x i 0 - x j 0| + (|ζ.re| - 1) * |x i 0 - x j 0| := by ring
+      linarith
+  have h_δt_le : δ₀ * t₀ ≤ (1 / 8) * t₀ := mul_le_mul_of_nonneg_right hδ₀_le ht₀.le
+  have hZ_fwd : complexBoostCS hcs_pos he • Z ∈ forward_tube_n n := by
+    intro k hk
+    let k' : Fin n := ⟨k.val + 1, hk⟩
+    let w : Fin 4 → ℂ := Z k - Z k'
+    have h_smul : (complexBoostCS hcs_pos he • Z) k - (complexBoostCS hcs_pos he • Z) k' =
+        (complexBoostCS hcs_pos he).val.val.mulVec w :=
+      (smul_sub_lorentz (complexBoostCS hcs_pos he) (Z k) (Z k')).symm
+    change (fun μ => -(((complexBoostCS hcs_pos he • Z) k -
+      (complexBoostCS hcs_pos he • Z) k') μ).im) ∈ forward_light_cone
+    rw [h_smul]
+    have hw1_im : (w 1).im = 0 := by simp [w, Z, zRectAdj]
+    have hw2_im : (w 2).im = 0 := by simp [w, Z, zRectAdj]
+    have hw3_im : (w 3).im = 0 := by simp [w, Z, zRectAdj]
+    have hw1_re : (w 1).re = x k 1 - x k' 1 := by simp [w, Z, zRectAdj]
+    have hw2_re : (w 2).re = x k 2 - x k' 2 := by simp [w, Z, zRectAdj]
+    have hw3_re : (w 3).re = x k 3 - x k' 3 := by simp [w, Z, zRectAdj]
+    have hw0_re : (w 0).re = ζ.re * (x k 0 - x k' 0) := by
+      simp [w, Z, zRectAdj, Complex.mul_re]
+      ring
+    have hw0_im : -(w 0).im = -ζ.im * (x k 0 - x k' 0) +
+        t₀ * (adjCoincVec n i k' 0 - adjCoincVec n i k 0) +
+        s * (adjBaseVec n k' 0 - adjBaseVec n k 0) := by
+      simp [w, Z, zRectAdj, Complex.mul_im]
+      ring
+    refine complexBoostCS_temporal_mem_forward_light_cone hcs_pos he w hw1_im hw2_im hw3_im ?_
+    rw [abs_of_pos hsq_pos, hw0_re, hw1_re, hw2_re, hw3_re]
+    have h_neg_c : -(c_q * (w 0).im) = c_q * (-(w 0).im) := by ring
+    rw [h_neg_c, hw0_im, adjCoincVec_diff i k hk, adjBaseVec_diff k hk]
+    by_cases hki : k = i
+    · subst hki
+      have hk'_eq : k' = j := rfl
+      rw [if_pos rfl, hk'_eq]
+      have him_abs := (abs_lt.mp (h_im_prod k j)).2
+      have hs_abs := (abs_lt.mp hs).1
+      have h_im_low : -((3 / 2 : ℝ) * (δ₀ * t₀)) < -ζ.im * (x k 0 - x j 0) + t₀ * 0 + s * 1 := by
+        linarith
+      have hc_mul := mul_lt_mul_of_pos_left h_im_low hcq_pos
+      have hc_eq : c_q * (-((3 / 2 : ℝ) * (δ₀ * t₀))) = -((3 / 2 : ℝ) * (δ₀ * (c_q * t₀))) := by
+        ring
+      rw [hc_eq] at hc_mul
+      have h_c_low : -((3 / 64 : ℝ) * (μ_gap * s_q)) <
+          c_q * (-ζ.im * (x k 0 - x j 0) + t₀ * 0 + s * 1) := by
+        linarith [hδ_cq_le]
+      have h_lhs_lt : s_q * |ζ.re * (x k 0 - x j 0)| < s_q * (r - 3 * μ_gap / 4) :=
+        mul_lt_mul_of_pos_left h_re_d0 hsq_pos
+      have h_sp_mul : s_q * (r - 3 * μ_gap / 8) <
+          s_q * (-(e₁ * (x k 1 - x j 1) + e₂ * (x k 2 - x j 2) + e₃ * (x k 3 - x j 3))) :=
+        mul_lt_mul_of_pos_left h_sp_bd hsq_pos
+      have h_μsq_pos : 0 < μ_gap * s_q := mul_pos hμ_pos hsq_pos
+      have h_alg : - s_q * (e₁ * (x k 1 - x j 1) + e₂ * (x k 2 - x j 2) + e₃ * (x k 3 - x j 3)) =
+          s_q * (-(e₁ * (x k 1 - x j 1) + e₂ * (x k 2 - x j 2) + e₃ * (x k 3 - x j 3))) := by
+        ring
+      have h_alg2 : s_q * (r - 3 * μ_gap / 8) - s_q * (r - 3 * μ_gap / 4) =
+          (3 / 8 : ℝ) * (μ_gap * s_q) := by ring
+      linarith
+    · rw [if_neg hki]
+      have him_abs := (abs_lt.mp (h_im_prod k k')).2
+      have hs_abs := (abs_lt.mp hs).1
+      have h_im_low : (13 / 16 : ℝ) * t₀ < -ζ.im * (x k 0 - x k' 0) + t₀ * 1 + s * 1 := by
+        linarith
+      have hc_mul := mul_lt_mul_of_pos_left h_im_low hcq_pos
+      have hc_eq : c_q * ((13 / 16 : ℝ) * t₀) = (13 / 16 : ℝ) * (c_q * t₀) := by ring
+      rw [hc_eq] at hc_mul
+      have h_re_bd : |ζ.re * (x k 0 - x k' 0)| ≤ (3 / 2) * M₀ := by
+        rw [abs_mul]
+        have h1 : |ζ.re| ≤ 3 / 2 := by linarith
+        exact mul_le_mul h1 (h_all_bd k k' 0).le (abs_nonneg _) (by norm_num)
+      have h_sre : s_q * |ζ.re * (x k 0 - x k' 0)| ≤ (3 / 2) * (s_q * M₀) := by
+        have hm := mul_le_mul_of_nonneg_left h_re_bd hsq_pos.le
+        linarith
+      have h_sp_le := le_abs_self (e₁ * (x k 1 - x k' 1) + e₂ * (x k 2 - x k' 2) +
+        e₃ * (x k 3 - x k' 3))
+      have h_sp_k := h_sp_abs k k'
+      have h_ssp : s_q * (e₁ * (x k 1 - x k' 1) + e₂ * (x k 2 - x k' 2) +
+          e₃ * (x k 3 - x k' 3)) ≤ 3 * (s_q * M₀) := by
+        have hm := mul_le_mul_of_nonneg_left (h_sp_le.trans h_sp_k) hsq_pos.le
+        linarith
+      have h_ct_pos : 0 < c_q * t₀ := mul_pos hcq_pos ht₀
+      linarith [hsqM_lt]
+  have hZ_swap_fwd : complexBoostCS hcs_neg he • (Z ∘ σ) ∈ forward_tube_n n :=
+    zRectAdj_swap_fwd_of_params i hi hμ_pos hδ₀_pos ht₀ hcq_pos hsq_pos hcs_neg he
+      hsqM_lt hδ_cq_le h_δt_le hs (by linarith) h_sp_bd h_all_bd h_sp_abs h_im_prod h_re_d0
+  exact ⟨Set.mem_iUnion.mpr ⟨(complexBoostCS hcs_pos he)⁻¹, _, hZ_fwd, inv_smul_smul _ Z⟩,
+    Set.mem_iUnion.mpr ⟨(complexBoostCS hcs_neg he)⁻¹, _, hZ_swap_fwd, inv_smul_smul _ (Z ∘ σ)⟩⟩
+
+end Phase2LocalityConverse
+
+noncomputable section Phase2LocalityEquivalence
+
+open scoped Distributions
+
+variable {ι : Type*} [Fintype ι] [DecidableEq ι]
+
+theorem spinor_H_ext_congr_of_wightman_eq
+    (R : HolomorphicLorentzRep ι) {W : WightmanFamily ι}
+    (E₁ E₂ : TubeExtension W) (n : ℕ) (α : Fin n → ι) (z : Fin n → Fin 4 → ℂ) :
+    spinor_H_ext R W E₁ n α z = spinor_H_ext R W E₂ n α z := by
+  dsimp [spinor_H_ext]
+  split_ifs with hz
+  · refine Finset.sum_congr rfl fun β _ => ?_
+    have hw := (Classical.choose_spec (Classical.choose_spec (Set.mem_iUnion.mp hz))).1
+    rw [tubeExtension_eq_of_wightman_eq E₁ E₂ n β hw]
+  · rfl
+
+theorem spinor_H_ext_wickEmbedN_eq_of_ordered_eq
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) {𝒮 : SchwingerFamily ι}
+    (hrot : FullEuclidRotCovariant R 𝒮)
+    (h_ord : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x)
+    (n : ℕ) (α : Fin n → ι) {y : Fin n → Fin 4 → ℝ}
+    (hy : wickEmbedN n y ∈ extended_tube_n n) :
+    y ∈ nonCoincidentEuclidN n ∧ 𝒮 n α y = spinor_H_ext R W E n α (wickEmbedN n y) := by
+  obtain ⟨u, hu_ne, hu_sep⟩ := (wickEmbedN_mem_extended_tube_iff_exists_euclidSep n y).mp hy
+  have hv_pos : 0 < euclidInner u u :=
+    lt_of_le_of_ne (euclidInner_self_nonneg u)
+      (Ne.symm ((euclidInner_self_eq_zero_iff u).not.mpr hu_ne))
+  let r : ℝ := Real.sqrt (euclidInner u u)
+  have hr_pos : 0 < r := Real.sqrt_pos.mpr hv_pos
+  let U : SU2 := alignPosTimeSU2 u
+  let y' : Fin n → Fin 4 → ℝ := euclidRotN n U 1 y
+  have hy'_ord : y' ∈ orderedEuclidN n := by
+    intro i hi
+    have h_in : euclidInner u (y ⟨i.val + 1, hi⟩ - y i) =
+        r * (y' ⟨i.val + 1, hi⟩ 0 - y' i 0) := by
+      have h1 := (euclidInner_euclidRotApply U 1 u (y ⟨i.val + 1, hi⟩ - y i)).symm
+      rw [euclidRotApply_alignPosTimeSU2 u] at h1
+      have h2 : euclidRotApply U 1 (y ⟨i.val + 1, hi⟩ - y i) =
+          y' ⟨i.val + 1, hi⟩ - y' i := by
+        change euclidRotLM U 1 (y ⟨i.val + 1, hi⟩ - y i) =
+          (euclidRotOfSU2 U 1).mulVec (y ⟨i.val + 1, hi⟩) -
+            (euclidRotOfSU2 U 1).mulVec (y i)
+        rw [map_sub, euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+        rfl
+      have h_zero : euclidInner ![r, 0, 0, 0] (y' ⟨i.val + 1, hi⟩ - y' i) =
+          r * (y' ⟨i.val + 1, hi⟩ 0 - y' i 0) := by
+        simp [euclidInner_explicit]
+      rw [h2, h_zero] at h1
+      exact h1
+    have h_pos := hu_sep i hi
+    rw [h_in] at h_pos
+    have h_sub_pos : 0 < y' ⟨i.val + 1, hi⟩ 0 - y' i 0 :=
+      pos_of_mul_pos_right h_pos hr_pos.le
+    linarith
+  have hy'_nc : y' ∈ nonCoincidentEuclidN n :=
+    orderedEuclidN_subset_nonCoincidentEuclidN n hy'_ord
+  have hy_eq : y = euclidRotN n U⁻¹ 1 y' := by
+    ext i μ
+    change y i μ = ((euclidRotOfSU2 U⁻¹ 1).mulVec ((euclidRotOfSU2 U 1).mulVec (y i))) μ
+    rw [euclidRotOfSU2_mulVec, euclidRotOfSU2_mulVec]
+    have h_inv : euclidRotApply U⁻¹ 1 (euclidRotApply U 1 (y i)) = y i := by
+      simpa using euclidRotApply_inv_self U 1 (y i)
+    rw [h_inv]
+  have hy_nc : y ∈ nonCoincidentEuclidN n := by
+    intro i j hij heq
+    apply hy'_nc i j hij
+    change (euclidRotOfSU2 U 1).mulVec (y i) = (euclidRotOfSU2 U 1).mulVec (y j)
+    rw [heq]
+  refine ⟨hy_nc, ?_⟩
+  conv_lhs => rw [hy_eq]
+  rw [hrot n U⁻¹ 1 α y' hy'_nc]
+  conv_rhs => rw [hy_eq, wickEmbedN_euclidRotN]
+  rw [spinor_H_ext_complexCovariant R W E h_cov n (su2ToSL2C U⁻¹, su2ToSL2C 1)
+    (wickEmbedN n y') α]
+  refine Finset.sum_congr rfl fun β _ => ?_
+  rw [h_ord n β y' hy'_ord,
+      spinor_H_ext_eq_on_forward_tube R W E h_cov n β (wickEmbedN_mem_forward_tube_n n hy'_ord)]
+  rfl
+
+theorem euclidExtendedTubePermLocality_of_fullEuclid
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) {𝒮 : SchwingerFamily ι}
+    (hrot : FullEuclidRotCovariant R 𝒮) (hperm : OSPermutationSymmetry η 𝒮)
+    (h_ord : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x) :
+    EuclidExtendedTubePermLocality η (spinor_H_ext R W E) := by
+  intro n π α x hx hxπ
+  obtain ⟨hx_nc, hx_eq⟩ :=
+    spinor_H_ext_wickEmbedN_eq_of_ordered_eq R W E h_cov hrot h_ord n α hx
+  obtain ⟨_, hxπ_eq⟩ :=
+    spinor_H_ext_wickEmbedN_eq_of_ordered_eq R W E h_cov hrot h_ord n (α ∘ π) hxπ
+  rw [← hxπ_eq, ← hx_eq]
+  exact hperm n π α x hx_nc
+
+theorem euclidExtendedTubePermLocality_of_fullEuclidOSAxioms
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hFull : FullEuclidOSAxioms R S η 𝒮) {W : WightmanFamily ι} (E : TubeExtension W)
+    (h_cov : TubeCovariant R E)
+    (h_ord : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x) :
+    EuclidExtendedTubePermLocality η (spinor_H_ext R W E) :=
+  euclidExtendedTubePermLocality_of_fullEuclid R W E h_cov
+    hFull.os1_rotation hFull.os3_permutation h_ord
+
+theorem spinor_H_ext_adj_swap_eq_on_ball
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E))
+    {n : ℕ} (i : Fin n) (hi : i.val + 1 < n)
+    {x₀ : Fin n → Fin 4 → ℝ} (hx₀ : is_spacelike (x₀ i - x₀ ⟨i.val + 1, hi⟩)) :
+    let σ := Equiv.swap i ⟨i.val + 1, hi⟩
+    ∃ (ρ δ₀ : ℝ), 0 < ρ ∧ 0 < δ₀ ∧ δ₀ ≤ 1 / 8 ∧
+      Metric.ball x₀ ρ ⊆ { x | is_spacelike (x i - x ⟨i.val + 1, hi⟩) } ∧
+      ∀ {x : Fin n → Fin 4 → ℝ}, x ∈ Metric.ball x₀ ρ →
+        ∀ {t₀ s : ℝ}, 0 < t₀ → t₀ ≤ 1 → |s| < δ₀ * t₀ → ∀ α : Fin n → ι,
+          let z := fun k μ =>
+            (x k μ : ℂ) + ((t₀ • adjCoincVec n i + s • adjBaseVec n) k μ : ℂ) * Complex.I
+          z ∈ extended_tube_n n ∧
+          spinor_H_ext R W E n α z = η * spinor_H_ext R W E n (α ∘ σ) (z ∘ σ) := by
+  intro σ
+  obtain ⟨ρ, δ₀, hρ_pos, hδ₀_pos, hδ₀_le, hB_sub, h_rect⟩ :=
+    exists_adjSpacelike_ball_rect_mem_extended_tube i hi hx₀
+  refine ⟨ρ, δ₀, hρ_pos, hδ₀_pos, hδ₀_le, hB_sub, ?_⟩
+  intro x hx t₀ s ht₀ ht₀_le hs α z
+  obtain ⟨a_rect, b_rect, ha_gt1, hb_pos, h_mem⟩ := h_rect hx ht₀ ht₀_le hs
+  let R_rect : Set ℂ := { ζ : ℂ | |ζ.re| < a_rect ∧ |ζ.im| < b_rect }
+  have hR_conv : Convex ℝ R_rect := by
+    intro z₁ hz₁ z₂ hz₂ a b ha hb hab
+    have hz₁_re : |z₁.re| < a_rect := hz₁.1
+    have hz₂_re : |z₂.re| < a_rect := hz₂.1
+    have hz₁_im : |z₁.im| < b_rect := hz₁.2
+    have hz₂_im : |z₂.im| < b_rect := hz₂.2
+    refine ⟨?_, ?_⟩
+    · simp only [Complex.add_re, Complex.real_smul, Complex.mul_re,
+        Complex.ofReal_re, Complex.ofReal_im, zero_mul, sub_zero]
+      have h1 := abs_add_le (a * z₁.re) (b * z₂.re)
+      rw [abs_mul, abs_mul, abs_of_nonneg ha, abs_of_nonneg hb] at h1
+      have ha_le : a * |z₁.re| ≤ a * a_rect := mul_le_mul_of_nonneg_left hz₁_re.le ha
+      have hb_le : b * |z₂.re| ≤ b * a_rect := mul_le_mul_of_nonneg_left hz₂_re.le hb
+      have h_ab : a * a_rect + b * a_rect = a_rect := by linear_combination a_rect * hab
+      by_cases ha0 : a = 0
+      · subst ha0
+        have hb1 : b = 1 := by linarith
+        subst hb1
+        linarith
+      · have ha_pos : 0 < a := lt_of_le_of_ne ha (Ne.symm ha0)
+        have ha_lt : a * |z₁.re| < a * a_rect := mul_lt_mul_of_pos_left hz₁_re ha_pos
+        linarith
+    · simp only [Complex.add_im, Complex.real_smul, Complex.mul_im,
+        Complex.ofReal_re, Complex.ofReal_im, zero_mul, add_zero]
+      have h1 := abs_add_le (a * z₁.im) (b * z₂.im)
+      rw [abs_mul, abs_mul, abs_of_nonneg ha, abs_of_nonneg hb] at h1
+      have ha_le : a * |z₁.im| ≤ a * b_rect := mul_le_mul_of_nonneg_left hz₁_im.le ha
+      have hb_le : b * |z₂.im| ≤ b * b_rect := mul_le_mul_of_nonneg_left hz₂_im.le hb
+      have h_ab : a * b_rect + b * b_rect = b_rect := by linear_combination b_rect * hab
+      by_cases ha0 : a = 0
+      · subst ha0
+        have hb1 : b = 1 := by linarith
+        subst hb1
+        linarith
+      · have ha_pos : 0 < a := lt_of_le_of_ne ha (Ne.symm ha0)
+        have ha_lt : a * |z₁.im| < a * b_rect := mul_lt_mul_of_pos_left hz₁_im ha_pos
+        linarith
+  have h0_mem : (0 : ℂ) ∈ R_rect := by
+    refine ⟨?_, ?_⟩ <;> simp <;> linarith
+  have h1_mem : (1 : ℂ) ∈ R_rect := by
+    refine ⟨?_, ?_⟩
+    · simpa using ha_gt1
+    · simpa using hb_pos
+  have hz_eq_z1 : z = zRectAdj i x t₀ s 1 := by
+    ext k μ
+    by_cases hμ : μ = 0
+    · subst hμ
+      simp [z, zRectAdj]
+    · simp [z, zRectAdj, adjCoincVec, adjBaseVec, hμ]
+  have hz_ext : z ∈ extended_tube_n n := by
+    rw [hz_eq_z1]
+    exact (h_mem 1 h1_mem.1 h1_mem.2).1
+  refine ⟨hz_ext, ?_⟩
+  let v_x : Fin n → Fin 4 → ℂ := fun k μ => if μ = 0 then (x k 0 : ℂ) else 0
+  let z_base : Fin n → Fin 4 → ℂ := zRectAdj i x t₀ s 0
+  let L₁ : ℂ →L[ℂ] (Fin n → Fin 4 → ℂ) := (ContinuousLinearMap.id ℂ ℂ).smulRight v_x
+  let L₂ : ℂ →L[ℂ] (Fin n → Fin 4 → ℂ) := (ContinuousLinearMap.id ℂ ℂ).smulRight (v_x ∘ σ)
+  let zSwap : ℂ → (Fin n → Fin 4 → ℂ) := fun w => zRectAdj i x t₀ s w ∘ σ
+  have hz_aff : ∀ ζ : ℂ, zRectAdj i x t₀ s ζ = L₁ ζ + z_base := by
+    intro ζ
+    ext k μ
+    dsimp [L₁, v_x, z_base, zRectAdj]
+    split_ifs <;> simp
+  have hz_swap_aff : ∀ ζ : ℂ, zSwap ζ = L₂ ζ + (z_base ∘ σ) := by
+    intro ζ
+    ext k μ
+    dsimp [zSwap, L₂, v_x, z_base, zRectAdj]
+    split_ifs <;> simp
+  let g : ℂ → ℂ := fun ζ =>
+    spinor_H_ext R W E n α (zRectAdj i x t₀ s ζ) -
+      η * spinor_H_ext R W E n (α ∘ σ) (zSwap ζ)
+  have hg_an : AnalyticOnNhd ℂ g R_rect := by
+    intro ζ hζ
+    obtain ⟨hζ₁, hζ₂⟩ := h_mem ζ hζ.1 hζ.2
+    have ha₁ : AnalyticAt ℂ (fun w => zRectAdj i x t₀ s w) ζ := by
+      rw [funext hz_aff]
+      exact (L₁.analyticAt ζ).add analyticAt_const
+    have ha₂ : AnalyticAt ℂ zSwap ζ := by
+      rw [funext hz_swap_aff]
+      exact (L₂.analyticAt ζ).add analyticAt_const
+    exact ((spinor_H_ext_analyticOnNhd R W E h_cov n α (zRectAdj i x t₀ s ζ) hζ₁).comp ha₁).sub
+      (analyticAt_const.mul
+        ((spinor_H_ext_analyticOnNhd R W E h_cov n (α ∘ σ) (zSwap ζ) hζ₂).comp ha₂))
+  have hg_im_zero : ∀ ξ : ℝ, |ξ| < b_rect → g ((ξ : ℂ) * Complex.I) = 0 := by
+    intro ξ hξ
+    let y_ξ : Fin n → Fin 4 → ℝ := fun k μ =>
+      if μ = 0 then ξ * x k 0 + (t₀ • adjCoincVec n i + s • adjBaseVec n) k 0 else x k μ
+    have hZ_wick : zRectAdj i x t₀ s ((ξ : ℂ) * Complex.I) = wickEmbedN n y_ξ := by
+      ext k μ
+      dsimp [zRectAdj, wickEmbedN, wickEmbed, y_ξ]
+      split_ifs
+      · push_cast
+        ring
+      · rfl
+    have hZ_wick_swap : zSwap ((ξ : ℂ) * Complex.I) = wickEmbedN n (y_ξ ∘ σ) := by
+      dsimp [zSwap]
+      rw [hZ_wick]
+      rfl
+    have h_re_ξ : |((ξ : ℂ) * Complex.I).re| < a_rect := by
+      simp only [Complex.mul_re, Complex.ofReal_re, Complex.I_re, mul_zero,
+        Complex.ofReal_im, Complex.I_im, mul_one, sub_self, abs_zero]
+      linarith
+    have h_im_ξ : |((ξ : ℂ) * Complex.I).im| < b_rect := by
+      simpa [Complex.mul_im] using hξ
+    have h_mem_ξ := h_mem ((ξ : ℂ) * Complex.I) h_re_ξ h_im_ξ
+    rw [hZ_wick] at h_mem_ξ
+    have hZ_swap_mem : wickEmbedN n (y_ξ ∘ σ) ∈ extended_tube_n n := h_mem_ξ.2
+    have h_inv_y : (y_ξ ∘ σ) ∘ σ = y_ξ := by ext k μ; simp [σ]
+    have h_inv_α : (α ∘ σ) ∘ σ = α := by ext k; simp [σ]
+    have hZ_mem_inv : wickEmbedN n ((y_ξ ∘ σ) ∘ σ) ∈ extended_tube_n n := by
+      rw [h_inv_y]
+      exact h_mem_ξ.1
+    have hp := hperm_ext n σ (α ∘ σ) (y_ξ ∘ σ) hZ_swap_mem hZ_mem_inv
+    rw [h_inv_y, h_inv_α, permInversions_adjacent_swap i hi, pow_one] at hp
+    dsimp [g]
+    rw [hZ_wick_swap, hZ_wick, hp, sub_self]
+  have h_freq : ∃ᶠ ζ in 𝓝[≠] 0, g ζ = 0 := by
+    rw [Filter.frequently_iff]
+    intro U hU
+    rw [mem_nhdsWithin] at hU
+    obtain ⟨V, hV_open, h0V, hVU⟩ := hU
+    obtain ⟨δ, hδ_pos, hball⟩ := Metric.isOpen_iff.mp hV_open 0 h0V
+    let ξ : ℝ := min (δ / 2) (b_rect / 2)
+    have hξ_pos : 0 < ξ := lt_min (half_pos hδ_pos) (half_pos hb_pos)
+    have hξ_lt_b : |ξ| < b_rect := by
+      rw [abs_of_pos hξ_pos]
+      exact (min_le_right _ _).trans_lt (half_lt_self hb_pos)
+    refine ⟨(ξ : ℂ) * Complex.I, hVU ⟨hball ?_, ?_⟩, hg_im_zero ξ hξ_lt_b⟩
+    · rw [Metric.mem_ball, dist_zero_right, norm_mul, Complex.norm_real, Complex.norm_I,
+        mul_one, Real.norm_of_nonneg hξ_pos.le]
+      exact (min_le_left _ _).trans_lt (half_lt_self hδ_pos)
+    · rw [Set.mem_compl_singleton_iff]
+      exact mul_ne_zero (Complex.ofReal_ne_zero.mpr hξ_pos.ne') Complex.I_ne_zero
+  have hg_zero_on :=
+    hg_an.eqOn_zero_of_preconnected_of_frequently_eq_zero hR_conv.isPreconnected h0_mem h_freq
+  have hg1 : g 1 = 0 := hg_zero_on h1_mem
+  dsimp [g, zSwap] at hg1
+  rw [← hz_eq_z1] at hg1
+  exact sub_eq_zero.mp hg1
+
+theorem localCommutativity_of_euclidExtendedTubePermLocality
+    (R : HolomorphicLorentzRep ι) (W : WightmanFamily ι) {η : ℂ} (E : TubeExtension W)
+    (hspec : SpectrumCondition W) (hP : PoincareCovariant R W)
+    (hperm_ext : EuclidExtendedTubePermLocality η (spinor_H_ext R W E)) :
+    LocalCommutativity η W := by
+  let E₀ : TubeExtension W := coneVladimirovTubeExtension R W hspec hP
+  have h_cov₀ : TubeCovariant R E₀ := coneVladimirov_tubeCovariant R W hspec hP
+  have hperm_ext₀ : EuclidExtendedTubePermLocality η (spinor_H_ext R W E₀) := by
+    intro n π α x hx hxπ
+    rw [spinor_H_ext_congr_of_wightman_eq R E₀ E, spinor_H_ext_congr_of_wightman_eq R E₀ E]
+    exact hperm_ext n π α x hx hxπ
+  intro n i hi α f f' hf_supp hf'
+  have hn : ¬ n ≤ 1 := by omega
+  let σ : Equiv.Perm (Fin n) := Equiv.swap i ⟨i.val + 1, hi⟩
+  have hf'_eq : f' = schwartzPermCLM n σ f := by
+    ext y
+    rw [schwartzPermCLM_apply, ← hf' (y ∘ σ)]
+    congr 1
+    ext k μ
+    simp [σ]
+  rw [hf'_eq]
+  let W_perm : TemperedDistribution (Fin n → Fin 4 → ℝ) ℂ :=
+    η • ((W n (α ∘ σ)).comp (schwartzPermCLM n σ))
+  let L_diff : TemperedDistribution (Fin n → Fin 4 → ℝ) ℂ := W n α - W_perm
+  let Ω_i : TopologicalSpace.Opens (Fin n → Fin 4 → ℝ) :=
+    ⟨{ x | is_spacelike (x i - x ⟨i.val + 1, hi⟩) }, isOpen_adjSpacelikeSet i hi⟩
+  let T_diff : 𝓓'(Ω_i, ℂ) := Distribution.temperedToDistribution Ω_i L_diff
+  have h_vanish_balls : ∀ x₀ ∈ (Ω_i : Set (Fin n → Fin 4 → ℝ)),
+      ∃ (U : TopologicalSpace.Opens (Fin n → Fin 4 → ℝ))
+        (hU : (U : Set (Fin n → Fin 4 → ℝ)) ⊆ (Ω_i : Set (Fin n → Fin 4 → ℝ))),
+        x₀ ∈ U ∧ Distribution.VanishesOn Ω_i T_diff U hU := by
+    intro x₀ hx₀
+    obtain ⟨ρ, δ₀, hρ_pos, hδ₀_pos, hδ₀_le, hB_sub, h_ball⟩ :=
+      spinor_H_ext_adj_swap_eq_on_ball R W E₀ h_cov₀ hperm_ext₀ i hi hx₀
+    let U : TopologicalSpace.Opens (Fin n → Fin 4 → ℝ) := ⟨Metric.ball x₀ ρ, Metric.isOpen_ball⟩
+    refine ⟨U, hB_sub, Metric.mem_ball_self hρ_pos, ?_⟩
+    intro φ hφ_supp
+    by_contra h_ne
+    have h_norm_pos : 0 < ‖T_diff φ‖ := norm_pos_iff.mpr h_ne
+    let ε : ℝ := ‖T_diff φ‖ / 8
+    have hε_pos : 0 < ε := by positivity
+    let φ_flat : 𝓓((⊤ : TopologicalSpace.Opens (Fin (n * 4) → ℝ)), ℝ) :=
+      { toFun := fun u => φ ((spacetimeFlatCLE n).symm u)
+        contDiff' := φ.contDiff'.comp (spacetimeFlatCLE n).symm.contDiff
+        hasCompactSupport' :=
+          φ.hasCompactSupport'.comp_homeomorph (spacetimeFlatCLE n).symm.toHomeomorph
+        tsupport_subset' := Set.subset_univ _ }
+    let φ_perm_flat : 𝓓((⊤ : TopologicalSpace.Opens (Fin (n * 4) → ℝ)), ℝ) :=
+      { toFun := fun u => φ (permCoordCLE n σ ((spacetimeFlatCLE n).symm u))
+        contDiff' :=
+          φ.contDiff'.comp ((permCoordCLE n σ).contDiff.comp (spacetimeFlatCLE n).symm.contDiff)
+        hasCompactSupport' :=
+          (φ.hasCompactSupport'.comp_homeomorph (permCoordCLE n σ).toHomeomorph).comp_homeomorph
+            (spacetimeFlatCLE n).symm.toHomeomorph
+        tsupport_subset' := Set.subset_univ _ }
+    let c₁ : ℂ := W n α (Distribution.testFunctionToSchwartzCLM Ω_i φ)
+    let c₂ : ℂ := W n (α ∘ σ) (schwartzPermCLM n σ (Distribution.testFunctionToSchwartzCLM Ω_i φ))
+    have hT_eq : T_diff φ = c₁ - η * c₂ := rfl
+    have hb₁ := coneVladimirov_hasBoundaryValue_forward R W hspec hP hn α ⊤ φ_flat
+    have hb₂ := coneVladimirov_hasBoundaryValue_forward R W hspec hP hn (α ∘ σ) ⊤ φ_perm_flat
+    have hc₁_eq : (Distribution.temperedToDistribution ⊤ (wightmanFlatTD W n α)) φ_flat = c₁ := by
+      change W n α (schwartzFlatCLM n (Distribution.testFunctionToSchwartzCLM ⊤ φ_flat)) = c₁
+      dsimp [c₁]
+      congr 1
+      ext x
+      simp [φ_flat]
+    have hc₂_eq :
+        (Distribution.temperedToDistribution ⊤ (wightmanFlatTD W n (α ∘ σ))) φ_perm_flat = c₂ := by
+      change W n (α ∘ σ) (schwartzFlatCLM n
+        (Distribution.testFunctionToSchwartzCLM ⊤ φ_perm_flat)) = c₂
+      dsimp [c₂]
+      congr 1
+      ext x
+      simp only [schwartzFlatCLM_apply, Distribution.testFunctionToSchwartzCLM_apply,
+        schwartzPermCLM_apply]
+      dsimp [φ_perm_flat]
+      rw [(spacetimeFlatCLE n).symm_apply_apply]
+      rfl
+    rw [hc₁_eq] at hb₁
+    rw [hc₂_eq] at hb₂
+    obtain ⟨r₁, hr₁_pos, hr₁_bd⟩ := Metric.tendsto_nhdsWithin_nhds.mp hb₁ ε hε_pos
+    obtain ⟨r₂, hr₂_pos, hr₂_bd⟩ :=
+      Metric.tendsto_nhdsWithin_nhds.mp hb₂ (ε / (2 * (‖η‖ + 1))) (by positivity)
+    let r₀ : ℝ := min r₁ r₂
+    have hr₀_pos : 0 < r₀ := lt_min hr₁_pos hr₂_pos
+    let w₀ := adjCoincVec n i
+    let u₀ := adjBaseVec n
+    let C_w : ℝ := ‖spacetimeFlatCLE n w₀‖ + 1
+    have hCw_pos : 0 < C_w := by positivity
+    let t₀ : ℝ := min 1 (r₀ / (4 * C_w))
+    have ht₀_pos : 0 < t₀ := lt_min zero_lt_one (by positivity)
+    have ht₀_le : t₀ ≤ 1 := min_le_left _ _
+    have ht₀_norm : ‖spacetimeFlatCLE n (t₀ • w₀)‖ < r₀ / 2 := by
+      rw [map_smul, norm_smul, Real.norm_of_nonneg ht₀_pos.le]
+      have h1 : t₀ ≤ r₀ / (4 * C_w) := min_le_right _ _
+      have h2 : t₀ * ‖spacetimeFlatCLE n w₀‖ ≤ (r₀ / (4 * C_w)) * C_w := by
+        refine mul_le_mul h1 ?_ (norm_nonneg _) (by positivity)
+        dsimp [C_w]
+        linarith
+      have hc : (r₀ / (4 * C_w)) * C_w = r₀ / 4 := by field_simp [hCw_pos.ne']
+      linarith
+    let z_line : ℝ → (Fin n → Fin 4 → ℝ) → (Fin n → Fin 4 → ℂ) := fun s x k μ =>
+      (x k μ : ℂ) + ((t₀ • w₀ + s • u₀) k μ : ℂ) * Complex.I
+    let F_int : ℝ → (Fin n → Fin 4 → ℝ) → ℂ := fun s x =>
+      spinor_H_ext R W E₀ n α (z_line s x) * (φ x : ℂ)
+    let G : ℝ → ℂ := fun s => ∫ x : Fin n → Fin 4 → ℝ, F_int s x
+    let b₀ : ℝ := δ₀ * t₀ / 2
+    have hb₀_pos : 0 < b₀ := by positivity
+    let I_s : Set ℝ := Set.Icc (-b₀) b₀
+    let K_φ : Set (Fin n → Fin 4 → ℝ) := tsupport (fun x => φ x)
+    have h_Is_lt : ∀ {s : ℝ}, s ∈ I_s → |s| < δ₀ * t₀ := by
+      intro s hs
+      have h_le : |s| ≤ b₀ := abs_le.mpr hs
+      dsimp [b₀] at h_le
+      linarith [mul_pos hδ₀_pos ht₀_pos]
+    have h_zline_cont : Continuous (fun p : ℝ × (Fin n → Fin 4 → ℝ) => z_line p.1 p.2) := by
+      refine continuous_pi fun k => continuous_pi fun μ => ?_
+      dsimp [z_line]
+      fun_prop
+    let Ψ : ℝ × (Fin n → Fin 4 → ℝ) → ℂ := fun p => spinor_H_ext R W E₀ n α (z_line p.1 p.2)
+    have hΨ_contOn : ContinuousOn Ψ (I_s ×ˢ K_φ) :=
+      (spinor_H_ext_analyticOnNhd R W E₀ h_cov₀ n α).continuousOn.comp h_zline_cont.continuousOn
+        fun p hp => (h_ball (hφ_supp hp.2) ht₀_pos ht₀_le (h_Is_lt hp.1) α).1
+    obtain ⟨M_Ψ, hM_Ψ⟩ :=
+      (isCompact_Icc.prod φ.hasCompactSupport').exists_bound_of_continuousOn hΨ_contOn
+    let M_bd : ℝ := max M_Ψ 0
+    have hM_nn : 0 ≤ M_bd := le_max_right _ _
+    have hF_cont_x : ∀ {s : ℝ}, s ∈ I_s → Continuous (F_int s) := by
+      intro s hs
+      rw [continuous_iff_continuousAt]
+      intro x
+      by_cases hx_ball : x ∈ Metric.ball x₀ ρ
+      · have h_zx_cont : Continuous (fun y : Fin n → Fin 4 → ℝ => z_line s y) :=
+          h_zline_cont.comp (continuous_const.prodMk continuous_id)
+        have h_contOn_ball : ContinuousOn (F_int s) (Metric.ball x₀ ρ) :=
+          ((spinor_H_ext_analyticOnNhd R W E₀ h_cov₀ n α).continuousOn.comp h_zx_cont.continuousOn
+            (fun y hy => (h_ball hy ht₀_pos ht₀_le (h_Is_lt hs) α).1)).mul
+            (Complex.continuous_ofReal.comp φ.contDiff'.continuous).continuousOn
+        exact h_contOn_ball.continuousAt (Metric.isOpen_ball.mem_nhds hx_ball)
+      · have hx_not : x ∈ (K_φ)ᶜ := fun hxK => hx_ball (hφ_supp hxK)
+        have h_zero_nhds : F_int s =ᶠ[𝓝 x] 0 := by
+          filter_upwards [isClosed_tsupport (fun y => φ y) |>.isOpen_compl.mem_nhds hx_not]
+            with y hy
+          dsimp [F_int]
+          rw [image_eq_zero_of_notMem_tsupport hy, Complex.ofReal_zero, mul_zero]
+        exact continuousAt_const.congr h_zero_nhds.symm
+    have hG_contOn : ContinuousOn G I_s := by
+      refine MeasureTheory.continuousOn_of_dominated
+        (fun s hs => (hF_cont_x hs).aestronglyMeasurable)
+        (fun s hs => Filter.Eventually.of_forall fun x => ?_)
+        ((φ.contDiff'.continuous.norm.integrable_of_hasCompactSupport
+          (φ.hasCompactSupport'.comp_left norm_zero)).const_mul M_bd)
+        (Filter.Eventually.of_forall fun x => ?_)
+      · by_cases hxK : x ∈ K_φ
+        · dsimp [F_int]
+          rw [norm_mul, Complex.norm_real]
+          exact mul_le_mul_of_nonneg_right
+            ((hM_Ψ (s, x) ⟨hs, hxK⟩).trans (le_max_left _ _)) (norm_nonneg _)
+        · dsimp [F_int]
+          rw [image_eq_zero_of_notMem_tsupport hxK, Complex.ofReal_zero, mul_zero, norm_zero]
+          positivity
+      · by_cases hxK : x ∈ K_φ
+        · have h_map : Set.MapsTo (fun s : ℝ => (s, x)) I_s (I_s ×ˢ K_φ) := fun s hs => ⟨hs, hxK⟩
+          exact (hΨ_contOn.comp (continuous_id.prodMk continuous_const).continuousOn h_map).mul
+            continuousOn_const
+        · have h_eq0 : Set.EqOn (fun s => F_int s x) 0 I_s := fun s _ => by
+            dsimp [F_int]
+            rw [image_eq_zero_of_notMem_tsupport hxK, Complex.ofReal_zero, mul_zero]
+          exact continuousOn_const.congr h_eq0
+    have hG_cont0 : ContinuousAt G 0 :=
+      hG_contOn.continuousAt (Icc_mem_nhds (by linarith) hb₀_pos)
+    obtain ⟨δ_G, hδG_pos, hδG_bd⟩ := Metric.continuousAt_iff.mp hG_cont0 ε hε_pos
+    let C_u : ℝ := ‖spacetimeFlatCLE n u₀‖ + ‖spacetimeFlatCLE n (u₀ ∘ σ)‖ + 1
+    have hCu_pos : 0 < C_u := by positivity
+    let s₁ : ℝ := min (min (δ_G / 2) (b₀ / 2)) (r₀ / (4 * C_u))
+    have hs₁_pos : 0 < s₁ := lt_min (lt_min (half_pos hδG_pos) (half_pos hb₀_pos)) (by positivity)
+    have hs₁_lt_δG : s₁ < δ_G :=
+      ((min_le_left _ _).trans (min_le_left _ _)).trans_lt (half_lt_self hδG_pos)
+    have hs₁_lt_b₀ : s₁ < b₀ :=
+      ((min_le_left _ _).trans (min_le_right _ _)).trans_lt (half_lt_self hb₀_pos)
+    have hs₁_le_r : s₁ ≤ r₀ / (4 * C_u) := min_le_right _ _
+    have hs₁_lt_δt : s₁ < δ₀ * t₀ := by dsimp [b₀] at hs₁_lt_b₀; linarith
+    have h3s₁_lt_t₀ : 3 * s₁ < t₀ := by
+      have h_δt : δ₀ * t₀ ≤ (1 / 8) * t₀ := mul_le_mul_of_nonneg_right hδ₀_le ht₀_pos.le
+      dsimp [b₀] at hs₁_lt_b₀
+      linarith
+    have hG_pos_dist : ‖G s₁ - G 0‖ < ε := by
+      have hd : dist s₁ 0 < δ_G := by
+        rw [dist_zero_right, Real.norm_of_nonneg hs₁_pos.le]
+        exact hs₁_lt_δG
+      simpa [dist_eq_norm] using hδG_bd hd
+    have hG_neg_dist : ‖G (-s₁) - G 0‖ < ε := by
+      have hd : dist (-s₁) 0 < δ_G := by
+        rw [dist_zero_right, norm_neg, Real.norm_of_nonneg hs₁_pos.le]
+        exact hs₁_lt_δG
+      simpa [dist_eq_norm] using hδG_bd hd
+    let v_pos : Fin (n * 4) → ℝ := spacetimeFlatCLE n (t₀ • w₀ + s₁ • u₀)
+    let v_neg : Fin (n * 4) → ℝ := spacetimeFlatCLE n ((t₀ • w₀ - s₁ • u₀) ∘ σ)
+    have hv_pos_mem : v_pos ∈ forwardTubeConeFlat n :=
+      pos_shift_mem_forwardTubeConeFlat i ht₀_pos hs₁_pos
+    have hv_neg_mem : v_neg ∈ forwardTubeConeFlat n :=
+      neg_shift_swap_mem_forwardTubeConeFlat i hi hs₁_pos h3s₁_lt_t₀
+    have hv_pos_norm : dist v_pos 0 < r₁ := by
+      rw [dist_zero_right]
+      dsimp [v_pos]
+      rw [map_add, map_smul (spacetimeFlatCLE n) s₁]
+      have h_tri := norm_add_le (spacetimeFlatCLE n (t₀ • w₀)) (s₁ • spacetimeFlatCLE n u₀)
+      rw [norm_smul, Real.norm_of_nonneg hs₁_pos.le] at h_tri
+      have h_u1 : s₁ * ‖spacetimeFlatCLE n u₀‖ < r₀ / 2 := by
+        have h1 : s₁ * ‖spacetimeFlatCLE n u₀‖ ≤ (r₀ / (4 * C_u)) * C_u := by
+          refine mul_le_mul hs₁_le_r ?_ (norm_nonneg _) (by positivity)
+          dsimp [C_u]
+          linarith [norm_nonneg (spacetimeFlatCLE n (u₀ ∘ σ))]
+        have hc : (r₀ / (4 * C_u)) * C_u = r₀ / 4 := by field_simp [hCu_pos.ne']
+        linarith
+      have hr₀_le : r₀ ≤ r₁ := min_le_left _ _
+      linarith
+    have hv_neg_norm : dist v_neg 0 < r₂ := by
+      rw [dist_zero_right]
+      have h_comp : (t₀ • w₀ - s₁ • u₀) ∘ σ = t₀ • w₀ - s₁ • (u₀ ∘ σ) := by
+        have hw_s := adjCoincVec_comp_swap i hi
+        ext k μ
+        have hwk := congrFun (congrFun hw_s k) μ
+        dsimp [w₀, Function.comp_apply] at hwk ⊢
+        rw [hwk]
+      dsimp [v_neg]
+      rw [h_comp, map_sub, map_smul (spacetimeFlatCLE n) s₁]
+      have h_tri := norm_sub_le (spacetimeFlatCLE n (t₀ • w₀)) (s₁ • spacetimeFlatCLE n (u₀ ∘ σ))
+      rw [norm_smul, Real.norm_of_nonneg hs₁_pos.le] at h_tri
+      have h_u2 : s₁ * ‖spacetimeFlatCLE n (u₀ ∘ σ)‖ < r₀ / 2 := by
+        have h1 : s₁ * ‖spacetimeFlatCLE n (u₀ ∘ σ)‖ ≤ (r₀ / (4 * C_u)) * C_u := by
+          refine mul_le_mul hs₁_le_r ?_ (norm_nonneg _) (by positivity)
+          dsimp [C_u]
+          linarith [norm_nonneg (spacetimeFlatCLE n u₀)]
+        have hc : (r₀ / (4 * C_u)) * C_u = r₀ / 4 := by field_simp [hCu_pos.ne']
+        linarith
+      have hr₀_le : r₀ ≤ r₂ := min_le_right _ _
+      linarith
+    have hGs₁_eq :
+        G s₁ = Distribution.boundaryIntegral ⊤ (tubeForwardFlat E₀ n α) φ_flat v_pos := by
+      dsimp only [G, F_int, Distribution.boundaryIntegral]
+      rw [← integral_comp_spacetimeFlatCLE n]
+      refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall fun x => ?_)
+      dsimp only [tubeForwardFlat, v_pos]
+      have hφ_fl : φ_flat (spacetimeFlatCLE n x) = φ x := by
+        change φ ((spacetimeFlatCLE n).symm (spacetimeFlatCLE n x)) = φ x
+        rw [(spacetimeFlatCLE n).symm_apply_apply]
+      rw [hφ_fl]
+      have h_symm : ((spacetimeFlatCLE_C n).symm fun p =>
+          (spacetimeFlatCLE n x p : ℂ) +
+            (spacetimeFlatCLE n (t₀ • w₀ + s₁ • u₀) p : ℂ) * Complex.I) = z_line s₁ x := by
+        apply (spacetimeFlatCLE_C n).injective
+        rw [(spacetimeFlatCLE_C n).apply_symm_apply]
+        ext p
+        rfl
+      rw [h_symm]
+      have hz_fwd : z_line s₁ x ∈ forward_tube_n n := by
+        rw [← mem_tubeDomain_forwardTubeConeFlat_iff n]
+        have him : (fun p => (spacetimeFlatCLE_C n (z_line s₁ x) p).im) = v_pos := by
+          ext p
+          simp [z_line, v_pos, spacetimeFlatCLE_C, spacetimeFlatLinearEquivC,
+            spacetimeFlatCLE, spacetimeFlatLinearEquiv]
+        change (fun p => (spacetimeFlatCLE_C n (z_line s₁ x) p).im) ∈ forwardTubeConeFlat n
+        rw [him]
+        exact hv_pos_mem
+      rw [spinor_H_ext_eq_on_forward_tube R W E₀ h_cov₀ n α hz_fwd]
+    have hG_negs₁_eq :
+        G (-s₁) = η * Distribution.boundaryIntegral ⊤ (tubeForwardFlat E₀ n (α ∘ σ))
+          φ_perm_flat v_neg := by
+      dsimp only [G, F_int, Distribution.boundaryIntegral]
+      rw [← integral_comp_spacetimeFlatCLE n,
+          ← integral_comp_perm n σ (fun z : Fin n → Fin 4 → ℝ =>
+            tubeForwardFlat E₀ n (α ∘ σ) (fun p =>
+              (spacetimeFlatCLE n z p : ℂ) + (v_neg p : ℂ) * Complex.I) *
+              (φ_perm_flat (spacetimeFlatCLE n z) : ℂ)),
+          ← MeasureTheory.integral_const_mul]
+      refine MeasureTheory.integral_congr_ae (Filter.Eventually.of_forall fun x => ?_)
+      dsimp only [tubeForwardFlat, v_neg]
+      have h_perm_inv : permCoordCLE n σ (x ∘ σ) = x := by
+        ext k μ
+        change x (σ (σ k)) μ = x k μ
+        simp [σ]
+      have hφ_pfl : φ_perm_flat (spacetimeFlatCLE n (x ∘ σ)) = φ x := by
+        change φ (permCoordCLE n σ ((spacetimeFlatCLE n).symm (spacetimeFlatCLE n (x ∘ σ)))) = φ x
+        rw [(spacetimeFlatCLE n).symm_apply_apply, h_perm_inv]
+      rw [hφ_pfl]
+      by_cases hxK : x ∈ K_φ
+      · have h_symm : ((spacetimeFlatCLE_C n).symm fun p =>
+            (spacetimeFlatCLE n (x ∘ σ) p : ℂ) +
+              (spacetimeFlatCLE n ((t₀ • w₀ - s₁ • u₀) ∘ σ) p : ℂ) * Complex.I) =
+            (z_line (-s₁) x ∘ σ) := by
+          apply (spacetimeFlatCLE_C n).injective
+          rw [(spacetimeFlatCLE_C n).apply_symm_apply]
+          ext p
+          dsimp [z_line, spacetimeFlatCLE_C, spacetimeFlatLinearEquivC,
+            spacetimeFlatCLE, spacetimeFlatLinearEquiv]
+          congr 1
+          congr 1
+          push_cast
+          ring
+        rw [h_symm]
+        have hz_neg_fwd : (z_line (-s₁) x ∘ σ) ∈ forward_tube_n n := by
+          rw [← mem_tubeDomain_forwardTubeConeFlat_iff n]
+          have him : (fun p => (spacetimeFlatCLE_C n (z_line (-s₁) x ∘ σ) p).im) = v_neg := by
+            ext p
+            dsimp [z_line, v_neg, spacetimeFlatCLE_C, spacetimeFlatCLE,
+              spacetimeFlatLinearEquivC, spacetimeFlatLinearEquiv]
+            simp [Complex.add_im, Complex.mul_im]
+            ring
+          change (fun p => (spacetimeFlatCLE_C n (z_line (-s₁) x ∘ σ) p).im) ∈
+            forwardTubeConeFlat n
+          rw [him]
+          exact hv_neg_mem
+        have hs_neg_lt : |-s₁| < δ₀ * t₀ := by
+          rw [abs_neg, abs_of_pos hs₁_pos]
+          exact hs₁_lt_δt
+        have h_swap_eq := (h_ball (hφ_supp hxK) ht₀_pos ht₀_le hs_neg_lt α).2
+        rw [h_swap_eq, spinor_H_ext_eq_on_forward_tube R W E₀ h_cov₀ n (α ∘ σ) hz_neg_fwd,
+            mul_assoc]
+      · rw [image_eq_zero_of_notMem_tsupport hxK, Complex.ofReal_zero, mul_zero, mul_zero,
+            mul_zero]
+    have hb₁_close : ‖c₁ - G s₁‖ < ε := by
+      rw [hGs₁_eq, norm_sub_rev]
+      simpa [dist_eq_norm] using hr₁_bd hv_pos_mem hv_pos_norm
+    have hb₂_close : ‖G (-s₁) - η * c₂‖ < ε := by
+      rw [hG_negs₁_eq, ← mul_sub, norm_mul]
+      have hd₂ : ‖Distribution.boundaryIntegral ⊤ (tubeForwardFlat E₀ n (α ∘ σ))
+          φ_perm_flat v_neg - c₂‖ < ε / (2 * (‖η‖ + 1)) := by
+        simpa [dist_eq_norm] using hr₂_bd hv_neg_mem hv_neg_norm
+      have h1 : ‖η‖ * ‖Distribution.boundaryIntegral ⊤ (tubeForwardFlat E₀ n (α ∘ σ))
+          φ_perm_flat v_neg - c₂‖ ≤ (‖η‖ + 1) * (ε / (2 * (‖η‖ + 1))) := by
+        refine mul_le_mul ?_ hd₂.le (norm_nonneg _) (by positivity)
+        linarith
+      have h2 : (‖η‖ + 1) * (ε / (2 * (‖η‖ + 1))) = ε / 2 := by
+        have hne : ‖η‖ + 1 ≠ 0 := by positivity
+        field_simp [hne]
+      linarith
+    have h_tot : ‖T_diff φ‖ < 4 * ε := by
+      rw [hT_eq]
+      have h_id : c₁ - η * c₂ =
+          (c₁ - G s₁) + (G s₁ - G 0) + (G 0 - G (-s₁)) + (G (-s₁) - η * c₂) := by ring
+      rw [h_id]
+      have h_t1 := (norm_add_le _ (G (-s₁) - η * c₂)).trans
+        (add_le_add ((norm_add_le _ (G 0 - G (-s₁))).trans
+          (add_le_add (norm_add_le (c₁ - G s₁) (G s₁ - G 0)) le_rfl)) le_rfl)
+      rw [norm_sub_rev (G 0) (G (-s₁))] at h_t1
+      linarith
+    dsimp [ε] at h_tot
+    linarith
+  have hT_zero : ∀ φ : 𝓓(Ω_i, ℝ), T_diff φ = 0 := by
+    intro φ
+    refine Distribution.vanishing_on_disjoint_support Ω_i T_diff φ ?_
+    rw [Distribution.compl_support_eq]
+    intro x hx
+    obtain ⟨U, hU, hxU, hV⟩ := h_vanish_balls x (φ.tsupport_subset' hx)
+    exact Set.mem_iUnion.mpr ⟨U, Set.mem_iUnion.mpr ⟨hU, Set.mem_iUnion.mpr ⟨hV, hxU⟩⟩⟩
+  have h_compact_zero : ∀ g : SchwartzMap (Fin n → Fin 4 → ℝ) ℂ,
+      HasCompactSupport (g : (Fin n → Fin 4 → ℝ) → ℂ) →
+      tsupport (g : (Fin n → Fin 4 → ℝ) → ℂ) ⊆ (Ω_i : Set (Fin n → Fin 4 → ℝ)) →
+      L_diff g = 0 := by
+    intro g hg_supp hg_tsupp
+    let φ_re : 𝓓(Ω_i, ℝ) :=
+      { toFun := fun x => (g x).re
+        contDiff' := Complex.reCLM.contDiff.comp g.smooth'
+        hasCompactSupport' := hg_supp.comp_left Complex.zero_re
+        tsupport_subset' :=
+          (closure_mono fun x hx =>
+            Function.mem_support.mpr fun h0 =>
+              (Function.mem_support.mp hx) (by rw [h0, Complex.zero_re])).trans hg_tsupp }
+    let φ_im : 𝓓(Ω_i, ℝ) :=
+      { toFun := fun x => (g x).im
+        contDiff' := Complex.imCLM.contDiff.comp g.smooth'
+        hasCompactSupport' := hg_supp.comp_left Complex.zero_im
+        tsupport_subset' :=
+          (closure_mono fun x hx =>
+            Function.mem_support.mpr fun h0 =>
+              (Function.mem_support.mp hx) (by rw [h0, Complex.zero_im])).trans hg_tsupp }
+    have hg_decomp : g = Distribution.testFunctionToSchwartzCLM Ω_i φ_re +
+        Complex.I • Distribution.testFunctionToSchwartzCLM Ω_i φ_im := by
+      ext x
+      change g x = ((g x).re : ℂ) + Complex.I * ((g x).im : ℂ)
+      rw [mul_comm, Complex.re_add_im]
+    rw [hg_decomp, map_add, map_smul]
+    change T_diff φ_re + Complex.I • T_diff φ_im = 0
+    rw [hT_zero φ_re, hT_zero φ_im, smul_zero, add_zero]
+  have h_lim : Filter.Tendsto (fun k : ℕ => L_diff (schwartzCutoffSeq n f k))
+      Filter.atTop (𝓝 (L_diff f)) :=
+    (L_diff.continuous.tendsto f).comp (schwartzCutoffSeq_tendsto n f)
+  have h_seq0 : (fun k : ℕ => L_diff (schwartzCutoffSeq n f k)) = fun _ => 0 :=
+    funext fun k => h_compact_zero (schwartzCutoffSeq n f k)
+      (schwartzCutoffSeq_hasCompactSupport n f k)
+      ((tsupport_schwartzCutoffSeq_subset n f k).trans hf_supp)
+  have h_zero_lim : Filter.Tendsto (fun k : ℕ => L_diff (schwartzCutoffSeq n f k))
+      Filter.atTop (𝓝 0) := by
+    rw [h_seq0]
+    exact tendsto_const_nhds
+  have hL_f : L_diff f = 0 := tendsto_nhds_unique h_lim h_zero_lim
+  exact sub_eq_zero.mp hL_f
+
+theorem localCommutativity_of_fullEuclidOSAxioms_and_tube
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hFull : FullEuclidOSAxioms R S η 𝒮) {W : WightmanFamily ι} (E : TubeExtension W)
+    (h_cov : TubeCovariant R E) (hspec : SpectrumCondition W) (hP : PoincareCovariant R W)
+    (h_ord : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E n α x) :
+    LocalCommutativity η W :=
+  localCommutativity_of_euclidExtendedTubePermLocality R W E hspec hP
+    (euclidExtendedTubePermLocality_of_fullEuclidOSAxioms hFull E h_cov h_ord)
+
+theorem OSTubeExtensionData.localCommutativity_of_fullEuclid
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (T : OSTubeExtensionData R 𝒮) (hFull : FullEuclidOSAxioms R S η 𝒮) :
+    LocalCommutativity η T.W :=
+  localCommutativity_of_fullEuclidOSAxioms_and_tube hFull T.E T.tubeCovariant
+    (T.spectrumCondition hFull.toOSAxioms.os1_translation)
+    (T.poincareCovariant hFull.toOSAxioms.os1_translation)
+    (fun n α _ hx => T.schwingerFromTube_eq n α hx)
+
+theorem OSTubeExtensionData.toFullEuclidOSAxioms_of_localCommutativity
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (T : OSTubeExtensionData R 𝒮) (hOS : OSAxioms R S η 𝒮)
+    (hη : η = 1 ∨ η = -1) (hloc : LocalCommutativity η T.W) :
+    FullEuclidOSAxioms R S η (schwingerFromPermutedTube R T.W η T.E) ∧
+    ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → schwingerFromPermutedTube R T.W η T.E n α x = 𝒮 n α x := by
+  have h_ord : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → schwingerFromPermutedTube R T.W η T.E n α x = 𝒮 n α x :=
+    fun n α _ hx =>
+      (schwingerFromPermutedTube_eq_schwingerFromTube_on_orderedEuclidN_of_localCommutativity
+        R T.W hη T.E T.tubeCovariant hloc n α hx).trans (T.schwingerFromTube_eq n α hx).symm
+  refine ⟨?_, h_ord⟩
+  exact
+    { os0_smooth :=
+        schwingerFromPermutedTube_contDiffOn_of_localCommutativity
+          R T.W hη T.E T.tubeCovariant hloc
+      os1_translation :=
+        schwingerFromPermutedTube_translation_invariant_of_localCommutativity
+          R T.W hη T.E T.tubeCovariant (T.tubeTranslationInvariant hOS.os1_translation) hloc
+      os1_rotation :=
+        schwingerFromPermutedTube_rotCovariant_of_localCommutativity
+          R T.W hη T.E T.tubeCovariant hloc
+      os2_hermiticity :=
+        (osHermiticity_congr_of_eq_on_orderedEuclidN S h_ord).mpr hOS.os2_hermiticity
+      os2_positivity :=
+        (osReflectionPositive_congr_of_eq_on_orderedEuclidN S h_ord).mpr hOS.os2_positivity
+      os3_permutation :=
+        schwingerFromPermutedTube_permutation_of_localCommutativity
+          R T.W hη T.E T.tubeCovariant hloc }
+
+theorem os_full_euclid_wightman_equivalence_of_tube
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮) (T : OSTubeExtensionData R 𝒮) (hη : η = 1 ∨ η = -1) :
+    ((∃ 𝒮_full : SchwingerFamily ι,
+        FullEuclidOSAxioms R S η 𝒮_full ∧
+        ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+          x ∈ orderedEuclidN n → 𝒮_full n α x = 𝒮 n α x) ↔
+      LocalCommutativity η T.W) ∧
+    ∀ 𝒮₁ 𝒮₂ : SchwingerFamily ι,
+      FullEuclidOSAxioms R S η 𝒮₁ → FullEuclidOSAxioms R S η 𝒮₂ →
+      (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n → 𝒮₁ n α x = 𝒮 n α x) →
+      (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n → 𝒮₂ n α x = 𝒮 n α x) →
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ nonCoincidentEuclidN n → 𝒮₁ n α x = 𝒮₂ n α x := by
+  refine ⟨⟨?_, fun hloc => ⟨schwingerFromPermutedTube R T.W η T.E,
+    T.toFullEuclidOSAxioms_of_localCommutativity hOS hη hloc⟩⟩, ?_⟩
+  · rintro ⟨𝒮_full, hFull, h_ord⟩
+    exact localCommutativity_of_fullEuclidOSAxioms_and_tube hFull T.E T.tubeCovariant
+      (T.spectrumCondition hOS.os1_translation)
+      (T.poincareCovariant hOS.os1_translation)
+      (fun n α x hx => (h_ord n α x hx).trans (T.schwingerFromTube_eq n α hx))
+  · intro 𝒮₁ 𝒮₂ hF₁ hF₂ h₁ h₂ n α x hx
+    exact fullEuclid_eq_of_eq_on_orderedEuclidN hF₁.os1_rotation hF₁.os3_permutation
+      hF₂.os1_rotation hF₂.os3_permutation
+      (fun β y hy => (h₁ n β y hy).trans (h₂ n β y hy).symm) α hx
+
+theorem osReconstructed_localCommutativity_of_fullEuclid_linearGrowth
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hFull : FullEuclidOSAxioms R S η 𝒮) (hlg : OSLinearGrowthCondition 𝒮) :
+    LocalCommutativity η
+      (osReconstructedWightmanFamily_of_linearGrowth hFull.toOSAxioms hlg) := by
+  rw [← osReconstructedTubeExtensionData_of_linearGrowth_W_eq hFull.toOSAxioms hlg]
+  exact (osReconstructedTubeExtensionData_of_linearGrowth
+    hFull.toOSAxioms hlg).localCommutativity_of_fullEuclid hFull
+
+theorem os_full_euclid_wightman_equivalence_of_linearGrowth
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮) (hlg : OSLinearGrowthCondition 𝒮) (hη : η = 1 ∨ η = -1) :
+    ((∃ 𝒮_full : SchwingerFamily ι,
+        FullEuclidOSAxioms R S η 𝒮_full ∧
+        ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+          x ∈ orderedEuclidN n → 𝒮_full n α x = 𝒮 n α x) ↔
+      LocalCommutativity η (osReconstructedWightmanFamily_of_linearGrowth hOS hlg)) ∧
+    ∀ 𝒮₁ 𝒮₂ : SchwingerFamily ι,
+      FullEuclidOSAxioms R S η 𝒮₁ → FullEuclidOSAxioms R S η 𝒮₂ →
+      (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n → 𝒮₁ n α x = 𝒮 n α x) →
+      (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ orderedEuclidN n → 𝒮₂ n α x = 𝒮 n α x) →
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ nonCoincidentEuclidN n → 𝒮₁ n α x = 𝒮₂ n α x := by
+  rw [← osReconstructedTubeExtensionData_of_linearGrowth_W_eq hOS hlg]
+  exact os_full_euclid_wightman_equivalence_of_tube hOS
+    (osReconstructedTubeExtensionData_of_linearGrowth hOS hlg) hη
+
+theorem fullEuclid_os_wightman_full_reconstruction_of_linearGrowth
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hFull : FullEuclidOSAxioms R S η 𝒮)
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    let hOS := hFull.toOSAxioms
+    let hdiag := osDiagonalKernelBounded_of_linearGrowth S hlg
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
+    let P := T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag
+    let A := T.toWightmanAxiomsOfDiagonalBounded hOS hdiag
+    let U := T.osToWightmanUnitaryEquivOfDiagonalBounded hOS hdiag
+    A.WData.W = osReconstructedWightmanFamily_of_linearGrowth hOS hlg ∧
+    LocalCommutativity η A.WData.W ∧
+    PermSpacelikeLocality η A.WData.W ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare R P.poincare) a (U Ψ)) ∧
+    ((∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ β : Fin 2 → ι,
+          osReconstructedWightmanFamily_of_linearGrowth hOS hlg 2 β ≠ 0) →
+        η = ε) ∧
+      (∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+          x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) → η = ε)) ∧
+    ((η = 1 ∨ η = -1) →
+      FullEuclidOSAxioms R S η P.permutedSchwinger ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ nonCoincidentEuclidN n → P.permutedSchwinger n α x = 𝒮 n α x) := by
+  have hsyn := os_wightman_reconstruction_of_linearGrowth hFull.toOSAxioms hlg
+  have hloc := osReconstructed_localCommutativity_of_fullEuclid_linearGrowth hFull hlg
+  rcases hsyn with ⟨hA, hschw, hvac, htr, hss, hfull⟩
+  have hlocA : LocalCommutativity η
+      ((osReconstructedTubeExtensionData_of_linearGrowth hFull.toOSAxioms hlg
+        |>.toWightmanAxiomsOfDiagonalBounded hFull.toOSAxioms
+          (osDiagonalKernelBounded_of_linearGrowth S hlg)).WData.W) := by
+    rwa [hA]
+  refine ⟨hA, hlocA, PermSpacelikeLocality.of_localCommutativity hlocA,
+    hschw, hvac, htr, hss, fun hη => ?_⟩
+  rcases hfull hη hloc with ⟨hFE, hperm⟩
+  refine ⟨hFE, fun n α x hx => ?_⟩
+  exact fullEuclid_eq_of_eq_on_orderedEuclidN hFE.os1_rotation hFE.os3_permutation
+    hFull.os1_rotation hFull.os3_permutation (fun β y hy => hperm n β y hy) α hx
+
+theorem fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hFull : FullEuclidOSAxioms R S η 𝒮)
+    (hcluster : OSTimeClusterDecomposition hFull.toOSAxioms.toReflectionPositiveData)
+    (hlg : OSLinearGrowthCondition 𝒮)
+    (hnorm : OSVacuumNormalized 𝒮) :
+    let hOS := hFull.toOSAxioms
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = osReconstructedWightmanFamily_of_linearGrowth hOS hlg ∧
+    LocalCommutativity η G.WData.W ∧
+    PermSpacelikeLocality η G.WData.W ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare R P.poincare) a (U Ψ)) ∧
+    ((∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ β : Fin 2 → ι,
+          osReconstructedWightmanFamily_of_linearGrowth hOS hlg 2 β ≠ 0) →
+        η = ε) ∧
+      (∀ {ε : ℂ}, R.HasSpinParity ε →
+        (∃ (n : ℕ) (_ : 1 ≤ n) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+          x ∈ orderedEuclidN n ∧ 𝒮 n α x ≠ 0) → η = ε)) ∧
+    ((η = 1 ∨ η = -1) →
+      FullEuclidOSAxioms R S η P.permutedSchwinger ∧
+      ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+        x ∈ nonCoincidentEuclidN n → P.permutedSchwinger n α x = 𝒮 n α x) := by
+  have hsyn := os_full_wightman_reconstruction_of_linearGrowth
+    hFull.toOSAxioms hcluster hlg hnorm
+  have hloc := osReconstructed_localCommutativity_of_fullEuclid_linearGrowth hFull hlg
+  rcases hsyn with ⟨hG, hschw, hvac, htr, hss, hfull⟩
+  have hlocG : LocalCommutativity η
+      ((osReconstructedTubeExtensionData_of_linearGrowth hFull.toOSAxioms hlg
+        |>.toGeneralWightmanAxiomsWithUniqueVacuum hFull.toOSAxioms hcluster hnorm).WData.W) := by
+    rwa [hG]
+  refine ⟨hG, hlocG, PermSpacelikeLocality.of_localCommutativity hlocG,
+    hschw, hvac, htr, hss, fun hη => ?_⟩
+  rcases hfull hη hloc with ⟨hFE, hperm⟩
+  refine ⟨hFE, fun n α x hx => ?_⟩
+  exact fullEuclid_eq_of_eq_on_orderedEuclidN hFE.os1_rotation hFE.os3_permutation
+    hFull.os1_rotation hFull.os3_permutation (fun β y hy => hperm n β y hy) α hx
+
+theorem z2FreeFullEuclidOSAxioms :
+    FullEuclidOSAxioms trivialRep trivialStarStructure 1 z2FreeS where
+  os0_smooth _ _ := contDiffOn_const
+  os1_translation _ _ _ _ _ := rfl
+  os1_rotation n U _ _ _ _ := by
+    simp [z2FreeS, momentS, trivialRep]
+  os2_hermiticity := z2FreeOSReconstructedWightman.osAxioms.os2_hermiticity
+  os2_positivity := z2FreeOSReconstructedWightman.osAxioms.os2_positivity
+  os3_permutation n π α x _ := by
+    change z2FreeCoeff n = 1 ^ permInversions π * z2FreeCoeff n
+    rw [one_pow, one_mul]
+
+theorem z2Free_fullEuclid_os_wightman_reconstruction_of_linearGrowth :
+    let hFull := z2FreeFullEuclidOSAxioms
+    let hOS := hFull.toOSAxioms
+    let hlg := z2FreeOSLinearGrowthCondition
+    let hdiag := osDiagonalKernelBounded_of_linearGrowth trivialStarStructure hlg
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
+    let P := T.toForwardConeOSReconstructedWightmanOfDiagonalBounded hOS hdiag
+    let A := T.toWightmanAxiomsOfDiagonalBounded hOS hdiag
+    let U := T.osToWightmanUnitaryEquivOfDiagonalBounded hOS hdiag
+    ¬ OSTimeClusterDecomposition hOS.toReflectionPositiveData ∧
+    A.WData.W = z2FreeW ∧
+    LocalCommutativity 1 z2FreeW ∧
+    PermSpacelikeLocality 1 z2FreeW ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → z2FreeS n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare trivialRep P.poincare) a (U Ψ)) ∧
+    FullEuclidOSAxioms trivialRep trivialStarStructure 1 P.permutedSchwinger ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ nonCoincidentEuclidN n → P.permutedSchwinger n α x = z2FreeS n α x) := by
+  have hsyn := fullEuclid_os_wightman_full_reconstruction_of_linearGrowth
+    z2FreeFullEuclidOSAxioms z2FreeOSLinearGrowthCondition
+  have hW : osReconstructedWightmanFamily_of_linearGrowth
+      z2FreeFullEuclidOSAxioms.toOSAxioms z2FreeOSLinearGrowthCondition = z2FreeW :=
+    z2Free_osReconstructedWightmanFamily_of_linearGrowth_eq
+  rcases hsyn with ⟨hA, hloc, hperm_loc, hschw, hvac, htr, _, hfull⟩
+  rcases hfull (Or.inl rfl) with ⟨hFE, hperm⟩
+  have hW_eq : (osReconstructedTubeExtensionData_of_linearGrowth
+      z2FreeFullEuclidOSAxioms.toOSAxioms z2FreeOSLinearGrowthCondition
+        |>.toWightmanAxiomsOfDiagonalBounded z2FreeFullEuclidOSAxioms.toOSAxioms
+          (osDiagonalKernelBounded_of_linearGrowth trivialStarStructure
+            z2FreeOSLinearGrowthCondition)).WData.W = z2FreeW := hA.trans hW
+  rw [hW_eq] at hloc hperm_loc
+  exact ⟨not_osTimeClusterDecomposition_z2FreeOSData,
+    hW_eq, hloc, hperm_loc, hschw, hvac, htr, hFE, hperm⟩
+
+end Phase2LocalityEquivalence
 
 end QFT

@@ -9546,15 +9546,14 @@ theorem wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq
         ∑ β : Fin 2 → ι, (∏ i : Fin 2, R_rep.rep A (α i) (β i)) * C β q)
     {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms R_rep S η_os 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮)
     (hD : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
       x ∈ orderedEuclidN n → 𝒮 n α x = wickMassShellS m hm η C hC n α x) :
-    osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg =
+    osReconstructedWightmanFamily_of_linearGrowth hOS hlg =
       wickMassShellW m η C hC := by
-  let T₁ := osReconstructedTubeExtensionData_of_linearGrowth hOS hcluster hlg
+  let T₁ := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
   let T₂ := wickMassShellOSTubeExtensionData R_rep hm η hC hC_cov
-  rw [← osReconstructedTubeExtensionData_of_linearGrowth_W_eq hOS hcluster hlg,
+  rw [← osReconstructedTubeExtensionData_of_linearGrowth_W_eq hOS hlg,
       ← wickMassShellOSTubeExtensionData_W R_rep hm η hC hC_cov]
   refine wightman_eq_of_tubeExtension_eq T₁.E T₂.E fun n α z hz => ?_
   have hx₀ : euclidOrderedBasePoint n ∈ orderedEuclidN n :=
@@ -9569,52 +9568,47 @@ theorem wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq
 
 theorem freeKG_osReconstructedWightmanFamily_of_linearGrowth_eq {m : ℝ} (hm : 0 < m) :
     osReconstructedWightmanFamily_of_linearGrowth (freeKGOSAxioms hm)
-      (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm) = freeKGW m hm :=
+      (freeKGOSLinearGrowthCondition hm) = freeKGW m hm :=
   wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (massiveKGCoeff_data hm)
     (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
-    (freeKGOSAxioms hm) (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm)
+    (freeKGOSAxioms hm) (freeKGOSLinearGrowthCondition hm)
     (fun _ _ _ _ => rfl)
 
 theorem freeKGFull_osReconstructedWightmanFamily_of_linearGrowth_eq {m : ℝ} (hm : 0 < m) :
     osReconstructedWightmanFamily_of_linearGrowth (freeKGFullEuclidOSAxioms hm).toOSAxioms
-      (freeKGFullOSTimeCluster hm) (freeKGFullOSLinearGrowthCondition hm) = freeKGW m hm :=
+      (freeKGFullOSLinearGrowthCondition hm) = freeKGW m hm :=
   wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (massiveKGCoeff_data hm)
     (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
-    (freeKGFullEuclidOSAxioms hm).toOSAxioms (freeKGFullOSTimeCluster hm)
+    (freeKGFullEuclidOSAxioms hm).toOSAxioms
     (freeKGFullOSLinearGrowthCondition hm)
     (fun n α _x hx => freeKGFullS_eq_freeKGS_on_orderedEuclidN hm n α hx)
 
 theorem freeDirac_osReconstructedWightmanFamily_of_linearGrowth_eq {m : ℝ} (hm : 0 < m) :
     osReconstructedWightmanFamily_of_linearGrowth (freeDiracOSAxioms hm)
-      (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm :=
+      (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm :=
   wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (diracMassShellCoeff_data hm)
     (diracMassShellCoeff_lorentz m)
-    (freeDiracOSAxioms hm) (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm)
+    (freeDiracOSAxioms hm) (freeDiracOSLinearGrowthCondition hm)
     (fun _ _ _ _ => rfl)
 
 theorem freeDiracFull_osReconstructedWightmanFamily_of_linearGrowth_eq {m : ℝ} (hm : 0 < m) :
     osReconstructedWightmanFamily_of_linearGrowth (freeDiracFullEuclidOSAxioms hm).toOSAxioms
-      (freeDiracFullOSTimeCluster hm) (freeDiracFullOSLinearGrowthCondition hm) =
-      freeDiracW m hm :=
+      (freeDiracFullOSLinearGrowthCondition hm) = freeDiracW m hm :=
   wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (diracMassShellCoeff_data hm)
     (diracMassShellCoeff_lorentz m)
-    (freeDiracFullEuclidOSAxioms hm).toOSAxioms (freeDiracFullOSTimeCluster hm)
+    (freeDiracFullEuclidOSAxioms hm).toOSAxioms
     (freeDiracFullOSLinearGrowthCondition hm)
     (fun n α _x hx => freeDiracFullS_eq_freeDiracS_on_orderedEuclidN hm n α hx)
 
 theorem freeKGS_spin_statistics {m : ℝ} (hm : 0 < m) {η : ℂ}
     (hOS : OSAxioms trivialRep trivialStarStructure η (freeKGS m hm)) :
     η = 1 := by
-  have hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData :=
-    wickMassShellOSTimeCluster hm (kgModeData hm) (massiveKGCoeff_data hm)
-      (fun _ _ => by simp [massiveKGCoeff, trivialStarStructure]) _ rfl
   have hlg : OSLinearGrowthCondition (freeKGS m hm) := freeKGOSLinearGrowthCondition hm
-  have hW : osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg = freeKGW m hm :=
+  have hW : osReconstructedWightmanFamily_of_linearGrowth hOS hlg = freeKGW m hm :=
     wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (massiveKGCoeff_data hm)
       (fun _ _ _ => by simp [massiveKGCoeff, trivialRep, HolomorphicLorentzRep.rep_apply])
-      hOS hcluster hlg (fun _ _ _ _ => rfl)
-  have hsyn := os_full_wightman_reconstruction_of_linearGrowth hOS hcluster hlg
-    (freeKGOSVacuumNormalized hm)
+      hOS hlg (fun _ _ _ _ => rfl)
+  have hsyn := os_wightman_reconstruction_of_linearGrowth hOS hlg
   exact hsyn.2.2.2.2.1.1 trivialRep_spinParity ⟨default, by
     rw [hW]
     exact freeKGW_twoPoint_ne_zero hm⟩
@@ -9622,15 +9616,11 @@ theorem freeKGS_spin_statistics {m : ℝ} (hm : 0 < m) {η : ℂ}
 theorem freeDiracS_spin_statistics {m : ℝ} (hm : 0 < m) {η : ℂ}
     (hOS : OSAxioms diracRep diracStarStructure η (freeDiracS m hm)) :
     η = -1 := by
-  have hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData :=
-    wickMassShellOSTimeCluster hm (diracModeData hm) (diracMassShellCoeff_data hm)
-      (diracMassShellCoeff_herm m) _ rfl
   have hlg : OSLinearGrowthCondition (freeDiracS m hm) := freeDiracOSLinearGrowthCondition hm
-  have hW : osReconstructedWightmanFamily_of_linearGrowth hOS hcluster hlg = freeDiracW m hm :=
+  have hW : osReconstructedWightmanFamily_of_linearGrowth hOS hlg = freeDiracW m hm :=
     wickMassShell_osReconstructedWightmanFamily_of_linearGrowth_eq hm (diracMassShellCoeff_data hm)
-      (diracMassShellCoeff_lorentz m) hOS hcluster hlg (fun _ _ _ _ => rfl)
-  have hsyn := os_full_wightman_reconstruction_of_linearGrowth hOS hcluster hlg
-    (freeDiracOSVacuumNormalized hm)
+      (diracMassShellCoeff_lorentz m) hOS hlg (fun _ _ _ _ => rfl)
+  have hsyn := os_wightman_reconstruction_of_linearGrowth hOS hlg
   rcases freeDiracW_twoPoint_nondegenerate hm with ⟨β, hβ⟩
   exact hsyn.2.2.2.2.1.1 diracRep_spinParity ⟨β, by
     rw [hW]
@@ -9641,7 +9631,7 @@ theorem freeKG_pure_os_full_reconstruction_of_linearGrowth {m : ℝ} (hm : 0 < m
     let hcluster := freeKGOSTimeCluster hm
     let hlg := freeKGOSLinearGrowthCondition hm
     let hnorm := freeKGOSVacuumNormalized hm
-    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hcluster hlg
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
     let P := T.toForwardConeOSReconstructedWightman hOS hcluster
     let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
     let U := T.osToWightmanUnitaryEquiv hOS hcluster
@@ -9661,11 +9651,11 @@ theorem freeKG_pure_os_full_reconstruction_of_linearGrowth {m : ℝ} (hm : 0 < m
   have hsyn := os_full_wightman_reconstruction_of_linearGrowth (freeKGOSAxioms hm)
     (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm) (freeKGOSVacuumNormalized hm)
   have hW : osReconstructedWightmanFamily_of_linearGrowth (freeKGOSAxioms hm)
-      (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm) = freeKGW m hm :=
+      (freeKGOSLinearGrowthCondition hm) = freeKGW m hm :=
     freeKG_osReconstructedWightmanFamily_of_linearGrowth_eq hm
   have hloc : LocalCommutativity 1
       (osReconstructedWightmanFamily_of_linearGrowth (freeKGOSAxioms hm)
-        (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm)) := by
+        (freeKGOSLinearGrowthCondition hm)) := by
     rw [hW]
     exact freeKG_localCommutativity hm
   rcases hsyn with ⟨hG, hschw, hvac, htr, _, hfull⟩
@@ -9682,7 +9672,7 @@ theorem freeDirac_pure_os_full_reconstruction_of_linearGrowth {m : ℝ} (hm : 0 
     let hcluster := freeDiracOSTimeCluster hm
     let hlg := freeDiracOSLinearGrowthCondition hm
     let hnorm := freeDiracOSVacuumNormalized hm
-    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hcluster hlg
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
     let P := T.toForwardConeOSReconstructedWightman hOS hcluster
     let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
     let U := T.osToWightmanUnitaryEquiv hOS hcluster
@@ -9703,11 +9693,11 @@ theorem freeDirac_pure_os_full_reconstruction_of_linearGrowth {m : ℝ} (hm : 0 
     (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm)
     (freeDiracOSVacuumNormalized hm)
   have hW : osReconstructedWightmanFamily_of_linearGrowth (freeDiracOSAxioms hm)
-      (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm :=
+      (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm :=
     freeDirac_osReconstructedWightmanFamily_of_linearGrowth_eq hm
   have hloc : LocalCommutativity (-1)
       (osReconstructedWightmanFamily_of_linearGrowth (freeDiracOSAxioms hm)
-        (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm)) := by
+        (freeDiracOSLinearGrowthCondition hm)) := by
     rw [hW]
     exact freeDirac_localCommutativity hm
   rcases hsyn with ⟨hG, hschw, hvac, htr, _, hfull⟩
@@ -9718,6 +9708,72 @@ theorem freeDirac_pure_os_full_reconstruction_of_linearGrowth {m : ℝ} (hm : 0 
     hFE_dir.os1_rotation hFE_dir.os3_permutation
     (fun β y hy => (hperm n β y hy).trans
       (freeDiracFullS_eq_freeDiracS_on_orderedEuclidN hm n β hy).symm) α hx
+
+theorem freeKG_euclidean_to_local_wightman_of_linearGrowth {m : ℝ} (hm : 0 < m) :
+    let hFull := freeKGFullEuclidOSAxioms hm
+    let hOS := hFull.toOSAxioms
+    let hcluster := freeKGFullOSTimeCluster hm
+    let hlg := freeKGFullOSLinearGrowthCondition hm
+    let hnorm := freeKGFullS_vacuumNormalized hm
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = freeKGW m hm ∧
+    LocalCommutativity 1 (freeKGW m hm) ∧
+    PermSpacelikeLocality 1 (freeKGW m hm) ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → freeKGFullS m hm n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare trivialRep P.poincare) a (U Ψ)) ∧
+    FullEuclidOSAxioms trivialRep trivialStarStructure 1 P.permutedSchwinger ∧
+    (∀ (n : ℕ) (α : Fin n → Unit) (x : Fin n → Fin 4 → ℝ),
+      x ∈ nonCoincidentEuclidN n → P.permutedSchwinger n α x = freeKGFullS m hm n α x) := by
+  have hsyn := fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+    (freeKGFullEuclidOSAxioms hm) (freeKGFullOSTimeCluster hm)
+    (freeKGFullOSLinearGrowthCondition hm) (freeKGFullS_vacuumNormalized hm)
+  have hW := freeKGFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm
+  rcases hsyn with ⟨hG, hloc, hperm_loc, hschw, hvac, htr, _, hfull⟩
+  rcases hfull (Or.inl rfl) with ⟨hFE, hperm⟩
+  have hW_eq := hG.trans hW
+  rw [hW_eq] at hloc hperm_loc
+  exact ⟨hW_eq, hloc, hperm_loc, hschw, hvac, htr, hFE, hperm⟩
+
+theorem freeDirac_euclidean_to_local_wightman_of_linearGrowth {m : ℝ} (hm : 0 < m) :
+    let hFull := freeDiracFullEuclidOSAxioms hm
+    let hOS := hFull.toOSAxioms
+    let hcluster := freeDiracFullOSTimeCluster hm
+    let hlg := freeDiracFullOSLinearGrowthCondition hm
+    let hnorm := freeDiracFullS_vacuumNormalized hm
+    let T := osReconstructedTubeExtensionData_of_linearGrowth hOS hlg
+    let P := T.toForwardConeOSReconstructedWightman hOS hcluster
+    let G := T.toGeneralWightmanAxiomsWithUniqueVacuum hOS hcluster hnorm
+    let U := T.osToWightmanUnitaryEquiv hOS hcluster
+    G.WData.W = freeDiracW m hm ∧
+    LocalCommutativity (-1) (freeDiracW m hm) ∧
+    PermSpacelikeLocality (-1) (freeDiracW m hm) ∧
+    (∀ (n : ℕ) (α : Fin n → Fin 2 ⊕ Fin 2) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → freeDiracFullS m hm n α x = schwingerFromTube T.E n α x) ∧
+    U P.vacuum = P.wightmanVacuumVec ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : P.Hilbert),
+      U (P.semigroup.spacetimeTranslate P.osAxioms.os1_translation (euclidTimeReflect a) Ψ) =
+        wightmanTranslate P.toWightmanPositiveData
+          (wightmanTranslationInvariant_of_poincare diracRep P.poincare) a (U Ψ)) ∧
+    FullEuclidOSAxioms diracRep diracStarStructure (-1) P.permutedSchwinger ∧
+    (∀ (n : ℕ) (α : Fin n → Fin 2 ⊕ Fin 2) (x : Fin n → Fin 4 → ℝ),
+      x ∈ nonCoincidentEuclidN n → P.permutedSchwinger n α x = freeDiracFullS m hm n α x) := by
+  have hsyn := fullEuclid_os_generalWightman_reconstruction_of_linearGrowth
+    (freeDiracFullEuclidOSAxioms hm) (freeDiracFullOSTimeCluster hm)
+    (freeDiracFullOSLinearGrowthCondition hm) (freeDiracFullS_vacuumNormalized hm)
+  have hW := freeDiracFull_osReconstructedWightmanFamily_of_linearGrowth_eq hm
+  rcases hsyn with ⟨hG, hloc, hperm_loc, hschw, hvac, htr, _, hfull⟩
+  rcases hfull (Or.inr rfl) with ⟨hFE, hperm⟩
+  have hW_eq := hG.trans hW
+  rw [hW_eq] at hloc hperm_loc
+  exact ⟨hW_eq, hloc, hperm_loc, hschw, hvac, htr, hFE, hperm⟩
 
 theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     FullEuclidOSAxioms trivialRep trivialStarStructure 1 (freeKGFullS m hm) ∧
@@ -9753,9 +9809,9 @@ theorem freeKG_grand_master {m : ℝ} (hm : 0 < m) :
     OSLinearGrowthCondition (freeKGS m hm) ∧
     OSLinearGrowthCondition (freeKGFullS m hm) ∧
     osReconstructedWightmanFamily_of_linearGrowth (freeKGOSAxioms hm)
-      (freeKGOSTimeCluster hm) (freeKGOSLinearGrowthCondition hm) = freeKGW m hm ∧
+      (freeKGOSLinearGrowthCondition hm) = freeKGW m hm ∧
     osReconstructedWightmanFamily_of_linearGrowth (freeKGFullEuclidOSAxioms hm).toOSAxioms
-      (freeKGFullOSTimeCluster hm) (freeKGFullOSLinearGrowthCondition hm) = freeKGW m hm ∧
+      (freeKGFullOSLinearGrowthCondition hm) = freeKGW m hm ∧
     Positivity trivialStarStructure (freeKGW m hm) ∧
     PoincareCovariant trivialRep (freeKGW m hm) ∧
     ForwardConeSpectrumCondition (freeKGW m hm) ∧
@@ -9852,10 +9908,9 @@ theorem freeDirac_grand_master {m : ℝ} (hm : 0 < m) :
     OSLinearGrowthCondition (freeDiracS m hm) ∧
     OSLinearGrowthCondition (freeDiracFullS m hm) ∧
     osReconstructedWightmanFamily_of_linearGrowth (freeDiracOSAxioms hm)
-      (freeDiracOSTimeCluster hm) (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm ∧
+      (freeDiracOSLinearGrowthCondition hm) = freeDiracW m hm ∧
     osReconstructedWightmanFamily_of_linearGrowth (freeDiracFullEuclidOSAxioms hm).toOSAxioms
-      (freeDiracFullOSTimeCluster hm) (freeDiracFullOSLinearGrowthCondition hm) =
-      freeDiracW m hm ∧
+      (freeDiracFullOSLinearGrowthCondition hm) = freeDiracW m hm ∧
     Positivity diracStarStructure (freeDiracW m hm) ∧
     PoincareCovariant diracRep (freeDiracW m hm) ∧
     ForwardConeSpectrumCondition (freeDiracW m hm) ∧

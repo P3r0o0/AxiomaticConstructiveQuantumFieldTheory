@@ -22959,6 +22959,94 @@ lemma sum_prod_norm_starStructure_le {R : HolomorphicLorentzRep ι} (S : StarStr
     _ = (osStarRowBound S) ^ k := by
         rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
 
+theorem osDiagonalKernelBounded_of_linearGrowth
+    {R : HolomorphicLorentzRep ι} (S : StarStructure R) {𝒮 : SchwingerFamily ι}
+    (hlg : OSLinearGrowthCondition 𝒮) :
+    OSDiagonalKernelBounded S 𝒮 := by
+  rcases hlg with ⟨C_lg, A_lg, M, hC, hA, hlg_bd⟩
+  rintro ⟨j, α, x, hx⟩
+  let p₀ : Fin (j + j) → Fin 4 → ℝ := osConcatPoint j j x x
+  have hp₀_ord : p₀ ∈ orderedEuclidN (j + j) := osConcatPoint_mem_orderedEuclidN j j hx hx
+  let B₀ : ℝ := C_lg * A_lg ^ (j + j) * (((j + j).factorial : ℝ) ^ M) *
+    ∏ k : Fin (j + j - 1),
+      (1 + (p₀ ⟨k.val + 1, by omega⟩ 0 - p₀ ⟨k.val, by omega⟩ 0)⁻¹) ^ M
+  refine ⟨(osStarRowBound S) ^ j * B₀, fun τ hτ => ?_⟩
+  let x_τ : Fin j → Fin 4 → ℝ := fun i => x i + euclidTimeVec τ
+  let p_τ : Fin (j + j) → Fin 4 → ℝ := osConcatPoint j j x_τ x_τ
+  have hx_τ : x_τ ∈ posOrderedEuclidN j := timeShift_mem_posOrderedEuclidN j hx hτ
+  have hp_τ_ord : p_τ ∈ orderedEuclidN (j + j) :=
+    osConcatPoint_mem_orderedEuclidN j j hx_τ hx_τ
+  have hp_τ_time : ∀ m : Fin (j + j),
+      p_τ m 0 = if m.val < j then p₀ m 0 - τ else p₀ m 0 + τ := by
+    intro m
+    by_cases hm : m.val < j
+    · have hm_eq : m = Fin.castAdd j ⟨m.val, hm⟩ := by ext; rfl
+      rw [if_pos hm, hm_eq]
+      dsimp only [p_τ, p₀, x_τ]
+      rw [osConcatPoint_castAdd, osConcatPoint_castAdd, euclidTimeReflect_add,
+        euclidTimeReflect_euclidTimeVec]
+      simp [euclidTimeVec]
+      ring
+    · have h_ge : j ≤ m.val := by omega
+      have hm_eq : m = Fin.natAdd j ⟨m.val - j, Nat.sub_lt_left_of_lt_add h_ge m.isLt⟩ := by
+        ext; dsimp; omega
+      rw [if_neg hm, hm_eq]
+      dsimp only [p_τ, p₀, x_τ]
+      rw [osConcatPoint_natAdd, osConcatPoint_natAdd]
+      simp [euclidTimeVec]
+  have h_prod_le : (∏ k : Fin (j + j - 1),
+        (1 + (p_τ ⟨k.val + 1, by omega⟩ 0 - p_τ ⟨k.val, by omega⟩ 0)⁻¹) ^ M) ≤
+      ∏ k : Fin (j + j - 1),
+        (1 + (p₀ ⟨k.val + 1, by omega⟩ 0 - p₀ ⟨k.val, by omega⟩ 0)⁻¹) ^ M := by
+    refine Finset.prod_le_prod (fun k _ => ?_) (fun k _ => ?_)
+    · have hk_lt := hp_τ_ord ⟨k.val, by omega⟩ (by dsimp; omega)
+      have hd : 0 < p_τ ⟨k.val + 1, by omega⟩ 0 - p_τ ⟨k.val, by omega⟩ 0 := by linarith
+      positivity
+    · have hk₀_lt := hp₀_ord ⟨k.val, by omega⟩ (by dsimp; omega)
+      have hd₀ : 0 < p₀ ⟨k.val + 1, by omega⟩ 0 - p₀ ⟨k.val, by omega⟩ 0 := by linarith
+      have hd_le : p₀ ⟨k.val + 1, by omega⟩ 0 - p₀ ⟨k.val, by omega⟩ 0 ≤
+          p_τ ⟨k.val + 1, by omega⟩ 0 - p_τ ⟨k.val, by omega⟩ 0 := by
+        rw [hp_τ_time ⟨k.val + 1, by omega⟩, hp_τ_time ⟨k.val, by omega⟩]
+        dsimp only
+        split_ifs <;> first | omega | linarith
+      have h_inv := inv_anti₀ hd₀ hd_le
+      have hk_τ_lt := hp_τ_ord ⟨k.val, by omega⟩ (by dsimp; omega)
+      have hd_τ : 0 < p_τ ⟨k.val + 1, by omega⟩ 0 - p_τ ⟨k.val, by omega⟩ 0 := by linarith
+      exact pow_le_pow_left₀ (by positivity) (by linarith) M
+  have hS_le : ∀ β : Fin j → ι, ‖𝒮 (j + j) (osConcatIdx j j β α) p_τ‖ ≤ B₀ := by
+    intro β
+    exact (hlg_bd (j + j) (osConcatIdx j j β α) p_τ hp_τ_ord).trans
+      (mul_le_mul_of_nonneg_left h_prod_le (by positivity))
+  have hB₀_nn : 0 ≤ B₀ := (norm_nonneg _).trans (hS_le α)
+  dsimp only [osKernel, osConfigTimeShift]
+  calc ‖∑ β : Fin j → ι, (∏ i : Fin j, S.C (α i) (β i)) *
+          𝒮 (j + j) (osConcatIdx j j β α) p_τ‖
+      ≤ ∑ β : Fin j → ι, ‖(∏ i : Fin j, S.C (α i) (β i)) *
+          𝒮 (j + j) (osConcatIdx j j β α) p_τ‖ := norm_sum_le _ _
+    _ ≤ ∑ β : Fin j → ι, (∏ i : Fin j, ‖S.C (α i) (β i)‖) * B₀ := by
+        refine Finset.sum_le_sum fun β _ => ?_
+        rw [norm_mul, norm_prod]
+        exact mul_le_mul_of_nonneg_left (hS_le β)
+          (Finset.prod_nonneg fun _ _ => norm_nonneg _)
+    _ = (∑ β : Fin j → ι, ∏ i : Fin j, ‖S.C (α i) (β i)‖) * B₀ := (Finset.sum_mul _ _ _).symm
+    _ ≤ (osStarRowBound S) ^ j * B₀ :=
+        mul_le_mul_of_nonneg_right (sum_prod_norm_starStructure_le S j α) hB₀_nn
+
+theorem osContractionCondition_of_linearGrowth
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮) (hlg : OSLinearGrowthCondition 𝒮) :
+    OSContractionCondition hOS.toReflectionPositiveData :=
+  osContractionCondition_of_diagonalKernelBounded hOS.toReflectionPositiveData
+    hOS.os1_translation (osDiagonalKernelBounded_of_linearGrowth S hlg)
+
+noncomputable def osContractionSemigroupTotal
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (hOS : OSAxioms R S η 𝒮)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData) (z : ℂ) :
+    OSHilbert hOS.toReflectionPositiveData →L[ℂ] OSHilbert hOS.toReflectionPositiveData :=
+  canonicalOSHolomorphicSemigroupTotal hOS.toReflectionPositiveData
+    hOS.os1_translation hcontr hOS.os0_smooth z
+
 noncomputable def osLeftState {R : HolomorphicLorentzRep ι} {S : StarStructure R}
     (D : OSReflectionPositiveData R S) (j : ℕ) (α : Fin j → ι)
     (x : posOrderedEuclidN j) : OSHilbert D :=
@@ -24967,11 +25055,11 @@ lemma osConcatPoint_osBuildPoints_eq_shift (L R : ℕ) (hL : 0 < L) (hR : 0 < R)
       rw [osConcatPoint_natAdd]
       simp [osBuildPoints, xR]
 
-lemma inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger
+lemma inner_osLeftState_osContractionSemigroup_osBasis_eq_schwinger
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData)
     (m : ℕ) (r : Fin m) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
     {t : Fin m → ℝ} (ht : ∀ j : Fin m, 0 < t j) {ε : ℝ} (hε : 0 < ε) (hr : 2 * ε < t r) :
     let L : ℕ := r.val + 1
@@ -24993,16 +25081,16 @@ lemma inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger
           (fun j => ht ⟨r.val + 1 + j.val, by omega⟩) hε
         refine ⟨fun i => h_mem.1 _, fun i hi => h_mem.2 _ (by dsimp; omega)⟩⟩
     ⟪osLeftState hOS.toReflectionPositiveData L α_L xL,
-      osClusterSemigroupTotal hOS hcluster ((t r - 2 * ε : ℝ) : ℂ)
+      osContractionSemigroupTotal hOS hcontr ((t r - 2 * ε : ℝ) : ℂ)
         (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, xR)⟩)⟫_ℂ =
       𝒮 (m + 1) α (osBuildPoints m x_sp t 0) := by
   intro L R α_L α_R x_sp_L x_sp_R t_L t_R xL xR
   have hs_nonneg : 0 ≤ t r - 2 * ε := by linarith
-  have h_semi : osClusterSemigroupTotal hOS hcluster ((t r - 2 * ε : ℝ) : ℂ)
+  have h_semi : osContractionSemigroupTotal hOS hcontr ((t r - 2 * ε : ℝ) : ℂ)
       (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, xR)⟩) =
       osBasis hOS.toReflectionPositiveData
         (osConfigTimeShift (t r - 2 * ε) hs_nonneg ⟨R, (α_R, xR)⟩) := by
-    unfold osClusterSemigroupTotal
+    unfold osContractionSemigroupTotal
     rw [canonicalOSHolomorphicSemigroupTotal_real_eq _ _ _ _ (t r - 2 * ε) hs_nonneg]
     dsimp only [osBasis]
     rw [osContractionSemigroup_toOSHilbert, osTimeShiftLM, osLiftConfigMap_osBasisPre]
@@ -25699,7 +25787,7 @@ lemma os_cut_holomorphic_extension
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData)
     (M : ℕ) (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
     (S : Finset (Fin m)) (t : Fin m → ℝ) (ht : ∀ j ∉ S, 0 < t j)
     (i_cut : Fin S.card)
@@ -25840,7 +25928,7 @@ lemma os_cut_holomorphic_extension
     let F_ε : (Fin S.card → ℂ) → ℂ := fun w =>
       logTimeDamp (w i_cut) ^ M *
         ⟪Φ_L_ext (fun j => star (projL w j)),
-          osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+          osContractionSemigroupTotal hOS hcontr (Complex.exp (w i_cut) - 2 * (ε : ℂ))
             (Φ_R_ext (projR w))⟫_ℂ
     have h_projL_maps : Set.MapsTo (fun w => fun j => star (projL w j))
         V_ε (TubeDomain (osBox θ_L)) := by
@@ -25865,13 +25953,10 @@ lemma os_cut_holomorphic_extension
           continuous_apply (⟨i_cut.val + 1 + j.val, by omega⟩ : Fin S.card)).continuousOn
           h_projR_maps
       have h_semi_cont : ContinuousOn (fun w : Fin S.card → ℂ =>
-          osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+          osContractionSemigroupTotal hOS hcontr (Complex.exp (w i_cut) - 2 * (ε : ℂ))
             (Φ_R_ext (projR w))) V_ε := by
         have h_unc := continuousOn_canonicalOSHolomorphicSemigroupTotal_uncurry
-          hOS.toReflectionPositiveData hOS.os1_translation
-          (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
-            hOS.os1_translation hcluster)
-          hOS.os0_smooth
+          hOS.toReflectionPositiveData hOS.os1_translation hcontr hOS.os0_smooth
         refine h_unc.comp (((Complex.continuous_exp.comp (continuous_apply i_cut)).sub
           continuous_const).continuousOn.prodMk h_R_cont) fun w hw => ?_
         refine ⟨?_, Set.mem_univ _⟩
@@ -25890,7 +25975,7 @@ lemma os_cut_holomorphic_extension
           ext j; dsimp [projR]
           exact Function.update_of_ne (fun h => by
             have := congrArg Fin.val h; dsimp at this; omega) _ _
-        let v₀ := osClusterSemigroupTotal hOS hcluster (Complex.exp (w₀ i_cut) - 2 * (ε : ℂ))
+        let v₀ := osContractionSemigroupTotal hOS hcontr (Complex.exp (w₀ i_cut) - 2 * (ε : ℂ))
           (Φ_R_ext (projR w₀))
         have h_eq : (fun ζ => F_ε (Function.update w₀ k ζ)) =
             fun ζ => logTimeDamp (w₀ i_cut) ^ M *
@@ -25931,7 +26016,7 @@ lemma os_cut_holomorphic_extension
           have h_eq : (fun ζ => F_ε (Function.update w₀ k ζ)) =
               fun ζ => logTimeDamp ζ ^ M *
                 ⟪Φ_L_ext (fun j => star (projL w₀ j)),
-                  osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (ε : ℂ))
+                  osContractionSemigroupTotal hOS hcontr (Complex.exp ζ - 2 * (ε : ℂ))
                     (Φ_R_ext (projR w₀))⟫_ℂ := by
             ext ζ; dsimp only [F_ε]
             rw [Function.update_self, h_L_eq, h_R_eq]
@@ -25941,7 +26026,7 @@ lemma os_cut_holomorphic_extension
               ((isOpen_lt (continuous_abs.comp Complex.continuous_im) continuous_const).mem_nhds
                 (lt_trans hw₀.1.2.1 hθCpi))).pow M
           have h_semi_da : DifferentiableAt ℂ
-              (fun ζ => osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (ε : ℂ)))
+              (fun ζ => osContractionSemigroupTotal hOS hcontr (Complex.exp ζ - 2 * (ε : ℂ)))
               (w₀ k) := by
             have h_re : 0 < (Complex.exp (w₀ k) - 2 * (ε : ℂ)).re := by
               have hre := hw₀.2
@@ -25949,9 +26034,7 @@ lemma os_cut_holomorphic_extension
                 Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
               linarith
             have h_da := (differentiableOn_canonicalOSHolomorphicSemigroupTotal
-              hOS.toReflectionPositiveData hOS.os1_translation
-              (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
-                hOS.os1_translation hcluster)
+              hOS.toReflectionPositiveData hOS.os1_translation hcontr
               hOS.os0_smooth _ h_re).differentiableAt
               ((isOpen_lt continuous_const Complex.continuous_re).mem_nhds h_re)
             exact h_da.comp (w₀ k) (Complex.differentiable_exp.differentiableAt.sub
@@ -25967,7 +26050,7 @@ lemma os_cut_holomorphic_extension
             ext j; dsimp [projL]
             exact Function.update_of_ne (fun h => by
               have := congrArg Fin.val h; dsimp at this; omega) _ _
-          let T₀ := osClusterSemigroupTotal hOS hcluster (Complex.exp (w₀ i_cut) - 2 * (ε : ℂ))
+          let T₀ := osContractionSemigroupTotal hOS hcontr (Complex.exp (w₀ i_cut) - 2 * (ε : ℂ))
           let l₀ : OSHilbert hOS.toReflectionPositiveData →L[ℂ] ℂ :=
             (innerSL ℂ (Φ_L_ext (fun j => star (projL w₀ j)))).comp T₀
           have h_eq : (fun ζ => F_ε (Function.update w₀ k ζ)) =
@@ -26093,8 +26176,8 @@ lemma os_cut_holomorphic_extension
         dsimp only [mkXR]
         rw [h_tR_eq]
       rw [h_xL_eq, h_xR_eq, ← ht_r,
-        inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger hOS hcluster m r α x_sp ht_full hε
-          (by rwa [ht_r])]
+        inner_osLeftState_osContractionSemigroup_osBasis_eq_schwinger hOS hcontr m r α x_sp
+          ht_full hε (by rwa [ht_r])]
       have h_prod_split : (∏ i : Fin S.card, logTimeDamp (x i : ℂ) ^ M) =
           logTimeDamp (x i_cut : ℂ) ^ M *
             (∏ j : Fin i_cut.val, logTimeDamp (x ⟨j.val, by omega⟩ : ℂ) ^ M) *
@@ -26156,14 +26239,14 @@ lemma os_cut_holomorphic_extension
       dsimp only [F_ε]
       rw [norm_mul, norm_pow]
       have h_in_le : ‖⟪Φ_L_ext (fun j => star (projL w j)),
-          osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+          osContractionSemigroupTotal hOS hcontr (Complex.exp (w i_cut) - 2 * (ε : ℂ))
             (Φ_R_ext (projR w))⟫_ℂ‖ ≤
           ‖Φ_L_ext (fun j => star (projL w j))‖ * ‖Φ_R_ext (projR w)‖ := by
         calc ‖⟪Φ_L_ext (fun j => star (projL w j)),
-              osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+              osContractionSemigroupTotal hOS hcontr (Complex.exp (w i_cut) - 2 * (ε : ℂ))
                 (Φ_R_ext (projR w))⟫_ℂ‖
             ≤ ‖Φ_L_ext (fun j => star (projL w j))‖ *
-                ‖osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+                ‖osContractionSemigroupTotal hOS hcontr (Complex.exp (w i_cut) - 2 * (ε : ℂ))
                   (Φ_R_ext (projR w))‖ := norm_inner_le_norm _ _
           _ ≤ ‖Φ_L_ext (fun j => star (projL w j))‖ * ‖Φ_R_ext (projR w)‖ :=
               mul_le_mul_of_nonneg_left
@@ -26198,7 +26281,7 @@ lemma os_cut_holomorphic_extension
               rw [Real.sqrt_mul (by positivity), Real.sqrt_sq (by positivity)]
       calc ‖logTimeDamp (w i_cut)‖ ^ M *
             ‖⟪Φ_L_ext (fun j => star (projL w j)),
-              osClusterSemigroupTotal hOS hcluster (Complex.exp (w i_cut) - 2 * (ε : ℂ))
+              osContractionSemigroupTotal hOS hcontr (Complex.exp (w i_cut) - 2 * (ε : ℂ))
                 (Φ_R_ext (projR w))⟫_ℂ‖
           ≤ ‖logTimeDamp (w i_cut)‖ ^ M * (Real.sqrt (B_L * B_R) * (1 + (2 * ε)⁻¹) ^ M) :=
             mul_le_mul_of_nonneg_left (h_in_le.trans h_prod_norm) (by positivity)
@@ -28212,7 +28295,7 @@ lemma os_stage0_flat_tube
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData)
     {C_lg A_lg : ℝ} {M : ℕ} (hC_ge1 : 1 ≤ C_lg) (hA_ge1 : 1 ≤ A_lg)
     (hlg : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
       ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
@@ -28312,7 +28395,7 @@ lemma os_stage0_flat_tube
     let fb_eps : (ε : ℝ) → (0 < ε) → (Fin S.card → ℂ) → ℂ := fun ε hε z =>
       (∏ i : Fin S.card, logTimeDamp (z i) ^ M) *
         ⟪osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε z, h_pL_mem ε hε z⟩,
-          osClusterSemigroupTotal hOS hcluster (Complex.exp (z i_cut) - 2 * (ε : ℂ))
+          osContractionSemigroupTotal hOS hcontr (Complex.exp (z i_cut) - 2 * (ε : ℂ))
             (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε z, h_pR_mem ε hε z⟩)⟩)⟫_ℂ
     have h_fb_eps_agree : ∀ (ε₁ ε₂ : ℝ) (hε₁ : 0 < ε₁) (hε₂ : 0 < ε₂) (z : Fin S.card → ℂ),
         |(z i_cut).im| < Real.pi / 4 →
@@ -28365,7 +28448,7 @@ lemma os_stage0_flat_tube
             fun ζ => (∏ i ∈ Finset.univ.erase i_cut, logTimeDamp (z i) ^ M) *
               (logTimeDamp ζ ^ M *
                 ⟪osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL e z, h_pL_mem e he z⟩,
-                  osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (e : ℂ))
+                  osContractionSemigroupTotal hOS hcontr (Complex.exp ζ - 2 * (e : ℂ))
                     (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR e z,
                       h_pR_mem e he z⟩)⟩)⟫_ℂ) := by
           ext ζ; dsimp only [fb_eps]
@@ -28395,11 +28478,9 @@ lemma os_stage0_flat_tube
             Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
           linarith
         have h_semi_da : DifferentiableAt ℂ
-            (fun ζ => osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (e : ℂ))) w :=
+            (fun ζ => osContractionSemigroupTotal hOS hcontr (Complex.exp ζ - 2 * (e : ℂ))) w :=
           ((differentiableOn_canonicalOSHolomorphicSemigroupTotal
-            hOS.toReflectionPositiveData hOS.os1_translation
-            (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
-              hOS.os1_translation hcluster)
+            hOS.toReflectionPositiveData hOS.os1_translation hcontr
             hOS.os0_smooth _ h_re).differentiableAt
             ((isOpen_lt continuous_const Complex.continuous_re).mem_nhds h_re)).comp w
             (Complex.differentiable_exp.differentiableAt.sub (differentiableAt_const _))
@@ -28432,11 +28513,11 @@ lemma os_stage0_flat_tube
               ((t_u r - 2 * e : ℝ) : ℂ) := fun e => by
             rw [Function.update_self, ← Complex.ofReal_exp, ht_u_r]; push_cast; ring
           rw [h_exp_c ε₁, h_exp_c ε₂]
-          rw [inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger hOS hcluster m r α x_sp
+          rw [inner_osLeftState_osContractionSemigroup_osBasis_eq_schwinger hOS hcontr m r α x_sp
             ht_u hε₁
               (by rw [ht_u_r]; linarith [le_max_left ε₁ ε₂]),
-            inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger hOS hcluster m r α x_sp ht_u
-              hε₂
+            inner_osLeftState_osContractionSemigroup_osBasis_eq_schwinger hOS hcontr m r α x_sp
+              ht_u hε₂
               (by rw [ht_u_r]; linarith [le_max_right ε₁ ε₂])]
         intro w hw
         have h_at := os_cut_open_eqOn_of_real_eq (isOpen_osBox (Real.pi / 4))
@@ -28495,14 +28576,11 @@ lemma os_stage0_flat_tube
           (continuous_osBasis_of_continuous_points hOS R α_R (mk_pR ε₀)
             (h_pR_cont ε₀) (fun z => h_pR_mem ε₀ hε₀ z)).continuousOn
         have h_semi_c : ContinuousOn (fun z =>
-            osClusterSemigroupTotal hOS hcluster (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
+            osContractionSemigroupTotal hOS hcontr (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
               (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z, h_pR_mem ε₀ hε₀ z⟩)⟩))
             (FlatStrip S.card (Real.pi / 4) i_cut ∩ W) := by
           refine (continuousOn_canonicalOSHolomorphicSemigroupTotal_uncurry
-            hOS.toReflectionPositiveData hOS.os1_translation
-            (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
-              hOS.os1_translation hcluster)
-            hOS.os0_smooth).comp
+            hOS.toReflectionPositiveData hOS.os1_translation hcontr hOS.os0_smooth).comp
             (((Complex.continuous_exp.comp (continuous_apply i_cut)).sub
               continuous_const).continuousOn.prodMk h_R_c) fun z hz => ⟨?_, Set.mem_univ _⟩
           change 0 ≤ (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ)).re
@@ -28547,8 +28625,8 @@ lemma os_stage0_flat_tube
               fun i hi => hm.2 (finCongr (by omega) i) (by dsimp; omega)⟩⟩ := by
         refine Subtype.ext ?_; dsimp only [mk_pR]; rw [h_mkt_eq]
       rw [h_exp_c, h_pL_eq, h_pR_eq]
-      exact inner_osLeftState_osClusterSemigroup_osBasis_eq_schwinger hOS hcluster m r α x_sp ht_x
-        hε₀
+      exact inner_osLeftState_osContractionSemigroup_osBasis_eq_schwinger hOS hcontr m r α x_sp
+        ht_x hε₀
         (by rw [h_tx_r]; dsimp [ε₀]; linarith [Real.exp_pos (x i_cut)])
     · intro z hz
       have hpos : 0 < (Complex.exp (z i_cut)).re :=
@@ -28560,7 +28638,7 @@ lemma os_stage0_flat_tube
       rw [norm_mul, norm_prod]
       have h_in_le : ‖⟪osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε₀ z,
         h_pL_mem ε₀ hε₀ z⟩,
-          osClusterSemigroupTotal hOS hcluster (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
+          osContractionSemigroupTotal hOS hcontr (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
             (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z, h_pR_mem ε₀ hε₀ z⟩)⟩)⟫_ℂ‖ ≤
           ‖osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε₀ z, h_pL_mem ε₀ hε₀ z⟩‖ *
           ‖osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z, h_pR_mem ε₀ hε₀ z⟩)⟩‖ :=
@@ -28663,7 +28741,7 @@ lemma os_stage0_flat_tube
       rw [h_prod_damp_split]
       calc (‖logTimeDamp (z i_cut)‖ ^ M * ∏ i ∈ Finset.univ.erase i_cut, ‖logTimeDamp (z i) ^ M‖) *
             ‖⟪osLeftState hOS.toReflectionPositiveData L α_L ⟨mk_pL ε₀ z, h_pL_mem ε₀ hε₀ z⟩,
-              osClusterSemigroupTotal hOS hcluster (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
+              osContractionSemigroupTotal hOS hcontr (Complex.exp (z i_cut) - 2 * (ε₀ : ℂ))
                 (osBasis hOS.toReflectionPositiveData ⟨R, (α_R, ⟨mk_pR ε₀ z,
                   h_pR_mem ε₀ hε₀ z⟩)⟩)⟫_ℂ‖
           ≤ (‖logTimeDamp (z i_cut)‖ ^ M * ∏ i ∈ Finset.univ.erase i_cut, ‖logTimeDamp (z i) ^ M‖) *
@@ -28763,7 +28841,7 @@ lemma os_stage0_flat_tube
               (logTimeDamp w ^ M *
                 ⟪osLeftState hOS.toReflectionPositiveData L α_L
                     ⟨mk_pL ε₀ (fun j => (x j : ℂ)), h_pL_mem ε₀ hε₀ _⟩,
-                  osClusterSemigroupTotal hOS hcluster (Complex.exp w - 2 * (ε₀ : ℂ))
+                  osContractionSemigroupTotal hOS hcontr (Complex.exp w - 2 * (ε₀ : ℂ))
                     (osBasis hOS.toReflectionPositiveData
                       ⟨R, (α_R, ⟨mk_pR ε₀ (fun j => (x j : ℂ)), h_pR_mem ε₀ hε₀ _⟩)⟩)⟫_ℂ)) ?_ ?_
         · intro w hw
@@ -28778,11 +28856,9 @@ lemma os_stage0_flat_tube
               Complex.ofReal_re, Complex.ofReal_im, mul_zero, sub_zero]
             linarith
           have h_semi_da : DifferentiableAt ℂ
-              (fun ζ => osClusterSemigroupTotal hOS hcluster (Complex.exp ζ - 2 * (ε₀ : ℂ))) w :=
+              (fun ζ => osContractionSemigroupTotal hOS hcontr (Complex.exp ζ - 2 * (ε₀ : ℂ))) w :=
             ((differentiableOn_canonicalOSHolomorphicSemigroupTotal
-              hOS.toReflectionPositiveData hOS.os1_translation
-              (osContractionCondition_of_timeCluster hOS.toReflectionPositiveData
-                hOS.os1_translation hcluster)
+              hOS.toReflectionPositiveData hOS.os1_translation hcontr
               hOS.os0_smooth _ h_re).differentiableAt
               ((isOpen_lt continuous_const Complex.continuous_re).mem_nhds h_re)).comp w
               (Complex.differentiable_exp.differentiableAt.sub (differentiableAt_const _))
@@ -29013,7 +29089,7 @@ lemma os_cut_step_of_hyps
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData)
     {M k_L k_R : ℕ} {θ_L θ_cut θ_R K_L K_R B_L B_R : ℝ}
     (hθL0 : 0 < θ_L) (hθC0 : 0 < θ_cut) (hθCpi : θ_cut < Real.pi / 2) (hθR0 : 0 < θ_R)
     (hKL_nn : 0 ≤ K_L) (hKR_nn : 0 ≤ K_R) (hBL_ge1 : 1 ≤ B_L) (hBR_ge1 : 1 ≤ B_R)
@@ -29061,7 +29137,7 @@ lemma os_cut_step_of_hyps
         (1 + (t j)⁻¹) ^ M) ^ 2 := sq_nonneg _
     dsimp [B_R_val]; positivity
   obtain ⟨F, hF_holo, hF_real, hF_bdd⟩ :=
-    os_cut_holomorphic_extension hOS hcluster M m α x_sp S t ht i_cut
+    os_cut_holomorphic_extension hOS hcontr M m α x_sp S t ht i_cut
       hθL0 hθC0 hθCpi hθR0 hBL_val_nn hBR_val_nn
       K_L_ker K_R_ker hKL_holo hKR_holo hKL_bdd hKR_bdd hKL_real hKR_real
   refine ⟨F, hF_holo, hF_real, fun w hw => ?_⟩
@@ -29242,7 +29318,7 @@ lemma osDampedSubsetH_odd_step
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData)
     {M k : ℕ} (ih : OSDampedSubsetHyp hOS M (2 * k)) :
     OSDampedSubsetHyp hOS M (2 * k + 1) := by
   rcases ih with ⟨C_k, A_k, E_k, D_k, hCk, hAk, hEk, h_bd⟩
@@ -29284,7 +29360,7 @@ lemma osDampedSubsetH_odd_step
     have hK_nn : 0 ≤ C_k * (2 : ℝ) ^ (D_k * p) := by positivity
     have hB_ge1 : 1 ≤ A_k * E_k ^ p := one_le_mul_of_one_le_of_one_le hAk (one_le_pow₀ hEk)
     obtain ⟨F, hF_holo, hF_real, hF_bdd⟩ :=
-      os_cut_step_of_hyps hOS hcluster hθ_pos hθ_pos hθ_lt hθ_pos hK_nn hK_nn hB_ge1 hB_ge1
+      os_cut_step_of_hyps hOS hcontr hθ_pos hθ_pos hθ_lt hθ_pos hK_nn hK_nn hB_ge1 hB_ge1
         (h_bd p) (h_bd p) m α x_sp S t ht i_cut (by dsimp [i_cut]; omega)
         (by dsimp [i_cut]; omega)
     have hsub : TubeDomain (osBox θ) ⊆ TubeDomain (osCutBox i_cut θ θ θ) :=
@@ -29332,7 +29408,7 @@ lemma osDampedSubsetH_even_step
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData)
     {C_lg A_lg : ℝ} {M : ℕ} (hC_ge1 : 1 ≤ C_lg) (hA_ge1 : 1 ≤ A_lg)
     (hlg : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
       ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
@@ -29371,7 +29447,7 @@ lemma osDampedSubsetH_even_step
   intro p
   induction p with
   | zero =>
-    have h0 := os_stage0_flat_tube hOS hcluster hC_ge1 hA_ge1 hlg k
+    have h0 := os_stage0_flat_tube hOS hcontr hC_ge1 hA_ge1 hlg k
     have h_mon := osDampedSubsetBound_mono (k₁ := 2 * k + 2) (k₂ := 2 * k + 2) le_rfl le_rfl
       (K₂ := C_e * (2 : ℝ) ^ (D_e * 0)) (B₂ := A_e * E_e ^ 0)
       (by simp only [mul_zero, pow_zero, mul_one]; exact le_max_left _ _)
@@ -29408,11 +29484,11 @@ lemma osDampedSubsetH_even_step
       have hBo_ge1 : 1 ≤ Bo := one_le_mul_of_one_le_of_one_le hAo (one_le_pow₀ hEo)
       have hBe_ge1 : 1 ≤ Be := one_le_mul_of_one_le_of_one_le hAe (one_le_pow₀ hEe)
       obtain ⟨F_A, hFA_holo, hFA_real, hFA_bdd⟩ :=
-        os_cut_step_of_hyps hOS hcluster hθ₁_pos hθ₁_pos hθ₁_lt hθ₂_pos
+        os_cut_step_of_hyps hOS hcontr hθ₁_pos hθ₁_pos hθ₁_lt hθ₂_pos
           hKo_nn hKe_nn hBo_ge1 hBe_ge1 (h_odd p) ihp m α x_sp S t ht i_A
           (by dsimp [i_A]; omega) (by dsimp [i_A]; omega)
       obtain ⟨F_B, hFB_holo, hFB_real, hFB_bdd⟩ :=
-        os_cut_step_of_hyps hOS hcluster hθ₂_pos hθ₁_pos hθ₁_lt hθ₁_pos
+        os_cut_step_of_hyps hOS hcontr hθ₂_pos hθ₁_pos hθ₁_lt hθ₁_pos
           hKe_nn hKo_nn hBe_ge1 hBo_ge1 ihp (h_odd p) m α x_sp S t ht i_B
           (by dsimp [i_B]; omega) (by dsimp [i_B]; omega)
       let M_bd : ℝ := C_e * (2 : ℝ) ^ (D_e * (p + 1)) * (A_e * E_e ^ (p + 1)) ^ (m + 1) *
@@ -29575,7 +29651,7 @@ theorem osDampedSubsetH_induction
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
+    (hcontr : OSContractionCondition hOS.toReflectionPositiveData)
     {C_lg A_lg : ℝ} {M : ℕ} (hC_ge1 : 1 ≤ C_lg) (hA_ge1 : 1 ≤ A_lg)
     (hlg : ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ), x ∈ orderedEuclidN n →
       ‖𝒮 n α x‖ ≤ C_lg * A_lg ^ n * ((n.factorial : ℝ) ^ M) *
@@ -29588,12 +29664,12 @@ theorem osDampedSubsetH_induction
     induction q with
     | zero => exact osDampedSubsetH_base hOS hC_ge1 hA_ge1 hlg
     | succ q ih =>
-      have h_odd := osDampedSubsetH_odd_step hOS hcluster ih
-      exact osDampedSubsetH_even_step hOS hcluster hC_ge1 hA_ge1 hlg h_odd
+      have h_odd := osDampedSubsetH_odd_step hOS hcontr ih
+      exact osDampedSubsetH_even_step hOS hcontr hC_ge1 hA_ge1 hlg h_odd
   rcases Nat.even_or_odd k with ⟨q, rfl⟩ | ⟨q, rfl⟩
   · have h_eq : q + q = 2 * q := by omega
     rw [h_eq]; exact h_even q
-  · exact osDampedSubsetH_odd_step hOS hcluster (h_even q)
+  · exact osDampedSubsetH_odd_step hOS hcontr (h_even q)
 
 end Phase2CutAndInduction
 
@@ -29781,7 +29857,6 @@ lemma osDampedMultiTimeH_exists
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     ∃ (M : ℕ) (F_damped : ∀ (m : ℕ), (Fin (m + 1) → ι) → (Fin (m + 1) → Fin 3 → ℝ) →
         (Fin m → ℂ) → ℂ),
@@ -29797,6 +29872,8 @@ lemma osDampedMultiTimeH_exists
             C_m * (2 : ℝ) ^ (D_m * p) * (A_m * E_m ^ p) ^ (m + 1) *
               (((m + 1).factorial : ℝ) ^ M)) := by
   classical
+  have hcontr : OSContractionCondition hOS.toReflectionPositiveData :=
+    osContractionCondition_of_linearGrowth hOS hlg
   rcases hlg with ⟨C_raw, A_lg, M, hC_raw, hA_lg, hlg_bd⟩
   let C_lg : ℝ := max C_raw 1
   have hC_lg : 1 ≤ C_lg := le_max_right _ _
@@ -29819,7 +29896,7 @@ lemma osDampedMultiTimeH_exists
         (mul_le_mul_of_nonneg_right (le_max_left _ _) (by positivity))
         (by positivity)) h_pr_nn)
   have h_hyp : ∀ m : ℕ, OSDampedSubsetHyp hOS M m :=
-    fun m => osDampedSubsetH_induction hOS hcluster hC_lg hA_lg hlg' m
+    fun m => osDampedSubsetH_induction hOS hcontr hC_lg hA_lg hlg' m
   let getC : ℕ → ℝ := fun m => Classical.choose (h_hyp m)
   let getA : ℕ → ℝ := fun m => Classical.choose (Classical.choose_spec (h_hyp m))
   let getE : ℕ → ℝ := fun
@@ -29947,58 +30024,53 @@ noncomputable def osLinearGrowthM
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) : ℕ :=
-  Classical.choose (osDampedMultiTimeH_exists hOS hcluster hlg)
+  Classical.choose (osDampedMultiTimeH_exists hOS hlg)
 
 noncomputable def osDampedMultiTimeH
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     ∀ (m : ℕ), (Fin (m + 1) → ι) → (Fin (m + 1) → Fin 3 → ℝ) → (Fin m → ℂ) → ℂ :=
-  Classical.choose (Classical.choose_spec (osDampedMultiTimeH_exists hOS hcluster hlg))
+  Classical.choose (Classical.choose_spec (osDampedMultiTimeH_exists hOS hlg))
 
 lemma osDampedMultiTimeH_holo
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮)
     (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ) :
-    DifferentiableOn ℂ (osDampedMultiTimeH hOS hcluster hlg m α x_sp)
+    DifferentiableOn ℂ (osDampedMultiTimeH hOS hlg m α x_sp)
       (TubeDomain (osBox (Real.pi / 2))) :=
   (Classical.choose_spec (Classical.choose_spec
-    (osDampedMultiTimeH_exists hOS hcluster hlg))).1 m α x_sp
+    (osDampedMultiTimeH_exists hOS hlg))).1 m α x_sp
 
 lemma osDampedMultiTimeH_real
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮)
     (m : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ) (x : Fin m → ℝ) :
-    osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun j => (x j : ℂ)) =
-      (∏ j : Fin m, logTimeDamp (x j : ℂ) ^ osLinearGrowthM hOS hcluster hlg) *
+    osDampedMultiTimeH hOS hlg m α x_sp (fun j => (x j : ℂ)) =
+      (∏ j : Fin m, logTimeDamp (x j : ℂ) ^ osLinearGrowthM hOS hlg) *
         𝒮 (m + 1) α (osBuildPoints m x_sp (fun j => Real.exp (x j)) 0) :=
   (Classical.choose_spec (Classical.choose_spec
-    (osDampedMultiTimeH_exists hOS hcluster hlg))).2.1 m α x_sp x
+    (osDampedMultiTimeH_exists hOS hlg))).2.1 m α x_sp x
 
 lemma osDampedMultiTimeH_stage_bound
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) (m : ℕ) :
     ∃ (C_m A_m E_m : ℝ) (D_m : ℕ), 1 ≤ C_m ∧ 1 ≤ A_m ∧ 1 ≤ E_m ∧
       ∀ (p : ℕ) (α : Fin (m + 1) → ι) (x_sp : Fin (m + 1) → Fin 3 → ℝ)
         (w : Fin m → ℂ), w ∈ TubeDomain (osBox (osThetaSeq m p)) →
-        ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w‖ ≤
+        ‖osDampedMultiTimeH hOS hlg m α x_sp w‖ ≤
           C_m * (2 : ℝ) ^ (D_m * p) * (A_m * E_m ^ p) ^ (m + 1) *
-            (((m + 1).factorial : ℝ) ^ osLinearGrowthM hOS hcluster hlg) :=
+            (((m + 1).factorial : ℝ) ^ osLinearGrowthM hOS hlg) :=
   (Classical.choose_spec (Classical.choose_spec
-    (osDampedMultiTimeH_exists hOS hcluster hlg))).2.2 m
+    (osDampedMultiTimeH_exists hOS hlg))).2.2 m
 
 lemma complex_log_im_abs_lt_pi_div_two {z : ℂ} (hz : 0 < z.re) :
     |(Complex.log z).im| < Real.pi / 2 := by
@@ -30042,30 +30114,28 @@ noncomputable def osMultiTimeH_of_linearGrowth
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     ∀ (n : ℕ) (_ : Fin n → ι) (_ : Fin n → Fin 3 → ℝ) (_ : Fin (n - 1) → ℂ), ℂ
   | 0, α, _, _ => 𝒮 0 α 0
   | m + 1, α, x_sp, τ =>
       if _hτ : ∀ k : Fin m, 0 < (τ k).re then
-        (∏ k : Fin m, logTimeDamp (Complex.log (τ k)) ^ osLinearGrowthM hOS hcluster hlg)⁻¹ *
-          osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))
+        (∏ k : Fin m, logTimeDamp (Complex.log (τ k)) ^ osLinearGrowthM hOS hlg)⁻¹ *
+          osDampedMultiTimeH hOS hlg m α x_sp (fun k => Complex.log (τ k))
       else 0
 
 theorem differentiableOn_osMultiTimeH_of_linearGrowth
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮)
     (n : ℕ) (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ) :
-    DifferentiableOn ℂ (osMultiTimeH_of_linearGrowth hOS hcluster hlg n α x_sp)
+    DifferentiableOn ℂ (osMultiTimeH_of_linearGrowth hOS hlg n α x_sp)
       {τ : Fin (n - 1) → ℂ | ∀ k, 0 < (τ k).re} := by
   cases n with
   | zero => exact differentiableOn_const _
   | succ m =>
     let U : Set (Fin m → ℂ) := {τ : Fin m → ℂ | ∀ k, 0 < (τ k).re}
-    let M := osLinearGrowthM hOS hcluster hlg
+    let M := osLinearGrowthM hOS hlg
     have h_log_diff : DifferentiableOn ℂ (fun τ : Fin m → ℂ => fun k => Complex.log (τ k)) U := by
       intro τ hτ
       exact differentiableWithinAt_pi.mpr fun k =>
@@ -30105,8 +30175,8 @@ theorem differentiableOn_osMultiTimeH_of_linearGrowth
       exact Finset.prod_ne_zero_iff.mpr fun k _ => pow_ne_zero M (logTimeDamp_log_ne_zero (hτ k))
     have h_comp : DifferentiableOn ℂ
         (fun τ : Fin m → ℂ =>
-          osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))) U :=
-      (osDampedMultiTimeH_holo hOS hcluster hlg m α x_sp).comp h_log_diff h_log_maps
+          osDampedMultiTimeH hOS hlg m α x_sp (fun k => Complex.log (τ k))) U :=
+      (osDampedMultiTimeH_holo hOS hlg m α x_sp).comp h_log_diff h_log_maps
     exact (h_inv_diff.mul h_comp).congr fun τ hτ => by
       have hτ' : ∀ k : Fin m, 0 < (τ k).re := hτ
       change (if _hτ : ∀ k : Fin m, 0 < (τ k).re then _ else 0) = _
@@ -30117,10 +30187,9 @@ theorem osMultiTimeH_of_linearGrowth_real_eq_schwinger
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     ∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ) (_ : x ∈ orderedEuclidN n),
-      osMultiTimeH_of_linearGrowth hOS hcluster hlg n α (fun i => spatialPart (x i))
+      osMultiTimeH_of_linearGrowth hOS hlg n α (fun i => spatialPart (x i))
         (fun k : Fin (n - 1) =>
           ((x ⟨k.val + 1, by omega⟩ 0 - x ⟨k.val, by omega⟩ 0 : ℝ) : ℂ)) =
         𝒮 n α x
@@ -30135,19 +30204,19 @@ theorem osMultiTimeH_of_linearGrowth_real_eq_schwinger
         have hlt := hx ⟨k.val, by omega⟩ (by dsimp; omega)
         dsimp [dt]; linarith
       have hτ_pos : ∀ k : Fin m, 0 < ((dt k : ℝ) : ℂ).re := fun k => by simpa using hdt_pos k
-      change osMultiTimeH_of_linearGrowth hOS hcluster hlg (m + 1) α (fun i => spatialPart (x i))
+      change osMultiTimeH_of_linearGrowth hOS hlg (m + 1) α (fun i => spatialPart (x i))
           (fun k : Fin m => ((dt k : ℝ) : ℂ)) = 𝒮 (m + 1) α x
       dsimp only [osMultiTimeH_of_linearGrowth]
       rw [dif_pos hτ_pos]
       have hlog : ∀ k : Fin m, Complex.log ((dt k : ℝ) : ℂ) = ((Real.log (dt k) : ℝ) : ℂ) :=
         fun k => (Complex.ofReal_log (hdt_pos k).le).symm
       simp_rw [hlog]
-      rw [osDampedMultiTimeH_real hOS hcluster hlg]
+      rw [osDampedMultiTimeH_real hOS hlg]
       have h_exp : (fun k : Fin m => Real.exp (Real.log (dt k))) = dt := by
         ext k; exact Real.exp_log (hdt_pos k)
       rw [h_exp]
       have h_ne : (∏ k : Fin m, logTimeDamp ((Real.log (dt k) : ℝ) : ℂ) ^
-          osLinearGrowthM hOS hcluster hlg) ≠ 0 := by
+          osLinearGrowthM hOS hlg) ≠ 0 := by
         refine Finset.prod_ne_zero_iff.mpr fun k _ => pow_ne_zero _ ?_
         have h1 := logTimeDamp_log_ne_zero (hτ_pos k)
         rwa [← Complex.ofReal_log (hdt_pos k).le] at h1
@@ -30162,20 +30231,19 @@ theorem osMultiTimeH_of_linearGrowth_spatial_shift
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     ∀ (n : ℕ) (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ)
       (τ : Fin (n - 1) → ℂ) (a : Fin 3 → ℝ),
-      osMultiTimeH_of_linearGrowth hOS hcluster hlg n α (fun i => x_sp i + a) τ =
-        osMultiTimeH_of_linearGrowth hOS hcluster hlg n α x_sp τ
+      osMultiTimeH_of_linearGrowth hOS hlg n α (fun i => x_sp i + a) τ =
+        osMultiTimeH_of_linearGrowth hOS hlg n α x_sp τ
   | 0, _, _, _, _ => rfl
   | m + 1, α, x_sp, τ, a => by
       dsimp only [osMultiTimeH_of_linearGrowth]
       split_ifs with hτ
       · congr 1
         refine osBox_eqOn_of_real_eq (by positivity : (0 : ℝ) < Real.pi / 2)
-          (osDampedMultiTimeH_holo hOS hcluster hlg m α (fun i => x_sp i + a))
-          (osDampedMultiTimeH_holo hOS hcluster hlg m α x_sp)
+          (osDampedMultiTimeH_holo hOS hlg m α (fun i => x_sp i + a))
+          (osDampedMultiTimeH_holo hOS hlg m α x_sp)
           (fun x => ?_) (fun k => complex_log_im_abs_lt_pi_div_two (hτ k))
         rw [osDampedMultiTimeH_real, osDampedMultiTimeH_real]
         congr 1
@@ -30195,15 +30263,14 @@ theorem osMultiTimeH_of_linearGrowth_spinorRot
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     ∀ (n : ℕ) (U : Geometry.PolarDecomposition.SU2) (α : Fin n → ι)
       (x_sp : Fin n → Fin 3 → ℝ) (τ : Fin (n - 1) → ℂ),
-      osMultiTimeH_of_linearGrowth hOS hcluster hlg n α
+      osMultiTimeH_of_linearGrowth hOS hlg n α
           (fun i => euclidSpatialRot U (x_sp i)) τ =
         ∑ β : Fin n → ι,
           (∏ i : Fin n, osSpinorRotMatrix Rrep U (α i) (β i)) *
-            osMultiTimeH_of_linearGrowth hOS hcluster hlg n β x_sp τ
+            osMultiTimeH_of_linearGrowth hOS hlg n β x_sp τ
   | 0, U, α, _, _ => by
       dsimp [osMultiTimeH_of_linearGrowth]
       rw [Finset.univ_unique, Finset.sum_singleton]
@@ -30218,14 +30285,14 @@ theorem osMultiTimeH_of_linearGrowth_spinorRot
             (fun w : Fin m → ℂ =>
               ∑ β : Fin (m + 1) → ι,
                 (∏ i : Fin (m + 1), osSpinorRotMatrix Rrep U (α i) (β i)) *
-                  osDampedMultiTimeH hOS hcluster hlg m β x_sp w)
+                  osDampedMultiTimeH hOS hlg m β x_sp w)
             (TubeDomain (osBox (Real.pi / 2))) := by
           intro w hw
           refine DifferentiableWithinAt.fun_sum fun β _ => ?_
           exact (differentiableWithinAt_const _).mul
-            (osDampedMultiTimeH_holo hOS hcluster hlg m β x_sp w hw)
+            (osDampedMultiTimeH_holo hOS hlg m β x_sp w hw)
         have h_eq := osBox_eqOn_of_real_eq (by positivity : (0 : ℝ) < Real.pi / 2)
-          (osDampedMultiTimeH_holo hOS hcluster hlg m α (fun i => euclidSpatialRot U (x_sp i)))
+          (osDampedMultiTimeH_holo hOS hlg m α (fun i => euclidSpatialRot U (x_sp i)))
           h_rhs_holo
           (fun x => ?_) (fun k => complex_log_im_abs_lt_pi_div_two (hτ k))
         · rw [h_eq, Finset.mul_sum]
@@ -30284,12 +30351,11 @@ theorem exists_osMultiTimeH_of_linearGrowth_growth_bound
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮) :
     ∀ (n : ℕ), ∃ (C_n : ℝ) (M_n : ℕ), 0 ≤ C_n ∧
       ∀ (α : Fin n → ι) (x_sp : Fin n → Fin 3 → ℝ) (τ : Fin (n - 1) → ℂ),
         (∀ k : Fin (n - 1), 0 < (τ k).re) →
-        ‖osMultiTimeH_of_linearGrowth hOS hcluster hlg n α x_sp τ‖ ≤
+        ‖osMultiTimeH_of_linearGrowth hOS hlg n α x_sp τ‖ ≤
           C_n * ∏ k : Fin (n - 1), (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ M_n
   | 0 => by
       refine ⟨‖𝒮 0 Fin.elim0 0‖, 0, norm_nonneg _, fun α x_sp τ _ => ?_⟩
@@ -30299,9 +30365,9 @@ theorem exists_osMultiTimeH_of_linearGrowth_growth_bound
         Finset.prod_eq_one fun k _ => Fin.elim0 k
       rw [hα, h_prod, mul_one]
   | m + 1 => by
-      let M := osLinearGrowthM hOS hcluster hlg
+      let M := osLinearGrowthM hOS hlg
       obtain ⟨C_m, A_m, E_m, D_m, hCm, hAm, hEm, h_stage⟩ :=
-        osDampedMultiTimeH_stage_bound hOS hcluster hlg m
+        osDampedMultiTimeH_stage_bound hOS hlg m
       obtain ⟨K_m, hKm, h_def⟩ := exists_osThetaSeq_defect_geom m
       let B_base : ℝ := (2 : ℝ) ^ D_m * E_m ^ (m + 1)
       have hB_ge1 : 1 ≤ B_base :=
@@ -30434,9 +30500,9 @@ theorem exists_osMultiTimeH_of_linearGrowth_growth_bound
         rw [norm_pow, ← inv_pow, ← norm_inv]
         have h1 := pow_le_pow_left₀ (norm_nonneg _) (norm_inv_logTimeDamp_log_le (hτ k)) M
         rwa [← pow_mul] at h1
-      have h_Fd_le : ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))‖ ≤
+      have h_Fd_le : ‖osDampedMultiTimeH hOS hlg m α x_sp (fun k => Complex.log (τ k))‖ ≤
           C_n * P_τ ^ Q := by
-        calc ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))‖
+        calc ‖osDampedMultiTimeH hOS hlg m α x_sp (fun k => Complex.log (τ k))‖
             ≤ C_m * (2 : ℝ) ^ (D_m * p₀) * (A_m * E_m ^ p₀) ^ (m + 1) *
                 (((m + 1).factorial : ℝ) ^ M) := h_Fd_bd
           _ = (C_m * A_m ^ (m + 1) * (((m + 1).factorial : ℝ) ^ M)) *
@@ -30452,7 +30518,7 @@ theorem exists_osMultiTimeH_of_linearGrowth_growth_bound
         refine Finset.prod_congr rfl fun k _ => ?_
         rw [← pow_mul, ← pow_add]
       calc ‖(∏ k : Fin m, logTimeDamp (Complex.log (τ k)) ^ M)⁻¹‖ *
-            ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp (fun k => Complex.log (τ k))‖
+            ‖osDampedMultiTimeH hOS hlg m α x_sp (fun k => Complex.log (τ k))‖
           ≤ (∏ k : Fin m, (1 + ((τ k).re)⁻¹ + ‖τ k‖) ^ (3 * M)) * (C_n * P_τ ^ Q) :=
             mul_le_mul h_damp_inv h_Fd_le (norm_nonneg _) (by
               exact Finset.prod_nonneg fun k _ => pow_nonneg (by
@@ -30924,18 +30990,17 @@ theorem continuousOn_osMultiTimeH_of_linearGrowth
     {Rrep : HolomorphicLorentzRep ι} {Sstr : StarStructure Rrep}
     {η : ℂ} {𝒮 : SchwingerFamily ι}
     (hOS : OSAxioms Rrep Sstr η 𝒮)
-    (hcluster : OSTimeClusterDecomposition hOS.toReflectionPositiveData)
     (hlg : OSLinearGrowthCondition 𝒮)
     (n : ℕ) (α : Fin n → ι) :
     ContinuousOn
       (fun p : (Fin n → Fin 3 → ℝ) × (Fin (n - 1) → ℂ) =>
-        osMultiTimeH_of_linearGrowth hOS hcluster hlg n α p.1 p.2)
+        osMultiTimeH_of_linearGrowth hOS hlg n α p.1 p.2)
       (Set.univ ×ˢ {τ : Fin (n - 1) → ℂ | ∀ k, 0 < (τ k).re}) := by
   cases n with
   | zero => exact continuousOn_const
   | succ m =>
     let U : Set (Fin m → ℂ) := {τ : Fin m → ℂ | ∀ k, 0 < (τ k).re}
-    let M := osLinearGrowthM hOS hcluster hlg
+    let M := osLinearGrowthM hOS hlg
     have hU_open : IsOpen U := by
       have h_eq : U = ⋂ k : Fin m, {τ : Fin m → ℂ | 0 < (τ k).re} := by ext τ; simp [U]
       rw [h_eq]
@@ -30957,7 +31022,7 @@ theorem continuousOn_osMultiTimeH_of_linearGrowth
         fun p hp => hp.2) (fun _ _ => Set.mem_univ _)
     have h_Fd_cont : ContinuousOn
         (fun p : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℂ) =>
-          osDampedMultiTimeH hOS hcluster hlg m α p.1 p.2)
+          osDampedMultiTimeH hOS hlg m α p.1 p.2)
         (Set.univ ×ˢ TubeDomain (osBox (Real.pi / 2))) := by
       intro ⟨x₀, w₀⟩ ⟨_, hw₀⟩
       have h_cover : ∃ p : ℕ, w₀ ∈ TubeDomain (osBox (osThetaSeq m p)) := by
@@ -30972,7 +31037,7 @@ theorem continuousOn_osMultiTimeH_of_linearGrowth
             (Finset.le_sup' (fun j => |(w₀ j).im|) (Finset.mem_univ i)) hp⟩
       obtain ⟨p, hp⟩ := h_cover
       obtain ⟨C_m, A_m, E_m, D_m, hCm, hAm, hEm, h_stage⟩ :=
-        osDampedMultiTimeH_stage_bound hOS hcluster hlg m
+        osDampedMultiTimeH_stage_bound hOS hlg m
       let θ : ℝ := osThetaSeq m p
       have hθ_pos : 0 < θ := osThetaSeq_pos m p
       let B_p : ℝ := C_m * (2 : ℝ) ^ (D_m * p) * (A_m * E_m ^ p) ^ (m + 1) *
@@ -30982,8 +31047,8 @@ theorem continuousOn_osMultiTimeH_of_linearGrowth
       obtain ⟨r, hr_pos, hr_sub⟩ := Metric.isOpen_iff.mp h_open_T w₀ hp
       have h_lip2 : ∀ (x_sp : Fin (m + 1) → Fin 3 → ℝ) (w : Fin m → ℂ),
           ‖w - w₀‖ < r / 4 →
-          ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w -
-            osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀‖ ≤
+          ‖osDampedMultiTimeH hOS hlg m α x_sp w -
+            osDampedMultiTimeH hOS hlg m α x_sp w₀‖ ≤
             (8 * B_p / r) * ‖w - w₀‖ := by
         intro x_sp w hw
         by_cases hww : w = w₀
@@ -30992,7 +31057,7 @@ theorem continuousOn_osMultiTimeH_of_linearGrowth
           let ρ : ℝ := (r / 2) / ‖w - w₀‖
           have hρ_gt2 : 2 < ρ := by dsimp [ρ]; rw [lt_div_iff₀ hnw_pos]; linarith
           let g_seg : ℂ → ℂ := fun ζ =>
-            osDampedMultiTimeH hOS hcluster hlg m α x_sp (w₀ + ζ • (w - w₀))
+            osDampedMultiTimeH hOS hlg m α x_sp (w₀ + ζ • (w - w₀))
           have h_in_ball' : ∀ ζ ∈ Metric.ball (0 : ℂ) ρ, w₀ + ζ • (w - w₀) ∈ Metric.ball w₀ r := by
             intro ζ hζ
             rw [Metric.mem_ball, dist_eq_norm, add_sub_cancel_left, norm_smul]
@@ -31003,7 +31068,7 @@ theorem continuousOn_osMultiTimeH_of_linearGrowth
           have h_g_holo' : DifferentiableOn ℂ g_seg (Metric.ball (0 : ℂ) ρ) := by
             have h_aff : Differentiable ℂ (fun ζ : ℂ => w₀ + ζ • (w - w₀)) :=
               (differentiable_const w₀).add (differentiable_id.smul_const (w - w₀))
-            exact (osDampedMultiTimeH_holo hOS hcluster hlg m α x_sp).comp h_aff.differentiableOn
+            exact (osDampedMultiTimeH_holo hOS hlg m α x_sp).comp h_aff.differentiableOn
               fun ζ hζ i => lt_trans (hr_sub (h_in_ball' ζ hζ) i) (osThetaSeq_lt_pi_div_two m p)
           have h_g_bdd' : ∀ ζ ∈ Metric.ball (0 : ℂ) ρ, ‖g_seg ζ‖ ≤ B_p :=
             fun ζ hζ => h_stage p α x_sp _ (hr_sub (h_in_ball' ζ hζ))
@@ -31040,32 +31105,32 @@ theorem continuousOn_osMultiTimeH_of_linearGrowth
                   h_g_holo'.continuousOn.mono (Metric.closure_ball_subset_closedBall.trans hsub_cb)⟩
                 (fun z hz => h_g_bdd' z (hsub_cb hz)) 1
               simpa [iteratedDeriv_one] using hcd
-          have hg1 : g_seg 1 = osDampedMultiTimeH hOS hcluster hlg m α x_sp w := by
+          have hg1 : g_seg 1 = osDampedMultiTimeH hOS hlg m α x_sp w := by
             dsimp [g_seg]; simp
-          have hg0 : g_seg 0 = osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀ := by
+          have hg0 : g_seg 0 = osDampedMultiTimeH hOS hlg m α x_sp w₀ := by
             dsimp [g_seg]; simp
           rw [hg1, hg0, sub_zero, norm_one, mul_one] at h_mvt'
           have h_eq : B_p / (ρ / 4) = (8 * B_p / r) * ‖w - w₀‖ := by
             dsimp [ρ]; field_simp [hr_pos.ne', hnw_pos.ne']; ring
           rwa [h_eq] at h_mvt'
-      have h_x_cont : ContinuousAt (fun x_sp => osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀) x₀
+      have h_x_cont : ContinuousAt (fun x_sp => osDampedMultiTimeH hOS hlg m α x_sp w₀) x₀
         := by
         rw [ContinuousAt, tendsto_iff_seq_tendsto]
         intro seq hseq
         have h_sub_pi : TubeDomain (osBox (d := m) θ) ⊆ TubeDomain (osBox (d := m) (Real.pi / 2)) :=
           fun z hz i => lt_trans (hz i) (osThetaSeq_lt_pi_div_two m p)
         have h_diff_tendsto : Tendsto (fun k =>
-            osDampedMultiTimeH hOS hcluster hlg m α (seq k) w₀ -
-              osDampedMultiTimeH hOS hcluster hlg m α x₀ w₀) atTop (𝓝 0) := by
+            osDampedMultiTimeH hOS hlg m α (seq k) w₀ -
+              osDampedMultiTimeH hOS hlg m α x₀ w₀) atTop (𝓝 0) := by
           refine tubeBox_tendsto_zero_of_real_tendsto_zero hθ_pos (by positivity : (0 : ℝ) ≤
             2 * B_p)
-            (fun k => ((osDampedMultiTimeH_holo hOS hcluster hlg m α (seq k)).mono h_sub_pi).sub
-              ((osDampedMultiTimeH_holo hOS hcluster hlg m α x₀).mono h_sub_pi))
+            (fun k => ((osDampedMultiTimeH_holo hOS hlg m α (seq k)).mono h_sub_pi).sub
+              ((osDampedMultiTimeH_holo hOS hlg m α x₀).mono h_sub_pi))
             (fun k w hw => by
-              calc ‖osDampedMultiTimeH hOS hcluster hlg m α (seq k) w -
-                    osDampedMultiTimeH hOS hcluster hlg m α x₀ w‖
-                  ≤ ‖osDampedMultiTimeH hOS hcluster hlg m α (seq k) w‖ +
-                      ‖osDampedMultiTimeH hOS hcluster hlg m α x₀ w‖ := norm_sub_le _ _
+              calc ‖osDampedMultiTimeH hOS hlg m α (seq k) w -
+                    osDampedMultiTimeH hOS hlg m α x₀ w‖
+                  ≤ ‖osDampedMultiTimeH hOS hlg m α (seq k) w‖ +
+                      ‖osDampedMultiTimeH hOS hlg m α x₀ w‖ := norm_sub_le _ _
                 _ ≤ B_p + B_p := add_le_add (h_stage p α (seq k) w hw) (h_stage p α x₀ w hw)
                 _ = 2 * B_p := by ring)
             (fun R hR ε hε => ?_) w₀ hp
@@ -31143,20 +31208,20 @@ theorem continuousOn_osMultiTimeH_of_linearGrowth
         have h_le : (8 * B_p / r) * ‖w - w₀‖ ≤ L * ‖w - w₀‖ :=
           mul_le_mul_of_nonneg_right (by dsimp [L]; linarith) (norm_nonneg _)
         linarith
-      calc ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w -
-            osDampedMultiTimeH hOS hcluster hlg m α x₀ w₀‖
-          = ‖(osDampedMultiTimeH hOS hcluster hlg m α x_sp w -
-              osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀) +
-              (osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀ -
-              osDampedMultiTimeH hOS hcluster hlg m α x₀ w₀)‖ := by ring_nf
-        _ ≤ ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w -
-              osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀‖ +
-            ‖osDampedMultiTimeH hOS hcluster hlg m α x_sp w₀ -
-              osDampedMultiTimeH hOS hcluster hlg m α x₀ w₀‖ := norm_add_le _ _
+      calc ‖osDampedMultiTimeH hOS hlg m α x_sp w -
+            osDampedMultiTimeH hOS hlg m α x₀ w₀‖
+          = ‖(osDampedMultiTimeH hOS hlg m α x_sp w -
+              osDampedMultiTimeH hOS hlg m α x_sp w₀) +
+              (osDampedMultiTimeH hOS hlg m α x_sp w₀ -
+              osDampedMultiTimeH hOS hlg m α x₀ w₀)‖ := by ring_nf
+        _ ≤ ‖osDampedMultiTimeH hOS hlg m α x_sp w -
+              osDampedMultiTimeH hOS hlg m α x_sp w₀‖ +
+            ‖osDampedMultiTimeH hOS hlg m α x_sp w₀ -
+              osDampedMultiTimeH hOS hlg m α x₀ w₀‖ := norm_add_le _ _
         _ < ε := by linarith
     have h_comp : ContinuousOn
         (fun p : (Fin (m + 1) → Fin 3 → ℝ) × (Fin m → ℂ) =>
-          osDampedMultiTimeH hOS hcluster hlg m α p.1 (fun k => Complex.log (p.2 k)))
+          osDampedMultiTimeH hOS hlg m α p.1 (fun k => Complex.log (p.2 k)))
         (Set.univ ×ˢ U) :=
       h_Fd_cont.comp (continuous_fst.continuousOn.prodMk
         (h_log_cont.comp continuous_snd.continuousOn fun p hp => hp.2))
