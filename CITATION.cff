@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this formalization in your research, please cite it using the metadata from this file."
+title: "Axiomatic & Constructive Quantum Field Theory in Lean 4"
+type: software
+authors:
+  - name: "P3r0o0"
+repository-code: "https://github.com/P3r0o0/Axiomatic-Constructive-Quantum-Field-Theory-in-Lean-4"
+url: "https://github.com/P3r0o0/Axiomatic-Constructive-Quantum-Field-Theory-in-Lean-4"
+license: MIT
+date-released: "2026-11-21"
+abstract: >-
+  A machine-checked Lean 4 formalization of 4-dimensional relativistic axiomatic
+  and constructive Quantum Field Theory built on Mathlib (v4.32.2), covering
+  complex Lorentz geometry and Jost's theorem, UV-cutoff-free cone Vladimirov
+  boundary values, general n-dimensional Malgrange-Zerner and distributional
+  Edge-of-the-Wedge theorems, general-spin Bargmann-Hall-Wightman continuation,
+  PCT and unconditional Spin-Statistics theorems, pure-Euclidean all n-point
+  Osterwalder-Schrader reconstruction, relativistic Haag-Ruelle scattering
+  theory, and constructive 4D massive neutral/charged Klein-Gordon and
+  Majorana/charged spin-1/2 Dirac models.
+keywords:
+  - "Lean 4"
+  - "Mathlib"
+  - "quantum field theory"
+  - "axiomatic quantum field theory"
+  - "constructive quantum field theory"
+  - "Wightman axioms"
+  - "Osterwalder-Schrader reconstruction"
+  - "Spin-Statistics theorem"
+  - "PCT theorem"
+  - "Haag-Ruelle scattering"
+  - "formalized mathematics"
