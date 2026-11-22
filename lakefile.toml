@@ -42,4 +42,5 @@ roots = [
     "VacuumTheory",
     "WightmanBridge",
     "ScatteringTheory",
+    "PoincareScattering",
 ]

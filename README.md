@@ -1,5 +1,9 @@
 ## Axiomatic & Constructive Quantum Field Theory in Lean 4
 
+[![Lean 4](https://img.shields.io/badge/Lean_4-v4.32.2-blue)](https://github.com/leanprover/lean4)
+[![Mathlib](https://img.shields.io/badge/Mathlib-v4.32.2-blue)](https://github.com/leanprover-community/mathlib4)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 A machine-checked Lean 4 formalization of **4-dimensional relativistic axiomatic and constructive Quantum Field Theory (QFT)** built on [Mathlib](https://github.com/leanprover-community/mathlib4) (`v4.32.2`).
 
 Starting from real and complex Minkowski geometry, the spinor double cover $SL(2,\mathbb{C}) \times SL(2,\mathbb{C}) \to SO^+(1,3;\mathbb{C})$, several complex variables, and Schwartz tempered distributions, this library develops:
@@ -9,7 +13,7 @@ Starting from real and complex Minkowski geometry, the spinor double cover $SL(2
 3. **General Spinor Bargmann–Hall–Wightman (BHW), Relativistic PCT & Unconditional Spin–Statistics**: Single-valued analytic continuation from $\mathcal{T}_n$ to $\mathcal{T}'_n$ for arbitrary finite-dimensional polynomial representations of $SL(2,\mathbb{C}) \times SL(2,\mathbb{C})$, the distributional PCT theorem, and unconditional general-spin Spin–Statistics ($\eta = \varepsilon$) for arbitrary `(R, S)` with $2\pi$-rotation spin parity $\varepsilon \in \{\pm 1\}$.
 4. **Pure-Euclidean All $n$-Point Osterwalder–Schrader (OS) Reconstruction & Full Euclidean Gluing**: OS GNS Hilbert space and canonical C\*-functional-calculus holomorphic contraction semigroup, multi-time semigroup continuation and pure-Euclidean all $n$-point OS $\to$ Wightman reconstruction from `OSAxioms` + `OSTimeClusterDecomposition` + either `OSDampedFieldBounded` or OS (1975) `OSLinearGrowthCondition` ($E0'$), canonical unitary equivalence $\mathcal{H}_{\mathrm{OS}} \simeq_{\mathbb{C}} \mathcal{H}_W$, and unconditional promotion of relativistic `LocalCommutativity` to `FullEuclidOSAxioms` across $\mathbb{R}^{4n}_{\neq}$.
 5. **Constructive 4D Massive ($m > 0$) Free QFT**: All $n$-point bosonic and fermionic Wick combinatorics, explicit mass-shell tempered Wightman and full non-coincident Euclidean Schwinger families on $L^2$ Fock space, damped field bounds (`K = 3`) and $E0'$ linear growth, pure-Euclidean reconstruction agreement, exponential OS clustering $\mathcal{O}(e^{-m\tau})$, and all-direction Minkowski cluster decomposition (`WightmanAxiomsWithUniqueVacuum`).
-6. **Relativistic Haag–Ruelle Scattering Theory & Euclidean OS Scattering Bridge**: Non-Gaussian `IsolatedMassShellData` and `EuclidIsolatedMassShellData` scattering framework, non-stationary phase rapid polynomial tail decay $\mathcal{O}((1 + |t|)^{-N})$, SNAG-free $L^1$ ergodic Hepp vacuum projection, strong Haag–Ruelle convergence $\lim_{t \to \pm\infty} \Psi_{\mathrm{HR}}(t) = \Phi_{\mathrm{in}/\mathrm{out}}$, isometric Møller wave operators intertwining $\mathbb{R}^4$ translations, S-matrix unitarity under `WeakAsymptoticCompleteness`, Pauli exclusion vs. distinct-mode co-occupancy witnesses, and 4 unconditional $m > 0$ Euclidean scattering models (neutral/charged Klein–Gordon and Majorana/charged spin-1/2 Dirac).
+6. **Relativistic Haag–Ruelle Scattering Theory, $SL(2,\mathbb{C}) \ltimes \mathbb{R}^4$ Poincaré Covariance, Antiunitary CPT & Euclidean OS Bridge**: Non-Gaussian `IsolatedMassShellData`, `PoincareIsolatedMassShellData`, `EuclidIsolatedMassShellData`, and `EuclidPoincareIsolatedMassShellData` scattering framework, non-stationary phase rapid polynomial tail decay $\mathcal{O}((1 + |t|)^{-N})$, SNAG-free $L^1$ ergodic Hepp vacuum projection, strong Haag–Ruelle convergence $\lim_{t \to \pm\infty} \Psi_{\mathrm{HR}}(t) = \Phi_{\mathrm{in}/\mathrm{out}}$, boost-hyperplane limit invariance via $SL(2,\mathbb{C})$ upper/lower 1-parameter generation, isometric Møller wave operators intertwining full $SL(2,\mathbb{C}) \ltimes \mathbb{R}^4$ Poincaré and antiunitary CPT ($\Theta \Omega^{\mathrm{out}} = \Omega^{\mathrm{in}} \Theta_{\mathrm{Fock}}$, $\Theta^2 = U(0,-1)$), S-matrix unitarity, Poincaré covariance, and CPT reciprocity $\Theta_{\mathrm{Fock}}^{-1} S \Theta_{\mathrm{Fock}} = S^\dagger$ under `WeakAsymptoticCompleteness`, Pauli exclusion vs. distinct-mode co-occupancy, explicit charged-scalar CPT particle $\leftrightarrow$ antiparticle orthogonal swap and fermionic Kramers sign-flip witnesses, and 4 unconditional $m > 0$ Euclidean scattering models (neutral/charged Klein–Gordon and Majorana/charged spin-1/2 Dirac).
 
 ---
 
@@ -33,25 +37,25 @@ Formalizing infinite-dimensional functional analysis and axiomatic QFT carries s
 | Metric | Verified Value | Details |
 | :--- | :---: | :--- |
 | **Lean 4 / Mathlib Toolchain** | `v4.32.2` | `leanprover/lean4:v4.32.2` with `mathlib` `v4.32.2` |
-| **QFT & Analysis Modules** | **23 files** | Located in `src/` (see [Section 2](#2-architecture--module-dependency-graph); excludes standalone `src/LWEBasic.lean`) |
-| **Total Lines of Lean 4** | **164,874 lines** | Comment-free, linter-clean (`weak.linter.mathlibStandardSet = true`) |
-| **Top-Level Declarations** | **8,552** | `2,337` `theorem`, `4,504` `lemma`, `1,570` `def`, `44` `abbrev`, `35` `structure`, `57` `instance`, `5` `inductive` |
+| **QFT & Analysis Modules** | **24 files** | Located in `src/` (see [Section 2](#2-architecture--module-dependency-graph); excludes standalone `src/LWEBasic.lean`) |
+| **Total Lines of Lean 4** | **173,839 lines** | Comment-free, linter-clean (`weak.linter.mathlibStandardSet = true`) |
+| **Top-Level Declarations** | **8,936** | `2,472` `theorem`, `4,683` `lemma`, `1,626` `def`, `55` `abbrev`, `38` `structure`, `57` `instance`, `5` `inductive` |
 | **`sorry` / `admit` / Custom `axiom`** | **0** | Mechanically checked by the Lean 4 kernel (reproducible via `#print axioms` in [Section 8](#8-build-instructions-axiom-verification--literature-cross-reference)) |
 | **`unsafe` / `opaque` / Metaprogramming Bypasses** | **0** | Purely logical definitions and proofs; independently verifiable in a fresh `lake build` |
 | **Permitted Kernel Axioms** | **Standard 3 only** | Every audited theorem depends exclusively on `[propext, Classical.choice, Quot.sound]` |
-| **Automated Vacuity & AST Checks** | **0 flagged (`0` unused `Prop`s)** | `MetaM` AST audit confirms `0` unused `Prop` parameters and `0` disguised `rfl` tautologies across `ScatteringTheory.lean` |
+| **Automated Vacuity & AST Checks** | **0 flagged (`0` unused `Prop`s)** | `MetaM` AST audits confirm `0` unused `Prop` parameters across `ScatteringTheory.lean` and `PoincareScattering.lean` and `0` disguised `rfl` tautologies in `ScatteringTheory.lean` |
 | **Concrete 4D $m > 0$ Models** | **4 scattering models** | Neutral Klein–Gordon ($\nu = 1, \eta = +1$), charged Klein–Gordon ($\nu = 2, \eta = +1$), 4-component Majorana–Dirac ($\nu = 2, \eta = -1$), and charged spin-1/2 Dirac ($\nu = 4, \eta = -1$) |
 
 > [!NOTE]
 > **Scope of Verification (Kernel Guarantees vs. Independent Semantic Audit)**:
 > - **Kernel-Guaranteed**: The absence of `sorry` (`sorryAx`), custom `axiom` declarations, `unsafe`, and `opaque` is checked mechanically by the Lean 4 kernel; anyone can reproduce these checks via the `#print axioms` commands in [Section 8](#8-build-instructions-axiom-verification--literature-cross-reference).
-> - **Subject to Independent Verification**: While automated kernel/`MetaM` checks and explicit 4D $m > 0$ model instantiations uncovered no vacuous positive theorems or specification collapses within the audited scope, no automated check can rule out subtle semantic vacuity or definition mismatches across all 8,500+ declarations. Independent mathematical review of [Section 3](#3-core-mathematical-definitions-verbatim-lean-4) and [Section 4](#4-main-formalized-theorems-verbatim-lean-4) is encouraged.
+> - **Subject to Independent Verification**: While automated kernel/`MetaM` checks and explicit 4D $m > 0$ model instantiations uncovered no vacuous positive theorems or specification collapses within the audited scope, no automated check can rule out subtle semantic vacuity or definition mismatches across all 8,900+ declarations. Independent mathematical review of [Section 3](#3-core-mathematical-definitions-verbatim-lean-4) and [Section 4](#4-main-formalized-theorems-verbatim-lean-4) is encouraged.
 
 ---
 
 ## 2. Architecture & Module Dependency Graph
 
-The 23 QFT and analysis modules are organized into six mathematical layers (`A --> B` means `B` imports `A`).
+The 24 QFT and analysis modules are organized into six mathematical layers (`A --> B` means `B` imports `A`).
 
 ```mermaid
 flowchart TD
@@ -92,8 +96,9 @@ flowchart TD
     FFF["FreeFieldFock.lean (9,977)"]
   end
 
-  subgraph Layer6["Layer VI: Relativistic Haag–Ruelle Scattering & Euclidean Bridge (17,248 lines)"]
+  subgraph Layer6["Layer VI: Relativistic Haag–Ruelle Scattering, Poincaré/CPT & Euclidean Bridge (26,213 lines)"]
     ST["ScatteringTheory.lean (17,248)"]
+    PS["PoincareScattering.lean (8,965)"]
   end
 
   Mink --> Giv --> Spin --> SL2M
@@ -110,7 +115,7 @@ flowchart TD
   VBHW --> OSR --> Vac --> WB --> FFF
   Vac --> FFW --> FFF
   WB --> ST
-  FFF --> ST
+  FFF --> ST --> PS
 ```
 
 ### Complete Module Inventory
@@ -162,11 +167,12 @@ flowchart TD
 | `src/FreeFieldWick.lean` | 3,116 | Positive-energy mass-shell measures ($m > 0$), all $n$-point neutral/Majorana Klein–Gordon and Dirac Wightman/Schwinger families, `LocalCommutativity`, equal-time non-vanishing witnesses, and `¬ ZeroMomentumSpectrumCondition`. |
 | `src/FreeFieldFock.lean` | 9,977 | Direct-sum $L^2$ Fock space `FockHilbert ν`, Wightman `Positivity` & `OSReflectionPositive`, exponential OS clustering $e^{-m\tau}$, Fock damped bounds (`K = 3`), `OSLinearGrowthCondition`, pure-Euclidean reconstruction agreement, and `freeKG/Dirac_grand_master`. |
 
-#### Layer VI: Relativistic Haag–Ruelle Scattering Theory & Euclidean OS Scattering Bridge (`17,248` lines)
+#### Layer VI: Relativistic Haag–Ruelle Scattering, Poincaré/CPT & Euclidean Bridge (`26,213` lines)
 
 | Module | Lines | Mathematical Scope |
 | :--- | ---: | :--- |
 | `src/ScatteringTheory.lean` | 17,248 | `VelocityDisjoint` $C_c^\infty(\mathbb{R}^3)$ wavepackets, non-stationary phase rapid tail decay $\mathcal{O}((1+\|t\|)^{-N})$, `IsolatedMassShellData` & `EuclidIsolatedMassShellData`, SNAG-free $L^1$ ergodic Hepp vacuum projection, strong Haag–Ruelle convergence, $\eta$-symmetrized Fock space `SymmFockHilbert ν η`, isometric Møller wave operators & S-matrix unitarity, Pauli exclusion vs. distinct-mode co-occupancy, and 4 unconditional $m > 0$ scattering models (neutral/charged KG & Majorana/charged Dirac). |
+| `src/PoincareScattering.lean` | 8,965 | Unitary $SL(2,\mathbb{C}) \ltimes \mathbb{R}^4$ Poincaré and antiunitary PCT operators on Wightman GNS (`wightmanPoincareEquiv`, `wightmanPCTEquiv`), symmetrized Fock space (`symmFockPoincareEquiv`, `symmFockPCTEquiv`), and OS Hilbert space (`osPoincareEquiv`, `osPCTEquiv`), intrinsic mode-space Wigner transition matrices, $SL(2,\mathbb{C})$ upper/lower 1-parameter generation & boost-hyperplane Haag–Ruelle limit invariance, `PoincareIsolatedMassShellData` & `EuclidPoincareIsolatedMassShellData`, S-matrix Poincaré covariance & CPT reciprocity $\Theta^{-1} S \Theta = S^\dagger$, Kramers $\Theta^2 = U(0,-1)$, charged-scalar CPT particle $\leftrightarrow$ antiparticle swap witness, and 4 unconditional $m > 0$ Euclidean Poincaré/CPT master theorems. |
 
 ---
 
@@ -477,9 +483,9 @@ noncomputable def freeDiracFullS (m : ℝ) (hm : 0 < m) :
   wickMassShellFullS diracRep m hm (-1) (diracMassShellCoeff m) (diracMassShellCoeff_data hm)
 ```
 
-### 3.7 Isolated Mass-Shell Axioms, Haag–Ruelle Wave Operators, S-Matrix & Euclidean Scattering Bridge (`ScatteringTheory.lean`)
+### 3.7 Isolated Mass-Shell Axioms, Poincaré/CPT Data, Haag–Ruelle Wave Operators, S-Matrix & Euclidean Scattering Bridge (`ScatteringTheory.lean`, `PoincareScattering.lean`)
 
-Compactly supported $C_c^\infty(\mathbb{R}^3)$ wavepackets (`SmoothWavepacket`), `VelocityDisjoint` separation, interacting-compatible `IsolatedMassShellData` with continuum threshold $M > m$, $\eta$-symmetrized Fock space `SymmFockHilbert ν η`, S-matrix `scatteringOperatorCLM`, and `EuclidIsolatedMassShellData`:
+Compactly supported $C_c^\infty(\mathbb{R}^3)$ wavepackets (`SmoothWavepacket`), `VelocityDisjoint` separation, interacting-compatible `IsolatedMassShellData` with continuum threshold $M > m$, $\eta$-symmetrized Fock space `SymmFockHilbert ν η`, S-matrix `scatteringOperatorCLM`, `EuclidIsolatedMassShellData`, and their Poincaré/Wigner upgrades `PoincareIsolatedMassShellData` and `EuclidPoincareIsolatedMassShellData`:
 
 ```lean
 structure SmoothWavepacket where
@@ -567,6 +573,26 @@ structure EuclidIsolatedMassShellData {ι : Type*} [Fintype ι] [DecidableEq ι]
       ∀ p ∈ U, minkowskiFourier F p = 0) →
     osReconstructedWightmanFamily_of_linearGrowth fullOS.toOSAxioms linearGrowth 2 β F =
       massShellTwoPointW m C_shell hC 2 β F
+
+structure PoincareIsolatedMassShellData
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (m M : ℝ) (η : ℂ) extends IsolatedMassShellData R S m M η where
+  contDiff_w : ∀ (s : Fin mode.ν) (α : ι),
+    ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => mode.w s p α)
+  hC_cov : ∀ (A : SL2C) (p : Fin 3 → ℝ) (α : Fin 2 → ι),
+    C_shell α ((lorentzOfSL2C A).mulVec (massShellVec m p)) =
+      ∑ β : Fin 2 → ι, (∏ i : Fin 2, R.rep A (α i) (β i)) * C_shell β (massShellVec m p)
+
+structure EuclidPoincareIsolatedMassShellData {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (R : HolomorphicLorentzRep ι) (S : StarStructure R)
+    (m M : ℝ) (η : ℂ) (𝒮 : SchwingerFamily ι) extends
+    EuclidIsolatedMassShellData R S m M η 𝒮 where
+  contDiff_w : ∀ (s : Fin mode.ν) (α : ι),
+    ContDiff ℝ (⊤ : ℕ∞) (fun p : Fin 3 → ℝ => mode.w s p α)
+  hC_cov : ∀ (A : SL2C) (p : Fin 3 → ℝ) (α : Fin 2 → ι),
+    C_shell α ((lorentzOfSL2C A).mulVec (massShellVec m p)) =
+      ∑ β : Fin 2 → ι, (∏ i : Fin 2, R.rep A (α i) (β i)) * C_shell β (massShellVec m p)
 ```
 
 ---
@@ -879,9 +905,10 @@ theorem freeDirac_osReconstructedWightmanFamily_eq {m : ℝ} (hm : 0 < m) :
 
 The end-to-end synthesis theorems `freeKG_grand_master` and `freeDirac_grand_master` (`src/FreeFieldFock.lean`) jointly package `FullEuclidOSAxioms`, sharp exponential OS clustering $\mathcal{O}(e^{-m\tau})$, equal-time non-coincident non-vanishing, all-$n$ OS reconstruction agreement under both `OSDampedFieldBounded` and `OSLinearGrowthCondition`, all-direction Minkowski clustering, unique vacuum, unconditional Spin–Statistics, and `¬ ZeroMomentumSpectrumCondition` (verified in [Section 8](#8-build-instructions-axiom-verification--literature-cross-reference)).
 
-### 4.8 Relativistic Haag–Ruelle Scattering, S-Matrix Unitarity, Pauli Exclusion & Euclidean Scattering Bridge (`ScatteringTheory.lean`)
+### 4.8 Relativistic Haag–Ruelle Scattering, Poincaré/CPT Covariance, S-Matrix Unitarity & Euclidean Scattering Bridge (`ScatteringTheory.lean`, `PoincareScattering.lean`)
 
 - **Haag–Ruelle Convergence, Isometric Møller Operators & S-Matrix Unitarity**: For any non-Gaussian `IsolatedMassShellData` and pairwise `VelocityDisjoint` wavepackets, `haagRuelleChainVec D r s f t` converges strongly as $t \to \pm\infty$ at rate $\mathcal{O}((1+|t|)^{-1})$ to `haagRuelleOutVec` / `haagRuelleInVec` with exact $\eta$-symmetrized Fock inner products (`inner_haagRuelleOutVec_eq`). Dense isometric extension yields `mollerWaveOut` and `mollerWaveIn` intertwining $\mathbb{R}^4$ translations and the contraction S-matrix `scatteringOperatorCLM D` (`‖S‖ ≤ 1`), which is two-sided unitary under `WeakAsymptoticCompleteness D`.
+- **Full $SL(2,\mathbb{C}) \ltimes \mathbb{R}^4$ Wigner–Poincaré & Antiunitary CPT Scattering Covariance (`PoincareScattering.lean`)**: `PoincareIsolatedMassShellData` lifts unitary Poincaré and antiunitary PCT operators onto both Wightman GNS (`wightmanPoincareEquiv`, `wightmanPCTEquiv`) and symmetrized Fock spaces (`symmFockPoincareEquiv`, `symmFockPCTEquiv`), proves boost-hyperplane Haag–Ruelle limit invariance, Møller Poincaré intertwining (`poincare_mollerWaveIn` / `Out`), antiunitary CPT exchange $\Theta \Omega^{\mathrm{out}} = \Omega^{\mathrm{in}} \Theta_{\mathrm{Fock}}$ (`pct_mollerWaveOut` / `In`), Kramers $\Theta^2 = U(0,-1)$, S-matrix Poincaré covariance (`scatteringOperatorCLM_comm_poincare`), CPT reciprocity $\Theta_{\mathrm{Fock}}^{-1} S \Theta_{\mathrm{Fock}} = S^\dagger$ (`symmFockPCTEquiv_symm_scatteringOperatorCLM_pct`), and the OS transport theorem `fullEuclid_os_poincare_pct_scattering_synthesis`.
 - **Pauli Exclusion vs. Distinct-Mode Co-Occupancy & Euclidean Scattering Bridge**: Fermionic wave operators vanish on identical `(s₀, f₀)` pairs (`mollerWaveIn_two_same_eq_zero_of_fermion`) while remaining strictly non-zero for any distinct mode pair `s₁ ≠ s₂` sharing the same wavepacket `f₀` (`mollerWaveIn_two_same_wavepacket_diff_spin_ne_zero`); `fullEuclid_os_haagRuelle_scattering_synthesis` bridges `EuclidIsolatedMassShellData` directly to OS Møller operators and S-matrices.
 
 ```lean
@@ -1006,14 +1033,115 @@ theorem fullEuclid_os_haagRuelle_scattering_synthesis
         symmFockMinkowskiTranslate m D.mode.ν η a (scatteringOperatorCLM D Ψ))
 ```
 
-All four unconditional 4D $m > 0$ Euclidean scattering models instantiate `EuclidIsolatedMassShellData` with threshold $M = 2m$, proving `AsymptoticCompleteness`, surjectivity and equality of `osMollerWaveIn` / `osMollerWaveOut`, `scatteringOperatorCLM D = id`, Spin–Statistics on `FullEuclidOSAxioms`, and non-vanishing $r$-particle asymptotic states for every $r \in \mathbb{N}$:
+```lean
+theorem wightmanPoincareEquiv_mul
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (WData : WightmanPositiveData R S) (hP : PoincareCovariant R WData.W)
+    (a₁ a₂ : Fin 4 → ℝ) (A₁ A₂ : SL2C) (x : WightmanHilbert WData) :
+    wightmanPoincareEquiv WData hP a₁ A₁ (wightmanPoincareEquiv WData hP a₂ A₂ x) =
+      wightmanPoincareEquiv WData hP (a₁ + (lorentzOfSL2C A₁).mulVec a₂) (A₁ * A₂) x
 
-| 4D $m > 0$ Model | Representation `(R, S)` | $(\nu, \eta)$ | Asymptotic Space | Same-Wavepacket 2-Particle Witnesses | Master Theorem (`ScatteringTheory.lean`) |
+theorem wightmanPCTEquiv_sq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    (WData : WightmanPositiveData R S) (hP : PoincareCovariant R WData.W)
+    {η : ℂ} (hpct : WightmanPCT η R WData.W) (hε : R.HasSpinParity η)
+    (x : WightmanHilbert WData) :
+    wightmanPCTEquiv WData hP hpct hε (wightmanPCTEquiv WData hP hpct hε x) =
+      wightmanSpinorLorentzEquiv WData hP (-1) x
+
+theorem symmFockPoincareEquiv_mul
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m : ℝ} {η : ℂ} {C_shell : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (L : LorentzModeData R S m η C_shell) (a₁ a₂ : Fin 4 → ℝ) (A₁ A₂ : SL2C)
+    (x : SymmFockHilbert L.mode.ν η) :
+    symmFockPoincareEquiv L a₁ A₁ (symmFockPoincareEquiv L a₂ A₂ x) =
+      symmFockPoincareEquiv L (a₁ + (lorentzOfSL2C A₁).mulVec a₂) (A₁ * A₂) x
+
+theorem symmFockPCTEquiv_sq
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m : ℝ} {η : ℂ} {C_shell : (Fin 2 → ι) → (Fin 4 → ℝ) → ℂ}
+    (L : LorentzModeData R S m η C_shell) (hε : R.HasSpinParity η)
+    (hC_pct : OnShellPCT R m η C_shell) (x : SymmFockHilbert L.mode.ν η) :
+    symmFockPCTEquiv L hε hC_pct (symmFockPCTEquiv L hε hC_pct x) =
+      symmFockLorentzEquiv L (-1) x
+
+theorem poincare_mollerWaveOut
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (P : PoincareIsolatedMassShellData R S m M η)
+    (a : Fin 4 → ℝ) (A : SL2C) (Ψ : SymmFockHilbert P.mode.ν η) :
+    P.poincareEquiv a A (mollerWaveOut P.toIsolatedMassShellData Ψ) =
+      mollerWaveOut P.toIsolatedMassShellData (P.fockPoincareEquiv a A Ψ)
+
+theorem pct_mollerWaveOut
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (P : PoincareIsolatedMassShellData R S m M η)
+    (hε : R.HasSpinParity η) (hC_pct : OnShellPCT R m η P.C_shell)
+    (Ψ : SymmFockHilbert P.mode.ν η) :
+    P.pctEquiv hε (mollerWaveOut P.toIsolatedMassShellData Ψ) =
+      mollerWaveIn P.toIsolatedMassShellData (P.fockPCTEquiv hε hC_pct Ψ)
+
+theorem scatteringOperatorCLM_comm_poincare
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (P : PoincareIsolatedMassShellData R S m M η)
+    (a : Fin 4 → ℝ) (A : SL2C) (Ψ : SymmFockHilbert P.mode.ν η) :
+    scatteringOperatorCLM P.toIsolatedMassShellData (P.fockPoincareEquiv a A Ψ) =
+      P.fockPoincareEquiv a A (scatteringOperatorCLM P.toIsolatedMassShellData Ψ)
+
+theorem symmFockPCTEquiv_symm_scatteringOperatorCLM_pct
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} (P : PoincareIsolatedMassShellData R S m M η)
+    (hε : R.HasSpinParity η) (hC_pct : OnShellPCT R m η P.C_shell)
+    (Ψ : SymmFockHilbert P.mode.ν η) :
+    (P.fockPCTEquiv hε hC_pct).symm
+        (scatteringOperatorCLM P.toIsolatedMassShellData (P.fockPCTEquiv hε hC_pct Ψ)) =
+      (scatteringOperatorCLM P.toIsolatedMassShellData).adjoint Ψ
+
+theorem fullEuclid_os_poincare_pct_scattering_synthesis
+    {R : HolomorphicLorentzRep ι} {S : StarStructure R}
+    {m M : ℝ} {η : ℂ} {𝒮 : SchwingerFamily ι}
+    (E : EuclidPoincareIsolatedMassShellData R S m M η 𝒮)
+    (hε : R.HasSpinParity η) (hC_pct : OnShellPCT R m η E.C_shell) :
+    let D := E.toIsolatedMassShellData
+    D.wightman.WData.W =
+      osReconstructedWightmanFamily_of_linearGrowth E.fullOS.toOSAxioms E.linearGrowth ∧
+    LocalCommutativity η D.wightman.WData.W ∧
+    (∀ (n : ℕ) (α : Fin n → ι) (x : Fin n → Fin 4 → ℝ),
+      x ∈ orderedEuclidN n → 𝒮 n α x = schwingerFromTube E.tubeData.E n α x) ∧
+    (∀ (r : ℕ) (s : Fin r → Fin D.mode.ν) (f : Fin r → SmoothWavepacket)
+      (hf : Pairwise fun i j : Fin r => VelocityDisjoint m (f i) (f j)),
+      Tendsto (haagRuelleChainVec D r s f) atTop (𝓝 (haagRuelleOutVec D r s f hf)) ∧
+      Tendsto (haagRuelleChainVec D r s f) atBot (𝓝 (haagRuelleInVec D r s f hf))) ∧
+    (∀ (a : Fin 4 → ℝ) (Ψ : E.OSHilbert), E.osPoincareEquiv a 1 Ψ = E.osSpacetimeTranslate a Ψ) ∧
+    (∀ (a : Fin 4 → ℝ) (A : SL2C), E.osPoincareEquiv a A E.osVacuumVec = E.osVacuumVec) ∧
+    E.osPCTEquiv hε E.osVacuumVec = E.osVacuumVec ∧
+    (∀ Ψ : E.OSHilbert, E.osPCTEquiv hε (E.osPCTEquiv hε Ψ) = E.osLorentzEquiv (-1) Ψ) ∧
+    (∀ (a : Fin 4 → ℝ) (A : SL2C) (Ψ : SymmFockHilbert E.mode.ν η),
+      E.osPoincareEquiv a A (E.osMollerWaveIn Ψ) =
+        E.osMollerWaveIn (E.toPoincareData.fockPoincareEquiv a A Ψ) ∧
+      E.osPoincareEquiv a A (E.osMollerWaveOut Ψ) =
+        E.osMollerWaveOut (E.toPoincareData.fockPoincareEquiv a A Ψ)) ∧
+    (∀ Ψ : SymmFockHilbert E.mode.ν η,
+      E.osPCTEquiv hε (E.osMollerWaveOut Ψ) =
+        E.osMollerWaveIn (E.toPoincareData.fockPCTEquiv hε hC_pct Ψ) ∧
+      E.osPCTEquiv hε (E.osMollerWaveIn Ψ) =
+        E.osMollerWaveOut (E.toPoincareData.fockPCTEquiv hε hC_pct Ψ)) ∧
+    (∀ (a : Fin 4 → ℝ) (A : SL2C) (Ψ : SymmFockHilbert E.mode.ν η),
+      scatteringOperatorCLM D (E.toPoincareData.fockPoincareEquiv a A Ψ) =
+        E.toPoincareData.fockPoincareEquiv a A (scatteringOperatorCLM D Ψ)) ∧
+    (∀ Ψ : SymmFockHilbert E.mode.ν η,
+      (E.toPoincareData.fockPCTEquiv hε hC_pct).symm
+          (scatteringOperatorCLM D (E.toPoincareData.fockPCTEquiv hε hC_pct Ψ)) =
+        (scatteringOperatorCLM D).adjoint Ψ)
+```
+
+All four unconditional 4D $m > 0$ Euclidean scattering models instantiate `EuclidIsolatedMassShellData` and `EuclidPoincareIsolatedMassShellData` with threshold $M = 2m$, proving `AsymptoticCompleteness`, surjectivity and equality of `osMollerWaveIn` / `osMollerWaveOut`, full $SL(2,\mathbb{C}) \ltimes \mathbb{R}^4$ Poincaré and antiunitary CPT intertwining, `scatteringOperatorCLM D = id`, Spin–Statistics on `FullEuclidOSAxioms`, non-vanishing $r$-particle asymptotic states for every $r \in \mathbb{N}$, and explicit CPT/Kramers witnesses:
+
+| 4D $m > 0$ Model | Representation `(R, S)` | $(\nu, \eta)$ | Asymptotic Space | Same-Wavepacket & CPT/Kramers Witnesses | Master Theorems (`ScatteringTheory.lean` / `PoincareScattering.lean`) |
 | :--- | :--- | :---: | :---: | :--- | :--- |
-| **Neutral Klein–Gordon** | `(trivialRep, trivialStarStructure)` | $(1, +1)$ | `SymmFockHilbert 1 1` | Symmetric bosonic occupancy | `freeKG_euclid_scattering_master` |
-| **Charged Klein–Gordon** | `(chargedKGRep, chargedKGStarStructure)` | $(2, +1)$ | `SymmFockHilbert 2 1` | `![0, 1]` particle–antiparticle $\neq 0$ | `chargedKG_euclid_scattering_master` |
-| **4-Component Majorana–Dirac** | `(diracRep, diracStarStructure)` | $(2, -1)$ | `SymmFockHilbert 2 (-1)` | Pauli `(s₀, s₀) = 0`; opposite spin `![0, 1] ≠ 0` | `freeDirac_euclid_scattering_master` |
-| **Charged Spin-1/2 Dirac** | `(chargedDiracRep, chargedDiracStarStructure)` | $(4, -1)$ | `SymmFockHilbert 4 (-1)` | Pauli `(s₀, s₀) = 0`; any `s₁ ≠ s₂` spin/charge $\neq 0$ | `chargedDirac_euclid_scattering_master` |
+| **Neutral Klein–Gordon** | `(trivialRep, trivialStarStructure)` | $(1, +1)$ | `SymmFockHilbert 1 1` | Symmetric bosonic occupancy; $\Theta^2 = U(0,-1)$ | `freeKG_euclid_scattering_master` / `freeKG_euclid_poincare_pct_master` |
+| **Charged Klein–Gordon** | `(chargedKGRep, chargedKGStarStructure)` | $(2, +1)$ | `SymmFockHilbert 2 1` | `![0, 1]` particle–antiparticle $\neq 0$; orthogonal CPT swap $\Theta \Psi_+ = \Psi_-$ | `chargedKG_euclid_scattering_master` / `chargedKG_euclid_poincare_pct_master` |
+| **4-Component Majorana–Dirac** | `(diracRep, diracStarStructure)` | $(2, -1)$ | `SymmFockHilbert 2 (-1)` | Pauli `(s₀, s₀) = 0`; `![0, 1] ≠ 0`; 1-particle Kramers $\Theta^2 \Psi_1 = -\Psi_1 \neq \Psi_1$ | `freeDirac_euclid_scattering_master` / `freeDirac_euclid_poincare_pct_master` |
+| **Charged Spin-1/2 Dirac** | `(chargedDiracRep, chargedDiracStarStructure)` | $(4, -1)$ | `SymmFockHilbert 4 (-1)` | Pauli `(s₀, s₀) = 0`; `s₁ ≠ s₂ ≠ 0`; 1-particle Kramers $\Theta^2 \Psi_1 = -\Psi_1 \neq \Psi_1$ | `chargedDirac_euclid_scattering_master` / `chargedDirac_euclid_poincare_pct_master` |
 
 ---
 
@@ -1079,6 +1207,33 @@ Beyond positive theorems, the library proves sharp **no-go theorems** and **non-
          haagRuelleOutVec D r s f hf ≠ 0
    ```
 
+6. **Charged-Scalar CPT Particle $\leftrightarrow$ Antiparticle Orthogonal Swap & Fermionic Kramers Sign-Flip** (`src/PoincareScattering.lean`):
+   In the $U(1)$ charge-eigenstate basis `chargedKGEigenModeData` on `chargedKGFullS m hm`, `osPCTEquiv` exchanges mode `0` and mode `1` into strictly orthogonal 1-particle sectors (`⟪Ψ_pos, Θ Ψ_pos⟫_ℂ = 0`, `Θ Ψ_pos ≠ Ψ_pos`), while Majorana and charged spin-1/2 Dirac models witness non-vanishing 1-particle Kramers sign-flips `Θ (Θ Ψ₁) = -Ψ₁ ≠ Ψ₁` on `OSHilbert`:
+   ```lean
+   theorem chargedKGEigen_fockPCT_zero {m : ℝ} (hm : 0 < m) (f : SmoothWavepacket) :
+       (chargedKGEigenEuclidPoincareData hm).toPoincareData.fockPCTEquiv
+           chargedKGRep_spinParity chargedKGCoeff_onShellPCT
+           (symmFockOneParticleVec 2 1 0 f) =
+         symmFockOneParticleVec 2 1 1 (conjWavepacket f)
+
+   theorem chargedKGEigen_exists_os_particle_antiparticle_swap {m : ℝ} (hm : 0 < m) :
+       let E := chargedKGEigenEuclidPoincareData hm
+       ∃ f₀ : SmoothWavepacket,
+         let Ψ_pos := E.osMollerWaveOut (symmFockOneParticleVec 2 1 0 f₀)
+         let Ψ_neg := E.osMollerWaveIn (symmFockOneParticleVec 2 1 1 (conjWavepacket f₀))
+         Ψ_pos ≠ 0 ∧
+         E.osPCTEquiv chargedKGRep_spinParity Ψ_pos = Ψ_neg ∧
+         ⟪Ψ_pos, E.osPCTEquiv chargedKGRep_spinParity Ψ_pos⟫_ℂ = 0 ∧
+         E.osPCTEquiv chargedKGRep_spinParity Ψ_pos ≠ Ψ_pos
+
+   theorem freeDirac_exists_os_oneParticle_kramers_neg {m : ℝ} (hm : 0 < m) :
+       let E := freeDiracEuclidPoincareData hm
+       ∃ Ψ₁ : E.OSHilbert,
+         Ψ₁ ≠ 0 ∧
+         E.osPCTEquiv diracRep_spinParity (E.osPCTEquiv diracRep_spinParity Ψ₁) = -Ψ₁ ∧
+         E.osPCTEquiv diracRep_spinParity (E.osPCTEquiv diracRep_spinParity Ψ₁) ≠ Ψ₁
+   ```
+
 ---
 
 ## 6. Key Proof Architectures & Technical Highlights
@@ -1113,6 +1268,12 @@ Gaussian-regularized contour shifts prove `malgrange_zerner_flat_tube` and `malg
 ### 6.9 Truncated-Wightman-Free Haag–Ruelle Convergence & SNAG-Free Hepp Vacuum Projection
 Rather than expanding $2r$-point functions into truncated Wightman distributions $W_k^T$ or invoking SNAG's theorem, `ScatteringTheory.lean` (1) splits smeared creation operators via `velocityConeCutoff` into a compact velocity-cone core plus an $\mathcal{O}((1+|t|)^{-N})$ non-stationary phase tail, (2) commutes spacelike-separated core time derivatives $\dot{B}_j^{\mathrm{core}}(t)$ via exact `LocalCommutativity` to annihilate $\Omega$, and (3) proves an $L^1$-ergodic momentum-bump projection `hepp_subgap_vacuum_projection` collapsing finite-time sub-gap products $B_{s_1,f}(t_1)^* B_{s_2,g}(t_2)\Omega$ onto $\langle f_{s_1}, g_{s_2} \rangle_{\mathcal{H}_1} \Omega$ because $(p_g - p_f)^2 \le \frac{1}{2}m^2 < m^2$ on $\mathrm{supp}\,\chi_{m,M}$.
 
+### 6.10 Intrinsic Wigner Matrices, Boost-Hyperplane Haag–Ruelle Invariance & Antiunitary CPT Reciprocity
+To formulate Wigner–Poincaré and antiunitary CPT scattering covariance without fixing global boost sections, `PoincareScattering.lean`:
+1. **Intrinsic Mode-Space Wigner Matrices**: Defines smooth Wigner transition matrices $D(A, p)_{s's} = \sum_\alpha \mathrm{dual\_w}_{s'}(p)_\alpha (R.\mathrm{rep}(A)\, w_s(\Lambda_A^{-1}p))_\alpha$ and mode PCT matrices $P(p)_{s's} = \sum_\alpha \mathrm{dual\_w}_{s'}(p)_\alpha (\overline{R.\sigma(-1,1)} \cdot S.C \, \overline{w_s(p)})_\alpha$ from `mode.w` and `dual_w`, establishing exact Hilbert unitarity via `positivity` and `StarStructure` identities without choosing a global $H_m^+ \to SL(2,\mathbb{C})$ section.
+2. **Boost-Hyperplane Invariance via $SL(2,\mathbb{C})$ 1-Parameter Generation**: Proves `sl2c_generated_by_upper_lower` for upper and lower triangular complex unipotent subgroups $\mathbb{C} \to SL(2,\mathbb{C})$ (`Givens`-free direct factorization) and establishes uniform `VelocityDisjoint` separation over compact parameters $u \in [0, 1]$ (`lorentz_waveOp_of_oneParam`), equating equal-time Haag–Ruelle limits $t \to \pm\infty$ with boosted-hyperplane limits and proving $U(a, A) \Omega^{\mathrm{in}/\mathrm{out}} = \Omega^{\mathrm{in}/\mathrm{out}} U_{\mathrm{Fock}}(a, A)$.
+3. **Antiunitary CPT Exchange, Kramers $\Theta^2 = U(0,-1)$ & S-Matrix Reciprocity**: Proves `wightmanPCTEquiv` sends the $t \to \pm\infty$ Haag–Ruelle chain to the time-reversed $t \to \mp\infty$ chain (`pct_mollerWaveOut` / `In`), yields Kramers sign-flip $\Theta^2 \Psi_1 = -\Psi_1$ for half-integer spin `HasSpinParity (-1)`, and derives S-matrix Poincaré covariance and antiunitary CPT reciprocity $\Theta_{\mathrm{Fock}}^{-1} S \Theta_{\mathrm{Fock}} = S^\dagger$.
+
 ---
 
 ## 7. Mathematical Scope, Design Choices & Open Boundaries
@@ -1124,12 +1285,12 @@ The boundaries between what is **unconditionally proved today** and what relies 
 3. **Spin–Statistics (Self-Conjugate vs. Pure Chiral Weyl Fields)**: $\eta = \varepsilon$ is proved unconditionally on both Wightman and OS sides for every `(R, S)` with `R.HasSpinParity ε`. Single 2-component chiral Weyl spinors admit no `StarStructure` (`isEmpty_starStructure_leftWeylRep` / `rightWeylRep`); for pure chiral two-point functions on $\mathcal{T}_n$, `OSReconstruction.lean` proves Clebsch–Gordan origin-antisymmetry Spin–Statistics under non-vanishing at $z_0 = z_1$.
 4. **Edge-of-the-Wedge, Malgrange–Zerner & Tube Continuation Scope**: General $N$-D Osgood and Malgrange–Zerner theorems and general $n$-D continuous and polynomial-growth distributional EOW theorems hold unconditionally in arbitrary dimension; single-tube convex-envelope continuation is proved for bounded 2D L-shaped domains (`bochner_tube_theorem`), while general unbounded codimension Bochner/Epstein hull theorems remain future SCV extensions.
 5. **Modern `ForwardConeSpectrumCondition` vs. Legacy `ZeroMomentumSpectrumCondition`**: Early stepping-stone definitions in `WightmanFramework.lean` / `OSReconstruction.lean` include `ZeroMomentumSpectrumCondition`; all physical theorems and 4D $m > 0$ models use the UV-cutoff-free relativistic `SpectrumCondition` (`ForwardConeSpectrumCondition`).
-6. **Relativistic Haag–Ruelle Scattering & Concrete 4D Model Boundaries (`ScatteringTheory.lean`)**:
-   - **General Interacting Engine vs. $S = \mathbf{1}$ in 4D Free Models**: All core theorems (`tendsto_haagRuelleChainVec_atTop`/`atBot`, Fock inner products, `mollerWaveIn`/`Out`, `scatteringOperatorCLM`, and S-matrix unitarity under `WeakAsymptoticCompleteness`) hold for **arbitrary non-Gaussian `IsolatedMassShellData`** without Wick-factorization assumptions ($W_4^T \neq 0$ and continuum above $M > m$ allowed). Because spacetime is fixed to $3+1$ (`Fin 4 → ℝ`), where constructing any Wightman/OS QFT with $S \neq \mathbf{1}$ remains open, all four unconditional concrete models are free Wick fields with `AsymptoticCompleteness`, $\Omega^{\mathrm{in}} = \Omega^{\mathrm{out}}$, and $S = \mathbf{1}$.
+6. **Relativistic Haag–Ruelle Scattering & Concrete 4D Model Boundaries (`ScatteringTheory.lean`, `PoincareScattering.lean`)**:
+   - **General Interacting Engine vs. $S = \mathbf{1}$ in 4D Free Models**: All core theorems (`tendsto_haagRuelleChainVec_atTop`/`atBot`, Fock inner products, `mollerWaveIn`/`Out`, `scatteringOperatorCLM`, Poincaré/CPT intertwining, and S-matrix unitarity/reciprocity under `WeakAsymptoticCompleteness`) hold for **arbitrary non-Gaussian `IsolatedMassShellData` / `PoincareIsolatedMassShellData`** without Wick-factorization assumptions ($W_4^T \neq 0$ and continuum above $M > m$ allowed). Because spacetime is fixed to $3+1$ (`Fin 4 → ℝ`), where constructing any Wightman/OS QFT with $S \neq \mathbf{1}$ remains open, all four unconditional concrete models are free Wick fields with `AsymptoticCompleteness`, $\Omega^{\mathrm{in}} = \Omega^{\mathrm{out}}$, and $S = \mathbf{1}$.
    - **Particle Content (Neutral/Majorana & Charged Doublets; Single Isolated Mass)**: Both neutral/Majorana fields (`freeKG` $\nu = 1$, 4-component Majorana–Dirac `freeDirac` $\nu = 2$) and $U(1)$-charged particle–antiparticle doublets via `directSumRep` (`chargedKG` $\nu = 2$, `chargedDirac` $\nu = 4$) are instantiated for a single lowest isolated mass hyperboloid $H_m^+$ below $M > m$ (multi-mass species require tensor-product Fock extensions).
-   - **Translation Covariance vs. Homogeneous $SL(2,\mathbb{C})$ Covariance**: Wave operators and S-matrices intertwine full $\mathbb{R}^4$ spacetime translations; homogeneous $SL(2,\mathbb{C})$ boost/rotation covariance of $\Omega^{\mathrm{in}/\mathrm{out}}$ (requiring Wigner little-group data on `MassShellModeData` and boost-hyperplane limit invariance) is not yet formalized.
+   - **Full $SL(2,\mathbb{C}) \ltimes \mathbb{R}^4$ Poincaré Covariance & Antiunitary CPT**: Wave operators and S-matrices intertwine both $\mathbb{R}^4$ translations and homogeneous $SL(2,\mathbb{C})$ transformations via intrinsic Wigner transition matrices and boost-hyperplane Haag–Ruelle invariance (`PoincareScattering.lean`), alongside antiunitary CPT exchange $\Theta \Omega^{\mathrm{out}} = \Omega^{\mathrm{in}} \Theta_{\mathrm{Fock}}$, Kramers $\Theta^2 = U(0,-1)$, and S-matrix CPT reciprocity $\Theta_{\mathrm{Fock}}^{-1} S \Theta_{\mathrm{Fock}} = S^\dagger$ under `contDiff_w`, `hC_cov`, `R.HasSpinParity η`, and `OnShellPCT`.
    - **Explicit Mass-Shell Mode/Dual-Mode Inputs & Composite Bound States**: `IsolatedMassShellData` takes `C_shell`, `mode`, smooth full-rank `dual_w`, and `twoPoint_shell` as explicit inputs rather than deriving Källén–Lehmann shell measures via SNAG. Because single-field smearings need not span composite bound-state sectors, `mollerWaveIn`/`Out` are isometric embeddings (`→ₗᵢ[ℂ]`) and `WeakAsymptoticCompleteness` / `AsymptoticCompleteness` remain explicit `Prop` hypotheses.
-   - **Hybrid Structure of `EuclidIsolatedMassShellData`**: `EuclidIsolatedMassShellData` pairs pure Euclidean OS axioms and `OSLinearGrowthCondition` with `massGap` and `twoPoint_shell` stated on `osReconstructedWightmanFamily_of_linearGrowth` (all unconditionally discharged in the four concrete models).
+   - **Hybrid Structure of `EuclidIsolatedMassShellData`**: `EuclidIsolatedMassShellData` (and `EuclidPoincareIsolatedMassShellData`) pairs pure Euclidean OS axioms and `OSLinearGrowthCondition` with `massGap` and `twoPoint_shell` stated on `osReconstructedWightmanFamily_of_linearGrowth` (all unconditionally discharged in the four concrete models).
    - **Dense Isometric Extension & LSZ Scope**: Overlapping-velocity and general $L^2(\mathbb{R}^3)$ states are defined via continuous isometric extension from pairwise `VelocityDisjoint` $C_c^\infty(\mathbb{R}^3)$ states following Reed–Simon Theorem XI.109; time-ordered Green's function LSZ reduction formulas lie outside the current scope.
 
 ---
@@ -1153,7 +1314,7 @@ lake build SCVAnalysis DistributionEOW                   # Layer II: SCV & Gener
 lake build WightmanFramework VectorBHW                   # Layer III: Cone Vladimirov, Spinor BHW & PCT
 lake build OSReconstruction VacuumTheory WightmanBridge  # Layer IV: OS & Wightman Axioms
 lake build WickCombinatorics FreeFieldWick FreeFieldFock # Layer V: 4D m > 0 Free KG & Dirac
-lake build ScatteringTheory                              # Layer VI: Haag–Ruelle Scattering & OS Bridge
+lake build ScatteringTheory PoincareScattering           # Layer VI: Haag–Ruelle Scattering, Poincaré/CPT & OS Bridge
 ```
 
 ### Reproducible Kernel Axiom Verification
@@ -1162,7 +1323,7 @@ To verify directly in the Lean 4 kernel that the flagship theorems depend exclus
 
 ```bash
 lake env lean --stdin <<'EOF'
-import ScatteringTheory
+import PoincareScattering
 
 #print axioms Geometry.jost_theorem
 #print axioms Geometry.PolarDecomposition.orbit_domain_path_connected
@@ -1237,6 +1398,23 @@ import ScatteringTheory
 #print axioms QFT.chargedKG_euclid_scattering_master
 #print axioms QFT.freeDirac_euclid_scattering_master
 #print axioms QFT.chargedDirac_euclid_scattering_master
+#print axioms QFT.wightmanPoincareEquiv_mul
+#print axioms QFT.wightmanPCTEquiv_sq
+#print axioms QFT.symmFockPoincareEquiv_mul
+#print axioms QFT.symmFockPCTEquiv_sq
+#print axioms QFT.poincare_mollerWaveOut
+#print axioms QFT.poincare_mollerWaveIn
+#print axioms QFT.pct_mollerWaveOut
+#print axioms QFT.pct_mollerWaveIn
+#print axioms QFT.scatteringOperatorCLM_comm_poincare
+#print axioms QFT.symmFockPCTEquiv_symm_scatteringOperatorCLM_pct
+#print axioms QFT.fullEuclid_os_poincare_pct_scattering_synthesis
+#print axioms QFT.chargedKGEigen_exists_os_particle_antiparticle_swap
+#print axioms QFT.freeDirac_exists_os_oneParticle_kramers_neg
+#print axioms QFT.freeKG_euclid_poincare_pct_master
+#print axioms QFT.chargedKG_euclid_poincare_pct_master
+#print axioms QFT.freeDirac_euclid_poincare_pct_master
+#print axioms QFT.chargedDirac_euclid_poincare_pct_master
 EOF
 ```
 
@@ -1257,4 +1435,4 @@ Every `#print axioms` query outputs:
 | **Vladimirov (1979)**, *Methods of the Theory of Generalized Functions* — Laplace transform of tempered distributions supported in dual cones | `coneVladimirovTubeExtension`, `coneVladimirov_tubeCovariant` (`WightmanFramework.lean`), `coneVladimirov_hasPolynomialTubeGrowth_forward` & `coneVladimirov_hasBoundaryValue_forward` (`VectorBHW.lean`) |
 | **Osterwalder & Schrader (1973, 1975)**, *Commun. Math. Phys.* **31**, 83–112 & **42**, 281–305 — Reflection positivity, multi-time contraction semigroup, factorial-power linear growth ($E0'$), pure-Euclidean all $n$-point reconstruction & full non-coincident Euclidean gluing | `OSAxioms`, `FullEuclidOSAxioms`, `OSDampedFieldBounded`, `OSLinearGrowthCondition`, `osMultiTimeH`, `euclidExtendedTubePermLocality_of_localCommutativity` (`OSReconstruction.lean`), `osReconstructedWightmanFamily`, `os_full_wightman_reconstruction`, `fullEuclid_os_generalWightman_reconstruction_of_linearGrowth` (`WightmanBridge.lean`) |
 | **Glimm & Jaffe (1987)**, *Quantum Physics: A Functional Integral Point of View*, Ch. 6 — Free bosonic/fermionic Euclidean & Minkowski fields, damped Fock field bounds & mass gap $e^{-m\tau}$ | `WickCombinatorics.lean`, `FreeFieldWick.lean`, `freeKGOSDampedFieldBounded`, `freeDiracOSDampedFieldBounded`, `freeKGOSLinearGrowthCondition`, `freeDiracOSLinearGrowthCondition`, `freeKG_grand_master` & `freeDirac_grand_master` (`FreeFieldFock.lean`) |
-| **Haag (1958), Ruelle (1962), Hepp (1965) & Reed–Simon (1979)**, *Commun. Math. Phys.* **1**, 35–69; *Methods of Modern Mathematical Physics III*, §XI.16 — Asymptotic Haag–Ruelle states, Fock inner products, unitary Møller wave operators, S-matrix unitarity, spin–statistics, and Pauli exclusion vs. opposite-spin co-occupancy | `IsolatedMassShellData`, `EuclidIsolatedMassShellData`, `hepp_subgap_vacuum_projection`, `tendsto_haagRuelleChainVec_atTop` / `atBot`, `inner_haagRuelleOutVec_eq`, `mollerWaveIn` / `Out`, `scatteringOperatorCLM_adjoint_comp_self`, `scatteringOperatorCLM_comp_adjoint`, `fullEuclid_os_haagRuelle_scattering_synthesis`, `freeKG_euclid_scattering_master`, `chargedKG_euclid_scattering_master`, `freeDirac_euclid_scattering_master`, `chargedDirac_euclid_scattering_master` (`ScatteringTheory.lean`) |
+| **Haag (1958), Ruelle (1962), Hepp (1965) & Reed–Simon (1979)**, *Commun. Math. Phys.* **1**, 35–69; *Methods of Modern Mathematical Physics III*, §XI.16 — Asymptotic Haag–Ruelle states, Fock inner products, $SL(2,\mathbb{C}) \ltimes \mathbb{R}^4$ Poincaré & antiunitary CPT covariance, S-matrix unitarity & CPT reciprocity, spin–statistics, and Pauli exclusion | `IsolatedMassShellData`, `EuclidIsolatedMassShellData`, `hepp_subgap_vacuum_projection`, `tendsto_haagRuelleChainVec_atTop` / `atBot`, `mollerWaveIn` / `Out`, `scatteringOperatorCLM_adjoint_comp_self`, `fullEuclid_os_haagRuelle_scattering_synthesis`, `freeKG/chargedKG/freeDirac/chargedDirac_euclid_scattering_master` (`ScatteringTheory.lean`); `PoincareIsolatedMassShellData`, `EuclidPoincareIsolatedMassShellData`, `poincare_mollerWaveIn` / `Out`, `pct_mollerWaveIn` / `Out`, `scatteringOperatorCLM_comm_poincare`, `symmFockPCTEquiv_symm_scatteringOperatorCLM_pct`, `fullEuclid_os_poincare_pct_scattering_synthesis`, `chargedKGEigen_exists_os_particle_antiparticle_swap`, `freeDirac_exists_os_oneParticle_kramers_neg`, `freeKG/chargedKG/freeDirac/chargedDirac_euclid_poincare_pct_master` (`PoincareScattering.lean`) |
