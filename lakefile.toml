@@ -23,6 +23,7 @@ roots = [
     "DistributionEOW",
     "Givens",
     "LWEBasic",
+    "LWESecurity",
     "Lightcone",
     "MatrixAnalysis",
     "MatrixExpS",
