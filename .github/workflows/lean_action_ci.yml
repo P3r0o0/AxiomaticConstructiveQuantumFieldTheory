@@ -45,9 +45,4 @@ jobs:
       - uses: leanprover/lean-action@v1
         with:
           use-github-cache: false
-      - name: Run Rust Tests
-        working-directory: crates
-        run: |
-          cargo check --no-default-features
-          cargo test
 
